@@ -2,7 +2,7 @@ CFLAGS=-std=c99 -Wall -fwrapv -Wextra -std=c99 -pedantic -O2
 
 .PHONY: all clean test run
 
-all: run
+all: subleq.bin subleq
 
 test: run
 

@@ -15,12 +15,14 @@ smaller system on an FPGA.
 ## To Do
 
 * [x] Implement virtual machine and skeleton of project
+  * [ ] Optional: Add proper terminal handling for Unix and Windows
+  * [ ] Optional: Add debugging functionality
 * [ ] Implement SUBLEQ routines
 * [ ] Implement eForth
   - [ ] Implement Virtual Machine capable of executing Forth
   - [ ] Implement Forth on the virtual machine
 * [ ] Documentation
-* [ ] Port to FPGA (Optional)
+* [ ] Optional: Port to FPGA
 
 ## References
 
@@ -30,4 +32,5 @@ smaller system on an FPGA.
 * <https://hackaday.io/project/158329-dawn-the-subleq-operating-system-by-geri>
 * <https://rosettacode.org/wiki/Subleq>
 * <https://en.wikipedia.org/wiki/One-instruction_set_computer#Subtract_and_branch_if_less_than_or_equal_to_zero>
+* <https://github.com/8l/hsq>
 

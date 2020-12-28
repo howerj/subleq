@@ -1,10 +1,10 @@
-\ 
+\
 \ Cross Compiler and eForth interpreter for the SUBLEQ CPU available at:
-\ 
+\
 \     <https://github.com/howerj/subleq>
 \
 \ This is a work in progress.
-\ 
+\
 
 only forth also definitions hex
 
@@ -62,10 +62,87 @@ size =cell - tep !
 :m save-target ( <name> -- )
   parse-word w/o create-file throw >r
    tflash there r@ write-file throw r> close-file ;m
+:m .h base @ >r hex     u. r> base ! ;m
+:m .d base @ >r decimal u. r> base ! ;m
+:m twords
+   cr tlast @
+   begin
+      dup tflash + =cell + count 1f and type space t@
+   ?dup 0= until ;m
+:m .stat
+  0 if
+    ." target: "      target.1      +order words cr cr
+    ." target-only: " target.only.1 +order words cr cr
+    ." assembler: "   assembler.1   +order words cr cr
+    ." meta: "        meta.1        +order words cr cr
+  then
+  ." used> " there dup ." 0x" .h ." / " .d cr ;m
+:m .end only forth also definitions decimal ;m
+:m atlast tlast @ ;m
+:m tvar   get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
+:m label: get-current >r meta.1 set-current create r> set-current there ,    does> @ ;m
+:m tdown =cell negate and ;m
+:m tnfa =cell + ;m ( pwd -- nfa : move to name field address)
+:m tcfa tnfa dup c@ $1F and + =cell + tdown ;m ( pwd -- cfa )
+:m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
+:m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
 
-0 t,
-1 t,
--1 t,
+\ ---------------------------------- Forth VM --------------------------------
+
+\ TODO: start/vm, nest, unnest, push, jump, jumpz, next, bye, exit, lshift,
+\ rshift, and, or, xor, +, um+, @, !, c@, c!, dup, drop, swap, over, 1-, >r,
+\ r>, r@, rdrop, execute, sp!, rp!, sp@, rp@, key, emit
+\ TODO: Virtual machine setup
+
+\ NOTES:
+\
+\ Z = location of a zero, may be temporarily modified
+\ #<num> = location of a memory cell containing <num>
+\ Omitted 'c' implies suppression (jump to next instruction)
+\
+\ JMP c
+\     subleq Z, Z, c
+\
+\ ADD a, b
+\     subleq a, Z
+\     subleq Z, b
+\     subleq Z, Z
+\
+\ MOV a, b
+\     subleq b, b
+\     subleq a, Z
+\     subleq Z, b
+\     subleq Z, Z
+\
+\ BEQ b, c
+\     subleq b, Z, L1
+\     subleq Z, Z, OUT
+\ L1: subleq Z, Z
+\     subleq Z, b, c
+\ OUT: ...
+\
+\ NOP
+\     subleq Z, Z
+\
+\ INC b
+\     subleq #-1, b
+\
+\ DEC b
+\     subleq #1, b
+\
+
+:m & rot t, swap t, t, ;m
+
+0000 0000 0006 & \ unconditional branch to m[6], also m[0] contains 0
+0001 0002 FFFF & \ contains 1, 2, and -1
+00FF 00FF 0009 & \ zero m[0xFF]
+2000 00FF 000C & \ load INPUT into m[0xFF]
+00FF 2001 000F & \ store m[0xFF] into OUTPUT
+0005 00FF 0015 & \ subtract -1 from m[0xFF], jump to end if less/equal to 0
+0000 0000 FFFF & \ halt
+0000 0000 0006 & \ unconditional branch to m[6]
+
+\ ---------------------------------- Image Generation ------------------------
 
 save-hex    subleq.hex
 save-target subleq.bin
