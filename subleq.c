@@ -13,18 +13,15 @@ typedef struct {
 
 static inline int load(subleq_t *s, const unsigned loc) {
 	assert(s);
-	assert(SZ < INT16_MAX);
-	if (loc < SZ)
-		return s->m[loc];
-	return loc == (SZ + 0) ? s->get(s->in) : 0;
+	return loc < SZ ? s->m[loc] : 0;
 }
 
 static inline int store(subleq_t *s, const unsigned loc, const int val) {
 	assert(s);
-	assert(SZ < (1l + INT16_MAX));
-	if (loc < SZ)
+	const int lz = loc < SZ;
+	if (lz)
 		s->m[loc] = val;
-	return loc == (SZ + 1) ? s->put(s->out, val) : 0;
+	return lz ? 0 : -1;
 }
 
 static int subleq(subleq_t *s, const uint64_t cycles, const int trace) {
@@ -35,18 +32,23 @@ static int subleq(subleq_t *s, const uint64_t cycles, const int trace) {
 		const int b = load(s, pc + 1);
 		const int c = load(s, pc + 2);
 		long next = pc + 3;
-		const int la = load(s, a);
-		const int lb = load(s, b);
-		const long r = (long)lb - (long)la;
-		if (store(s, b, r) < 0)
-			return -1;
-		if (r <= 0)
-			next = c;
+		if (a == -1) {
+			if (store(s, b, s->get(s->in)) < 0)
+				return -1;
+		} else if (b == -1) {
+			if (s->put(s->out, load(s, a)) < 0)
+				return -1;
+		} else {
+			const int la = load(s, a);
+			const int lb = load(s, b);
+			const long r = (long)lb - (long)la;
+			if (store(s, b, r) < 0)
+				return -1;
+			if (r <= 0)
+				next = c;
+		}
 		if (next >= SZ)
 			next = -1;
-		if (trace)
-			if (fprintf(stderr, "(pc=%04lx a=%04x b=%04x c=%04x la=%04x lb=%04x r=%04lx)\n", pc, a, b, c, la, lb, r) < 0)
-				return -1;
 		pc = next;
 	}
 	s->pc = pc;

@@ -100,20 +100,6 @@ size =cell - tep !
 \ #<num> = location of a memory cell containing <num>
 \ Omitted 'c' implies suppression (jump to next instruction)
 \
-\ JMP c
-\     subleq Z, Z, c
-\
-\ ADD a, b
-\     subleq a, Z
-\     subleq Z, b
-\     subleq Z, Z
-\
-\ MOV a, b
-\     subleq b, b
-\     subleq a, Z
-\     subleq Z, b
-\     subleq Z, Z
-\
 \ BEQ b, c
 \     subleq b, Z, L1
 \     subleq Z, Z, OUT
@@ -121,26 +107,35 @@ size =cell - tep !
 \     subleq Z, b, c
 \ OUT: ...
 \
-\ NOP
-\     subleq Z, Z
-\
-\ INC b
-\     subleq #-1, b
-\
-\ DEC b
-\     subleq #1, b
-\
+
+:m Z 0 t, ;m  \ TODO: store 0, 1, -1 in DAT section
+:m #1 1 t, ;m
+:m #N1 -1 t, ;m
+:m NADDR tdp @ 1+ t, ;m \ TODO: Round up
+
+:m JMP Z Z t, ;m ( c -- )
+:m ADD swap t, Z NADDR Z t, NADDR Z Z NADDR ;m ( a b -- )
+:m NOP Z Z NADDR ;m ( -- )
+:m INC #N1 t, NADDR ;m ( b -- )
+:m DEC #1 t, NADDR ;m ( b -- )
+:m MOV >r r@ dup t, t, NADDR t, Z NADDR Z r> t, NADDR Z Z NADDR ;m ( a b -- )
 
 :m & rot t, swap t, t, ;m
 
-0000 0000 0006 & \ unconditional branch to m[6], also m[0] contains 0
-0001 0002 FFFF & \ contains 1, 2, and -1
-00FF 00FF 0009 & \ zero m[0xFF]
-2000 00FF 000C & \ load INPUT into m[0xFF]
-00FF 2001 000F & \ store m[0xFF] into OUTPUT
-0005 00FF 0015 & \ subtract -1 from m[0xFF], jump to end if less/equal to 0
-0000 0000 FFFF & \ halt
-0000 0000 0006 & \ unconditional branch to m[6]
+\ Hello World!
+decimal
+15   17   -1   &
+17   -1   -1   &
+16   1    -1   &
+16   3    -1   &
+15   15   0    &
+0    -1   72   &
+101  108  108  &
+111  44   32   &
+119  111  114  &
+108  100  33   &
+10   t,   0    t,
+hex
 
 \ ---------------------------------- Image Generation ------------------------
 

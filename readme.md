@@ -33,4 +33,5 @@ smaller system on an FPGA.
 * <https://rosettacode.org/wiki/Subleq>
 * <https://en.wikipedia.org/wiki/One-instruction_set_computer#Subtract_and_branch_if_less_than_or_equal_to_zero>
 * <https://github.com/8l/hsq>
+* <http://mazonka.com/subleq/>
 
