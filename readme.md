@@ -5,7 +5,7 @@
 * Repo: <https://github.com/howerj/subleq>
 * License: The Unlicense
 
-A SUBLEQ computer, with a few special cases to halt the machine and
+A 16-bit SUBLEQ computer, with a few special cases to halt the machine and
 for Input/Output purposes. The goal of this project is to get a eForth
 interpreter up an running in a virtual machine, perhaps get it running
 on an FPGA, and compare it to the [bit-serial](https://github.com/howerj/bit-serial)
@@ -23,6 +23,9 @@ smaller system on an FPGA.
   - [ ] Implement Forth on the virtual machine
 * [ ] Documentation
 * [ ] Optional: Port to FPGA
+* [ ] Optional: Port and improve self-interpreter with I/O
+  - See <http://www.mazonka.com/subleq/index.html>
+  - See <https://eigenratios.blogspot.com/2006/09/mark-ii-oisc-self-interpreter.html>
 
 ## References
 

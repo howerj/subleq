@@ -1,22 +1,27 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <limits.h>
 
-#define SZ (8192)
+#define SZ       (8192ul)
+#define ALL_SET  ((subleq_cell_t)~0ul)
+#define HIGH_SET ((subleq_cell_t)(1ul << ((sizeof(subleq_cell_t) * CHAR_BIT) - 1ul)))
+
+typedef uint16_t subleq_cell_t;
 
 typedef struct {
-	int16_t pc, m[SZ];
+	subleq_cell_t pc, m[SZ];
 	int (*put)(void *out, int ch);
 	int (*get)(void *in);
 	void *in, *out;
 } subleq_t;
 
-static inline int load(subleq_t *s, const unsigned loc) {
+static inline subleq_cell_t load(subleq_t *s, const subleq_cell_t loc) {
 	assert(s);
 	return loc < SZ ? s->m[loc] : 0;
 }
 
-static inline int store(subleq_t *s, const unsigned loc, const int val) {
+static inline int store(subleq_t *s, const subleq_cell_t loc, const subleq_cell_t val) {
 	assert(s);
 	const int lz = loc < SZ;
 	if (lz)
@@ -26,25 +31,25 @@ static inline int store(subleq_t *s, const unsigned loc, const int val) {
 
 static int subleq(subleq_t *s, const uint64_t cycles, const int trace) {
 	assert(s);
-	long pc = s->pc;
-	for (uint64_t i = 0; (i < cycles || cycles == 0) && pc >= 0; i++) {
-		const int a = load(s, pc + 0);
-		const int b = load(s, pc + 1);
-		const int c = load(s, pc + 2);
-		long next = pc + 3;
-		if (a == -1) {
+	subleq_cell_t pc = s->pc;
+	for (uint64_t i = 0; (i < cycles || cycles == 0) && !(pc & HIGH_SET); i++) {
+		const subleq_cell_t a = load(s, pc + 0);
+		const subleq_cell_t b = load(s, pc + 1);
+		const subleq_cell_t c = load(s, pc + 2);
+		subleq_cell_t next = pc + 3;
+		if (a == ALL_SET) {
 			if (store(s, b, s->get(s->in)) < 0)
 				return -1;
-		} else if (b == -1) {
+		} else if (b == ALL_SET) {
 			if (s->put(s->out, load(s, a)) < 0)
-				return -1;
+				return -2;
 		} else {
-			const int la = load(s, a);
-			const int lb = load(s, b);
-			const long r = (long)lb - (long)la;
+			const subleq_cell_t la = load(s, a);
+			const subleq_cell_t lb = load(s, b);
+			const subleq_cell_t r = lb - la;
 			if (store(s, b, r) < 0)
-				return -1;
-			if (r <= 0)
+				return -3;
+			if (r == 0u || r & HIGH_SET)
 				next = c;
 		}
 		if (next >= SZ)
@@ -67,24 +72,26 @@ static int get(void *in) {
 
 int main(int argc, char **argv) {
 	subleq_t s = { .get = get, .put = put, .in = stdin, .out = stdout, };
-	if (argc != 2) {
-		(void)fprintf(stderr, "usage: %s file.bin\n", argv[0]);
+	if (argc < 2) {
+		(void)fprintf(stderr, "usage: %s file.dec...\n", argv[0]);
 		return 1;
 	}
-	FILE *program = fopen(argv[1], "rb");
-	if (!program) {
-		(void)fprintf(stderr, "load failed -- %s\n", argv[1]);
-		return 2;
+	size_t pc = 0;
+	for (int i = 1; i < argc; i++) {
+		FILE *program = fopen(argv[i], "rb");
+		if (!program) {
+			(void)fprintf(stderr, "load failed -- %s\n", argv[1]);
+			return 2;
+		}
+		for (; pc < SZ; pc++) {
+			long l = 0;
+			if (fscanf(program, "%ld", &l) != 1)
+				break;
+			s.m[pc] = l;
+		}
+		if (fclose(program) < 0)
+			return 3;
 	}
-	for (size_t i = 0; i < SZ; i ++) {
-		const int v1 = fgetc(program);
-		const int v2 = fgetc(program);
-		if (v1 < 0 || v2 < 0)
-			break;
-		s.m[i] = (v1 << 0) | (v2 << 8);
-	}
-	if (fclose(program) < 0)
-		return 3;
 	return subleq(&s, 0, 0) < 0 ? 1 : 0;
 }
 

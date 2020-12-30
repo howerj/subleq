@@ -2,16 +2,16 @@ CFLAGS=-std=c99 -Wall -fwrapv -Wextra -std=c99 -pedantic -O2
 
 .PHONY: all clean test run
 
-all: subleq.bin subleq
+all: subleq.dec subleq
 
 test: run
 
-run: subleq subleq.bin
-	./subleq subleq.bin
+run: subleq subleq.dec
+	./subleq subleq.dec
 
-subleq.bin: subleq.fth
+subleq.dec: subleq.fth
 	gforth subleq.fth
 
 clean:
-	rm -fv subleq *.bin *.hex
+	rm -fv subleq *.dec *.hex
 

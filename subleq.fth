@@ -59,9 +59,12 @@ size =cell - tep !
   parse-word w/o create-file throw
   there 0 do i t@  over >r hex# r> write-file throw =cell +loop
    close-file throw ;m
+:m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m 
+:m >neg dup 7FFF u> if 10000 - then ;
 :m save-target ( <name> -- )
-  parse-word w/o create-file throw >r
-   tflash there r@ write-file throw r> close-file ;m
+  parse-word w/o create-file throw
+  there 0 do i t@  over >r >neg dec# r> write-file throw =cell +loop
+   close-file throw ;m
 :m .h base @ >r hex     u. r> base ! ;m
 :m .d base @ >r decimal u. r> base ! ;m
 :m twords
@@ -94,51 +97,51 @@ size =cell - tep !
 \ r>, r@, rdrop, execute, sp!, rp!, sp@, rp@, key, emit
 \ TODO: Virtual machine setup
 
-\ NOTES:
-\
-\ Z = location of a zero, may be temporarily modified
-\ #<num> = location of a memory cell containing <num>
-\ Omitted 'c' implies suppression (jump to next instruction)
-\
-\ BEQ b, c
-\     subleq b, Z, L1
-\     subleq Z, Z, OUT
-\ L1: subleq Z, Z
-\     subleq Z, b, c
-\ OUT: ...
-\
-
-:m Z 0 t, ;m  \ TODO: store 0, 1, -1 in DAT section
-:m #1 1 t, ;m
-:m #N1 -1 t, ;m
-:m NADDR tdp @ 1+ t, ;m \ TODO: Round up
-
+:m Z 0 t, ;m \ Address 0 must contain 0
+:m NADDR there 2/ 1+ t, ;m 
+:m HALT 0 t, 0 t, -1 t, ;m
 :m JMP Z Z t, ;m ( c -- )
 :m ADD swap t, Z NADDR Z t, NADDR Z Z NADDR ;m ( a b -- )
 :m NOP Z Z NADDR ;m ( -- )
-:m INC #N1 t, NADDR ;m ( b -- )
-:m DEC #1 t, NADDR ;m ( b -- )
 :m MOV >r r@ dup t, t, NADDR t, Z NADDR Z r> t, NADDR Z Z NADDR ;m ( a b -- )
+:m PUT t, -1 t, NADDR ;m ( a -- : load from address and output character )
+:m GET -1 t, t, NADDR ;m ( a -- : get character from input and store at addr. )
+:m begin there ;m ( -- addr )
+:m again 2/ JMP ;m ( addr -- )
+:m mark there 0 t, ;m
+:m if 
+	2/ dup t, Z there 2/ 4 + dup t, 
+	Z Z 3 + t, 
+	Z Z NADDR 
+	Z t, mark ;m ( var -- addr )
+:m -if 2/ t, Z mark ;m  ( var -- addr )
+:m then begin 2/ swap t! ;m
+:m subleq rot t, swap t, t, ;m ( a b c -- )
 
-:m & rot t, swap t, t, ;m
+label: entry
+	NOP ( Must be first instruction so "m[0] == 0" is true )
+	0 -if ( This is the DATA section, it is never executed )
+		HALT
+		there -1 t, constant #N1
+		there  1 t, constant #1
+		there  0 t, constant var
 
-\ Hello World!
-decimal
-15   17   -1   &
-17   -1   -1   &
-16   1    -1   &
-16   3    -1   &
-15   15   0    &
-0    -1   72   &
-101  108  108  &
-111  44   32   &
-119  111  114  &
-108  100  33   &
-10   t,   0    t,
-hex
+:m INC #N1 2/ t, t, NADDR ;m ( b -- )
+:m DEC #1  2/ t, t, NADDR ;m ( b -- )
+
+	then
+
+	begin
+		var 2/ GET 
+		var -if HALT then
+		var 2/ PUT
+	again
+	HALT
 
 \ ---------------------------------- Image Generation ------------------------
 
-save-hex    subleq.hex
-save-target subleq.bin
+\ save-hex    subleq.hex
+save-target subleq.dec
+.stat
+.end
 bye
