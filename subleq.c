@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <limits.h>
 
-#define SZ       (8192ul)
+#define SZ       (65536u/2u)
 #define ALL_SET  ((subleq_cell_t)~0ul)
 #define HIGH_SET ((subleq_cell_t)(1ul << ((sizeof(subleq_cell_t) * CHAR_BIT) - 1ul)))
 

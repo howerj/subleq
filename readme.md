@@ -12,6 +12,10 @@ on an FPGA, and compare it to the [bit-serial](https://github.com/howerj/bit-ser
 CPU and project to see if this esoteric system is faster or produces a
 smaller system on an FPGA.
 
+An 8-bit SUBLEQ machine might be nice to target also, however that would
+be a little more difficult, but still doable. A 16-bit virtual machine 
+would have to be emulated anyway.
+
 ## To Do
 
 * [x] Implement virtual machine and skeleton of project

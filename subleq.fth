@@ -25,6 +25,8 @@ meta.1 +order also definitions
    2 constant =cell
 4000 constant size ( 16384 bytes, 8192 cells )
 2000 constant =end ( 8192  bytes, leaving 4096 for Dual Port Block RAM )
+  40 constant =stksz
+  60 constant =buf
 0008 constant =bksp
 000A constant =lf
 000D constant =cr
@@ -114,32 +116,72 @@ size =cell - tep !
 	Z Z 3 + t, 
 	Z Z NADDR 
 	Z t, mark ;m ( var -- addr )
+:m until
+	2/ dup t, Z there 2/ 4 + dup t, 
+	Z Z 3 + t, 
+	Z Z NADDR 
+	Z t, 2/ t, ;m ( var -- addr )
 :m -if 2/ t, Z mark ;m  ( var -- addr )
 :m then begin 2/ swap t! ;m
 :m subleq rot t, swap t, t, ;m ( a b c -- )
 
+	0 t, 0 t,
 label: entry
-	NOP ( Must be first instruction so "m[0] == 0" is true )
-	0 -if ( This is the DATA section, it is never executed )
-		HALT
-		there -1 t, constant #N1
-		there  1 t, constant #1
-		there  0 t, constant var
+	3 t,
+	HALT
+	-1 tvar #N1
+	1 tvar #1
+
+	0 tvar <cold>    \ entry point of virtual machine program, set later on
+	0 tvar pwd       \ previous word pointer
+
+	0 tvar ip        \ instruction pointer
+	0 tvar w         \ working pointer
+	0 tvar t         \ temporary register
+	0 tvar tos       \ top of stack
+	0 tvar h         \ dictionary pointer
+	0 tvar {state}   \ compiler state
+	0 tvar {hld}     \ hold space pointer
+	0 tvar {base}    \ input/output radix, default = 16
+	0 tvar {dpl}     \ number of places after fraction
+	0 tvar {in}      \ position in query string
+	0 tvar {handler} \ throw/catch handler
+	0 tvar {last}    \ last defined word
+	0 tvar #tib      \ terminal input buffer
+
+	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
+	=end =stksz 2* -           dup tvar {rp0} tvar {rp} \ grows upwards
+	=end =stksz 2* - =buf - constant TERMBUF \ pad buffer space
+
+	TERMBUF =buf + constant =tbufend
 
 :m INC #N1 2/ t, t, NADDR ;m ( b -- )
 :m DEC #1  2/ t, t, NADDR ;m ( b -- )
 
-	then
+label: start
+	start 2/ entry t!
 
 	begin
-		var 2/ GET 
-		var -if HALT then
-		var 2/ PUT
+		w 2/ GET 
+		w -if HALT then
+		w 2/ PUT
 	again
 	HALT
 
+\ NOTE: This version is going to require a lot more self-modifying code
+
+	\ TODO: Set entry point
+	\ Load sp0, rp0, store in sp and rp
+	\ Load <cold>, store in ip
+	\ fall-throw
+label: vm
+	\ ip -> w
+	\ ip++
+	\ jump(w) <- requires self-modifying code
+
 \ ---------------------------------- Image Generation ------------------------
 
+\ TODO: Delete 'save-hex' after image is created.
 \ save-hex    subleq.hex
 save-target subleq.dec
 .stat
