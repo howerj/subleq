@@ -94,22 +94,18 @@ size =cell - tep !
 
 \ ---------------------------------- Forth VM --------------------------------
 
-\ TODO: start/vm, nest, unnest, push, jump, jumpz, next, bye, exit, lshift,
-\ rshift, and, or, xor, +, um+, @, !, c@, c!, dup, drop, swap, over, 1-, >r,
-\ r>, r@, rdrop, execute, sp!, rp!, sp@, rp@, key, emit
-\ TODO: Virtual machine setup
-
 :m Z 0 t, ;m \ Address 0 must contain 0
 :m NADDR there 2/ 1+ t, ;m 
 :m HALT 0 t, 0 t, -1 t, ;m
-:m JMP Z Z t, ;m ( c -- )
-:m ADD swap t, Z NADDR Z t, NADDR Z Z NADDR ;m ( a b -- )
+:m JMP 2/ Z Z t, ;m ( c -- )
+:m ADD 2/ swap 2/ t, Z NADDR Z t, NADDR Z Z NADDR ;m ( a b -- )
+:m SUB 2/ t, 2/ t, NADDR ;m
 :m NOP Z Z NADDR ;m ( -- )
-:m MOV >r r@ dup t, t, NADDR t, Z NADDR Z r> t, NADDR Z Z NADDR ;m ( a b -- )
-:m PUT t, -1 t, NADDR ;m ( a -- : load from address and output character )
-:m GET -1 t, t, NADDR ;m ( a -- : get character from input and store at addr. )
+:m MOV 2/ swap 2/ swap >r r@ dup t, t, NADDR t, Z NADDR Z r> t, NADDR Z Z NADDR ;m ( a b -- )
+:m PUT 2/ t, -1 t, NADDR ;m ( a -- : load from address and output character )
+:m GET 2/ -1 t, t, NADDR ;m ( a -- : get character from input and store at addr. )
 :m begin there ;m ( -- addr )
-:m again 2/ JMP ;m ( addr -- )
+:m again JMP ;m ( addr -- )
 :m mark there 0 t, ;m
 :m if 
 	2/ dup t, Z there 2/ 4 + dup t, 
@@ -122,8 +118,15 @@ size =cell - tep !
 	Z Z NADDR 
 	Z t, 2/ t, ;m ( var -- addr )
 :m -if 2/ t, Z mark ;m  ( var -- addr )
+:m -until 2/ t, Z 2/ t, ;m
 :m then begin 2/ swap t! ;m
 :m subleq rot t, swap t, t, ;m ( a b c -- )
+
+\ TODO: load/store/jump indirect
+:m iLOAD  ;m
+:m iJMP   ;m
+:m iSTORE ;m
+
 
 	0 t, 0 t,
 label: entry
@@ -131,6 +134,7 @@ label: entry
 	HALT
 	-1 tvar #N1
 	1 tvar #1
+	40 tvar #64
 
 	0 tvar <cold>    \ entry point of virtual machine program, set later on
 	0 tvar pwd       \ previous word pointer
@@ -155,29 +159,54 @@ label: entry
 
 	TERMBUF =buf + constant =tbufend
 
-:m INC #N1 2/ t, t, NADDR ;m ( b -- )
-:m DEC #1  2/ t, t, NADDR ;m ( b -- )
+:m INC 2/ #N1 2/ t, t, NADDR ;m ( b -- )
+:m DEC 2/ #1  2/ t, t, NADDR ;m ( b -- )
 
 label: start
 	start 2/ entry t!
 
 	begin
-		w 2/ GET 
+		w GET 
 		w -if HALT then
-		w 2/ PUT
+		#N1 w ADD
+		w PUT
 	again
 	HALT
 
-\ NOTE: This version is going to require a lot more self-modifying code
-
-	\ TODO: Set entry point
-	\ Load sp0, rp0, store in sp and rp
-	\ Load <cold>, store in ip
-	\ fall-throw
+	{sp0} {sp} MOV
+	{rp0} {rp} MOV
+	<cold> ip MOV
+	( fall-through )
 label: vm
-	\ ip -> w
-	\ ip++
-	\ jump(w) <- requires self-modifying code
+	ip w MOV
+	ip INC
+	\ jump(w) <- if addr < 64 use jump table, else next ip
+	
+
+:m --sp ;m
+:m ++sp ;m
+:m --rp ;m
+:m ++rp ;m
+
+label: bye
+	HALT
+
+label: 1-
+	tos DEC
+	vm JMP
+
+label: xt-jump-table
+	bye 2/ t,
+	1- 2/ t,
+
+\ TODO: start/vm, nest, unnest, push, jump, jumpz, next, bye, exit, lshift,
+\ rshift, and, or, xor, +, um+, @, !, c@, c!, dup, drop, swap, over, 1-, >r,
+\ r>, r@, rdrop, execute, sp!, rp!, sp@, rp@, key, emit
+
+
+
+\ TODO: It is probably best to use token threaded code, tokens <64 are
+\ instructions, greater than are addresses.
 
 \ ---------------------------------- Image Generation ------------------------
 
