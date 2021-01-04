@@ -14,7 +14,14 @@ smaller system on an FPGA.
 
 An 8-bit SUBLEQ machine might be nice to target also, however that would
 be a little more difficult, but still doable. A 16-bit virtual machine 
-would have to be emulated anyway.
+would have to be emulated anyway. A few modifications to the SUBLEQ machine,
+which are not implemented, would increase speed, reduce memory usage or both,
+one is two have an always zero register, which reduces the size of some
+common assembly routines which have to zero the register after use. Another
+obvious one, which defeats the purpose of the machine, is to add more 
+instructions, just adding one or two instructions can greatly speed up the
+system, such as left/right shifts and a bitwise instruction such as NAND. If
+just one instruction were to be added, NAND would be it.
 
 ## To Do
 

@@ -54,6 +54,10 @@ static int subleq(subleq_t *s, const uint64_t cycles, const int trace) {
 		}
 		if (next >= SZ)
 			next = -1;
+		if (trace) {
+			if (fprintf(stderr, "%d %d %d %d\n", pc, a, b, c) < 0)
+				return -4;
+		}
 		pc = next;
 	}
 	s->pc = pc;

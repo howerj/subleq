@@ -13,5 +13,5 @@ subleq.dec: subleq.fth
 	gforth subleq.fth
 
 clean:
-	rm -fv subleq *.dec *.hex
+	rm -fv subleq *.dec *.hex *.exe
 
