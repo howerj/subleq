@@ -56,11 +56,6 @@ size =cell - tep !
   talign
   there tlast @ t, tlast !
   parse-word dup tc, 0 ?do count tc, loop drop talign ;m
-:m hex# ( u -- addr len )  0 <# base @ >r hex =lf hold # # # # r> base ! #> ;m
-:m save-hex ( <name> -- )
-  parse-word w/o create-file throw
-  there 0 do i t@  over >r hex# r> write-file throw =cell +loop
-   close-file throw ;m
 :m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m 
 :m >neg dup 7FFF u> if 10000 - then ;
 :m save-target ( <name> -- )
@@ -148,7 +143,7 @@ label: entry
 
 	0 tvar ip        \ instruction pointer
 	0 tvar w         \ working pointer
-	0 tvar t         \ temporary register
+	0 tvar t         \ temporary register for Virtual Machine
 	0 tvar tos       \ top of stack
 	0 tvar h         \ dictionary pointer
 	0 tvar {state}   \ compiler state
@@ -159,6 +154,7 @@ label: entry
 	0 tvar {handler} \ throw/catch handler
 	0 tvar {last}    \ last defined word
 	0 tvar #tib      \ terminal input buffer
+	0 tvar xt-loc    \ jump table location
 	char B invert tvar /AC
 
 	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
@@ -177,9 +173,7 @@ label: start
 	begin
 		tos GET 
 		tos -if HALT then
-		tos w MOV
 		tos PUT
-		w PUT
 	again
 	HALT
 
@@ -192,7 +186,6 @@ label: vm
 	ip INC
 	\ jump(w) <- if addr < 64 use jump table, else next ip
 	
-
 :m ++sp {sp} DEC ;m
 :m --sp {sp} ADD ;m
 :m --rp {rp} DEC ;m
@@ -210,6 +203,7 @@ label: invert
 	vm JMP
 
 label: xt-jump-table
+	xt-jump-table 2/ xt-loc t!
 	bye    2/ t,
 	1-     2/ t,
 	invert 2/ t,
@@ -219,14 +213,8 @@ label: xt-jump-table
 \ r>, r@, rdrop, execute, sp!, rp!, sp@, rp@, key, emit
 
 
-
-\ TODO: It is probably best to use token threaded code, tokens <64 are
-\ instructions, greater than are addresses.
-
 \ ---------------------------------- Image Generation ------------------------
 
-\ TODO: Delete 'save-hex' after image is created.
-\ save-hex    subleq.hex
 save-target subleq.dec
 .stat
 .end
