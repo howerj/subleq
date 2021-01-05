@@ -56,7 +56,7 @@ size =cell - tep !
   talign
   there tlast @ t, tlast !
   parse-word dup tc, 0 ?do count tc, loop drop talign ;m
-:m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m 
+:m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m
 :m >neg dup 7FFF u> if 10000 - then ;
 :m save-target ( <name> -- )
   parse-word w/o create-file throw
@@ -90,44 +90,41 @@ size =cell - tep !
 \ ---------------------------------- Forth VM --------------------------------
 
 :m Z 0 t, ;m \ Address 0 must contain 0
-:m NADDR there 2/ 1+ t, ;m 
+:m NADDR there 2/ 1+ t, ;m
 :m HALT 0 t, 0 t, -1 t, ;m
 :m JMP 2/ Z Z t, ;m ( c -- )
 :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m ( a b -- )
 :m SUB swap 2/ t, 2/ t, NADDR ;m ( a b -- )
 :m NOP Z Z NADDR ;m ( -- )
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
-:m MOV 
-	2/ >r r@ dup t, t, NADDR 
-        2/ t, Z  NADDR 
-	r> Z  t, NADDR 
+:m MOV
+	2/ >r r@ dup t, t, NADDR
+        2/ t, Z  NADDR
+	r> Z  t, NADDR
 	Z Z NADDR ;m ( a b -- )
 :m PUT 2/ t, -1 t, NADDR ;m ( a -- : load from address and output character )
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get character from input and store at addr. )
 :m begin there ;m ( -- addr )
 :m again JMP ;m ( addr -- )
 :m mark there 0 t, ;m
-:m if 
-	2/ dup t, Z there 2/ 4 + dup t, 
-	Z Z 3 + t, 
-	Z Z NADDR 
+:m if
+	2/ dup t, Z there 2/ 4 + dup t,
+	Z Z 3 + t,
+	Z Z NADDR
 	Z t, mark ;m ( var -- addr )
 :m until
-	2/ dup t, Z there 2/ 4 + dup t, 
-	Z Z 3 + t, 
-	Z Z NADDR 
+	2/ dup t, Z there 2/ 4 + dup t,
+	Z Z 3 + t,
+	Z Z NADDR
 	Z t, 2/ t, ;m ( var -- addr )
-\ :m -if 2/ t, Z mark ;m  ( var -- addr )
-\ :m -until 2/ t, Z 2/ t, ;m
 :m -if 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;m  ( var -- addr )
 :m -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ;m  ( addr var -- addr )
 :m then begin 2/ swap t! ;m
 :m subleq rot t, swap t, t, ;m ( a b c -- )
 
-\ TODO: load/store/jump indirect
-:m iLOAD  ;m
-:m iJMP   ;m
+:m iLOAD  ;m ( addr w -- )
 :m iSTORE ;m
+:m iJMP   ;m
 
 	0 t, 0 t,
 label: entry
@@ -155,7 +152,6 @@ label: entry
 	0 tvar {last}    \ last defined word
 	0 tvar #tib      \ terminal input buffer
 	0 tvar xt-loc    \ jump table location
-	char B invert tvar /AC
 
 	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
 	=end =stksz 2* -           dup tvar {rp0} tvar {rp} \ grows upwards
@@ -171,7 +167,7 @@ label: start
 	start 2/ entry t!
 
 	begin
-		tos GET 
+		tos GET
 		tos -if HALT then
 		tos PUT
 	again
@@ -185,7 +181,13 @@ label: vm
 	ip w MOV
 	ip INC
 	\ jump(w) <- if addr < 64 use jump table, else next ip
-	
+	\ w t iLOAD
+	\ #64 t -if exec jump table vm JMP then
+	\ (else-nest)
+	vm JMP
+\ TODO: alternatively, the jump table is not needed, we could jump directly
+\ if the address is within the VM address range.
+
 :m ++sp {sp} DEC ;m
 :m --sp {sp} ADD ;m
 :m --rp {rp} DEC ;m
@@ -198,7 +200,7 @@ label: 1-
 	tos DEC
 	vm JMP
 
-label: invert 
+label: invert
 	tos INV
 	vm JMP
 

@@ -13,19 +13,19 @@ CPU and project to see if this esoteric system is faster or produces a
 smaller system on an FPGA.
 
 An 8-bit SUBLEQ machine might be nice to target also, however that would
-be a little more difficult, but still doable. A 16-bit virtual machine 
+be a little more difficult, but still doable. A 16-bit virtual machine
 would have to be emulated anyway. A few modifications to the SUBLEQ machine,
 which are not implemented, would increase speed, reduce memory usage or both,
 one is two have an always zero register, which reduces the size of some
 common assembly routines which have to zero the register after use. Another
-obvious one, which defeats the purpose of the machine, is to add more 
+obvious one, which defeats the purpose of the machine, is to add more
 instructions, just adding one or two instructions can greatly speed up the
 system, such as left/right shifts and a bitwise instruction such as NAND. If
 just one instruction were to be added, NAND would be it.
 
 ## Building and Running
 
-To build and run the SUBLEQ VM program you will need Make and a C compiler, 
+To build and run the SUBLEQ VM program you will need Make and a C compiler,
 GNU make and GCC should work. To build the image that is run on the VM, you
 will need gforth. Type:
 
@@ -39,7 +39,7 @@ To run the target image in the VM.
 
 ## SUBLEQ Specification
 
-SUBLEQ is a One Instruction Set Computer, or OISC, there are multiple types 
+SUBLEQ is a One Instruction Set Computer, or OISC, there are multiple types
 of OISC of which SUBLEQ is one. SUBLEQ stands for "Subtract and Branch if
 Less Than Or Equal (to Zero)", each SUBLEQ instruction consists of three
 operands called "a", "b", and "c", the contents of the memory location pointed
