@@ -56,7 +56,7 @@ size =cell - tep !
   talign
   there tlast @ t, tlast !
   parse-word dup tc, 0 ?do count tc, loop drop talign ;m
-:m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m
+:m dec# base @ >r decimal dup >r abs 0 <# bl hold #s r> sign #> r> base ! ;m
 :m >neg dup 7FFF u> if 10000 - then ;
 :m save-target ( <name> -- )
   parse-word w/o create-file throw
@@ -74,7 +74,7 @@ size =cell - tep !
     ." target: "      target.1      +order words cr cr
     ." target-only: " target.only.1 +order words cr cr
     ." assembler: "   assembler.1   +order words cr cr
-    ." meta: "        meta.1        +order words cr cr
+    ." met:a "        meta.1        +order words cr cr
   then
   ." used> " there dup ." 0x" .h ." / " .d cr ;m
 :m .end only forth also definitions decimal ;m
@@ -122,16 +122,31 @@ size =cell - tep !
 :m then begin 2/ swap t! ;m
 :m subleq rot t, swap t, t, ;m ( a b c -- )
 
-:m iLOAD  ;m ( addr w -- )
-:m iSTORE ;m
-:m iJMP   ;m
+
+( :m MOV
+	2/ >r r@ dup t, t, NADDR
+        2/ t, Z  NADDR
+	r> Z  t, NADDR
+	Z Z NADDR ;m ( a b -- )
+
+:m iLOAD
+	swap there 3 4 * 2 * 3 2 * + + MOV
+	0 swap MOV ;m ( indr w -- : indirect load )
+
+:m iSTORE 
+	2drop \ TODO: implement this
+	;m ( addr w -- )
+
+:m iJMP   
+	swap there 3 4 * 2 * 5 2 * + + MOV
+	Z Z NADDR ;m ( indr -- )
 
 	0 t, 0 t,
 label: entry
 	3 t,
 	HALT
-	-1 tvar #N1
-	1 tvar #1
+	-1 tvar #N1      \ must contain -1
+	1 tvar #1        \ must contain  1
 	0 tvar R0        \ temporary register
 	0 tvar R1        \ temporary register
 
@@ -151,7 +166,7 @@ label: entry
 	0 tvar {handler} \ throw/catch handler
 	0 tvar {last}    \ last defined word
 	0 tvar #tib      \ terminal input buffer
-	0 tvar xt-loc    \ jump table location
+	0 tvar primitive \ any address lower than this one must be a primitive
 
 	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
 	=end =stksz 2* -           dup tvar {rp0} tvar {rp} \ grows upwards
@@ -180,39 +195,68 @@ label: start
 label: vm
 	ip w MOV
 	ip INC
-	\ jump(w) <- if addr < 64 use jump table, else next ip
-	\ w t iLOAD
-	\ #64 t -if exec jump table vm JMP then
-	\ (else-nest)
+	ip w iLOAD
+	primitive w SUB
+	w -if w iJMP then
+	\ TODO: nest (increment RP, store ip, load new IP, vm JMP)
 	vm JMP
-\ TODO: alternatively, the jump table is not needed, we could jump directly
-\ if the address is within the VM address range.
 
 :m ++sp {sp} DEC ;m
-:m --sp {sp} ADD ;m
+:m --sp {sp} INC ;m
 :m --rp {rp} DEC ;m
-:m ++rp {rp} ADD ;m
+:m ++rp {rp} INC ;m
 
-label: bye
-	HALT
+:m :a ( "name" -- : assembly only routine, no header )
+  $CAFED00D
+  target.1 +order also definitions
+  create talign there ,
+  assembler.1 +order
+  does> @ t, ;m
+:m (a); 
+   [ meta.1 -order ] 
+	$CAFED00D <> if abort" unstructured" then assembler.1 -order 
+   [ meta.1 +order ] ;m
+:m ;a (a); vm JMP ;m
 
-label: 1-
-	tos DEC
-	vm JMP
-
-label: invert
-	tos INV
-	vm JMP
-
-label: xt-jump-table
-	xt-jump-table 2/ xt-loc t!
-	bye    2/ t,
-	1-     2/ t,
-	invert 2/ t,
+:a opBye HALT ;a
+:a opDec tos DEC ;a
+:a opInvert tos INV ;a
+:a opPush
+	++sp 
+	tos {sp} iSTORE 
+	ip {sp} iLOAD
+	ip INC  ;a
+:a opSub
+	;a
+:a opAdd
+	w {sp} iLOAD
+	w tos ADD 
+	--sp 
+	;a
+:a opEmit
+	tos PUT
+	tos {sp} iLOAD
+	--sp
+	;a
+:a opKey?
+	++sp
+	tos {sp} iSTORE
+	tos GET ;a
 
 \ TODO: start/vm, nest, unnest, push, jump, jumpz, next, bye, exit, lshift,
 \ rshift, and, or, xor, +, um+, @, !, c@, c!, dup, drop, swap, over, 1-, >r,
 \ r>, r@, rdrop, execute, sp!, rp!, sp@, rp@, key, emit
+
+there 2/ primitive t!
+
+	opPush char H t,
+	opEmit
+	opPush char i t,
+	opEmit
+	opBye
+
+\ Start of Forth code
+
 
 
 \ ---------------------------------- Image Generation ------------------------

@@ -63,6 +63,8 @@ use direct memory mapping.
   - [ ] Implement Virtual Machine capable of executing Forth
   - [ ] Implement Forth on the virtual machine
   - [ ] Make the system self-hosting, and remove Gforth as a dependency.
+  - [ ] Make a LZSS compressed image that is decompressed at run time,
+        a CRC check would be nice also.
 * [ ] Documentation
 * [ ] Optional: Port to FPGA
 * [ ] Optional: Port and improve self-interpreter with I/O
