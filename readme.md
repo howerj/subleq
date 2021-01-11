@@ -27,7 +27,7 @@ just one instruction were to be added, NAND would be it.
 
 To build and run the SUBLEQ VM program you will need Make and a C compiler,
 GNU make and GCC should work. To build the image that is run on the VM, you
-will need gforth. Type:
+will need [gforth](https://gforth.org/). Type:
 
 	make
 
@@ -52,12 +52,14 @@ to treat memory locations specially, not quite a direct memory mapping, as
 the CPU operation is directly effected by the I/O, other implementations do
 use direct memory mapping.
 
+The SUBLEQ Virtual Machine is quite small at around 900 bytes of C and
+is available [here](subleq.c).
+
 ## To Do
 
 * [x] Implement virtual machine and skeleton of project
   * [ ] Optional: Add proper terminal handling for Unix and Windows
   * [ ] Optional: Add debugging functionality
-  * [ ] Optional: Simplify C Virtual Machine
 * [x] Implement SUBLEQ routines
 * [ ] Implement eForth
   - [ ] Implement Virtual Machine capable of executing Forth
@@ -74,13 +76,14 @@ use direct memory mapping.
 ## References
 
 * <https://en.wikipedia.org/wiki/Forth_(programming_language)>
+* <https://en.wikipedia.org/wiki/One-instruction_set_computer>
 * <https://github.com/howerj/bit-serial>
 * <http://gerigeri.uw.hu/DawnOS/index.html>
 * <https://hackaday.io/project/158329-dawn-the-subleq-operating-system-by-geri>
 * <https://rosettacode.org/wiki/Subleq>
-* <https://en.wikipedia.org/wiki/One-instruction_set_computer#Subtract_and_branch_if_less_than_or_equal_to_zero>
 * <https://github.com/8l/hsq>
 * <http://mazonka.com/subleq/>
-* <https://stackoverflow.com/questions/2982729/is-it-possible-to-implement-bitwise-operators-using-integer-arithmetic?rq=1>
-* <https://stackoverflow.com/questions/34120161/bitwise-operations-in-subleq>
+* <https://stackoverflow.com/questions/2982729>
+* <https://stackoverflow.com/questions/34120161>
 * <https://web.ece.ucsb.edu/~parhami/pubs_folder/parh88-ijeee-ultimate-risc.pdf>
+

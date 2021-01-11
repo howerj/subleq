@@ -1,9 +1,19 @@
+\ Project: Cross Compiler and eForth interpreter for a SUBLEQ CPU
+\ License: The Unlicense
+\ Author:  Richard James Howe
+\ Email:   howe.r.j.89@gmail.com
+\ Repo:    <https://github.com/howerj/subleq>
 \
-\ Cross Compiler and eForth interpreter for the SUBLEQ CPU available at:
+\ References:
 \
-\     <https://github.com/howerj/subleq>
+\ - <https://en.wikipedia.org/wiki/Threaded_code>
+\ - <https://github.com/howerj/embed>
+\ - <https://github.com/howerj/forth-cpu>
+\ - <https://github.com/samawati/j1eforth>
+\ - <https://www.bradrodriguez.com/papers/>
+\ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
 \
-\ This is a work in progress.
+\ Tested with GForth version 0.7.3
 \
 
 only forth also definitions hex
@@ -97,11 +107,6 @@ size =cell - tep !
 :m SUB swap 2/ t, 2/ t, NADDR ;m ( a b -- )
 :m NOP Z Z NADDR ;m ( -- )
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
-:m MOV
-	2/ >r r@ dup t, t, NADDR
-        2/ t, Z  NADDR
-	r> Z  t, NADDR
-	Z Z NADDR ;m ( a b -- )
 :m PUT 2/ t, -1 t, NADDR ;m ( a -- : load from address and output character )
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get character from input and store at addr. )
 :m begin there ;m ( -- addr )
@@ -121,16 +126,15 @@ size =cell - tep !
 :m -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ;m  ( addr var -- addr )
 :m then begin 2/ swap t! ;m
 :m subleq rot t, swap t, t, ;m ( a b c -- )
-
-
-( :m MOV
+:m MOV
 	2/ >r r@ dup t, t, NADDR
         2/ t, Z  NADDR
 	r> Z  t, NADDR
 	Z Z NADDR ;m ( a b -- )
 
+\ TODO: Test this
 :m iLOAD
-	swap there 3 4 * 2 * 3 2 * + + MOV
+	swap there 2/ 3 4 * 3 + + 2* MOV
 	0 swap MOV ;m ( indr w -- : indirect load )
 
 :m iSTORE 
@@ -138,7 +142,7 @@ size =cell - tep !
 	;m ( addr w -- )
 
 :m iJMP   
-	swap there 3 4 * 2 * 5 2 * + + MOV
+	swap there 2/ 3 4 * 3 + + 2* MOV \ 3 4 * 2 * 5 2 * + + MOV
 	Z Z NADDR ;m ( indr -- )
 
 	0 t, 0 t,
@@ -181,12 +185,7 @@ label: entry
 label: start
 	start 2/ entry t!
 
-	begin
-		tos GET
-		tos -if HALT then
-		tos PUT
-	again
-	HALT
+	begin tos GET tos -if HALT then tos PUT again HALT
 
 	{sp0} {sp} MOV
 	{rp0} {rp} MOV
@@ -195,23 +194,46 @@ label: start
 label: vm
 	ip w MOV
 	ip INC
-	ip w iLOAD
-	primitive w SUB
-	w -if w iJMP then
+	w t iLOAD
+	t w MOV
+	primitive t SUB 
+	t -if w iJMP then 
 	\ TODO: nest (increment RP, store ip, load new IP, vm JMP)
 	vm JMP
+
+\ TODO: lshift, rshift, and, or, xor, um+, c@, c!, 
 
 :m ++sp {sp} DEC ;m
 :m --sp {sp} INC ;m
 :m --rp {rp} DEC ;m
 :m ++rp {rp} INC ;m
 
+:m :ht ( "name" -- : forth only routine )
+  get-current >r target.1 set-current create
+  r> set-current CAFEBABE talign there ,
+  
+  does> @ 2/ t, ( really a call ) ;m
+
+:m :t ( "name" -- : forth only routine )
+  >in @ thead >in !
+  get-current >r target.1 set-current create
+  r> set-current CAFEBABE talign there ,
+  
+  does> @ 2/ t, ( really a call ) ;m
+
+:m :to ( "name" -- : forth only, target only routine )
+  >in @ thead >in !
+  get-current >r target.only.1 set-current create r> set-current
+  there ,
+  CAFEBABE
+  does> @ 2/ t, ;m
+
 :m :a ( "name" -- : assembly only routine, no header )
   $CAFED00D
   target.1 +order also definitions
   create talign there ,
   assembler.1 +order
-  does> @ t, ;m
+  does> @ 2/ t, ;m
 :m (a); 
    [ meta.1 -order ] 
 	$CAFED00D <> if abort" unstructured" then assembler.1 -order 
@@ -220,43 +242,128 @@ label: vm
 
 :a opBye HALT ;a
 :a opDec tos DEC ;a
+:a opInc tos INC ;a
 :a opInvert tos INV ;a
+:a opJump 
+	w ip iLOAD
+	w ip MOV
+	;a
 :a opPush
 	++sp 
 	tos {sp} iSTORE 
-	ip {sp} iLOAD
-	ip INC  ;a
+	tos ip iLOAD
+	ip INC ;a
 :a opSub
-	;a
+	w {sp} iLOAD
+	w tos SUB
+	--sp ;a
 :a opAdd
 	w {sp} iLOAD
 	w tos ADD 
-	--sp 
-	;a
+	--sp ;a
 :a opEmit
 	tos PUT
 	tos {sp} iLOAD
-	--sp
-	;a
+	--sp ;a
 :a opKey?
 	++sp
 	tos {sp} iSTORE
 	tos GET ;a
+:a opDrop
+	tos {sp} iLOAD
+	--sp ;a
+:a opDup
+	++sp
+	tos {sp} iSTORE ;a
+:a opSwap
+	tos w iSTORE
+	tos {sp} iLOAD
+	w {sp} iSTORE ;a
+:a opOver
+	w {sp} iLOAD
+	++sp
+	tos {sp} iSTORE
+	w tos MOV ;a
+:a opLoad
+	w tos iLOAD
+	w tos MOV ;a
+:a opStore
+	tos w MOV
+	--sp
+	tos {sp} iLOAD
+	tos w iSTORE
+	--sp
+	tos {sp} iLOAD ;a
+:a opToR
+	++rp
+	tos {rp} iSTORE
+	tos {sp} iLOAD
+	--sp ;a
+:a opFromR
+	++sp
+	tos {sp} iSTORE
+	tos {rp} iLOAD
+	--rp ;a
+:a opRDrop
+	--rp ;a
+:a opSp@
+	++sp
+	tos {sp} iSTORE
+	{sp} tos MOV
+	tos DEC ;a
+:a opSp!
+	{sp} tos MOV ;a
+:a opRp@
+	++sp
+	tos {sp} iSTORE
+	{rp} tos MOV
+	;a
+:a opRp!
+	tos {rp} MOV
+	--sp
+	tos {sp} iLOAD
+	;a
+:a opExecute
+	tos ip MOV
+	--sp
+	tos {sp} iLOAD
+	;a
+:a opExit
+	ip {rp} iLOAD
+	--rp
+	;a
+:a opJumpZ
+	tos if
+		w ip iLOAD
+		w ip MOV
+	then
+	--sp
+	tos {sp} iLOAD
+	;a
+:a opNext
+	ip INC
+	w {rp} iLOAD
+	w -if
+		w DEC
+		w {rp} iSTORE
+		w ip iLOAD
+		w ip MOV
+	then
+	;a
 
-\ TODO: start/vm, nest, unnest, push, jump, jumpz, next, bye, exit, lshift,
-\ rshift, and, or, xor, +, um+, @, !, c@, c!, dup, drop, swap, over, 1-, >r,
-\ r>, r@, rdrop, execute, sp!, rp!, sp@, rp@, key, emit
+:m literal opPush t, ;m
 
 there 2/ primitive t!
+there 2/ <cold> t!
 
-	opPush char H t,
+	opBye
+	char H literal
 	opEmit
-	opPush char i t,
+	char i literal
 	opEmit
 	opBye
 
 \ Start of Forth code
-
 
 
 \ ---------------------------------- Image Generation ------------------------
