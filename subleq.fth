@@ -124,7 +124,7 @@ size =cell - tep !
 	Z t, 2/ t, ;m ( var -- addr )
 :m -if 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;m  ( var -- addr )
 :m -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ;m  ( addr var -- addr )
-:m then begin 2/ swap t! ;m
+:m then begin 2/ swap t! NOP ;m ( TODO: Why do I need a NOP here!? )
 :m subleq rot t, swap t, t, ;m ( a b c -- )
 :m MOV
 	2/ >r r@ dup t, t, NADDR
@@ -135,9 +135,11 @@ size =cell - tep !
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( indr w -- : indirect load )
 :m iJMP  there 2/ 3 4 * 5 + + 2* MOV Z Z NADDR ;m ( indr -- )
 :m iSTORE 
-	2drop \ TODO: implement this
-	;m ( addr w -- )
-
+	swap >r
+	there 2/ 3 4 * 3 * 0 + + 2dup 2* MOV
+	                     2dup 1 + 2* MOV
+	                          7 + 2* MOV
+	r> 0 MOV ;m ( addr w -- )
 
 	0 t, 0 t,
 label: entry
@@ -175,6 +177,10 @@ label: entry
 :m INC 2/ #N1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ #1  2/ t, t, NADDR ;m ( b -- )
 :m INV R0 ZERO dup R0 SUB dup R0 swap MOV DEC ;m ( b -- : invert NB. b - a = b + ~a + 1 )
+:m ++sp {sp} DEC ;m
+:m --sp {sp} INC ;m
+:m --rp {rp} DEC ;m
+:m ++rp {rp} INC ;m
 
 label: start
 	start 2/ entry t!
@@ -191,16 +197,12 @@ label: vm
 	t w iLOAD
 	t w MOV
 	primitive t SUB 
-	t -if w iJMP then 
-	\ TODO: nest (increment RP, store ip, load new IP, vm JMP)
+	w iJMP
+	t -if w iJMP then
+	++rp ip {rp} iSTORE w ip MOV
 	vm JMP
 
 \ TODO: lshift, rshift, and, or, xor, um+, c@, c!, 
-
-:m ++sp {sp} DEC ;m
-:m --sp {sp} INC ;m
-:m --rp {rp} DEC ;m
-:m ++rp {rp} INC ;m
 
 :m :ht ( "name" -- : forth only routine )
   get-current >r target.1 set-current create
@@ -232,18 +234,36 @@ label: vm
    [ meta.1 +order ] ;m
 :m ;a (a); vm JMP ;m
 
+\ Tested
 :a opBye HALT ;a
 :a opDec tos DEC ;a
 :a opInc tos INC ;a
 :a opInvert tos INV ;a
+:a opLoad w tos iLOAD w tos MOV ;a
+:a opEmit tos PUT tos {sp} iLOAD --sp ;a
+:a opKey?  ++sp tos {sp} iSTORE tos GET ;a
+:a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
+
+\ untested
 :a opJump 
 	w ip iLOAD
 	w ip MOV ;a
-:a opPush
-	++sp 
-	tos {sp} iSTORE 
-	tos ip iLOAD
-	ip INC ;a
+:a opJumpZ
+	tos if
+		w ip iLOAD
+		w ip MOV
+	then
+	--sp
+	tos {sp} iLOAD ;a
+:a opNext
+	ip INC
+	w {rp} iLOAD
+	w -if
+		w DEC
+		w {rp} iSTORE
+		w ip iLOAD
+		w ip MOV
+	then ;a
 :a opSub
 	w {sp} iLOAD
 	w tos SUB
@@ -252,14 +272,6 @@ label: vm
 	w {sp} iLOAD
 	w tos ADD 
 	--sp ;a
-:a opEmit
-	tos PUT
-	tos {sp} iLOAD
-	--sp ;a
-:a opKey?
-	++sp
-	tos {sp} iSTORE
-	tos GET ;a
 :a opDrop
 	tos {sp} iLOAD
 	--sp ;a
@@ -274,9 +286,6 @@ label: vm
 	w {sp} iLOAD
 	++sp
 	tos {sp} iSTORE
-	w tos MOV ;a
-:a opLoad
-	w tos iLOAD
 	w tos MOV ;a
 :a opStore
 	tos w MOV
@@ -295,62 +304,38 @@ label: vm
 	tos {sp} iSTORE
 	tos {rp} iLOAD
 	--rp ;a
-:a opRDrop
-	--rp ;a
+:a opRDrop --rp ;a
 :a opSp@
 	++sp
 	tos {sp} iSTORE
 	{sp} tos MOV
 	tos DEC ;a
-:a opSp!
-	{sp} tos MOV ;a
+:a opSp! tos {sp} MOV ;a
 :a opRp@
 	++sp
 	tos {sp} iSTORE
-	{rp} tos MOV
-	;a
+	{rp} tos MOV ;a
 :a opRp!
 	tos {rp} MOV
 	--sp
-	tos {sp} iLOAD
-	;a
+	tos {sp} iLOAD ;a
 :a opExecute
 	tos ip MOV
 	--sp
-	tos {sp} iLOAD
-	;a
+	tos {sp} iLOAD ;a
 :a opExit
 	ip {rp} iLOAD
 	--rp ;a
-:a opJumpZ
-	tos if
-		w ip iLOAD
-		w ip MOV
-	then
-	--sp
-	tos {sp} iLOAD ;a
-:a opNext
-	ip INC
-	w {rp} iLOAD
-	w -if
-		w DEC
-		w {rp} iSTORE
-		w ip iLOAD
-		w ip MOV
-	then ;a
 :m literal opPush t, ;m
 
 there 2/ primitive t!
 there 2/ <cold> t!
 \ Start of Forth code
 
-	char H literal opEmit
-	char i literal opEmit
-	char ! literal opEmit
-	=lf literal opEmit
+	\ char H R1 t! R1 2/ literal opLoad opEmit
+	\ char H literal opEmit char i literal opEmit char ! literal opEmit =lf literal opEmit
+	=lf literal char ! literal char i literal char H literal opEmit opEmit opEmit opEmit
 	opBye
-
-
 
 \ ---------------------------------- Image Generation ------------------------
 
