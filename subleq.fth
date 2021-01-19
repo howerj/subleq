@@ -109,22 +109,33 @@ size =cell - tep !
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
 :m PUT 2/ t, -1 t, NADDR ;m ( a -- : load from address and output character )
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get character from input and store at addr. )
-:m begin there ;m ( -- addr )
-:m again JMP ;m ( addr -- )
-:m mark there 0 t, ;m
-:m if
+assembler.1 +order also definitions
+: begin there ; ( -- addr )
+: again JMP ; ( addr -- )
+: mark there 0 t, ;
+: if
 	2/ dup t, Z there 2/ 4 + dup t,
 	Z Z 3 + t,
 	Z Z NADDR
-	Z t, mark ;m ( var -- addr )
-:m until
+	Z t, mark ; ( var -- addr )
+: until
 	2/ dup t, Z there 2/ 4 + dup t,
 	Z Z 3 + t,
 	Z Z NADDR
-	Z t, 2/ t, ;m ( var -- addr )
-:m -if 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;m  ( var -- addr )
-:m -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ;m  ( addr var -- addr )
-:m then begin 2/ swap t! NOP ;m ( TODO: Why do I need a NOP here!? )
+	Z t, 2/ t, ; ( var -- addr )
+: -if 
+	2/ t, Z there 2/ 4 + t, 
+	Z Z there 2/ 4 + t, 
+	Z Z mark ;  ( var -- addr )
+: -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ;  ( addr var -- addr )
+: then begin 2/ swap t! NOP ; ( TODO: Why do I need a NOP here!? )
+: else mark swap then ;
+: while if swap ;
+: repeat branch then ;
+assembler.1 -order
+meta.1 +order also definitions
+
+
 :m subleq rot t, swap t, t, ;m ( a b c -- )
 :m MOV
 	2/ >r r@ dup t, t, NADDR
@@ -182,6 +193,8 @@ label: entry
 :m --rp {rp} DEC ;m
 :m ++rp {rp} INC ;m
 
+\ TODO: Optimize VM
+assembler.1 +order
 label: start
 	start 2/ entry t!
 
@@ -197,10 +210,13 @@ label: vm
 	t w iLOAD
 	t w MOV
 	primitive t SUB 
-	w iJMP
+	\ R1 GET
 	t -if w iJMP then
-	++rp ip {rp} iSTORE w ip MOV
+	++rp 
+	ip {rp} iSTORE 
+	w ip MOV
 	vm JMP
+assembler.1 -order
 
 \ TODO: lshift, rshift, and, or, xor, um+, c@, c!, 
 
@@ -229,9 +245,7 @@ label: vm
   assembler.1 +order
   does> @ 2/ t, ;m
 :m (a); 
-   [ meta.1 -order ] 
-	$CAFED00D <> if abort" unstructured" then assembler.1 -order 
-   [ meta.1 +order ] ;m
+   $CAFED00D <> if abort" unstructured" then assembler.1 -order ;m
 :m ;a (a); vm JMP ;m
 
 \ Tested
@@ -243,6 +257,12 @@ label: vm
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
 :a opKey?  ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
+:a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
+:a opDup ++sp tos {sp} iSTORE ;a
+:a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
+:a opDrop tos {sp} iLOAD --sp ;a
+:a opSub w {sp} iLOAD w tos SUB --sp ;a
+:a opAdd w {sp} iLOAD w tos ADD --sp ;a
 
 \ untested
 :a opJump 
@@ -264,29 +284,6 @@ label: vm
 		w ip iLOAD
 		w ip MOV
 	then ;a
-:a opSub
-	w {sp} iLOAD
-	w tos SUB
-	--sp ;a
-:a opAdd
-	w {sp} iLOAD
-	w tos ADD 
-	--sp ;a
-:a opDrop
-	tos {sp} iLOAD
-	--sp ;a
-:a opDup
-	++sp
-	tos {sp} iSTORE ;a
-:a opSwap
-	tos w iSTORE
-	tos {sp} iLOAD
-	w {sp} iSTORE ;a
-:a opOver
-	w {sp} iLOAD
-	++sp
-	tos {sp} iSTORE
-	w tos MOV ;a
 :a opStore
 	tos w MOV
 	--sp
@@ -326,16 +323,25 @@ label: vm
 :a opExit
 	ip {rp} iLOAD
 	--rp ;a
-:m literal opPush t, ;m
-
 there 2/ primitive t!
-there 2/ <cold> t!
+
+:m literal opPush t, ;m
+:m ;t CAFEBABE <> if abort" unstructured" then talign opExit target.only.1 -order ;
+
+:t bye opBye ;t
+:t emit opEmit ;t
+:t dup opDup ;t
+:t drop opDrop ;t
+:t [@] opLoad ;t
+:t [!] opStore ;t
+
 \ Start of Forth code
 
-	\ char H R1 t! R1 2/ literal opLoad opEmit
-	\ char H literal opEmit char i literal opEmit char ! literal opEmit =lf literal opEmit
-	=lf literal char ! literal char i literal char H literal opEmit opEmit opEmit opEmit
+:t cold 
+there 2/ <cold> t!
+	char H literal opEmit char i literal opEmit char ! literal opEmit =lf literal opEmit
 	opBye
+	;t
 
 \ ---------------------------------- Image Generation ------------------------
 
