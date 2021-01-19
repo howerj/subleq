@@ -115,14 +115,15 @@ assembler.1 +order also definitions
 : mark there 0 t, ;
 : if
 	2/ dup t, Z there 2/ 4 + dup t,
-	Z Z 3 + t,
+	Z Z 6 + t,
 	Z Z NADDR
 	Z t, mark ; ( var -- addr )
 : until
 	2/ dup t, Z there 2/ 4 + dup t,
-	Z Z 3 + t,
+	Z Z 6 + t,
 	Z Z NADDR
 	Z t, 2/ t, ; ( var -- addr )
+: +if   Z 2/ t, mark ;
 : -if 
 	2/ t, Z there 2/ 4 + t, 
 	Z Z there 2/ 4 + t, 
@@ -135,8 +136,6 @@ assembler.1 +order also definitions
 assembler.1 -order
 meta.1 +order also definitions
 
-
-:m subleq rot t, swap t, t, ;m ( a b c -- )
 :m MOV
 	2/ >r r@ dup t, t, NADDR
         2/ t, Z  NADDR
@@ -144,7 +143,14 @@ meta.1 +order also definitions
 	Z Z NADDR ;m ( a b -- )
 
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( indr w -- : indirect load )
-:m iJMP  there 2/ 3 4 * 5 + + 2* MOV Z Z NADDR ;m ( indr -- )
+\ :m iJMP  there 2/ 3 4 * 5 + + 2* MOV NOP ;m ( indr -- )
+:m iJMP \ TODO: Fix this, there are problems with it, also why does it work?
+	there 2/ 3 4 * 5 + + 2*
+	2/ >r r@ dup t, t, NADDR
+        2/ t, Z  NADDR
+	r> Z  t, NADDR
+	Z Z NADDR 
+	Z Z NADDR ;m ( indr -- )
 :m iSTORE 
 	swap >r
 	there 2/ 3 4 * 3 * 0 + + 2dup 2* MOV
@@ -155,7 +161,6 @@ meta.1 +order also definitions
 	0 t, 0 t,
 label: entry
 	3 t,
-	HALT
 	-1 tvar #N1      \ must contain -1
 	1 tvar #1        \ must contain  1
 	0 tvar R0        \ temporary register
@@ -197,9 +202,6 @@ label: entry
 assembler.1 +order
 label: start
 	start 2/ entry t!
-
-	\ begin tos GET tos -if HALT then tos PUT again HALT
-
 	{sp0} {sp} MOV
 	{rp0} {rp} MOV
 	<cold> ip MOV
@@ -210,12 +212,8 @@ label: vm
 	t w iLOAD
 	t w MOV
 	primitive t SUB 
-	\ R1 GET
-	t -if w iJMP then
-	++rp 
-	ip {rp} iSTORE 
-	w ip MOV
-	vm JMP
+\	t +if ++rp ip {rp} iSTORE w ip MOV vm JMP then w iJMP
+	t -if w iJMP then ++rp ip {rp} iSTORE w ip MOV vm JMP
 assembler.1 -order
 
 \ TODO: lshift, rshift, and, or, xor, um+, c@, c!, 
@@ -254,6 +252,7 @@ assembler.1 -order
 :a opInc tos INC ;a
 :a opInvert tos INV ;a
 :a opLoad w tos iLOAD w tos MOV ;a
+:a opStore tos w MOV tos {sp} iLOAD --sp tos w iSTORE tos {sp} iLOAD --sp ;a
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
 :a opKey?  ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
@@ -263,34 +262,20 @@ assembler.1 -order
 :a opDrop tos {sp} iLOAD --sp ;a
 :a opSub w {sp} iLOAD w tos SUB --sp ;a
 :a opAdd w {sp} iLOAD w tos ADD --sp ;a
+:a opJump w ip iLOAD w ip MOV ;a
+:a opJumpZ tos w MOV --sp w if vm JMP then w ip iLOAD w ip MOV ;a
+\ :a opJumpN tos w MOV --sp w -if vm JMP then w ip iLOAD w ip MOV ;a
 
 \ untested
-:a opJump 
-	w ip iLOAD
-	w ip MOV ;a
-:a opJumpZ
-	tos if
-		w ip iLOAD
-		w ip MOV
-	then
-	--sp
-	tos {sp} iLOAD ;a
 :a opNext
 	ip INC
 	w {rp} iLOAD
-	w -if
+	w if
 		w DEC
 		w {rp} iSTORE
 		w ip iLOAD
 		w ip MOV
 	then ;a
-:a opStore
-	tos w MOV
-	--sp
-	tos {sp} iLOAD
-	tos w iSTORE
-	--sp
-	tos {sp} iLOAD ;a
 :a opToR
 	++rp
 	tos {rp} iSTORE
@@ -325,21 +310,46 @@ assembler.1 -order
 	--rp ;a
 there 2/ primitive t!
 
-:m literal opPush t, ;m
-:m ;t CAFEBABE <> if abort" unstructured" then talign opExit target.only.1 -order ;
+:m ;t CAFEBABE <> if abort" unstructured" then talign opExit target.only.1 -order ;m
 
+:m lit         opPush t, ;m
+:m [char] char opPush t, ;m
+:m char   char opPush t, ;m
+:m begin talign there ;m
+:m until talign opJumpZ 2/ t, ;m
+:m again talign opJump  2/ t, ;m
+:m if opJumpZ there 0 t, ;m
+\ :m -if opJumpN there 0 t, ;m
+:m mark opJump there 0 t, ;m
+:m then there 2/ swap t! ;m
+:m else mark swap then ;m
+:m while if ;m
+:m repeat swap again then ;m
+:m aft drop mark begin swap ;m
+:m next talign opNext 2/ t, ;m
+:m for opToR begin ;m
+
+:t 1+ opInc ;t
+:t 1- opDec ;t
+:t + opAdd ;t
+:t - opSub ;t
+:t invert opInvert ;t
 :t bye opBye ;t
 :t emit opEmit ;t
+:t key? opKey? ;t
 :t dup opDup ;t
 :t drop opDrop ;t
+:t over opOver ;t
+:t swap opSwap ;t
 :t [@] opLoad ;t
 :t [!] opStore ;t
+:t cr =cr lit emit =lf lit emit ;t
 
 \ Start of Forth code
 
 :t cold 
 there 2/ <cold> t!
-	char H literal opEmit char i literal opEmit char ! literal opEmit =lf literal opEmit
+	1 lit if char H opEmit char i opEmit char ! opEmit =lf lit opEmit then
 	opBye
 	;t
 
