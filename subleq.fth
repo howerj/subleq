@@ -74,18 +74,20 @@ size =cell - tep !
    close-file throw ;m
 :m .h base @ >r hex     u. r> base ! ;m
 :m .d base @ >r decimal u. r> base ! ;m
+:m tlen dup tflash + =cell + count 1f and nip ;m
 :m twords
    cr tlast @
    begin
-      dup tflash + =cell + count 1f and type space t@
+      dup dup tlen + 2/ .d tflash + =cell + count 1f and type space t@
    ?dup 0= until ;m
 :m .stat
   0 if
     ." target: "      target.1      +order words cr cr
     ." target-only: " target.only.1 +order words cr cr
     ." assembler: "   assembler.1   +order words cr cr
-    ." met:a "        meta.1        +order words cr cr
+    ." meta: "        meta.1        +order words cr cr
   then
+  0 if twords then
   ." used> " there dup ." 0x" .h ." / " .d cr ;m
 :m .end only forth also definitions decimal ;m
 :m atlast tlast @ ;m
@@ -110,7 +112,7 @@ size =cell - tep !
 :m PUT 2/ t, -1 t, NADDR ;m ( a -- : load from address and output character )
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get character from input and store at addr. )
 assembler.1 +order also definitions
-: begin there ; ( -- addr )
+: begin talign there ; ( -- addr )
 : again JMP ; ( addr -- )
 : mark there 0 t, ;
 : if
@@ -129,10 +131,10 @@ assembler.1 +order also definitions
 	Z Z there 2/ 4 + t, 
 	Z Z mark ;  ( var -- addr )
 : -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ;  ( addr var -- addr )
-: then begin 2/ swap t! NOP ; ( TODO: Why do I need a NOP here!? )
+: then begin 2/ swap t! ;
 : else mark swap then ;
 : while if swap ;
-: repeat branch then ;
+: repeat JMP then ;
 assembler.1 -order
 meta.1 +order also definitions
 
@@ -145,12 +147,7 @@ meta.1 +order also definitions
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( indr w -- : indirect load )
 \ :m iJMP  there 2/ 3 4 * 5 + + 2* MOV NOP ;m ( indr -- )
 :m iJMP \ TODO: Fix this, there are problems with it, also why does it work?
-	there 2/ 3 4 * 5 + + 2*
-	2/ >r r@ dup t, t, NADDR
-        2/ t, Z  NADDR
-	r> Z  t, NADDR
-	Z Z NADDR 
-	Z Z NADDR ;m ( indr -- )
+	there 2/ E + 2* MOV NOP ;m ( indr -- )
 :m iSTORE 
 	swap >r
 	there 2/ 3 4 * 3 * 0 + + 2dup 2* MOV
@@ -160,7 +157,7 @@ meta.1 +order also definitions
 
 	0 t, 0 t,
 label: entry
-	3 t,
+	-1 t,
 	-1 tvar #N1      \ must contain -1
 	1 tvar #1        \ must contain  1
 	0 tvar R0        \ temporary register
@@ -169,6 +166,7 @@ label: entry
 	0 tvar <cold>    \ entry point of virtual machine program, set later on
 	0 tvar pwd       \ previous word pointer
 
+\ TODO: Add hooks in for <key>, <emit>, <literal>, ...
 	0 tvar ip        \ instruction pointer
 	0 tvar w         \ working pointer
 	0 tvar t         \ temporary register for Virtual Machine
@@ -212,8 +210,11 @@ label: vm
 	t w iLOAD
 	t w MOV
 	primitive t SUB 
-\	t +if ++rp ip {rp} iSTORE w ip MOV vm JMP then w iJMP
-	t -if w iJMP then ++rp ip {rp} iSTORE w ip MOV vm JMP
+	t -if w iJMP then 
+	++rp 
+	ip {rp} iSTORE 
+	w ip MOV 
+	vm JMP
 assembler.1 -order
 
 \ TODO: lshift, rshift, and, or, xor, um+, c@, c!, 
@@ -263,24 +264,27 @@ assembler.1 -order
 :a opSub w {sp} iLOAD w tos SUB --sp ;a
 :a opAdd w {sp} iLOAD w tos ADD --sp ;a
 :a opJump w ip iLOAD w ip MOV ;a
-:a opJumpZ tos w MOV --sp w if vm JMP then w ip iLOAD w ip MOV ;a
-\ :a opJumpN tos w MOV --sp w -if vm JMP then w ip iLOAD w ip MOV ;a
+:a opJumpZ tos w MOV --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
+:a opJumpN tos w MOV --sp w -if ip INC vm JMP then w ip iLOAD w ip MOV ;a
+:a opR@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
+:a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
+:a opNext
+	w {rp} iLOAD
+	w t MOV
+	w if
+		t DEC
+		t {rp} iSTORE
+		t ip iLOAD
+		t ip MOV
+		vm JMP
+	then
+	ip INC 
+	--rp
+	;a
+:a op0<= tos w MOV #N1 tos MOV w +if 0 tos MOV then ;a
+:a op0=  tos w MOV #N1 tos MOV w  if 0 tos MOV then ;a
 
 \ untested
-:a opNext
-	ip INC
-	w {rp} iLOAD
-	w if
-		w DEC
-		w {rp} iSTORE
-		w ip iLOAD
-		w ip MOV
-	then ;a
-:a opToR
-	++rp
-	tos {rp} iSTORE
-	tos {sp} iLOAD
-	--sp ;a
 :a opFromR
 	++sp
 	tos {sp} iSTORE
@@ -293,8 +297,7 @@ assembler.1 -order
 	{sp} tos MOV
 	tos DEC ;a
 :a opSp! tos {sp} MOV ;a
-:a opRp@
-	++sp
+:a opRp@ ++sp
 	tos {sp} iSTORE
 	{rp} tos MOV ;a
 :a opRp!
@@ -317,16 +320,17 @@ there 2/ primitive t!
 :m char   char opPush t, ;m
 :m begin talign there ;m
 :m until talign opJumpZ 2/ t, ;m
+:m -until talign opJumpN 2/ t, ;m
 :m again talign opJump  2/ t, ;m
 :m if opJumpZ there 0 t, ;m
-\ :m -if opJumpN there 0 t, ;m
+:m -if opJumpN there 0 t, ;m
 :m mark opJump there 0 t, ;m
 :m then there 2/ swap t! ;m
 :m else mark swap then ;m
 :m while if ;m
 :m repeat swap again then ;m
 :m aft drop mark begin swap ;m
-:m next talign opNext 2/ t, ;m
+:m next opNext talign 2/ t, ;m
 :m for opToR begin ;m
 
 :t 1+ opInc ;t
@@ -343,15 +347,30 @@ there 2/ primitive t!
 :t swap opSwap ;t
 :t [@] opLoad ;t
 :t [!] opStore ;t
-:t cr =cr lit emit =lf lit emit ;t
+:t execute opRDrop opExecute ;t
+:t sp@ opSp@ ;t
+:t sp! opSp! ;t
+:t 0<= op0<= ;t
+:t 0= op0= ;t
+:to >r opFromR opSwap opToR opToR ;t compile-only
+:to r> opFromR opFromR opSwap opToR ;t compile-only
+:to r@ opFromR opR@ opSwap opToR ;t compile-only
 
-\ Start of Forth code
+:t cr =cr lit emit =lf lit emit ;t
+:t 0> 0<= invert ;t
+:t = - 0= ;t
+:t <> = invert ;t
+:t 2dup over over ;t
+:t 2drop drop drop ;t
+:t 2* dup + ;t
 
 :t cold 
 there 2/ <cold> t!
-	1 lit if char H opEmit char i opEmit char ! opEmit =lf lit opEmit then
-	opBye
-	;t
+	1 lit 0> if
+		3 lit for aft char H emit char i emit char ! emit cr then next
+	then
+	bye 
+;t
 
 \ ---------------------------------- Image Generation ------------------------
 

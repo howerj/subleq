@@ -62,7 +62,7 @@ is available [here](subleq.c).
   * [ ] Optional: Remove debugging functionality
 * [x] Implement SUBLEQ routines
 * [ ] Implement eForth
-  - [ ] Implement Virtual Machine capable of executing Forth
+  - [x] Implement Virtual Machine capable of executing Forth
   - [ ] Implement Forth on the virtual machine
   - [ ] Make the system self-hosting, and remove Gforth as a dependency.
   - [ ] Make a LZSS compressed image that is decompressed at run time,
