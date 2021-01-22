@@ -340,7 +340,6 @@ there 2/ primitive t!
 :t invert opInvert ;t
 :t bye opBye ;t
 :t emit opEmit ;t
-:t key? opKey? ;t
 :t dup opDup ;t
 :t drop opDrop ;t
 :t over opOver ;t
@@ -350,24 +349,49 @@ there 2/ primitive t!
 :t execute opRDrop opExecute ;t
 :t sp@ opSp@ ;t
 :t sp! opSp! ;t
-:t 0<= op0<= ;t
-:t 0= op0= ;t
 :to >r opFromR opSwap opToR opToR ;t compile-only
 :to r> opFromR opFromR opSwap opToR ;t compile-only
 :to r@ opFromR opR@ opSwap opToR ;t compile-only
-
-:t cr =cr lit emit =lf lit emit ;t
-:t 0> 0<= invert ;t
+:t here h 2/ lit opLoad ;t
+:t base {base} lit ;t  ( -- a : base variable controls input/output radix )
+:t dpl {dpl} lit ;t    ( -- a : push address of 'dpl' onto the variable stack )
+:t hld {hld} lit ;t    ( -- a : push address of 'hld' onto the variable stack )
+:t bl 20 lit ;t        ( -- space : push a space onto the stack )
+:t >in {in} lit ;t     ( -- b : push pointer to terminal input position )
+:t hex  $10 lit {base} 2/ lit opStore ;t ( -- : switch to hexadecimal input/output radix )
+:t source TERMBUF 2/ lit #tib 2/ lit opLoad ;t ( -- b u )
+:t last {last} 2/ lit opLoad ;t      ( -- : last defined word )
+:t 2* dup + ;t
+:t state {state} lit 2* ;t      ( -- a : compilation state variable )
+:t ] -1 lit {state} 2/ lit opStore ;t          ( -- : turn compile mode on )
+:t [  0 lit {state} 2/ lit opStore ;t immediate ( -- : turn compile mode off )
+:t nip swap drop ;t          ( u1 u2 -- u2 : remove next stack value )
+:t tuck swap over ;t         ( u1 u2 -- u2 u1 u2 : save top stack value )
+:t ?dup dup if dup then ;t   ( u -- u u | 0 : duplicate if not zero )
+:t rot >r swap r> swap ;t    ( u1 u2 u3 -- u2 u3 u1 : rotate three numbers )
+:t 2drop drop drop ;t        ( u u -- : drop two numbers )
+:t 2dup  over over ;t        ( u1 u2 -- u1 u2 u1 u2 : duplicate set of values )
+:t 0<= op0<= ;t
+:t 0> op0<= op0= ;t
+:t 0= op0= ;t
 :t = - 0= ;t
 :t <> = invert ;t
-:t 2dup over over ;t
-:t 2drop drop drop ;t
-:t 2* dup + ;t
+:t negate -1 lit invert ;t
+:t cell 2 lit ;t             ( -- u : size of memory cell )
+:t cell+ cell + ;t           ( a -- a : increment address to next cell )
+:t pick opSp@ + opLoad ;t        ( ??? u -- ??? u u : )
+
+\ :t key? opKey? dup 0< if drop 0 lit exit then -1 lit  ;t
+\ :t key begin key? until ;t
+\ :t +! tuck @ + swap ! ;t     ( n a -- : increment value at address by 'n' )
+
+
+:t cr =cr lit emit =lf lit emit ;t
 
 :t cold 
 there 2/ <cold> t!
 	1 lit 0> if
-		3 lit for aft char H emit char i emit char ! emit cr then next
+	3 lit for aft char H emit char i emit char ! emit cr then next
 	then
 	bye 
 ;t
