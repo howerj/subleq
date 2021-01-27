@@ -34,7 +34,7 @@ meta.1 +order also definitions
 
    2 constant =cell
 4000 constant size ( 16384 bytes, 8192 cells )
-2000 constant =end ( 8192  bytes, leaving 4096 for Dual Port Block RAM )
+4000 constant =end
   40 constant =stksz
   60 constant =buf
 0008 constant =bksp
@@ -178,8 +178,8 @@ label: entry
 	0 tvar primitive \ any address lower than this one must be a primitive
 
 	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
-	=end =stksz 2* -           dup tvar {rp0} tvar {rp} \ grows upwards
-	=end =stksz 2* - =buf - constant TERMBUF \ pad buffer space
+	=end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
+	=end =stksz 4 * - =buf - constant TERMBUF \ pad buffer space
 
 	TERMBUF =buf + constant =tbufend
 
@@ -211,8 +211,6 @@ label: vm
 	w ip MOV 
 	vm JMP
 assembler.1 -order
-
-\ TODO: lshift, rshift, and, or, xor, um+, c@, c!, 
 
 :m :ht ( "name" -- : forth only routine )
   get-current >r target.1 set-current create
@@ -266,42 +264,21 @@ assembler.1 -order
 :a op0> tos w MOV  0   tos MOV w +if neg1 tos MOV then ;a
 :a op0=  tos w MOV neg1 tos MOV w  if 0   tos MOV then ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
+\ untested
+:a opExit ip {rp} iLOAD --rp ;a
+:a opRDrop --rp ;a
+:a opSp@ ++sp tos {sp} iSTORE {sp} tos MOV tos DEC ;a
+:a opSp! tos {sp} MOV ;a
+:a opRp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
+:a opRp!  tos {rp} MOV --sp tos {sp} iLOAD ;a
+:a opExecute tos ip MOV --sp tos {sp} iLOAD ;a
 :a opNext
 	w {rp} iLOAD
 	w t MOV
-	w if
-		t DEC
-		t {rp} iSTORE
-		t ip iLOAD
-		t ip MOV
-		vm JMP
-	then
+	w if t DEC t {rp} iSTORE t ip iLOAD t ip MOV vm JMP then
 	ip INC 
 	--rp
 	;a
-
-\ untested
-:a opRDrop --rp ;a
-:a opSp@
-	++sp
-	tos {sp} iSTORE
-	{sp} tos MOV
-	tos DEC ;a
-:a opSp! tos {sp} MOV ;a
-:a opRp@ ++sp
-	tos {sp} iSTORE
-	{rp} tos MOV ;a
-:a opRp!
-	tos {rp} MOV
-	--sp
-	tos {sp} iLOAD ;a
-:a opExecute
-	tos ip MOV
-	--sp
-	tos {sp} iLOAD ;a
-:a opExit
-	ip {rp} iLOAD
-	--rp ;a
 there 2/ primitive t!
 
 :m ;t CAFEBABE <> if abort" unstructured" then talign opExit target.only.1 -order ;m
@@ -323,10 +300,10 @@ there 2/ primitive t!
 :m aft drop mark begin swap ;m
 :m next opNext talign 2/ t, ;m
 :m for opToR begin ;m
-
 \ TODO: Optimize by inline-ing assembly and renaming (ie. opInc -> 1+).
 :ht #0 0 lit ;t
 :ht #1 1 lit ;t
+:ht #-1 -1 lit ;t
 :t 1+ opInc ;t
 :t 1- opDec ;t
 :t + opAdd ;t
@@ -357,7 +334,7 @@ there 2/ primitive t!
 :t last {last} 2/ lit opLoad ;t ( -- : last defined word )
 :t 2* dup + ;t                  ( u -- u )
 :t state {state} lit 2* ;t      ( -- a : compilation state variable )
-:t ] -1 lit {state} 2/ lit opStore ;t           ( -- : turn compile mode on )
+:t ] #-1 {state} 2/ lit opStore ;t           ( -- : turn compile mode on )
 :t [  0 lit {state} 2/ lit opStore ;t immediate ( -- : turn compile mode off )
 :t nip opSwap opDrop ;t          ( u1 u2 -- u2 : remove next stack value )
 :t tuck opSwap opOver ;t         ( u1 u2 -- u2 u1 u2 : save top stack value )
@@ -375,6 +352,7 @@ there 2/ primitive t!
 :t > opSwap < ;t
 :t <= > opInvert ;t
 :t 0< 0 lit < ;t             ( n -- f )
+:t 0>= 0< invert ;t
 :t s>d opDup 0< ;t           ( n -- d )
 :t negate 1- opInvert ;t     ( u -- u )
 :t abs s>d if negate then ;t ( n -- u )
@@ -382,12 +360,12 @@ there 2/ primitive t!
 :t cell+ cell + ;t           ( a -- a : increment address to next cell )
 :t pick opSp@ + opLoad ;t    ( ??? u -- ??? u u : )
 :t cr =cr lit emit =lf lit emit ;t ( -- )
-:t key? opKey? dup 0< if drop 0 lit opExit then -1 lit ;t
+:t key? opKey? dup 0< if drop 0 lit opExit then #-1 ;t
 :t key begin key? until ;t
 :t * 0 lit swap for aft over + then next nip ;t
 :t /mod 
   0 lit opToR
-  begin 2dup >=
+  begin 2dup >= \ TODO: Probably should be unsigned!
   while 
     opFromR opInc opToR 
     tuck opSub opSwap
@@ -442,14 +420,6 @@ there 2/ primitive t!
   swap $FF lit and dup 8 lit lshift or swap
    tuck dup @ swap 1 lit and 0 lit = $FF lit xor
    opToR over xor opFromR and xor swap ! ;t
-:t um+
-  2dup + opToR
-   opR@ 0 lit >= opToR
-    2dup and
-	 0< opFromR or opToR
-   or 0< opFromR and invert 1+
-  opFromR swap ;t
-\ :t u< 2dup 0>= swap 0>= xor >r < r> xor ;t ( u u -- f : )
 :t max 2dup < if nip else drop then ;t  ( n n -- n : maximum of two numbers )
 :t min 2dup > if nip else drop then ;t  ( n n -- n : minimum of two numbers )
 :t count dup 1+ swap c@ ;t ( b -- b c : advance string, get next char )
@@ -467,41 +437,51 @@ there 2/ primitive t!
 :m $" ($) $literal ;m
 :t space bl emit ;t               ( -- : print space )
 \ :t cr .$ 2 tc, =cr tc, =lf tc, ;t ( -- : print new line )
-\ :t catch ( xt -- exception# | 0 \ return addr on stack )
-\    sp@ >r              ( xt )   \ save data stack pointer
-\    {handler} lit @ >r  ( xt )   \ and previous handler
-\    rp@ {handler} lit ! ( xt )   \ set current handler
-\    execute             ( )      \ execute returns if no throw
-\    r> {handler} lit !  ( )      \ restore previous handler
-\    rdrop               ( )      \ discard saved stack ptr
-\    #0 ;t               ( 0 )    \ normal completion
-\ :t throw ( ??? exception# -- ??? exception# )
-\     ?dup if              ( exc# )     \ 0 throw is no-op
-\       {handler} lit @ rp!   ( exc# )     \ restore prev return stack
-\       r> {handler} lit !    ( exc# )     \ restore prev handler
-\       r> swap >r            ( saved-sp ) \ exc# on return stack
-\       sp! drop r>           ( exc# )     \ restore stack
-\     then ;t
-\ :t um* ( u u -- ud : double cell width multiply )
-\   #0 swap ( u1 0 u2 ) $F lit
-\   for dup um+ >r >r dup um+ r> + r>
-\     if >r over um+ r> + then
-\   next rot drop ;t
-\ :t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
-\   ?dup 0= if -A lit throw then
-\   2dup u<
-\   if negate $F lit
-\     for >r dup um+ >r >r dup um+ r> + dup
-\       r> r@ swap >r um+ r> or
-\       if >r drop 1+ r> else drop then r>
-\     next
-\     drop swap exit
-\   then 2drop drop #-1 dup ;t
- 
 
+\ TODO: Test catch/throw
+:t catch ( xt -- exception# | 0 \ return addr on stack )
+   opSp@ opToR              ( xt )   \ save data stack pointer
+   {handler} lit @ opToR  ( xt )   \ and previous handler
+   opRp@ {handler} lit ! ( xt )   \ set current handler
+   opExecute ( )      \ execute returns if no throw
+   opFromR {handler} lit !  ( )      \ restore previous handler
+   opRdrop             ( )      \ discard saved stack ptr
+   #0 ;t               ( 0 )    \ normal completion
+:t throw ( ??? exception# -- ??? exception# )
+    ?dup if              ( exc# )     \ 0 throw is no-op
+      {handler} lit @ opRp! ( exc# )     \ restore prev return stack
+      opFromR {handler} lit !    ( exc# )     \ restore prev handler
+      opFromR swap opToR            ( saved-sp ) \ exc# on return stack
+      opSp! drop opFromR         ( exc# )     \ restore stack
+    then ;t
+
+\ TODO: Fix these, they do not work correctly (specifically u< and um+)
+\       This is probably due to fault logic or comparison operators
+:t u< 2dup 0>= swap 0>= xor opToR < opFromR xor ;t ( u u -- f : )
+:t um+ 2dup u< 0= if swap then over + swap over swap u< #1 and ;t ( u u -- u carry )
+:t um* ( u u -- ud : double cell width multiply )
+  #0 swap ( u1 0 u2 ) $F lit
+  for dup um+ opToR opToR dup um+ opFromR + opFromR
+    if opToR over um+ opFromR + then
+  next rot drop ;t
+:t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
+  ?dup 0= if -A lit throw then
+  2dup u<
+  if negate $F lit
+    for opToR dup um+ opToR opToR dup um+ opFromR + dup
+      opFromR opR@ swap opToR um+ opFromR or
+      if opToR drop 1+ opFromR else drop then opFromR
+    next
+    drop swap opExit
+  then 2drop drop #-1 dup ;t
+ 
 
 :t cold 
 there half <cold> t!
+	\ -5 lit -6 lit u< if char Y emit cr then
+	\ 3 lit FFFF lit um+ 30 lit + opEmit space 30 lit + emit cr
+	\ char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
+	\ char A 8 lit lshift FFFF lit and 8 lit rshift FFFF lit and emit cr
 
 	\ begin key? 0< while emit repeat drop
 	#1 0> if
@@ -512,6 +492,8 @@ there half <cold> t!
 
 \ ---------------------------------- Image Generation ------------------------
 
+there h t!
+atlast {last} t!
 save-target subleq.dec
 .stat
 .end
