@@ -98,6 +98,7 @@ size =cell - tep !
 :m tcfa tnfa dup c@ $1F and + =cell + tdown ;m ( pwd -- cfa )
 :m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
+:m half 2/ ;m
 
 \ ---------------------------------- Forth VM --------------------------------
 
@@ -261,13 +262,16 @@ assembler.1 -order
 :a opDup ++sp tos {sp} iSTORE ;a
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
 :a opDrop tos {sp} iLOAD --sp ;a
-:a opSub w {sp} iLOAD w tos SUB --sp ;a
+:a opSub w {sp} iLOAD tos w SUB w tos MOV --sp ;a
 :a opAdd w {sp} iLOAD w tos ADD --sp ;a
 :a opJump w ip iLOAD w ip MOV ;a
-:a opJumpZ tos w MOV --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
-:a opJumpN tos w MOV --sp w -if ip INC vm JMP then w ip iLOAD w ip MOV ;a
+:a opJumpZ tos w MOV tos {sp} iLOAD --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
+:a opJumpN tos w MOV tos {sp} iLOAD --sp w -if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 :a opR@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
+:a op0> tos w MOV  0   tos MOV w +if #N1 tos MOV then ;a
+:a op0=  tos w MOV #N1 tos MOV w  if 0   tos MOV then ;a
+:a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opNext
 	w {rp} iLOAD
 	w t MOV
@@ -281,15 +285,8 @@ assembler.1 -order
 	ip INC 
 	--rp
 	;a
-:a op0<= tos w MOV #N1 tos MOV w +if 0 tos MOV then ;a
-:a op0=  tos w MOV #N1 tos MOV w  if 0 tos MOV then ;a
 
 \ untested
-:a opFromR
-	++sp
-	tos {sp} iSTORE
-	tos {rp} iLOAD
-	--rp ;a
 :a opRDrop --rp ;a
 :a opSp@
 	++sp
@@ -360,39 +357,64 @@ there 2/ primitive t!
 :t >in {in} lit ;t     ( -- b : push pointer to terminal input position )
 :t hex  $10 lit {base} 2/ lit opStore ;t ( -- : switch to hexadecimal input/output radix )
 :t source TERMBUF 2/ lit #tib 2/ lit opLoad ;t ( -- b u )
-:t last {last} 2/ lit opLoad ;t      ( -- : last defined word )
-:t 2* dup + ;t
+:t last {last} 2/ lit opLoad ;t ( -- : last defined word )
+:t 2* dup + ;t                  ( u -- u )
 :t state {state} lit 2* ;t      ( -- a : compilation state variable )
-:t ] -1 lit {state} 2/ lit opStore ;t          ( -- : turn compile mode on )
+:t ] -1 lit {state} 2/ lit opStore ;t           ( -- : turn compile mode on )
 :t [  0 lit {state} 2/ lit opStore ;t immediate ( -- : turn compile mode off )
-:t nip swap drop ;t          ( u1 u2 -- u2 : remove next stack value )
-:t tuck swap over ;t         ( u1 u2 -- u2 u1 u2 : save top stack value )
-:t ?dup dup if dup then ;t   ( u -- u u | 0 : duplicate if not zero )
+:t nip opSwap opDrop ;t          ( u1 u2 -- u2 : remove next stack value )
+:t tuck opSwap opOver ;t         ( u1 u2 -- u2 u1 u2 : save top stack value )
+:t ?dup opDup if opDup then ;t   ( u -- u u | 0 : duplicate if not zero )
 :t rot >r swap r> swap ;t    ( u1 u2 u3 -- u2 u3 u1 : rotate three numbers )
-:t 2drop drop drop ;t        ( u u -- : drop two numbers )
-:t 2dup  over over ;t        ( u1 u2 -- u1 u2 u1 u2 : duplicate set of values )
-:t 0<= op0<= ;t
-:t 0> op0<= op0= ;t
-:t 0= op0= ;t
-:t = - 0= ;t
-:t <> = invert ;t
-:t negate -1 lit invert ;t
+:t 2drop opDrop opDrop ;t    ( u u -- : drop two numbers )
+:t 2dup  opOver opOver ;t    ( u1 u2 -- u1 u2 u1 u2 : duplicate set of values )
+:t 0> op0> ;t                ( n -- f )
+:t 0<= op0> opInvert ;t      ( n -- f )
+:t 0= op0= ;t                ( u -- f )
+:t = - op0= ;t               ( u u -- f )
+:t <> = op0= ;t              ( u u -- f )
+:t >= opSwap - 0<= ;t \ TODO: cleanup
+:t < >= opInvert ;t
+:t > opSwap < ;t
+:t <= > opInvert ;t
+:t 0< 0 lit < ;t             ( n -- f )
+:t s>d opDup 0< ;t           ( n -- d )
+:t negate 1- opInvert ;t     ( u -- u )
+:t abs s>d if negate then ;t ( n -- u )
 :t cell 2 lit ;t             ( -- u : size of memory cell )
 :t cell+ cell + ;t           ( a -- a : increment address to next cell )
-:t pick opSp@ + opLoad ;t        ( ??? u -- ??? u u : )
-
-\ :t key? opKey? dup 0< if drop 0 lit exit then -1 lit  ;t
-\ :t key begin key? until ;t
+:t pick opSp@ + opLoad ;t    ( ??? u -- ??? u u : )
+:t cr =cr lit emit =lf lit emit ;t ( -- )
+:t key? opKey? dup 0< if drop 0 lit opExit then -1 lit ;t
+:t key begin key? until ;t
+:t * 0 lit swap for aft over + then next nip ;t
+:t /mod 
+  0 lit opToR
+  begin 2dup >=
+  while 
+    opFromR opInc opToR 
+    tuck opSub opSwap
+  repeat 
+  opDrop opFromR ;t
+:t mod /mod drop ;t
+:t / /mod nip ;t
+:t 2/ 2 lit / ;t
+\ :t and ;t
+\ :t or ;t
+\ :t xor ;t
+\ :t @ 2/ [@] ;t
+\ :t ! 2/ [@] ;t
 \ :t +! tuck @ + swap ! ;t     ( n a -- : increment value at address by 'n' )
-
-
-:t cr =cr lit emit =lf lit emit ;t
+\ :t c@ ;t
+\ :t c! ;t
 
 :t cold 
-there 2/ <cold> t!
+there half <cold> t!
+
+	\ begin key? 0< while emit repeat drop
 	1 lit 0> if
-	3 lit for aft char H emit char i emit char ! emit cr then next
-	then
+	  3 lit for aft char H emit char i emit char ! emit cr then next
+	  then
 	bye 
 ;t
 
