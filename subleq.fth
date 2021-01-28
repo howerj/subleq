@@ -332,14 +332,14 @@ there 2/ primitive t!
 :t hex  $10 lit {base} 2/ lit opStore ;t ( -- : switch to hexadecimal input/output radix )
 :t source TERMBUF 2/ lit #tib 2/ lit opLoad ;t ( -- b u )
 :t last {last} 2/ lit opLoad ;t ( -- : last defined word )
-:t 2* dup + ;t                  ( u -- u )
+:t 2* opDup opAdd ;t                  ( u -- u )
 :t state {state} lit 2* ;t      ( -- a : compilation state variable )
 :t ] #-1 {state} 2/ lit opStore ;t           ( -- : turn compile mode on )
 :t [  0 lit {state} 2/ lit opStore ;t immediate ( -- : turn compile mode off )
 :t nip opSwap opDrop ;t          ( u1 u2 -- u2 : remove next stack value )
 :t tuck opSwap opOver ;t         ( u1 u2 -- u2 u1 u2 : save top stack value )
 :t ?dup opDup if opDup then ;t   ( u -- u u | 0 : duplicate if not zero )
-:t rot >r swap r> swap ;t    ( u1 u2 u3 -- u2 u3 u1 : rotate three numbers )
+:t rot opTor opSwap opFromR opSwap ;t  ( u1 u2 u3 -- u2 u3 u1 : rotate three numbers )
 :t 2drop opDrop opDrop ;t    ( u u -- : drop two numbers )
 :t 2dup  opOver opOver ;t    ( u1 u2 -- u1 u2 u1 u2 : duplicate set of values )
 :t 0> op0> ;t                ( n -- f )
@@ -351,8 +351,8 @@ there 2/ primitive t!
 :t < >= opInvert ;t
 :t > opSwap < ;t
 :t <= > opInvert ;t
-:t 0< 0 lit < ;t             ( n -- f )
-:t 0>= 0< invert ;t
+:t 0< #0 < ;t                ( n -- f )
+:t 0>= 0< 0= ;t
 :t s>d opDup 0< ;t           ( n -- d )
 :t negate 1- opInvert ;t     ( u -- u )
 :t abs s>d if negate then ;t ( n -- u )
@@ -363,9 +363,13 @@ there 2/ primitive t!
 :t key? opKey? dup 0< if drop 0 lit opExit then #-1 ;t
 :t key begin key? until ;t
 :t * 0 lit swap for aft over + then next nip ;t
+:t u< 2dup 0>= opSwap 0>= = opToR < opFromR = ;t ( u u -- f : )
+:t u> opSwap u< ;t
+:t u>= u< opInvert ;t
+:t u<= u> opInvert ;t
 :t /mod 
-  0 lit opToR
-  begin 2dup >= \ TODO: Probably should be unsigned!
+  #0 opToR
+  begin opOver opOver u>=
   while 
     opFromR opInc opToR 
     tuck opSub opSwap
@@ -380,44 +384,44 @@ there 2/ primitive t!
 :t +! tuck @ + swap ! ;t     ( n a -- : increment value at address by 'n' )
 :t lshift begin ?dup while 1- swap 2* swap repeat ;t
 :t rshift begin ?dup while 1- swap 2/ swap repeat ;t
+\ TODO: Test these more thoroughly, and rewrite in assembly for efficiency
 :t and  ( u u -- u : bitwise AND using arithmetic )
-	#1 #0 opToR opToR
-	begin
-		2dup *
-	while
-		2dup
-		lsb swap lsb * opR@ * opFromR swap opFromR + opToR opToR
-		opFromR 2* opToR 
-		2/ swap 2/ swap
-	repeat 2drop opRDrop opFromR ;t
+  #1 #0 opToR opToR
+  begin
+    2dup *
+  while
+    2dup
+    lsb swap lsb * opR@ * opFromR swap opFromR + opToR opToR
+    opFromR 2* opToR 
+    2/ swap 2/ swap
+  repeat 2drop opRDrop opFromR ;t
 :t or 
-	#1 #0 opToR opToR
-	begin
-		2dup +
-	while
-		2dup
-		lsb swap lsb + ?dup
-		if opFromR opFromR over + opToR opToR then
-		opFromR 2* opToR
-		2/ swap 2/ swap
-	repeat 2drop opRDrop opFromR ;t
+  #1 #0 opToR opToR
+  begin
+    2dup +
+  while
+    2dup
+    lsb swap lsb + ?dup
+    if opFromR opFromR over + opToR opToR then
+    opFromR 2* opToR
+    2/ swap 2/ swap
+  repeat 2drop opRDrop opFromR ;t
 :t xor 
- 	#1 #0 opToR opToR
-	begin
-		2dup +
-	while
-		2dup
-		lsb swap lsb +
-		dup #1 = if
-			opFromR tuck * opFromR + opToR opToR
-		else drop then
-		opFromR 2* opToR
-		2/ swap 2/ swap
-	repeat 2drop opRDrop opFromR ;t
+   #1 #0 opToR opToR
+  begin
+    2dup +
+  while
+    2dup
+    lsb swap lsb +
+    dup #1 = if
+      opFromR tuck * opFromR + opToR opToR
+    else drop then
+    opFromR 2* opToR
+    2/ swap 2/ swap
+  repeat 2drop opRDrop opFromR ;t
 
 :t c@ dup @ swap 1 lit and if 8 lit rshift else $FF lit and then ;t
-:t c! 
-  swap $FF lit and dup 8 lit lshift or swap
+:t c!  swap $FF lit and dup 8 lit lshift or swap
    tuck dup @ swap 1 lit and 0 lit = $FF lit xor
    opToR over xor opFromR and xor swap ! ;t
 :t max 2dup < if nip else drop then ;t  ( n n -- n : maximum of two numbers )
@@ -441,24 +445,20 @@ there 2/ primitive t!
 \ TODO: Test catch/throw
 :t catch ( xt -- exception# | 0 \ return addr on stack )
    opSp@ opToR              ( xt )   \ save data stack pointer
-   {handler} lit @ opToR  ( xt )   \ and previous handler
-   opRp@ {handler} lit ! ( xt )   \ set current handler
-   opExecute ( )      \ execute returns if no throw
+   {handler} lit @ opToR    ( xt )   \ and previous handler
+   opRp@ {handler} lit !    ( xt )   \ set current handler
+   opExecute                ( )      \ execute returns if no throw
    opFromR {handler} lit !  ( )      \ restore previous handler
-   opRdrop             ( )      \ discard saved stack ptr
-   #0 ;t               ( 0 )    \ normal completion
+   opRdrop                  ( )      \ discard saved stack ptr
+   #0 ;t                    ( 0 )    \ normal completion
 :t throw ( ??? exception# -- ??? exception# )
-    ?dup if              ( exc# )     \ 0 throw is no-op
-      {handler} lit @ opRp! ( exc# )     \ restore prev return stack
-      opFromR {handler} lit !    ( exc# )     \ restore prev handler
-      opFromR swap opToR            ( saved-sp ) \ exc# on return stack
-      opSp! drop opFromR         ( exc# )     \ restore stack
+    ?dup if                   ( exc# )     \ 0 throw is no-op
+      {handler} lit @ opRp!   ( exc# )     \ restore prev return stack
+      opFromR {handler} lit ! ( exc# )     \ restore prev handler
+      opFromR opSwap opToR    ( saved-sp ) \ exc# on return stack
+      opSp! opDrop opFromR    ( exc# )     \ restore stack
     then ;t
-
-\ TODO: Fix these, they do not work correctly (specifically u< and um+)
-\       This is probably due to fault logic or comparison operators
-:t u< 2dup 0>= swap 0>= xor opToR < opFromR xor ;t ( u u -- f : )
-:t um+ 2dup u< 0= if swap then over + swap over swap u< #1 and ;t ( u u -- u carry )
+:t um+ 2dup u< 0= if opSwap then over + opSwap over opSwap u< #1 and ;t ( u u -- u carry )
 :t um* ( u u -- ud : double cell width multiply )
   #0 swap ( u1 0 u2 ) $F lit
   for dup um+ opToR opToR dup um+ opFromR + opFromR
@@ -469,19 +469,26 @@ there 2/ primitive t!
   2dup u<
   if negate $F lit
     for opToR dup um+ opToR opToR dup um+ opFromR + dup
-      opFromR opR@ swap opToR um+ opFromR or
+      opFromR opR@ opSwap opToR um+ opFromR or
       if opToR drop 1+ opFromR else drop then opFromR
     next
-    drop swap opExit
+    drop opSwap opExit
   then 2drop drop #-1 dup ;t
  
 
 :t cold 
 there half <cold> t!
-	\ -5 lit -6 lit u< if char Y emit cr then
-	\ 3 lit FFFF lit um+ 30 lit + opEmit space 30 lit + emit cr
-	\ char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
+
+
+	\ 4 lit -5 lit u< if char Y emit cr then
+	\ 3 lit FFFD lit um+ 30 lit + opEmit space 30 lit + emit cr
+	\ 3 lit 3 lit um+ 30 lit + opEmit space 30 lit + emit cr
+	\ 2 lit    3 lit um* 30 lit + opEmit space 30 lit + emit cr
+	\ TODO: Fix problem with xor?
+	char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
 	\ char A 8 lit lshift FFFF lit and 8 lit rshift FFFF lit and emit cr
+	\ char A 80FF lit xor FF lit and FF lit xor emit cr
+
 
 	\ begin key? 0< while emit repeat drop
 	#1 0> if
