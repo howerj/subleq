@@ -276,8 +276,9 @@ assembler.1 -order
 :a opExecute tos ip MOV --sp tos {sp} iLOAD ;a
 :a opNext
 	w {rp} iLOAD
-	w t MOV
-	w if t DEC t {rp} iSTORE t ip iLOAD t ip MOV vm JMP then
+	w DEC
+	w {rp} iSTORE
+	w if t ip iLOAD t ip MOV vm JMP then
 	ip INC 
 	--rp
 	;a
@@ -401,7 +402,7 @@ there 2/ primitive t!
 \ :t 0< op0< ;t
 :t 0< opDup 8000 lit = if opDrop #-1 opExit then op0< ;t                ( n -- f )
 :t 0>= 0< 0= ;t
-:t 2* dup 8000 lit = if 7FFF lit - then dup + ;t
+:t 2* dup 8000 lit = if 7FFF lit - then op2* ;t
 :t s>d opDup 0< ;t           ( n -- d )
 :t negate 1- opInvert ;t     ( u -- u )
 :t abs s>d if negate then ;t ( n -- u )
@@ -434,8 +435,8 @@ there 2/ primitive t!
 :t ! 2/ opStore ;t \ TODO: Avoid using this where possible, use [!]
 :t lsb opLsb ;t
 :t +! tuck @ + swap ! ;t     ( n a -- : increment value at address by 'n' )
-:t lshift begin ?dup while 1- opSwap 2* opSwap repeat ;t
-:t rshift begin ?dup while 1- opSwap 2/ opSwap repeat ;t
+:t lshift begin ?dup while opDec opSwap 2* opSwap repeat ;t
+:t rshift begin ?dup while opDec opSwap 2/ opSwap repeat ;t
 :t logical if #1 else #0 then ;t
 :t ? dup 30 lit + emit ;t \ TODO: delete when no longer needed
 :t or
@@ -475,9 +476,9 @@ there 2/ primitive t!
 
 \ TODO: Rewrite with efficiency in mind for this platform, use
 \ [@] and [!], multiply directly by 256, and divide by 256
-:t c@ dup @ swap 1 lit and if 8 lit rshift ( 100 lit u/ ) else $FF lit and then ;t
-:t c!  swap $FF lit and dup 8 lit lshift ( 100 lit * ) or swap
-   tuck dup @ swap 1 lit and #0 = $FF lit xor
+:t c@ dup @ swap opLsb if 8 lit rshift  else $FF lit and then ;t
+:t c!  swap $FF lit and dup 8 lit lshift or swap
+   tuck dup @ swap opLsb #0 = $FF lit xor
    opToR over xor opFromR and xor swap ! ;t
 :t max 2dup < if nip else drop then ;t  ( n n -- n : maximum of two numbers )
 :t min 2dup > if nip else drop then ;t  ( n n -- n : minimum of two numbers )
@@ -513,9 +514,9 @@ there 2/ primitive t!
     then ;t
 :t um+ 2dup u< op0= if opSwap then opOver opAdd opSwap opOver opSwap u< logical ;t ( u u -- u carry )
 :t um* ( u u -- ud : double cell width multiply )
-  #0 swap ( u1 0 u2 ) F lit
+  #0 swap ( u1 0 u2 ) $F lit
   for opDup um+ opToR opToR opDup um+ opFromR opAdd opFromR
-    if opToR opOver um+ opFromR + then
+    if opToR opOver um+ opFromR opAdd then
   next rot drop ;t
 :t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
   ?dup 0= if -A lit throw then
@@ -530,21 +531,21 @@ there 2/ primitive t!
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
 :t cfa nfa dup c@ $1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 :t words last begin dup nfa count 1f lit and ( space ) type cr @ ?dup 0= until ;t
+\ TODO: Hex dump
 
 :t cold 
 there half <cold> t!
 
 	\ words
 
-	\ 4 lit    4 lit um* ? drop space ? drop cr
-	3 lit    3 lit um* emit emit cr
+	3 lit    3 lit um* ? drop space ? drop cr
 
 
-	4 lit 0 lit  2 lit um/mod ? drop space ? drop cr
+	0 lit 8 lit  2 lit um/mod ? drop space ? drop cr
 	\ char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
 	\ char A 8 lit lshift FF00 lit and 8 lit rshift 00FF lit and emit cr
 
-	char @ 1 lit or emit cr
+	char @ 1 lit xor emit cr
 	3 lit 3 lit um+ 30 lit + opEmit space 30 lit + emit cr
 	5 lit FFFD lit um+ 30 lit + opEmit space 30 lit + emit cr
 	FFFF lit FFFF lit um+ 30 lit + opEmit space 30 lit + emit cr
