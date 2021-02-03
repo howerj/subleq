@@ -13,7 +13,7 @@ int main(int argc, char **argv) { /* 16-bit SUBLEQ OISC */
 	do {
 		const uint16_t a = m[pc++ % SZ], b = m[pc++ % SZ], c = m[pc++ % SZ];
 		if (a == 0xFFFFu) { m[b % SZ] = (int16_t)getchar(); }
-		else if (b == 0xFFFFu) { if (putchar(m[a % SZ]) < 0) return 3; }
+		else if (b == 0xFFFFu) { if (putchar(m[a % SZ]) < 0) return 3; if (fflush(stdout) < 0) return 4; }
 		else {
 			const uint16_t r = m[b % SZ] - m[a % SZ];
 			if (r & 0x8000u || r == 0u) pc = c;
