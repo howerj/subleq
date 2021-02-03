@@ -1,3 +1,4 @@
 *.dec
 *.hex
+*.out
 subleq
