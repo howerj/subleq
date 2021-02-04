@@ -401,7 +401,8 @@ there 2/ primitive t!
 :t <= > opInvert ;t
 \ :t 0< op0< ;t
 :t 0< opDup 8000 lit = if opDrop #-1 opExit then op0< ;t                ( n -- f )
-:t 0>= 0< 0= ;t
+:t 0>= op0< 0= ;t \ TODO: Using op0< vs 0< fixes and breaks certain things!
+\ :t 0>= 0< 0= ;t
 :t 2* dup 8000 lit = if 7FFF lit - then op2* ;t
 :t s>d opDup 0< ;t           ( n -- d )
 :t negate 1- opInvert ;t     ( u -- u )
@@ -483,7 +484,7 @@ there 2/ primitive t!
 :t max 2dup < if nip else drop then ;t  ( n n -- n : maximum of two numbers )
 :t min 2dup > if nip else drop then ;t  ( n n -- n : minimum of two numbers )
 :t count dup 1+ swap c@ ;t ( b -- b c : advance string, get next char )
-:t aligned dup #1 and + ;t       ( b -- u : align a pointer )
+:t aligned dup opLsb + ;t       ( b -- u : align a pointer )
 :t align here aligned h lit ! ;t ( -- : align dictionary pointer )
 :t allot aligned h lit +! ;t      ( u -- : allocate space in dictionary )
 :t , align here ! cell allot ;t   ( u -- : write a value into the dictionary )
@@ -520,7 +521,7 @@ there 2/ primitive t!
   next rot drop ;t
 :t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
   ?dup 0= if -A lit throw then
-  2dup u<
+  2dup u< \ TODO: Fix/Broken
   if negate $F lit
     for opToR dup um+ opToR opToR dup um+ opFromR + dup
       opFromR opR@ opSwap opToR um+ opFromR or
@@ -530,21 +531,20 @@ there 2/ primitive t!
   then 2drop drop #-1 dup ;t
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
 :t cfa nfa dup c@ $1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
-:t words last begin dup nfa count 1f lit and ( space ) type cr @ ?dup 0= until ;t
-\ TODO: Hex dump
+\ TODO: Fix words, words with length 1 do not print correctly
+:t words last begin dup nfa count 1f lit and space type @ ?dup 0= until ;t
 
 :t cold 
 there half <cold> t!
 
-	\ words
 
 	3 lit    3 lit um* ? drop space ? drop cr
 
 
-	0 lit 8 lit  2 lit um/mod ? drop space ? drop cr
+
+	9 lit 8 lit  9 lit um/mod ? drop space ? drop cr
 	\ char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
 	\ char A 8 lit lshift FF00 lit and 8 lit rshift 00FF lit and emit cr
-
 	char @ 1 lit xor emit cr
 	3 lit 3 lit um+ 30 lit + opEmit space 30 lit + emit cr
 	5 lit FFFD lit um+ 30 lit + opEmit space 30 lit + emit cr
@@ -557,7 +557,7 @@ there half <cold> t!
 
 	\ begin key? 0< while emit repeat drop
 	#1 0> if
-	  3 lit for aft char H emit char i emit char ! emit cr then next
+	  3 lit for char H emit char i emit char ! emit cr next
 	  then
 	bye ;t
 
