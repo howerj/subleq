@@ -123,9 +123,9 @@ assembler.1 +order also definitions
 	Z Z NADDR
 	Z t, 2/ t, ; ( var -- addr )
 : +if   Z 2/ t, mark ;
-: -if 
-	2/ t, Z there 2/ 4 + t, 
-	Z Z there 2/ 4 + t, 
+: -if
+	2/ t, Z there 2/ 4 + t,
+	Z Z there 2/ 4 + t,
 	Z Z mark ;  ( var -- addr )
 : -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ;  ( addr var -- addr )
 : then begin 2/ swap t! ;
@@ -143,7 +143,7 @@ meta.1 +order also definitions
 
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( indr w -- : indirect load )
 :m iJMP there 2/ E + 2* MOV NOP ;m ( indr -- )
-:m iSTORE 
+:m iSTORE
 	swap >r
 	there 2/ 3 4 * 3 * 0 + + 2dup 2* MOV
 	                     2dup 1 + 2* MOV
@@ -204,11 +204,11 @@ label: vm
 	ip INC
 	t w iLOAD
 	t w MOV
-	primitive t SUB 
-	t -if w iJMP then 
-	++rp 
-	ip {rp} iSTORE 
-	w ip MOV 
+	primitive t SUB
+	t -if w iJMP then
+	++rp
+	ip {rp} iSTORE
+	w ip MOV
 	vm JMP
 assembler.1 -order
 
@@ -236,52 +236,51 @@ assembler.1 -order
   create talign there ,
   assembler.1 +order
   does> @ 2/ t, ;m
-:m (a); 
+:m (a);
    $CAFED00D <> if abort" unstructured" then assembler.1 -order ;m
 :m ;a (a); vm JMP ;m
 
-\ Tested
-:a opBye HALT ;a
-:a opDec tos DEC ;a
-:a opInc tos INC ;a
-:a opInvert tos INV ;a
-:a opLoad w tos iLOAD w tos MOV ;a
-:a opStore tos w MOV tos {sp} iLOAD --sp tos w iSTORE tos {sp} iLOAD --sp ;a
-:a opEmit tos PUT tos {sp} iLOAD --sp ;a
+:a bye HALT ;a
+:a 1- tos DEC ;a
+:a 1+ tos INC ;a
+:a invert tos INV ;a
+:a [@] w tos iLOAD w tos MOV ;a
+:a [!] tos w MOV tos {sp} iLOAD --sp tos w iSTORE tos {sp} iLOAD --sp ;a
+:a emit tos PUT tos {sp} iLOAD --sp ;a
 :a opKey?  ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
 :a opDrop tos {sp} iLOAD --sp ;a
-:a opSub w {sp} iLOAD tos w SUB w tos MOV --sp ;a
-:a opAdd w {sp} iLOAD w tos ADD --sp ;a
+:a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
+:a + w {sp} iLOAD w tos ADD --sp ;a
 :a opJump w ip iLOAD w ip MOV ;a
 :a opJumpZ tos w MOV tos {sp} iLOAD --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 :a opJumpN tos w MOV tos {sp} iLOAD --sp w -if ip INC vm JMP then w ip iLOAD w ip MOV ;a
-:a opR@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
+:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a op0>  tos w MOV  0   tos MOV w +if neg1 tos MOV then ;a
 :a op0<  tos w MOV  0   tos MOV w -if neg1 tos MOV then ;a
 :a op0=  tos w MOV neg1 tos MOV w  if 0   tos MOV then ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
-\ untested
 :a opExit ip {rp} iLOAD --rp ;a
-:a opRDrop --rp ;a
-:a opSp@ ++sp tos {sp} iSTORE {sp} tos MOV tos DEC ;a
-:a opSp! tos {sp} MOV ;a
-:a opRp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
-:a opRp!  tos {rp} MOV --sp tos {sp} iLOAD ;a
-:a opExecute tos ip MOV --sp tos {sp} iLOAD ;a
+:a rdrop --rp ;a
 :a opNext
 	w {rp} iLOAD
 	w DEC
 	w {rp} iSTORE
 	w if t ip iLOAD t ip MOV vm JMP then
-	ip INC 
+	ip INC
 	--rp
 	;a
+:a op2* tos tos ADD ;a
+:a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos DEC ;a
+:a sp! tos {sp} MOV ;a
+:a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
+:a rp!  tos {rp} MOV --sp tos {sp} iLOAD ;a
+:a opExecute tos ip MOV --sp tos {sp} iLOAD ;a
 \ :a opDivMod
 \ 	w {sp} iLOAD
 \ 	R0 ZERO
@@ -296,13 +295,12 @@ assembler.1 -order
 \ 	repeat
 \ 	R0 {sp} iSTORE
 \ 	w tos MOV ;a
-:a opLsb
+:a lsb
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
-	tos tos ADD tos tos ADD 
+	tos tos ADD tos tos ADD
 	tos if one tos MOV then ;a
-:a op2* tos tos ADD ;a
 \ :a op2/
 \ 	w ZERO
 \ 	tos -if w INC then w w ADD tos tos ADD
@@ -322,7 +320,7 @@ assembler.1 -order
 \ 	tos -if w INC then w w ADD tos tos ADD
 \ 	tos -if w INC then
 \ 	w tos MOV ;a
-\ 
+\
 there 2/ primitive t!
 
 :m ;t CAFEBABE <> if abort" unstructured" then talign opExit target.only.1 -order ;m
@@ -344,212 +342,219 @@ there 2/ primitive t!
 :m aft drop mark begin swap ;m
 :m next opNext talign 2/ t, ;m
 :m for opToR begin ;m
-\ TODO: Optimize by inline-ing assembly and renaming (ie. opInc -> 1+).
+
+
+\ TODO: Optimize by inline-ing assembly and renaming (ie. 1+ -> 1+).
 :ht #0 0 lit ;t
 :ht #1 1 lit ;t
 :ht #-1 -1 lit ;t
 
-:t 1+ opInc ;t
-:t 1- opDec ;t
-:t + opAdd ;t
-:t - opSub ;t
-:t invert opInvert ;t
-:t bye opBye ;t
-:t emit opEmit ;t
-:t dup opDup ;t
-:t drop opDrop ;t
-:t over opOver ;t
-:t swap opSwap ;t
-:t [@] opLoad ;t
-:t [!] opStore ;t
-:t execute opRDrop opExecute ;t
-:t sp@ opSp@ ;t
-:t sp! opSp! ;t
+:m dup opDup ;m
+:m drop opDrop ;m
+:m over opOver ;m
+:m swap opSwap ;m
+:m >r opToR ;m
+:m r> opFromR ;m
+:m 0> op0> ;m
+:m 0= op0= ;m
+:m 0< op0< ;m
+:m exit opExit ;m
+
+:to 1+ 1+ ;t
+:to 1- 1- ;t
+:to + + ;t
+:to - - ;t
+:to invert invert ;t
+:to bye bye ;t
+:to emit emit ;t
+:to dup dup ;t
+:to drop opDrop ;t
+:to over opOver ;t
+:to swap opSwap ;t
+:to [@] [@] ;t
+:to [!] [!] ;t
+:to sp@ sp@ ;t
+:to sp! sp! ;t
+\ TODO: Change to immediate and compile-only, compiling in assembly op
 :to >r opFromR opSwap opToR opToR ;t compile-only
 :to r> opFromR opFromR opSwap opToR ;t compile-only
-:to r@ opFromR opR@ opSwap opToR ;t compile-only
+:to r@ opFromR r@ opSwap opToR ;t compile-only
+:to rdrop opFromR rdrop opToR ;t compile-only
+:to 0> op0> ;t
+:to 0= op0= ;t
+:to 0< op0< ;t
+:to lsb lsb ;t
 
-:t here h 2/ lit opLoad ;t
-:t base {base} lit ;t  ( -- a : base variable controls input/output radix )
-:t dpl {dpl} lit ;t    ( -- a : push address of 'dpl' onto the variable stack )
-:t hld {hld} lit ;t    ( -- a : push address of 'hld' onto the variable stack )
-:t bl 20 lit ;t        ( -- space : push a space onto the stack )
-:t >in {in} lit ;t     ( -- b : push pointer to terminal input position )
-:t hex  $10 lit {base} 2/ lit opStore ;t ( -- : switch to hexadecimal input/output radix )
-:t source TERMBUF 2/ lit #tib 2/ lit opLoad ;t ( -- b u )
-:t last {last} 2/ lit opLoad ;t ( -- : last defined word )
-:t state {state} lit op2* ;t      ( -- a : compilation state variable )
-:t ] #-1 {state} 2/ lit opStore ;t           ( -- : turn compile mode on )
-:t [ #0  {state} 2/ lit opStore ;t immediate ( -- : turn compile mode off )
-:t nip opSwap opDrop ;t          ( u1 u2 -- u2 : remove next stack value )
-:t tuck opSwap opOver ;t         ( u1 u2 -- u2 u1 u2 : save top stack value )
-:t ?dup opDup if opDup then ;t   ( u -- u u | 0 : duplicate if not zero )
-:t rot opTor opSwap opFromR opSwap ;t  ( u1 u2 u3 -- u2 u3 u1 : rotate three numbers )
+:t execute rdrop opExecute ;t
+:t here h 2/ lit [@] ;t
+:t base {base} lit ;t
+:t dpl {dpl} lit ;t
+:t hld {hld} lit ;t
+:t bl 20 lit ;t
+:t >in {in} lit ;t
+:t hex  $10 lit {base} 2/ lit [!] ;t
+:t source TERMBUF 2/ lit #tib 2/ lit [@] ;t
+:t last {last} 2/ lit [@] ;t
+:t state {state} lit op2* ;t
+:t ] #-1 {state} 2/ lit [!] ;t
+:t [ #0  {state} 2/ lit [!] ;t immediate
+:t nip swap drop ;t
+:t tuck swap over ;t
+:t ?dup dup if dup then ;t
+:t rot >r swap r> swap ;t
 :t -rot rot rot ;t
-:t 2drop opDrop opDrop ;t    ( u u -- : drop two numbers )
-:t 2dup  opOver opOver ;t    ( u1 u2 -- u1 u2 u1 u2 : duplicate set of values )
-\ TODO: Implement more test primitives for efficiencies sake
-:t 0> op0> ;t                ( n -- f )
-:t 0<= op0> opInvert ;t      ( n -- f )
-:t 0= op0= ;t                ( u -- f )
-:t 0<> op0= op0= ;t
-:t = opSub op0= ;t               ( u u -- f )
-:t <> = op0= ;t              ( u u -- f )
-:t >= opSwap opSub 0<= ;t \ TODO: cleanup
-:t < >= opInvert ;t
-:t > opSwap < ;t
-:t <= > opInvert ;t
-\ :t 0< op0< ;t
-:t 0< opDup 8000 lit = if opDrop #-1 opExit then op0< ;t                ( n -- f )
-:t 0>= op0< 0= ;t \ TODO: Using op0< vs 0< fixes and breaks certain things!
-\ :t 0>= 0< 0= ;t
+:t 2drop drop drop ;t
+:t 2dup  over over ;t
+:t 0<= 0> invert ;t
+:t 0<> 0= 0= ;t
+:t = - 0= ;t
+:t <> = 0= ;t
+:t >= swap - 0<= ;t
+:t < >= invert ;t
+:t > swap < ;t
+:t <= > invert ;t
+:t msb dup 8000 lit = if drop #-1 exit then 0< ;t
+:t 0>= 0< 0= ;t
 :t 2* dup 8000 lit = if 7FFF lit - then op2* ;t
-:t s>d opDup 0< ;t           ( n -- d )
-:t negate 1- opInvert ;t     ( u -- u )
-:t abs s>d if negate then ;t ( n -- u )
-:t cell 2 lit ;t             ( -- u : size of memory cell )
-:t cell+ cell + ;t           ( a -- a : increment address to next cell )
-:t pick opSp@ + opLoad ;t    ( ??? u -- ??? u u : )
-:t cr =cr lit emit =lf lit emit ;t ( -- )
-:t key? opKey? dup 0< if drop #0 opExit then #-1 ;t
+:t s>d dup 0< ;t
+:t negate 1- invert ;t
+:t abs s>d if negate then ;t
+:t cell 2 lit ;t
+:t cell+ cell + ;t
+:t pick sp@ + [@] ;t
+:t cr =cr lit emit =lf lit emit ;t
+:t key? opKey? dup 0< if drop #0 exit then #-1 ;t
 :t key begin key? until ;t
-:t u< 2dup 0>= opSwap 0>= = opToR < opFromR = ;t ( u u -- f : )
-:t u> opSwap u< ;t
-:t u>= u< opInvert ;t
-:t u<= u> opInvert ;t
-\ TODO: Optimize / and *, rewrite in assembly along with other words
-:t * 2dup u< if opSwap then opMul ;t
-:t u/mod 
+:t u< 2dup 0>= swap 0>= = opToR < r> = ;t
+:t u> swap u< ;t
+:t u>= u< invert ;t
+:t u<= u> invert ;t
+:t * 2dup u< if swap then opMul ;t
+:t u/mod
   #0 opToR
-  begin opOver opOver u>=
-  while 
-    opFromR opInc opToR 
-    tuck opSub opSwap
-  repeat 
-  opDrop opFromR ;t
+  begin over over u>=
+  while
+    r> 1+ opToR
+    tuck - swap
+  repeat
+  drop r> ;t
 :t umod u/mod drop ;t
 :t u/ u/mod nip ;t
 \ TODO: Fast divide by two using repeated double and testing of top bit
 \ to build up a new value
 :t 2/ 2 lit u/ ;t
-:t @ 2/ opLoad ;t \ TODO: Avoid using this where possible, use [@]
-:t ! 2/ opStore ;t \ TODO: Avoid using this where possible, use [!]
-:t lsb opLsb ;t
-:t +! tuck @ + swap ! ;t     ( n a -- : increment value at address by 'n' )
-:t lshift begin ?dup while opDec opSwap 2* opSwap repeat ;t
-:t rshift begin ?dup while opDec opSwap 2/ opSwap repeat ;t
+:t @ 2/ [@] ;t \ TODO: Avoid using this where possible, use [@]
+:t ! 2/ [!] ;t \ TODO: Avoid using this where possible, use [!]
+:t +! 2/ tuck [@] + swap [!] ;t
+:t lshift begin ?dup while 1- swap 2* swap repeat ;t
+:t rshift begin ?dup while 1- swap 2/ swap repeat ;t
 :t logical if #1 else #0 then ;t
 :t ? dup 30 lit + emit ;t \ TODO: delete when no longer needed
 :t or
-   $10 lit #0 opToR opToR
+   $10 lit #0 >r >r
    begin
-     opFromR opDup opDec opToR
+     r> dup 1- >r
    while
-     opFromR opFromR 2* opToR opToR
-     2dup 0< opSwap 0< + if
-       opFromR opFromR opInc opToR opToR
+     r> r> 2* >r >r
+     2dup msb swap msb + if
+       r> r> 1+ >r >r
      then
      2* swap 2*
-   repeat 2drop opRDrop opFromR ;t
+   repeat 2drop rdrop r> ;t
 :t xor
-   $10 lit #0 opToR opToR
+   $10 lit #0 >r >r
    begin
-     opFromR opDup opDec opToR
+     r> dup 1- >r
    while
-     opFromR opFromR 2* opToR opToR
-     2dup 0< opSwap 0< opAdd #-1 = if
-     \ 2dup 0< opSwap 0< opAdd #-1 <> if
-       opFromR opFromR opInc opToR opToR
+     r> r> 2* >r >r
+     2dup msb swap msb + #-1 = if
+       r> r> 1+ >r >r
      then
      2* swap 2*
-   repeat 2drop opRDrop opFromR ;t
+   repeat 2drop rdrop r> ;t
 :t and
-   $10 lit #0 opToR opToR
+   $10 lit #0 >r >r
    begin
-     opFromR opDup opDec opToR
+     r> dup 1- >r
    while
-     opFromR opFromR 2* opToR opToR
-     2dup 0< opSwap 0< + -2 lit = if
-       opFromR opFromR opInc opToR opToR
+     r> r> 2* >r >r
+     2dup msb swap msb + -2 lit = if
+       r> r> 1+ >r >r
      then
-     2* opSwap 2*
-   repeat 2drop opRDrop opFromR ;t
-
-\ TODO: Rewrite with efficiency in mind for this platform, use
-\ [@] and [!], multiply directly by 256, and divide by 256
-:t c@ dup @ swap opLsb if 8 lit rshift  else $FF lit and then ;t
+     2* swap 2*
+   repeat 2drop rdrop r> ;t
+:t c@ dup @ swap lsb if 8 lit rshift  else $FF lit and then ;t
 :t c!  swap $FF lit and dup 8 lit lshift or swap
-   tuck dup @ swap opLsb #0 = $FF lit xor
-   opToR over xor opFromR and xor swap ! ;t
-:t max 2dup < if nip else drop then ;t  ( n n -- n : maximum of two numbers )
-:t min 2dup > if nip else drop then ;t  ( n n -- n : minimum of two numbers )
-:t count dup 1+ swap c@ ;t ( b -- b c : advance string, get next char )
-:t aligned dup opLsb + ;t       ( b -- u : align a pointer )
-:t align here aligned h lit ! ;t ( -- : align dictionary pointer )
-:t allot aligned h lit +! ;t      ( u -- : allocate space in dictionary )
-:t , align here ! cell allot ;t   ( u -- : write a value into the dictionary )
-:t +string #1 over min rot over + rot rot - ;t ( b u -- b u : increment str )
-:t type begin dup while swap count emit swap 1- repeat 2drop ;t ( b u -- )
-:t cmove for aft opToR dup c@ opR@ c! 1+ opFromR 1+ then next 2drop ;t ( b1 b2 u -- )
-:t do$ opFromR opFromR 2* dup count + aligned 2/ opToR swap opToR ;t ( -- a : )
+   tuck dup @ swap lsb #0 = $FF lit xor
+   >r over xor r> and xor swap ! ;t
+:t max 2dup < if nip else drop then ;t
+:t min 2dup > if nip else drop then ;t
+:t count dup 1+ swap c@ ;t
+:t aligned dup lsb + ;t
+:t align here aligned h half lit [!] ;t
+:t allot aligned h lit +! ;t
+:t , align h half lit [!] cell allot ;t
+:t +string #1 over min rot over + rot rot - ;t
+:t type begin dup while swap count emit swap 1- repeat 2drop ;t
+:t cmove for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;t ( b1 b2 u -- )
+:t do$ r> r> 2* dup count + aligned 2/ >r swap >r ;t ( -- a : )
 :t ($) do$ ;t            ( -- a : do string NB. )
 :t .$ do$ count type ;t  ( -- : print string, next cells contain string )
 :m ." .$ $literal ;m
 :m $" ($) $literal ;m
-:t space bl emit ;t               ( -- : print space )
-\ :t cr .$ 2 tc, =cr tc, =lf tc, ;t ( -- : print new line )
-:t catch ( xt -- exception# | 0 \ return addr on stack )
-   opSp@ opToR              ( xt )   \ save data stack pointer
-   {handler} lit @ opToR    ( xt )   \ and previous handler
-   opRp@ {handler} lit !    ( xt )   \ set current handler
-   opExecute                ( )      \ execute returns if no throw
-   opFromR {handler} lit !  ( )      \ restore previous handler
-   opRdrop                  ( )      \ discard saved stack ptr
-   #0 ;t                    ( 0 )    \ normal completion
+:t space bl emit ;t
+\ :t cr .$ 2 tc, =cr tc, =lf tc, ;t
+:t catch        ( xt -- exception# | 0 \ return addr on stack )
+   sp@ >r                        ( xt )   \ save data stack pointer
+   {handler} half lit [@] >r     ( xt )   \ and previous handler
+   rp@ {handler} half lit [!]    ( xt )   \ set current handler
+   opExecute                     ( )      \ execute returns if no throw
+   r> {handler} half lit [!]     ( )      \ restore previous handler
+   rdrop                         ( )      \ discard saved stack ptr
+   #0 ;t                         ( 0 )    \ normal completion
 :t throw ( ??? exception# -- ??? exception# )
-    ?dup if                   ( exc# )     \ 0 throw is no-op
-      {handler} lit @ opRp!   ( exc# )     \ restore prev return stack
-      opFromR {handler} lit ! ( exc# )     \ restore prev handler
-      opFromR opSwap opToR    ( saved-sp ) \ exc# on return stack
-      opSp! opDrop opFromR    ( exc# )     \ restore stack
+    ?dup if                      ( exc# )     \ 0 throw is no-op
+      {handler} half lit [@] rp! ( exc# )     \ restore prev return stack
+      r> {handler} half lit [!]  ( exc# )     \ restore prev handler
+      r> swap >r                 ( saved-sp ) \ exc# on return stack
+      sp! drop r>                ( exc# )     \ restore stack
     then ;t
-:t um+ 2dup u< op0= if opSwap then opOver opAdd opSwap opOver opSwap u< logical ;t ( u u -- u carry )
+:t um+ 2dup u< 0= if swap then over + swap over swap u< logical ;t ( u u -- u carry )
 :t um* ( u u -- ud : double cell width multiply )
   #0 swap ( u1 0 u2 ) $F lit
-  for opDup um+ opToR opToR opDup um+ opFromR opAdd opFromR
-    if opToR opOver um+ opFromR opAdd then
+  for dup um+ >r >r dup um+ r> + r>
+    if >r over um+ r> + then
   next rot drop ;t
 :t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
   ?dup 0= if -A lit throw then
   2dup u< \ TODO: Fix/Broken
   if negate $F lit
-    for opToR dup um+ opToR opToR dup um+ opFromR + dup
-      opFromR opR@ opSwap opToR um+ opFromR or
-      if opToR drop 1+ opFromR else drop then opFromR
+    for >r dup um+ >r >r dup um+ r> + dup
+      r> r@ swap >r um+ r> or
+      if >r drop 1+ r> else drop then r>
     next
-    drop opSwap opExit
+    drop swap exit
   then 2drop drop #-1 dup ;t
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
-:t cfa nfa dup c@ $1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
+:t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 \ TODO: Fix words, words with length 1 do not print correctly
-:t words last begin dup nfa count 1f lit and space type @ ?dup 0= until ;t
+:t words last begin dup nfa count 1F lit and space type @ ?dup 0= until cr ;t
 
-:t cold 
+:t cold
 there half <cold> t!
 
-
+	\ words
 	3 lit    3 lit um* ? drop space ? drop cr
 
-
-
 	9 lit 8 lit  9 lit um/mod ? drop space ? drop cr
-	\ char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
-	\ char A 8 lit lshift FF00 lit and 8 lit rshift 00FF lit and emit cr
+	3 lit 3 lit um+ 30 lit + emit space 30 lit + emit cr
+	5 lit FFFD lit um+ 30 lit + emit space 30 lit + emit cr
+	FFFF lit FFFF lit um+ 30 lit + emit space 30 lit + emit cr
+	4 lit -5 lit u< if char Y emit else char N emit then cr
+	4 lit -5 lit  < if char Y emit else char N emit then cr
 	char @ 1 lit xor emit cr
-	3 lit 3 lit um+ 30 lit + opEmit space 30 lit + emit cr
-	5 lit FFFD lit um+ 30 lit + opEmit space 30 lit + emit cr
-	FFFF lit FFFF lit um+ 30 lit + opEmit space 30 lit + emit cr
-	4 lit -5 lit u< if char Y emit cr then
+	char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
+	char A 8 lit lshift FF00 lit and 8 lit rshift 00FF lit and emit cr
 	char A 4 lit lshift FFFF lit xor 4 lit rshift FFFF lit xor emit cr
 	char A FFFF lit xor FFFF lit xor emit cr
 	char A 80FF lit xor FF lit and FF lit xor emit cr
