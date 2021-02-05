@@ -33,10 +33,10 @@ wordlist constant target.only.1
 meta.1 +order also definitions
 
    2 constant =cell
-4000 constant size ( 16384 bytes, 8192 cells )
-4000 constant =end
+8000 constant size ( 16384 bytes, 8192 cells )
+8000 constant =end
   40 constant =stksz
-  60 constant =buf
+ 100 constant =buf
 0008 constant =bksp
 000A constant =lf
 000D constant =cr
@@ -60,12 +60,12 @@ size =cell - tep !
 :m talign there 1 and tdp +! ;m
 :m tc, there tc! 1 tdp +! ;m
 :m t, there t! 2 tdp +! ;m
-:m $literal [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
+:m $literal talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
 :m tallot tdp +! ;m
 :m thead
   talign
   there tlast @ t, tlast !
-  parse-word dup tc, 0 ?do count tc, loop drop talign ;m
+  parse-word talign dup tc, 0 ?do count tc, loop drop talign ;m
 :m dec# base @ >r decimal dup >r abs 0 <# bl hold #s r> sign #> r> base ! ;m
 :m >neg dup 7FFF u> if 10000 - then ;
 :m save-target ( <name> -- )
@@ -105,29 +105,29 @@ size =cell - tep !
 :m Z 0 t, ;m \ Address 0 must contain 0
 :m NADDR there 2/ 1+ t, ;m
 :m HALT 0 t, 0 t, -1 t, ;m
-:m JMP 2/ Z Z t, ;m ( c -- )
-:m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m ( a b -- )
-:m SUB swap 2/ t, 2/ t, NADDR ;m ( a b -- )
-:m NOP Z Z NADDR ;m ( -- )
+:m JMP 2/ Z Z t, ;m
+:m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
+:m SUB swap 2/ t, 2/ t, NADDR ;m
+:m NOP Z Z NADDR ;m
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
-:m PUT 2/ t, -1 t, NADDR ;m ( a -- : load from address and output character )
-:m GET 2/ -1 t, t, NADDR ;m ( a -- : get character from input and store at addr. )
+:m PUT 2/ t, -1 t, NADDR ;m
+:m GET 2/ -1 t, t, NADDR ;m
 assembler.1 +order also definitions
-: begin talign there ; ( -- addr )
-: again JMP ; ( addr -- )
+: begin talign there ;
+: again JMP ;
 : mark there 0 t, ;
 : if 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t, mark ;
 : until
 	2/ dup t, Z there 2/ 4 + dup t,
 	Z Z 6 + t,
 	Z Z NADDR
-	Z t, 2/ t, ; ( var -- addr )
+	Z t, 2/ t, ;
 : +if   Z 2/ t, mark ;
 : -if
 	2/ t, Z there 2/ 4 + t,
 	Z Z there 2/ 4 + t,
-	Z Z mark ;  ( var -- addr )
-: -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ;  ( addr var -- addr )
+	Z Z mark ; 
+: -until 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z 2/ t, ; 
 : then begin 2/ swap t! ;
 : else mark swap then ;
 : while if swap ;
@@ -139,10 +139,10 @@ meta.1 +order also definitions
 	2/ >r r@ dup t, t, NADDR
         2/ t, Z  NADDR
 	r> Z  t, NADDR
-	Z Z NADDR ;m ( a b -- )
+	Z Z NADDR ;m
 
-:m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( indr w -- : indirect load )
-:m iJMP there 2/ E + 2* MOV NOP ;m ( indr -- )
+:m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
+:m iJMP there 2/ E + 2* MOV NOP ;m
 :m iSTORE
 	swap >r
 	there 2/ 3 4 * 3 * 0 + + 2dup 2* MOV
@@ -158,10 +158,13 @@ label: entry
 	0 tvar R0        \ temporary register
 	0 tvar R1        \ temporary register
 
-	0 tvar <cold>    \ entry point of virtual machine program, set later on
+	0 tvar {cold}    \ entry point of virtual machine program, set later on
+	\ 0 tvar {key}     \ execution vector for key?
+	\ 0 tvar {emit}    \ execution vector for emit
+	\ 0 tvar {literal} \ execution vector for literal
+	\ 0 tvar {interp}  \ execution vector for interpret
 	0 tvar pwd       \ previous word pointer
 
-\ TODO: Add hooks in for <key>, <emit>, <literal>, ...
 	0 tvar ip        \ instruction pointer
 	0 tvar w         \ working pointer
 	0 tvar t         \ temporary register for Virtual Machine
@@ -177,6 +180,7 @@ label: entry
 	0 tvar #tib      \ terminal input buffer
 	0 tvar primitive \ any address lower than this one must be a primitive
 
+
 	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
 	=end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
 	=end =stksz 4 * - =buf - constant TERMBUF \ pad buffer space
@@ -191,13 +195,12 @@ label: entry
 :m --rp {rp} DEC ;m
 :m ++rp {rp} INC ;m
 
-\ TODO: Optimize VM
 assembler.1 +order
 label: start
 	start 2/ entry t!
 	{sp0} {sp} MOV
 	{rp0} {rp} MOV
-	<cold> ip MOV
+	{cold} ip MOV
 	( fall-through )
 label: vm
 	ip w MOV
@@ -253,12 +256,9 @@ assembler.1 -order
 :a opDup ++sp tos {sp} iSTORE ;a
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
 :a opDrop tos {sp} iLOAD --sp ;a
-:a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
-:a + w {sp} iLOAD w tos ADD --sp ;a
 :a opJump w ip iLOAD w ip MOV ;a
 :a opJumpZ tos w MOV tos {sp} iLOAD --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 :a opJumpN tos w MOV tos {sp} iLOAD --sp w -if ip INC vm JMP then w ip iLOAD w ip MOV ;a
-:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a op0>  tos w MOV  0   tos MOV w +if neg1 tos MOV then ;a
 :a op0<  tos w MOV  0   tos MOV w -if neg1 tos MOV then ;a
@@ -266,7 +266,6 @@ assembler.1 -order
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
 :a opExit ip {rp} iLOAD --rp ;a
-:a rdrop --rp ;a
 :a opNext
 	w {rp} iLOAD
 	w DEC
@@ -276,11 +275,16 @@ assembler.1 -order
 	--rp
 	;a
 :a op2* tos tos ADD ;a
+:a opExecute tos ip MOV --sp tos {sp} iLOAD ;a
+:a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
+:a + w {sp} iLOAD w tos ADD --sp ;a
+:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
+:a rdrop --rp ;a
 :a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos DEC ;a
 :a sp! tos {sp} MOV ;a
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
 :a rp!  tos {rp} MOV --sp tos {sp} iLOAD ;a
-:a opExecute tos ip MOV --sp tos {sp} iLOAD ;a
+:a r1+ w {rp} iLOAD w INC w {rp} iSTORE ;a
 \ :a opDivMod
 \ 	w {sp} iLOAD
 \ 	R0 ZERO
@@ -413,41 +417,44 @@ there 2/ primitive t!
 :t < >= invert ;t
 :t > swap < ;t
 :t <= > invert ;t
-:t msb dup 8000 lit = if drop #-1 exit then 0< ;t
+:t msb dup 8000 lit - 0= if drop #-1 exit then 0< ;t
 :t 0>= 0< 0= ;t
-:t 2* dup 8000 lit = if 7FFF lit - then op2* ;t
-:t s>d dup 0< ;t
 :t negate 1- invert ;t
+:t s>d dup 0< ;t
 :t abs s>d if negate then ;t
+\ TODO: Fix 2*, it appears this does not work correctly in all cases
+:t 2* dup 8000 lit - 0= if 7FFF lit - then op2* ;t
+\ :t 2* dup 0<            if 7FFF lit - then op2* ;t
 :t cell 2 lit ;t
 :t cell+ cell + ;t
 :t pick sp@ + [@] ;t
 :t cr =cr lit emit =lf lit emit ;t
 :t key? opKey? dup 0< if drop #0 exit then #-1 ;t
 :t key begin key? until ;t
-:t u< 2dup 0>= swap 0>= = opToR < r> = ;t
+:t u< 2dup 0>= swap 0>= = >r < r> = ;t
 :t u> swap u< ;t
 :t u>= u< invert ;t
 :t u<= u> invert ;t
 :t * 2dup u< if swap then opMul ;t
 :t u/mod
-  #0 opToR
+  #0 >r
   begin over over u>=
   while
-    r> 1+ opToR
+    r1+
     tuck - swap
   repeat
   drop r> ;t
 :t umod u/mod drop ;t
 :t u/ u/mod nip ;t
-\ TODO: Fast divide by two using repeated double and testing of top bit
-\ to build up a new value
 :t 2/ 2 lit u/ ;t
-:t @ 2/ [@] ;t \ TODO: Avoid using this where possible, use [@]
-:t ! 2/ [!] ;t \ TODO: Avoid using this where possible, use [!]
+:t @ 2/ [@] ;t
+:t ! 2/ [!] ;t
 :t +! 2/ tuck [@] + swap [!] ;t
-:t lshift begin ?dup while 1- swap 2* swap repeat ;t
-:t rshift begin ?dup while 1- swap 2/ swap repeat ;t
+\ :t lshift begin ?dup while 1- swap 2* swap repeat ;t
+\ :t rshift begin ?dup while 1- swap 2/ swap repeat ;t
+:t lshift for aft 2* then next ;t
+:t rshift for aft 2/ then next ;t
+
 :t logical if #1 else #0 then ;t
 :t ? dup 30 lit + emit ;t \ TODO: delete when no longer needed
 :t or
@@ -457,7 +464,7 @@ there 2/ primitive t!
    while
      r> r> 2* >r >r
      2dup msb swap msb + if
-       r> r> 1+ >r >r
+       r> r1+ >r
      then
      2* swap 2*
    repeat 2drop rdrop r> ;t
@@ -468,7 +475,7 @@ there 2/ primitive t!
    while
      r> r> 2* >r >r
      2dup msb swap msb + #-1 = if
-       r> r> 1+ >r >r
+       r> r1+ >r
      then
      2* swap 2*
    repeat 2drop rdrop r> ;t
@@ -479,13 +486,13 @@ there 2/ primitive t!
    while
      r> r> 2* >r >r
      2dup msb swap msb + -2 lit = if
-       r> r> 1+ >r >r
+       r> r1+ >r
      then
      2* swap 2*
    repeat 2drop rdrop r> ;t
-:t c@ dup @ swap lsb if 8 lit rshift  else $FF lit and then ;t
+:t c@ dup @ swap lsb if 100 lit u/ ( 8 lit rshift ) else $FF lit and then ;t
 :t c!  swap $FF lit and dup 8 lit lshift or swap
-   tuck dup @ swap lsb #0 = $FF lit xor
+   tuck dup @ swap lsb 0= $FF lit xor
    >r over xor r> and xor swap ! ;t
 :t max 2dup < if nip else drop then ;t
 :t min 2dup > if nip else drop then ;t
@@ -493,7 +500,6 @@ there 2/ primitive t!
 :t aligned dup lsb + ;t
 :t align here aligned h half lit [!] ;t
 :t allot aligned h lit +! ;t
-:t , align h half lit [!] cell allot ;t
 :t +string #1 over min rot over + rot rot - ;t
 :t type begin dup while swap count emit swap 1- repeat 2drop ;t
 :t cmove for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;t ( b1 b2 u -- )
@@ -538,12 +544,36 @@ there 2/ primitive t!
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
 :t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 \ TODO: Fix words, words with length 1 do not print correctly
+:t , align h half lit [!] cell allot ;t
 :t words last begin dup nfa count 1F lit and space type @ ?dup 0= until cr ;t
 
-:t cold
-there half <cold> t!
+:t hi hex ." eForth v0.1" cr ;t \ TODO: reset input buffers, set exe vectors
 
-	\ words
+1 tvar xx
+0201 tvar yy
+
+:t cold
+there half {cold} t!
+
+	\ TODO: fix so it should all 0, 1, 2
+	8000 lit 8 lit lshift 8 lit rshift ? cr
+	   1 lit 8 lit lshift 8 lit rshift ? cr
+	   2 lit 8 lit lshift 8 lit rshift ? cr
+
+	xx lit @ ? cr
+	xx lit c@ ? cr
+	yy lit @ ? cr
+	yy lit c@ ? cr
+	yy lit 1+ c@ ? cr
+	words
+
+	\ TODO: Should print 'A', both do not
+	char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
+	char A 100 lit * FFFF lit xor 100 lit u/ FFFF lit xor emit cr
+	\ hi words
+
+	\ char A FFFF lit xor FFFF lit xor emit cr
+
 	3 lit    3 lit um* ? drop space ? drop cr
 
 	9 lit 8 lit  9 lit um/mod ? drop space ? drop cr
@@ -553,9 +583,10 @@ there half <cold> t!
 	4 lit -5 lit u< if char Y emit else char N emit then cr
 	4 lit -5 lit  < if char Y emit else char N emit then cr
 	char @ 1 lit xor emit cr
-	char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
-	char A 8 lit lshift FF00 lit and 8 lit rshift 00FF lit and emit cr
+	char A 7 lit lshift FFFF lit xor 7 lit rshift FFFF lit xor emit cr
 	char A 4 lit lshift FFFF lit xor 4 lit rshift FFFF lit xor emit cr
+	char A 8 lit lshift FF00 lit and 8 lit rshift 00FF lit and emit cr
+	char A 8 lit lshift FF00 lit and 100 lit u/   00FF lit and emit cr
 	char A FFFF lit xor FFFF lit xor emit cr
 	char A 80FF lit xor FF lit and FF lit xor emit cr
 	char A 7FFF lit xor 7FFF lit xor emit cr

@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
-#define SZ    (32768)
+#define SZ (32768)
 int main(int argc, char **argv) { /* 16-bit SUBLEQ OISC */
 	uint16_t m[SZ] = { 0, }, pc = 0;
 	for (int i = 1, d = 0, j = 0; i < argc && j < SZ; i++) {
