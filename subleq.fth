@@ -99,6 +99,7 @@ size =cell - tep !
 :m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
 :m half 2/ ;m
+:m t' ' >body @ ;m
 
 \ ---------------------------------- Forth VM --------------------------------
 
@@ -331,7 +332,12 @@ there 2/ primitive t!
 :m aft drop mark begin swap ;m
 :m next opNext talign 2/ t, ;m
 :m for opToR begin ;m
-
+:m =push   [ t' opPush  ] literal ;m
+:m =jump   [ t' opJump  ] literal ;m
+:m =jumpz  [ t' opJumpZ ] literal ;m
+:m =unnest [ t' opExit  ] literal ;m
+:m =>r     [ t' opToR   ] literal ;m
+:m =next   [ t' opNext  ] literal ;m
 
 \ TODO: Optimize by inline-ing assembly and renaming (ie. 1+ -> 1+).
 :ht #0 0 lit ;t
@@ -410,12 +416,12 @@ there 2/ primitive t!
 :t s>d dup 0< ;t
 :t abs s>d if negate then ;t
 \ TODO: Fix 2*, it appears this does not work correctly in all cases
-:t 2* dup 8000 lit - 0= if 7FFF lit - then op2* ;t
+\ :t 2* op2* ;t
 \ :t 2* dup 0<            if 7FFF lit - then op2* ;t
+:t 2* dup 8000 lit - 0= if 7FFF lit - then op2* ;t
 :t cell 2 lit ;t
 :t cell+ cell + ;t
 :t pick sp@ + [@] ;t
-:t cr =cr lit emit =lf lit emit ;t
 :t key? opKey? dup 0< if drop #0 exit then #-1 ;t
 :t key begin key? until ;t
 :t u< 2dup 0>= swap 0>= = >r < r> = ;t
@@ -423,8 +429,8 @@ there 2/ primitive t!
 :t u>= u< invert ;t
 :t u<= u> invert ;t
 :t * 2dup u< if swap then opMul ;t
-:t u/mod opDivMod ;t
-  \ #0 >r begin over over u>= while r1+ tuck - swap repeat drop r> ;t
+:t u/mod \ opDivMod ;t
+  #0 >r begin over over u>= while r1+ tuck - swap repeat drop r> ;t
 :t umod u/mod drop ;t
 :t u/ u/mod nip ;t
 :t 2/ 2 lit u/ ;t
@@ -433,7 +439,6 @@ there 2/ primitive t!
 :t +! 2/ tuck [@] + swap [!] ;t
 :t lshift begin ?dup while 1- swap 2* swap repeat ;t
 :t rshift begin ?dup while 1- swap 2/ swap repeat ;t
-
 :t logical if #1 else #0 then ;t
 :t ? dup 30 lit + emit ;t \ TODO: delete when no longer needed
 :t or
@@ -488,7 +493,15 @@ there 2/ primitive t!
 :m ." .$ $literal ;m
 :m $" ($) $literal ;m
 :t space bl emit ;t
-\ :t cr .$ 2 tc, =cr tc, =lf tc, ;t
+:t cr .$ 2 tc, =cr tc, =lf tc, ;t
+
+\ ==========================================================================
+\ ===                                                                    ===
+\ ===                       UNTESTED / NOT WORKING                       ===
+\ ===                                                                    ===
+\ ==========================================================================
+
+
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
    sp@ >r                        ( xt )   \ save data stack pointer
    {handler} half lit [@] >r     ( xt )   \ and previous handler
@@ -504,6 +517,8 @@ there 2/ primitive t!
       r> swap >r                 ( saved-sp ) \ exc# on return stack
       sp! drop r>                ( exc# )     \ restore stack
     then ;t
+
+\ TODO: Buggy/Not Working
 :t um+ 2dup u< 0= if swap then over + swap over swap u< logical ;t ( u u -- u carry )
 :t um* ( u u -- ud : double cell width multiply )
   #0 swap ( u1 0 u2 ) $F lit
@@ -520,13 +535,188 @@ there 2/ primitive t!
     next
     drop swap exit
   then 2drop drop #-1 dup ;t
+:t depth {sp0} lit @ sp@ - 1- ;t ( -- u : variable stack depth )
+:t ktap ( bot eot cur c -- bot eot cur )
+  dup dup =cr lit <> >r  =lf lit <> r> and if \ Not End of Line?
+    dup =bksp lit <> >r =del lit <> r> and if \ Not Delete Char?
+      bl ( tap -> ) dup emit over c! 1+ ( bot eot cur c -- bot eot cur )
+      exit
+    then
+    >r over r@ < dup if
+      =bksp lit dup emit space emit
+    then
+    r> +
+    exit
+  then drop nip dup ;t
+:t accept ( b u -- b u : read in a line of user input )
+  over + over
+  begin
+    2dup xor
+  while
+    key dup bl - $5F lit u< if ( tap -> ) dup emit over c! 1+ else ktap then
+  repeat drop over - ;t
+:t query TERMBUF lit =buf lit accept #tib lit ! drop #0 >in ! ;t ( -- : get line)
+:t ?depth depth > if -4 lit throw then ;t ( u -- : check stack depth )
+:t -trailing ( b u -- b u : remove trailing spaces )
+  for
+    aft bl over r@ + c@ <
+      if r> 1+ exit then
+    then
+  next #0 ;t
+:ht look ( b u c xt -- b u : skip until *xt* test succeeds )
+  swap >r rot rot
+  begin
+    dup
+  while
+    over c@ r@ - r@ bl = 4 lit pick execute
+    if rdrop rot drop exit then
+    +string
+  repeat rdrop rot drop ;t
+:ht no-match if 0> exit then 0= 0= ;t ( c1 c2 -- t )
+:ht match no-match invert ;t          ( c1 c2 -- t )
+:t parse ( c -- b u ; <string> )
+    >r source drop >in @ + #tib lit @ >in @ - r@
+    >r over r> swap >r >r
+    r@ t' no-match lit look 2dup
+    r> t' match    lit look swap r> - >r - r> 1+  ( b u c -- b u delta )
+    >in +!
+    r> bl = if -trailing then #0 max ;t
+:t spaces begin dup 0> while space 1- repeat drop ;t ( +n -- )
+:t hold #-1 hld +! hld @ c! ;t ( c -- : save a character in hold space )
+:t #> 2drop hld @ =tbufend lit over - ;t  ( u -- b u )
+:t #  ( d -- d : add next character in number to hold space )
+   2 lit ?depth
+   #0 base @
+   ( extract ->) dup >r um/mod r> swap >r um/mod r> rot ( ud ud -- ud u )
+   ( digit -> ) 9 lit over < 7 lit and + [char] 0 + ( u -- c )
+   hold ;t
+:t #s begin # 2dup ( d0= -> ) or 0= until ;t       ( d -- 0 )
+:t <# =tbufend lit hld ! ;t                        ( -- )
+:t sign 0< if [char] - hold then ;t                ( n -- )
+:t u.r >r #0 <# #s #>  r> over - spaces type ;t    ( u +n -- : print u right justified by +n )
+:t u.  #0 <# #s #> space type ;t                   ( u -- : print unsigned number )
+:t . dup >r abs #0 <# #s r> sign #> space type ;t  ( n -- print number )
+:t >number ( ud b u -- ud b u : convert string to number )
+  begin
+    2dup >r >r drop c@ base @        ( get next character )
+    ( digit? -> ) >r [char] 0 - 9 lit over <
+    if 7 lit - dup $A lit < or then dup r> u< ( c base -- u f )
+    0= if                            ( d char )
+      drop                           ( d char -- d )
+      r> r>                          ( restore string )
+      exit                           ( ..exit )
+    then                             ( d char )
+    swap base @ um* drop rot base @ um* ( d+ -> ) >r swap >r um+ r> + r> + ( accumulate digit )
+    r> r>                            ( restore string )
+    +string dup 0=                   ( advance string and test for end )
+  until ;t
+:t number? ( a u -- d -1 | a u 0 : string to a number [easier to use] )
+  #-1 dpl !
+  base @ >r
+  over c@ [char] - = dup >r if     +string then
+  over c@ [char] $ =        if hex +string then
+  >r >r #0 dup r> r>
+  begin
+    >number dup
+  while over c@ [char] . xor
+    if rot drop rot r> 2drop #0 r> base ! exit then
+    1- dpl ! 1+ dpl @
+  repeat 
+  2drop r> if 
+    ( dnegate -> ) invert >r invert #1 um+ r> + 
+  then r> base ! #-1 ;t
+:t compare ( a1 u1 a2 u2 -- n : string equality )
+  rot
+  over - ?dup if >r 2drop r> nip exit then
+  for ( a1 a2 )
+    aft
+      count rot count rot - ?dup
+      if rdrop nip nip exit then
+    then
+  next 2drop #0 ;t
+:to .s depth  for aft r@ pick . then next ;t ( -- : print variable stack )
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
 :t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 \ TODO: Fix words, words with length 1 do not print correctly
 :t , align h half lit [!] cell allot ;t
+:t (find) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
+  swap >r dup
+  begin
+    dup
+  while
+    dup nfa count $9F lit ( $1F:word-length + $80:hidden ) and r@ count compare 0=
+    if ( found! )
+      rdrop
+      dup ( immediate? -> ) nfa $40 lit swap @ and 0= 0=
+      #1 or negate exit
+    then
+    nip dup @
+  repeat
+  2drop #0 r> #0 ;t
+:t find last (find) rot drop ;t  ( "name" -- b )
+:t literal state @ if =push lit , , then ;t immediate ( u -- )
+:t compile, 2/ align , ;t  ( xt -- )
+:t ?found if exit then space count type [char] ? emit cr -D lit throw ;t ( u f -- )
+:t interpret                                          ( b -- )
+  find ?dup if
+    state @
+    if
+      0> if cfa execute exit then \ <- immediate word are executed
+      cfa compile, exit           \ <- compiling word are...compiled.
+    then
+    drop
+    dup nfa c@ 20 lit and if -E lit throw then ( <- ?compile )
+    cfa execute exit  \ <- if its not, execute it, then exit *interpreter*
+  then
+  \ not a word
+  dup >r count number? if rdrop \ it is a number!
+    dpl @ 0< if \ <- dpl will be -1 if it is a single cell number
+       drop     \ drop high cell from 'number?' for single cell output
+    else        \ <- dpl is not -1, it is a double cell number
+       state @ if swap then
+       postpone literal \ literal is executed twice if it's a double
+    then
+    postpone literal exit
+  then
+  r> #0 ?found \ Could vector ?found here, to handle arbitrary words
+  ;t
+:t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :t words last begin dup nfa count 1F lit and space type @ ?dup 0= until cr ;t
-
-:t hi hex ." eForth v0.1" cr ;t \ TODO: reset input buffers, set exe vectors
+:to see bl word find ?found
+    cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
+:to : align here last , {last} lit ! ( "name" -- : define a new word )
+    bl word
+    dup c@ 0= if -A lit throw then
+    count + h lit ! align
+    ] BABE lit ;t
+:to ; postpone [ BABE lit <> if -16 lit throw then  =unnest lit , ;t immediate compile-only
+:to begin align here ;t immediate compile-only
+:to until =jumpz lit , 2/ , ;t immediate compile-only
+:to again =jump  lit , 2/ , ;t immediate compile-only
+:to if =jumpz lit , here #0 , ;t immediate compile-only
+:to then here 2/ swap ! ;t immediate compile-only
+:to for =>r lit , here ;t immediate compile-only
+:to next =next lit , 2/ , ;t immediate compile-only
+:to ' bl word find ?found cfa literal ;t immediate
+:t compile r> dup 2* @ , 1+ >r ;t compile-only ( -- : compile next compiled into dictionary )
+:to exit compile exit ;t immediate compile-only
+:to ." compile .$  [char] " word count + h lit ! align ;t immediate compile-only
+:to $" compile ($) [char] " word count + h lit ! align ;t immediate compile-only  \ "
+:to ( [char] ) parse 2drop ;t immediate ( "comment" -- discard until parenthesis )
+:to \ source drop @ >in ! ;t immediate  ( "comment" -- discard until end of line )
+:to immediate last nfa @ $40 lit or last nfa ! ;t ( -- : turn previously defined word into an immediate one )
+:to dump begin over c@ u. +string ?dup 0= until drop ;t
+:t eval begin bl word dup c@ while interpret #1 ?depth repeat drop ."  ok" cr ;t ( "word" -- )
+:t ini hex postpone [ #0 >in ! #-1 dpl ! ;t ( -- )
+:t quit ( -- : interpreter loop [and more, does more than most QUITs] )
+   there half {cold} t! \ program entry point set here
+   ." eForth 3.2" cr
+   ini 
+   begin
+     query t' eval lit catch
+     ( ?error -> ) ?dup if
+       space . [char] ? emit cr ini
+     then again ;t
 
 1 tvar xx
 0201 tvar yy
@@ -534,26 +724,23 @@ there 2/ primitive t!
 :t cold
 there half {cold} t!
 
-	A lit 2 lit opDivMod ? drop ? drop cr
-	A lit 2 lit u/       ? drop ? drop cr
+	." TESTING/NOT WORKING" cr
 
 	\ TODO: fix so it should all 0, 1, 2
 	8000 lit 8 lit lshift 8 lit rshift ? cr
 	   1 lit 8 lit lshift 8 lit rshift ? cr
 	   2 lit 8 lit lshift 8 lit rshift ? cr
 
-	xx lit @ ? cr
-	xx lit c@ ? cr
-	yy lit @ ? cr
-	yy lit c@ ? cr
+	xx lit @     ? cr
+	xx lit c@    ? cr
+	yy lit @     ? cr
+	yy lit c@    ? cr
 	yy lit 1+ c@ ? cr
-	words
 
 	\ TODO: Should print 'A', both do not
 	char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
 	char A 100 lit * FFFF lit xor 100 lit u/ FFFF lit xor emit cr
-	\ hi words
-
+	\ ini words
 	\ char A FFFF lit xor FFFF lit xor emit cr
 
 	3 lit    3 lit um* ? drop space ? drop cr
@@ -572,6 +759,8 @@ there half {cold} t!
 	char A FFFF lit xor FFFF lit xor emit cr
 	char A 80FF lit xor FF lit and FF lit xor emit cr
 	char A 7FFF lit xor 7FFF lit xor emit cr
+
+	words
 
 	\ begin key? 0< while emit repeat drop
 	#1 0> if
