@@ -339,11 +339,6 @@ there 2/ primitive t!
 :m =>r     [ t' opToR   ] literal ;m
 :m =next   [ t' opNext  ] literal ;m
 
-\ TODO: Optimize by inline-ing assembly and renaming (ie. 1+ -> 1+).
-:ht #0 0 lit ;t
-:ht #1 1 lit ;t
-:ht #-1 -1 lit ;t
-
 :m dup opDup ;m
 :m drop opDrop ;m
 :m over opOver ;m
@@ -357,6 +352,9 @@ there 2/ primitive t!
 :m > op> ;m
 :m exit opExit ;m
 
+:ht #0 0 lit ;t
+:ht #1 1 lit ;t
+:ht #-1 -1 lit ;t
 :to 1+ 1+ ;t
 :to 1- 1- ;t
 :to + + ;t
@@ -372,11 +370,6 @@ there 2/ primitive t!
 :to [!] [!] ;t
 :to sp@ sp@ ;t
 :to sp! sp! ;t
-\ TODO: Change to immediate and compile-only, compiling in assembly op
-:to >r opFromR opSwap opToR opToR ;t compile-only
-:to r> opFromR opFromR opSwap opToR ;t compile-only
-:to r@ opFromR r@ opSwap opToR ;t compile-only
-:to rdrop opFromR rdrop opToR ;t compile-only
 :to 0> op0> ;t
 :to 0= op0= ;t
 :to 0< op0< ;t
@@ -500,7 +493,12 @@ there 2/ primitive t!
 \ ===                       UNTESTED / NOT WORKING                       ===
 \ ===                                                                    ===
 \ ==========================================================================
-
+\ TODO: Fix words, words with length 1 do not print correctly
+\ TODO: um*, um/mod not working correctly
+\ TODO: >r, r>, r@, rdrop will need testing in a run time compiled word
+\ TODO: Fix "8000 lshift", other operators, c@, ...
+\ TODO: Test numeric words, interpreter loop
+\ TODO: Implement system hooks for common I/O, interpreter loop, literal
 
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
    sp@ >r                        ( xt )   \ save data stack pointer
@@ -518,7 +516,6 @@ there 2/ primitive t!
       sp! drop r>                ( exc# )     \ restore stack
     then ;t
 
-\ TODO: Buggy/Not Working
 :t um+ 2dup u< 0= if swap then over + swap over swap u< logical ;t ( u u -- u carry )
 :t um* ( u u -- ud : double cell width multiply )
   #0 swap ( u1 0 u2 ) $F lit
@@ -527,7 +524,7 @@ there 2/ primitive t!
   next rot drop ;t
 :t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
   ?dup 0= if -A lit throw then
-  2dup u< \ TODO: Fix/Broken
+  2dup u<
   if negate $F lit
     for >r dup um+ >r >r dup um+ r> + dup
       r> r@ swap >r um+ r> or
@@ -637,7 +634,6 @@ there 2/ primitive t!
 :to .s depth  for aft r@ pick . then next ;t ( -- : print variable stack )
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
 :t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
-\ TODO: Fix words, words with length 1 do not print correctly
 :t , align h half lit [!] cell allot ;t
 :t (find) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
   swap >r dup
@@ -698,13 +694,17 @@ there 2/ primitive t!
 :to for =>r lit , here ;t immediate compile-only
 :to next =next lit , 2/ , ;t immediate compile-only
 :to ' bl word find ?found cfa literal ;t immediate
-:t compile r> dup 2* @ , 1+ >r ;t compile-only ( -- : compile next compiled into dictionary )
+:t compile r> dup 2* @ , 1+ >r ;t compile-only 
+:to >r compile opToR ;t immediate compile-only
+:to r> compile opFromR ;t immediate compile-only
+:to r@ compile r@ ;t immediate compile-only
+:to rdrop compile rdrop ;t immediate compile-only
 :to exit compile exit ;t immediate compile-only
 :to ." compile .$  [char] " word count + h lit ! align ;t immediate compile-only
 :to $" compile ($) [char] " word count + h lit ! align ;t immediate compile-only  \ "
-:to ( [char] ) parse 2drop ;t immediate ( "comment" -- discard until parenthesis )
-:to \ source drop @ >in ! ;t immediate  ( "comment" -- discard until end of line )
-:to immediate last nfa @ $40 lit or last nfa ! ;t ( -- : turn previously defined word into an immediate one )
+:to ( [char] ) parse 2drop ;t immediate 
+:to \ source drop @ >in ! ;t immediate  
+:to immediate last nfa @ $40 lit or last nfa ! ;t 
 :to dump begin over c@ u. +string ?dup 0= until drop ;t
 :t eval begin bl word dup c@ while interpret #1 ?depth repeat drop ."  ok" cr ;t ( "word" -- )
 :t ini hex postpone [ #0 >in ! #-1 dpl ! ;t ( -- )
