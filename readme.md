@@ -59,7 +59,6 @@ is available [here](subleq.c).
 
 * [x] Implement virtual machine and skeleton of project
   * [ ] Optional: Add proper terminal handling for Unix and Windows
-  * [ ] Optional: Remove debugging functionality
 * [x] Implement SUBLEQ routines
 * [ ] Implement eForth
   - [x] Implement Virtual Machine capable of executing Forth

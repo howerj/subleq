@@ -167,6 +167,7 @@ label: entry
 
 	0 tvar ip        \ instruction pointer
 	0 tvar w         \ working pointer
+	0 tvar x         \ working pointer
 	0 tvar t         \ temporary register for Virtual Machine
 	0 tvar tos       \ top of stack
 	0 tvar h         \ dictionary pointer
@@ -263,6 +264,8 @@ assembler.1 -order
 :a op0>  tos w MOV  0   tos MOV w +if neg1 tos MOV then ;a
 :a op0<  tos w MOV  0   tos MOV w -if neg1 tos MOV then ;a
 :a op0=  tos w MOV neg1 tos MOV w  if 0   tos MOV then ;a
+:a op<   w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
+:a op>   w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
 :a opExit ip {rp} iLOAD --rp ;a
@@ -285,46 +288,28 @@ assembler.1 -order
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
 :a rp!  tos {rp} MOV --sp tos {sp} iLOAD ;a
 :a r1+ w {rp} iLOAD w INC w {rp} iSTORE ;a
-\ :a opDivMod
-\ 	w {sp} iLOAD
-\ 	R0 ZERO
-\ 	t ZERO
-\ 	begin
-\ 		#1 R1 MOV
-\ 		tos w SUB
-\ 		w -if then
-\ 	while
-\ 		R0 INC
-\ 		tos w SUB
-\ 	repeat
-\ 	R0 {sp} iSTORE
-\ 	w tos MOV ;a
 :a lsb
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD
 	tos if one tos MOV then ;a
-\ :a op2/
-\ 	w ZERO
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then w w ADD tos tos ADD
-\ 	tos -if w INC then
-\ 	w tos MOV ;a
-\
+:a opDivMod \ NB. a "op2/" instruction would improve speed even more
+	w {sp} iLOAD
+	t ZERO
+	begin
+		one x MOV
+		w -if 0 x MOV then \ TODO: Replace with u>=
+		x
+	while
+		t INC
+		tos w SUB	
+	repeat
+	tos w ADD
+	t DEC
+	t tos MOV
+	w {sp} iSTORE ;a
+
 there 2/ primitive t!
 
 :m ;t CAFEBABE <> if abort" unstructured" then talign opExit target.only.1 -order ;m
@@ -362,6 +347,8 @@ there 2/ primitive t!
 :m 0> op0> ;m
 :m 0= op0= ;m
 :m 0< op0< ;m
+:m < op< ;m
+:m > op> ;m
 :m exit opExit ;m
 
 :to 1+ 1+ ;t
@@ -388,6 +375,8 @@ there 2/ primitive t!
 :to 0= op0= ;t
 :to 0< op0< ;t
 :to lsb lsb ;t
+:to < op< ;t
+:to > op> ;t
 
 :t execute rdrop opExecute ;t
 :t here h 2/ lit [@] ;t
@@ -414,8 +403,6 @@ there 2/ primitive t!
 :t = - 0= ;t
 :t <> = 0= ;t
 :t >= swap - 0<= ;t
-:t < >= invert ;t
-:t > swap < ;t
 :t <= > invert ;t
 :t msb dup 8000 lit - 0= if drop #-1 exit then 0< ;t
 :t 0>= 0< 0= ;t
@@ -436,24 +423,16 @@ there 2/ primitive t!
 :t u>= u< invert ;t
 :t u<= u> invert ;t
 :t * 2dup u< if swap then opMul ;t
-:t u/mod
-  #0 >r
-  begin over over u>=
-  while
-    r1+
-    tuck - swap
-  repeat
-  drop r> ;t
+:t u/mod opDivMod ;t
+  \ #0 >r begin over over u>= while r1+ tuck - swap repeat drop r> ;t
 :t umod u/mod drop ;t
 :t u/ u/mod nip ;t
 :t 2/ 2 lit u/ ;t
 :t @ 2/ [@] ;t
 :t ! 2/ [!] ;t
 :t +! 2/ tuck [@] + swap [!] ;t
-\ :t lshift begin ?dup while 1- swap 2* swap repeat ;t
-\ :t rshift begin ?dup while 1- swap 2/ swap repeat ;t
-:t lshift for aft 2* then next ;t
-:t rshift for aft 2/ then next ;t
+:t lshift begin ?dup while 1- swap 2* swap repeat ;t
+:t rshift begin ?dup while 1- swap 2/ swap repeat ;t
 
 :t logical if #1 else #0 then ;t
 :t ? dup 30 lit + emit ;t \ TODO: delete when no longer needed
@@ -554,6 +533,9 @@ there 2/ primitive t!
 
 :t cold
 there half {cold} t!
+
+	A lit 2 lit opDivMod ? drop ? drop cr
+	A lit 2 lit u/       ? drop ? drop cr
 
 	\ TODO: fix so it should all 0, 1, 2
 	8000 lit 8 lit lshift 8 lit rshift ? cr
