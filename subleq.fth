@@ -163,6 +163,7 @@ label: entry
 	0 tvar ip        \ instruction pointer
 	0 tvar w         \ working pointer
 	0 tvar x         \ working pointer
+\	0 tvar y         \ working pointer
 	0 tvar t         \ temporary register for Virtual Machine
 	0 tvar tos       \ top of stack
 	0 tvar h         \ dictionary pointer
@@ -260,6 +261,18 @@ assembler.1 -order
 :a op>   w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
+
+\ \ :t u< 2dup 0>= swap 0>= = >r < r> = ;t
+\ :a opu<
+\ 	w {sp} iLOAD
+\ 	y ZERO
+\ 	--sp
+\ 	tos +if y INC then tos if y INC then
+\ 	w   +if y INC then w   if y INC then
+\ 	w tos SUB tos -if then
+\ ;a
+\ 
+
 :a opExit ip {rp} iLOAD --rp ;a
 :a op2* tos tos ADD ;a
 :a opExecute tos ip MOV --sp tos {sp} iLOAD ;a
@@ -402,7 +415,9 @@ there 2/ primitive t!
 \ TODO: Fix 2*, it appears this does not work correctly in all cases
 \ :t 2* op2* ;t
 \ :t 2* dup 0<            if 7FFF lit - then op2* ;t
-:t 2* dup 8000 lit - 0= if 7FFF lit - then op2* ;t
+\ :t 2* dup 8000 lit - 0= if 7FFF lit - then op2* ;t
+\ :t 2* dup 0< if invert op2* invert exit then op2* ;t
+:t 2* dup msb if invert op2* invert opExit then op2* ;t
 :t cell 2 lit ;t
 :t cell+ cell + ;t
 :t pick sp@ + [@] ;t
@@ -448,7 +463,7 @@ there 2/ primitive t!
      2* swap 2*
    repeat 2drop rdrop r> ;t
 :t and
-   $10 lit #0 >r >r
+   $10  lit #0 >r >r
    begin
      r> dup 1- >r
    while
@@ -477,7 +492,8 @@ there 2/ primitive t!
 :m ." .$ $literal ;m
 :m $" ($) $literal ;m
 :t space bl emit ;t
-:t cr .$ 2 tc, =cr tc, =lf tc, ;t
+:t cr =cr lit emit =lf lit emit ;t
+\ :t cr .$ 2 tc, =cr tc, =lf tc, 0 tc, ;t
 
 \ ==========================================================================
 \ ===                                                                    ===
@@ -709,13 +725,20 @@ there 2/ primitive t!
        space . [char] ? emit cr ini
      then again ;t
 
-0001 tvar xx \ TODO: Delete after testing
-0201 tvar yy \ TODO: Delete after testing
+0005 tvar xx \ TODO: Delete after testing
+0706 tvar yy \ TODO: Delete after testing
 
+\ TODO: Create a test bench for all bitwise operators
 :t cold
 there half {cold} t!
-
 	." TESTING/NOT WORKING" cr
+
+	3 lit 1 lit xor  ? cr
+	3 lit 1 lit and  ? cr
+	2 lit 1 lit or   ? cr
+	0 lit 1 lit or   ? cr
+	3 lit 1 lit xor  ? cr
+
 
 	\ TODO: fix so it should all 0, 1, 2
 	8000 lit 8 lit lshift 8 lit rshift ? cr
