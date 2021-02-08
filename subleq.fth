@@ -113,6 +113,8 @@ size =cell - tep !
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
 :m PUT 2/ t, -1 t, NADDR ;m
 :m GET 2/ -1 t, t, NADDR ;m
+:m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR Z Z NADDR ;m
+
 assembler.1 +order also definitions
 : begin talign there ;
 : again JMP ;
@@ -136,12 +138,6 @@ assembler.1 +order also definitions
 assembler.1 -order
 meta.1 +order also definitions
 
-:m MOV
-	2/ >r r@ dup t, t, NADDR
-        2/ t, Z  NADDR
-	r> Z  t, NADDR
-	Z Z NADDR ;m
-
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
 :m iJMP there 2/ E + 2* MOV NOP ;m
 :m iSTORE
@@ -157,15 +153,13 @@ label: entry
 	-1 tvar neg1     \ must contain -1
 	1 tvar one       \ must contain  1
 	0 tvar R0        \ temporary register
-	0 tvar R1        \ temporary register
-
+	0 tvar R1        \ TODO: DELETE (temporary register)
 	0 tvar {cold}    \ entry point of virtual machine program, set later on
 	\ 0 tvar {key}     \ execution vector for key?
 	\ 0 tvar {emit}    \ execution vector for emit
 	\ 0 tvar {literal} \ execution vector for literal
 	\ 0 tvar {interp}  \ execution vector for interpret
-	0 tvar pwd       \ previous word pointer
-
+	0 tvar pwd       \ TODO: DELETE (previous word pointer)
 	0 tvar ip        \ instruction pointer
 	0 tvar w         \ working pointer
 	0 tvar x         \ working pointer
@@ -181,12 +175,9 @@ label: entry
 	0 tvar {last}    \ last defined word
 	0 tvar #tib      \ terminal input buffer
 	0 tvar primitive \ any address lower than this one must be a primitive
-
-
 	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
 	=end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
 	=end =stksz 4 * - =buf - constant TERMBUF \ pad buffer space
-
 	TERMBUF =buf + constant =tbufend
 
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
@@ -217,25 +208,25 @@ label: vm
 	vm JMP
 assembler.1 -order
 
-:m :ht ( "name" -- : forth only routine )
+:m :ht ( "name" -- : forth routine, no header )
   get-current >r target.1 set-current create
   r> set-current CAFEBABE talign there ,
   does> @ 2/ t, ( really a call ) ;m
 
-:m :t ( "name" -- : forth only routine )
+:m :t ( "name" -- : forth routine )
   >in @ thead >in !
   get-current >r target.1 set-current create
   r> set-current CAFEBABE talign there ,
   does> @ 2/ t, ( really a call ) ;m
 
-:m :to ( "name" -- : forth only, target only routine )
+:m :to ( "name" -- : forth, target only routine )
   >in @ thead >in !
   get-current >r target.only.1 set-current create r> set-current
   there ,
   CAFEBABE
   does> @ 2/ t, ;m
 
-:m :a ( "name" -- : assembly only routine, no header )
+:m :a ( "name" -- : assembly routine, no header )
   $CAFED00D
   target.1 +order also definitions
   create talign there ,
@@ -270,14 +261,6 @@ assembler.1 -order
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
 :a opExit ip {rp} iLOAD --rp ;a
-:a opNext
-	w {rp} iLOAD
-	w DEC
-	w {rp} iSTORE
-	w if t ip iLOAD t ip MOV vm JMP then
-	ip INC
-	--rp
-	;a
 :a op2* tos tos ADD ;a
 :a opExecute tos ip MOV --sp tos {sp} iLOAD ;a
 :a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
@@ -289,6 +272,14 @@ assembler.1 -order
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
 :a rp!  tos {rp} MOV --sp tos {sp} iLOAD ;a
 :a r1+ w {rp} iLOAD w INC w {rp} iSTORE ;a
+:a opNext
+	w {rp} iLOAD
+	w DEC
+	w {rp} iSTORE
+	w if t ip iLOAD t ip MOV vm JMP then
+	ip INC
+	--rp
+	;a
 :a lsb
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
@@ -499,6 +490,7 @@ there 2/ primitive t!
 \ TODO: Fix "8000 lshift", other operators, c@, ...
 \ TODO: Test numeric words, interpreter loop
 \ TODO: Implement system hooks for common I/O, interpreter loop, literal
+\ TODO: Remove usage of logical operators where possible
 
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
    sp@ >r                        ( xt )   \ save data stack pointer
@@ -515,7 +507,6 @@ there 2/ primitive t!
       r> swap >r                 ( saved-sp ) \ exc# on return stack
       sp! drop r>                ( exc# )     \ restore stack
     then ;t
-
 :t um+ 2dup u< 0= if swap then over + swap over swap u< logical ;t ( u u -- u carry )
 :t um* ( u u -- ud : double cell width multiply )
   #0 swap ( u1 0 u2 ) $F lit
@@ -560,7 +551,7 @@ there 2/ primitive t!
       if r> 1+ exit then
     then
   next #0 ;t
-:ht look ( b u c xt -- b u : skip until *xt* test succeeds )
+:t look ( b u c xt -- b u : skip until *xt* test succeeds )
   swap >r rot rot
   begin
     dup
@@ -569,8 +560,8 @@ there 2/ primitive t!
     if rdrop rot drop exit then
     +string
   repeat rdrop rot drop ;t
-:ht no-match if 0> exit then 0= 0= ;t ( c1 c2 -- t )
-:ht match no-match invert ;t          ( c1 c2 -- t )
+:t no-match if 0> exit then 0= 0= ;t ( c1 c2 -- t )
+:t match no-match invert ;t          ( c1 c2 -- t )
 :t parse ( c -- b u ; <string> )
     >r source drop >in @ + #tib lit @ >in @ - r@
     >r over r> swap >r >r
@@ -718,8 +709,8 @@ there 2/ primitive t!
        space . [char] ? emit cr ini
      then again ;t
 
-1 tvar xx
-0201 tvar yy
+0001 tvar xx \ TODO: Delete after testing
+0201 tvar yy \ TODO: Delete after testing
 
 :t cold
 there half {cold} t!
@@ -744,7 +735,6 @@ there half {cold} t!
 	\ char A FFFF lit xor FFFF lit xor emit cr
 
 	3 lit    3 lit um* ? drop space ? drop cr
-
 	9 lit 8 lit  9 lit um/mod ? drop space ? drop cr
 	3 lit 3 lit um+ 30 lit + emit space 30 lit + emit cr
 	5 lit FFFD lit um+ 30 lit + emit space 30 lit + emit cr

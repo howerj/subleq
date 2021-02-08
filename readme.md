@@ -59,11 +59,12 @@ is available [here](subleq.c).
 
 * [x] Implement virtual machine and skeleton of project
   * [ ] Optional: Add proper terminal handling for Unix and Windows
+  * [ ] Optional: Implement 32-bit version of VM and eForth
 * [x] Implement SUBLEQ routines
 * [ ] Implement eForth
   - [x] Implement Virtual Machine capable of executing Forth
   - [ ] Implement Forth on the virtual machine
-  - [ ] Make the system self-hosting, and remove Gforth as a dependency.
+  - [ ] Make the system self-hosting, and remove gforth as a dependency.
   - [ ] Make a LZSS compressed image that is decompressed at run time,
         a CRC check would be nice also.
 * [ ] Documentation
