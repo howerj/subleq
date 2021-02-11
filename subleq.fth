@@ -98,7 +98,7 @@ size =cell - tep !
 :m tcfa tnfa dup c@ $1F and + =cell + tdown ;m ( pwd -- cfa )
 :m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
-:m half 2/ ;m
+:m half dup 1 and abort" unaligned" 2/ ;m
 :m t' ' >body @ ;m
 
 \ ---------------------------------- Forth VM --------------------------------
@@ -217,8 +217,7 @@ assembler.1 -order
 :m :to ( "name" -- : forth, target only routine )
   >in @ thead >in !
   get-current >r target.only.1 set-current create r> set-current
-  there ,
-  CAFEBABE
+  CAFEBABE talign there , 
   does> @ 2/ t, ;m
 
 :m :a ( "name" -- : assembly routine, no header )
@@ -246,11 +245,11 @@ assembler.1 -order
 :a opDrop tos {sp} iLOAD --sp ;a
 :a opJump w ip iLOAD w ip MOV ;a
 :a opJumpZ tos w MOV tos {sp} iLOAD --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
-:a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a op0>  tos w MOV  0   tos MOV w +if neg1 tos MOV then ;a
 :a op0=  tos w MOV neg1 tos MOV w  if 0   tos MOV then ;a
 :a op<   w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
 :a op>   w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
+:a opToR   ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
 
@@ -275,8 +274,6 @@ assembler.1 -order
 \ 
 
 :a opExit ip {rp} iLOAD --rp ;a
-:a op2* tos tos ADD ;a
-:a opExecute tos ip MOV tos {sp} iLOAD --sp ;a
 :a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
 :a + w {sp} iLOAD w tos ADD --sp ;a
 :a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
@@ -316,9 +313,10 @@ assembler.1 -order
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD
 	tos if one tos MOV then ;a
-:a op0<  FFFC t, tos 2/ t, NADDR ;a
+\ :a op0<  FFFC t, tos 2/ t, NADDR ;a
 :a opTmp2/  FFFE t, tos 2/ t, NADDR ;a
 :a opTmpMsb FFFC t, tos 2/ t, NADDR ;a
+\ :a op2* tos tos ADD ;a
 :a op2*     FFFD t, tos 2/ t, NADDR ;a
 :a lsb      FFFB t, tos 2/ t, NADDR ;a
 
@@ -339,14 +337,14 @@ there 2/ primitive t!
 :m while if ;m
 :m repeat swap again then ;m
 :m aft drop mark begin swap ;m
-:m next opNext talign 2/ t, ;m
+:m next talign opNext 2/ t, ;m
 :m for opToR begin ;m
-:m =push   [ t' opPush  ] literal ;m
-:m =jump   [ t' opJump  ] literal ;m
-:m =jumpz  [ t' opJumpZ ] literal ;m
-:m =unnest [ t' opExit  ] literal ;m
-:m =>r     [ t' opToR   ] literal ;m
-:m =next   [ t' opNext  ] literal ;m
+:m =push   [ t' opPush  half ] literal ;m
+:m =jump   [ t' opJump  half ] literal ;m
+:m =jumpz  [ t' opJumpZ half ] literal ;m
+:m =unnest [ t' opExit  half ] literal ;m
+:m =>r     [ t' opToR   half ] literal ;m
+:m =next   [ t' opNext  half ] literal ;m
 
 :m dup opDup ;m
 :m drop opDrop ;m
@@ -394,6 +392,7 @@ there 2/ primitive t!
 :t bl 20 lit ;t
 :t >in {in} lit ;t
 :t hex  $10 lit {base} half lit [!] ;t
+\ :t decimal $A lit {base} half lit [!] ;t
 :t source TERMBUF lit #tib half lit [@] ;t
 :t last {last} half lit [@] ;t
 :t state {state} lit ;t
@@ -434,7 +433,6 @@ there 2/ primitive t!
 :t u/ u/mod nip ;t
 :t 2/ opTmp2/ ;t
 \ :t 2/ 2 lit u/ ;t
-\ :t execute opExecute ;t
 :t execute 2/ >r ;t
 :t @ 2/ [@] ;t
 :t ! 2/ [!] ;t
@@ -493,21 +491,19 @@ there 2/ primitive t!
 :t do$ r> r> 2* dup count + aligned 2/ >r swap >r ;t ( -- a : )
 :t ($) do$ ;t            ( -- a : do string NB. )
 :t .$ do$ count type ;t  ( -- : print string, next cells contain string )
-:m ." .$ $literal talign ;m
-:m $" ($) $literal talign ;m
+:m ." .$ $literal ;m
+:m $" ($) $literal ;m
 :t space bl emit ;t
-\ :t cr .$ 2 tc, =cr tc, =lf tc, 0 tc, ;t
 
 \ ==========================================================================
 \ ===                                                                    ===
 \ ===                       UNTESTED / NOT WORKING                       ===
 \ ===                                                                    ===
 \ ==========================================================================
-\ TODO: Fix words, words with length 1 do not print correctly
 \ TODO: um*, um/mod not working correctly
 \ TODO: >r, r>, r@, rdrop will need testing in a run time compiled word
 \ TODO: Fix "8000 lshift", other operators, c@, ...
-\ TODO: Test numeric words, interpreter loop
+\ TODO: Test numeric words
 \ TODO: Implement system hooks for common I/O, interpreter loop, literal
 \ TODO: Remove usage of logical operators where possible
 
@@ -531,7 +527,7 @@ there 2/ primitive t!
   #0 swap ( u1 0 u2 ) $F lit
   for dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
-  next rot drop ;t
+  next rot drop ;t 
 :t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
   ?dup 0= if -A lit throw then
   2dup u<
@@ -563,7 +559,7 @@ there 2/ primitive t!
     key dup bl - $5F lit u< if ( tap -> ) dup emit over c! 1+ else ktap then
   repeat drop over - ;t
 :t query TERMBUF lit =buf lit accept #tib lit ! drop #0 >in ! ;t ( -- : get line)
-:t ?depth drop ( depth > if -4 lit throw then ) ;t ( u -- : check stack depth ) \ TODO Fix
+:t ?depth depth > if -4 lit throw then ;t ( u -- : check stack depth )
 :t -trailing ( b u -- b u : remove trailing spaces )
   for
     aft bl over r@ + c@ <
@@ -689,14 +685,12 @@ there 2/ primitive t!
   ;t
 :t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :t words last begin dup nfa count 1F lit and space type @ ?dup 0= until cr ;t
-:to see bl word find ?found
-    cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
 :to : align here last , {last} half lit [!] ( "name" -- : define a new word )
     bl word
     dup c@ 0= if -A lit throw then
     count + h half lit [!] align
-    ] BABE lit ;t
-:to ; postpone [ BABE lit <> if -16 lit throw then  =unnest lit , ;t immediate compile-only
+    ] $BABE lit ;t
+:to ; postpone [ $BABE lit <> if -16 lit throw then  =unnest lit , ;t immediate compile-only
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
 :to again =jump  lit , 2/ , ;t immediate compile-only
@@ -719,94 +713,89 @@ there 2/ primitive t!
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
 :to dump begin over c@ u. +string ?dup 0= until drop ;t
-:t <ok> ."  ok" cr ;t
-:t eval begin bl word dup c@ while interpret #1 ?depth repeat drop {ok} lit @ execute ;t ( "word" -- )
+:t (ok) ."  ok" cr ;t
+:t <ok> {ok} lit ;t
+:t eval begin bl word dup c@ while interpret #1 ?depth repeat drop {ok} half lit [@] execute ;t ( "word" -- )
 :t ini 
     hex postpone [ 
     #0 {in} half lit [!] 
     #-1 {dpl} half lit [!]
-    t' <ok> lit {ok} half lit [!] ;t ( -- )
-cr
+    t' (ok) lit {ok} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop [and more, does more than most QUITs] )
    there half {cold} t! \ program entry point set here
-   ." eForth v0.1" cr \ TODO Print out bytes used/left
+   ." eForth v1" cr \ TODO Print out bytes used/left
    ini 
    begin
-     query eval
-     \ query t' eval lit catch
-     ( ?error -> ) ?dup if
-\       space . [char] ? emit cr ini
-     then again ;t
+    query t' eval lit catch
+    ( ?error -> ) ?dup if space . [char] ? emit cr ini then 
+   again ;t
+:t <cold> {cold} lit ;t
+:t cold {cold} half lit [@] execute ;t
 
-0005 tvar xx \ TODO: Delete after testing
-0706 tvar yy \ TODO: Delete after testing
-\ TODO: Create a test bench for all bitwise operators
-:t cold
-\   there half {cold} t! \ program entry point set here
-	." TESTING/NOT WORKING" cr
-	3 lit 2 lit xor  ? cr
-	3 lit 1 lit xor  ? cr
-	3 lit 1 lit and  ? cr
-	3 lit 2 lit and  ? cr
-	2 lit 1 lit or   ? cr
-	0 lit 1 lit or   ? cr
-	3 lit 1 lit xor  ? cr
+\ TODO: Delete this after testing is completed
+0005 tvar xx
+0706 tvar yy
+:t test
+	cr
+	3 lit 2 lit xor  ? space
+	3 lit 1 lit xor  ? space
+	3 lit 1 lit and  ? space
+	3 lit 2 lit and  ? space
+	2 lit 1 lit or   ? space
+	0 lit 1 lit or   ? space
+	3 lit 1 lit xor  ? space
+	cr
+
+	8000 lit 8 lit lshift 8 lit rshift ? space
+	   1 lit 8 lit lshift 8 lit rshift ? space
+	   2 lit 8 lit lshift 8 lit rshift ? space
+	cr
+
+	xx lit @     ? space
+	xx lit c@    ? space
+	yy lit @     ? space
+	yy lit c@    ? space
+	yy lit 1+ c@ ? space
 	cr
 
 
-	\ TODO: fix so it should all 0, 1, 2
-	8000 lit 8 lit lshift 8 lit rshift ? cr
-	   1 lit 8 lit lshift 8 lit rshift ? cr
-	   2 lit 8 lit lshift 8 lit rshift ? cr
+	2 lit    1 lit um* ? drop space ? drop space cr
+	0 lit 1 lit  1 lit um/mod ? drop space ? drop space
+	3 lit 3 lit um+ 30 lit + emit space 30 lit + emit space
+	5 lit FFFD lit um+ 30 lit + emit space 30 lit + emit space
+	5 lit FFFF lit um+ 30 lit + emit space 30 lit + emit space
+	FFFF lit FFFF lit um+ 30 lit + emit space 30 lit + emit space
+	\ 4 lit -5 lit u< if char Y emit else char N emit then space
+	\ 4 lit -5 lit  < if char Y emit else char N emit then space
+	\ 4 lit 8000 lit u< if char Y emit else char N emit then space
+	\ 8000 lit 8000 lit u< if char Y emit else char N emit then space
+	\ 8000 lit 4    lit u< if char Y emit else char N emit then space
 	cr
 
-	xx lit @     ? cr
-	xx lit c@    ? cr
-	yy lit @     ? cr
-	yy lit c@    ? cr
-	yy lit 1+ c@ ? cr
+	char A FFFF lit xor FFFF lit xor emit space
+	char @ 1 lit xor emit space
+	char A 7 lit lshift FFFF lit xor 7 lit rshift FFFF lit xor emit space
+	char A 4 lit lshift FFFF lit xor 4 lit rshift FFFF lit xor emit space
+	char A FFFF lit xor FFFF lit xor emit space
+	char A FFFF lit and emit space
+	char A 80FF lit xor   FF lit and FF lit xor emit space
+	char A FFFF lit xor   FF lit and FF lit xor emit space
 	cr
 
-	\ ini words
-	\ char A FFFF lit xor FFFF lit xor emit cr
-
-	2 lit    1 lit um* ? drop space ? drop cr
-	0 lit 1 lit  1 lit um/mod ? drop space ? drop cr
-	3 lit 3 lit um+ 30 lit + emit space 30 lit + emit cr
-	5 lit FFFD lit um+ 30 lit + emit space 30 lit + emit cr
-	5 lit FFFF lit um+ 30 lit + emit space 30 lit + emit cr
-	FFFF lit FFFF lit um+ 30 lit + emit space 30 lit + emit cr
-	\ 4 lit -5 lit u< if char Y emit else char N emit then cr
-	\ 4 lit -5 lit  < if char Y emit else char N emit then cr
-	\ 4 lit 8000 lit u< if char Y emit else char N emit then cr
-	\ 8000 lit 8000 lit u< if char Y emit else char N emit then cr
-	\ 8000 lit 4    lit u< if char Y emit else char N emit then cr
-	cr
-
-	char @ 1 lit xor emit cr
-	char A 7 lit lshift FFFF lit xor 7 lit rshift FFFF lit xor emit cr
-	char A 4 lit lshift FFFF lit xor 4 lit rshift FFFF lit xor emit cr
-	char A FFFF lit xor FFFF lit xor emit cr
-	char A FFFF lit and emit cr
-	char A 80FF lit xor   FF lit and FF lit xor emit cr
-	char A FFFF lit xor   FF lit and FF lit xor emit cr
-
-	cr
 	\ TODO: Should print 'A', fix them
-	char A FFFF lit xor FF00 lit xor FF lit xor emit cr
-	char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit cr
-	char A 8 lit lshift FF00 lit and 8 lit rshift 00FF lit and emit cr
-	char A 8 lit lshift FF00 lit and 100 lit u/   00FF lit and emit cr
-	char A 7FFF lit xor 7FFF lit xor emit cr
-	char A 100 lit * FFFF lit xor 100 lit u/ FFFF lit xor emit cr
+	char A FFFF lit xor FF00 lit xor FF lit xor emit space
+	char A 8 lit lshift FFFF lit xor 8 lit rshift FFFF lit xor emit space
+	char A 8 lit lshift FF00 lit and 8 lit rshift 00FF lit and emit space
+	char A 8 lit lshift FF00 lit and 100 lit u/   00FF lit and emit space
+	char A 7FFF lit xor 7FFF lit xor emit space
+	char A 100 lit * FFFF lit xor 100 lit u/ FFFF lit xor emit space
+	cr
 
-	\ words
-
-	\ begin key? 0< while emit repeat drop
-	#1 0> if
-	  0 lit for char H emit char i emit char ! emit cr next
+	7FFF lit 0> if
+	  F lit for char H emit char i emit char ! emit cr next
+	  \ 0 lit for aft char H emit char i emit char ! emit cr then next
 	  then
-	bye ;t
+	;t
 
 \ ---------------------------------- Image Generation ------------------------
 
