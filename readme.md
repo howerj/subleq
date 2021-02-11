@@ -60,6 +60,7 @@ is available [here](subleq.c).
 * [x] Implement virtual machine and skeleton of project
   * [ ] Optional: Add proper terminal handling for Unix and Windows
   * [ ] Optional: Implement 32-bit version of VM and eForth
+  * [ ] Add more realistic I/O (eg. return failure if we cannot output a byte)
 * [x] Implement SUBLEQ routines
 * [ ] Implement eForth
   - [x] Implement Virtual Machine capable of executing Forth
@@ -67,6 +68,8 @@ is available [here](subleq.c).
   - [ ] Make the system self-hosting, and remove gforth as a dependency.
   - [ ] Make a LZSS compressed image that is decompressed at run time,
         a CRC check would be nice also.
+  - [ ] Micro-optimizations (eg. merging jumps with previous instructions,
+    which may still need the following jump).
 * [ ] Documentation
 * [ ] Optional: Port to FPGA
 * [ ] Optional: Port and improve self-interpreter with I/O
