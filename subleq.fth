@@ -41,6 +41,7 @@ meta.1 +order also definitions
 000A constant =lf
 000D constant =cr
 007F constant =del
+   8 constant =bs 
 
 create tflash size cells here over erase allot
 
@@ -95,7 +96,7 @@ size =cell - tep !
 :m label: get-current >r meta.1 set-current create r> set-current there ,    does> @ ;m
 :m tdown =cell negate and ;m
 :m tnfa =cell + ;m ( pwd -- nfa : move to name field address)
-:m tcfa tnfa dup c@ $1F and + =cell + tdown ;m ( pwd -- cfa )
+:m tcfa tnfa dup c@ $1F and + =cell + ( tdown ) ;m ( pwd -- cfa )
 :m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
 :m half dup 1 and abort" unaligned" 2/ ;m
@@ -252,27 +253,6 @@ assembler.1 -order
 :a opToR   ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
-
-\ :a op0<  
-\   tos w   MOV  
-\   0   tos MOV 
-\   w -if neg1 tos MOV vm JMP then 
-\   neg1 tos MOV
-\   highb w SUB w if 0 tos MOV then
-\ ;a
-\ 
-
-\ \ :t u< 2dup 0>= swap 0>= = >r < r> = ;t
-\ :a opu<
-\ 	w {sp} iLOAD
-\ 	y ZERO
-\ 	--sp
-\ 	tos +if y INC then tos if y INC then
-\ 	w   +if y INC then w   if y INC then
-\ 	w tos SUB tos -if then
-\ ;a
-\ 
-
 :a opExit ip {rp} iLOAD --rp ;a
 :a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
 :a + w {sp} iLOAD w tos ADD --sp ;a
@@ -288,9 +268,7 @@ assembler.1 -order
 	w if 
 		w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP 
 	then
-	ip INC
-	--rp
-	;a
+	ip INC --rp ;a
 :a opDivMod \ NB. a "op2/" instruction would improve speed even more
 	w {sp} iLOAD
 	t ZERO
@@ -306,6 +284,7 @@ assembler.1 -order
 	t DEC
 	t tos MOV
 	w {sp} iSTORE ;a
+\ TODO: Improve and remove these
 :a op0<  tos w MOV  0   tos MOV w -if neg1 tos MOV then ;a
 :a lsb
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
@@ -313,12 +292,30 @@ assembler.1 -order
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD
 	tos if one tos MOV then ;a
-\ :a op0<  FFFC t, tos 2/ t, NADDR ;a
 :a opTmp2/  FFFE t, tos 2/ t, NADDR ;a
 :a opTmpMsb FFFC t, tos 2/ t, NADDR ;a
-\ :a op2* tos tos ADD ;a
 :a op2*     FFFD t, tos 2/ t, NADDR ;a
 :a lsb      FFFB t, tos 2/ t, NADDR ;a
+\ :a op0<  FFFC t, tos 2/ t, NADDR ;a
+\ :a op2* tos tos ADD ;a
+\ :a op0<  
+\   tos w   MOV  
+\   0   tos MOV 
+\   w -if neg1 tos MOV vm JMP then 
+\   neg1 tos MOV
+\   highb w SUB w if 0 tos MOV then
+\ ;a
+\ 
+\ \ :t u< 2dup 0>= swap 0>= = >r < r> = ;t
+\ :a opu<
+\ 	w {sp} iLOAD
+\ 	y ZERO
+\ 	--sp
+\ 	tos +if y INC then tos if y INC then
+\ 	w   +if y INC then w   if y INC then
+\ 	w tos SUB tos -if then
+\ ;a
+\ 
 
 there 2/ primitive t!
 
@@ -539,6 +536,32 @@ there 2/ primitive t!
     drop swap exit
   then 2drop drop #-1 dup ;t
 :t depth {sp0} half lit [@] sp@ - 1- ;t ( -- u : variable stack depth )
+
+\ :t echo {echo} half lit [@] execute ;t
+\ :t ^h ( bot eot cur -- bot eot cur )
+\   >r over r@ < dup
+\   if
+\     =bs lit dup echo bl echo echo
+\   then r> + ;t
+\ :t tap dup echo over c! 1+ ;t ( bot eot cur c -- bot eot cur )
+\ :t delete? dup =bs lit = swap =del lit = or 0= ;t ( c -- t : delete key pressed? )
+\ :t ktap ( bot eot cur c -- bot eot cur )
+\  dup =cr lit xor
+\  if delete? \ =bs lit xor
+\    if bl tap exit then ^h exit
+\  then drop nip dup ;t
+\ \ :t ktap? dup bl - $5F u< swap =del lit xor and ;t ( c -- t : possible ktap? )
+\ : accept ( b u -- b u )
+\   over + over
+\   begin
+\     2dup xor
+\   while
+\     key dup bl - $5F u< if tap else <tap> @execute then
+\   repeat drop over - ;t
+\ :t expect <expect> @ execute span ! drop ;t   ( b u -- )
+\ :t query tib tib-length <expect> @ execute #tib ! drop #0 >in ! ;t
+
+\ TODO: Change emit/echo so this can work on terminals that do/do not echo
 :t ktap ( bot eot cur c -- bot eot cur )
   dup dup =cr lit <> >r  =lf lit <> r> and if \ Not End of Line?
     dup =bksp lit <> >r =del lit <> r> and if \ Not Delete Char?
@@ -640,7 +663,7 @@ there 2/ primitive t!
   next 2drop #0 ;t
 :to .s depth  for aft r@ pick . then next ;t ( -- : print variable stack )
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
-:t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
+:t cfa nfa dup c@ 1F lit and + cell+ ( cell negate and ) ;t ( pwd -- cfa )
 :t , align h half lit [!] cell allot ;t
 :t (find) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
   swap >r dup
@@ -723,7 +746,7 @@ there 2/ primitive t!
     t' (ok) lit {ok} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop [and more, does more than most QUITs] )
    there half {cold} t! \ program entry point set here
-   ." eForth v1" cr \ TODO Print out bytes used/left
+   ." eForth v0.1" cr \ here u. cr \ TODO Print out bytes used/left
    ini 
    begin
     query t' eval lit catch
@@ -757,7 +780,6 @@ there 2/ primitive t!
 	yy lit c@    ? space
 	yy lit 1+ c@ ? space
 	cr
-
 
 	2 lit    1 lit um* ? drop space ? drop space cr
 	0 lit 1 lit  1 lit um/mod ? drop space ? drop space

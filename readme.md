@@ -72,6 +72,10 @@ is available [here](subleq.c).
     which may still need the following jump).
 * [ ] Documentation
 * [ ] Optional: Port to FPGA
+  - <https://cs.uwaterloo.ca/research/tr/1987/CS-87-36.pdf> Or
+  "URISC: The Ultimate Reduced Instruction Set Computer" by Farhad Mavaddat
+  and Behrooz Parhami (CS-87-36, June 1987). The microcode program would
+  help, as would the circuit diagram.
 * [ ] Optional: Port and improve self-interpreter with I/O
   - See <http://www.mazonka.com/subleq/index.html>
   - See <https://eigenratios.blogspot.com/2006/09/mark-ii-oisc-self-interpreter.html>
