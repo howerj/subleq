@@ -421,7 +421,7 @@ there 2/ primitive t!
 :t cell+ cell + ;t
 :t key? opKey? dup 0< if drop #0 exit then #-1 ;t
 :t key begin key? until ;t
-:t u< 2dup 0>= swap 0>= <> >r < r> <> ;t
+:t u< 2dup 0>= swap 0>= = >r < r> = ;t
 :t u> swap u< ;t
 :t u>= u< 0= ;t
 :t u<= u> 0= ;t
@@ -522,7 +522,7 @@ there 2/ primitive t!
 :t um+ 2dup u< 0= if swap then over + swap over swap u< lsb ;t ( u u -- u carry )
 :t um+ over over + >r r@ 0 lit >= >r over over and 0< r> or >r or 0< r> and invert 1+ r> swap ;t ( u u -- u carry )
 :t um* ( u u -- ud : double cell width multiply )
-  #0 swap ( u1 0 u2 ) $10 lit
+  #0 swap ( u1 0 u2 ) $F lit
   for
     dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
@@ -591,7 +591,6 @@ there 2/ primitive t!
       if r> 1+ exit then
     then
   next #0 ;t
-\ TODO: Fix parse, pick, execute, depth
 :t look ( b u c xt -- b u : skip until *xt* test succeeds )
   swap >r rot rot
   begin
@@ -797,6 +796,9 @@ there 2/ primitive t!
 	2 lit    2 lit um* ? drop space ? drop space cr
 	3 lit    3 lit um* ? drop space ? drop space cr
 	4 lit    4 lit um* ? drop space ? drop space cr
+	cr
+
+	10 lit 0 lit 2 lit um/mod ? drop space ? drop space cr
 	\ 0 lit 1 lit  1 lit um/mod ? drop space ? drop space
 \	3 lit 3 lit um+ 30 lit + emit space 30 lit + emit space
 \	5 lit FFFD lit um+ 30 lit + emit space 30 lit + emit space
@@ -829,7 +831,7 @@ there 2/ primitive t!
 	cr
 
 	7FFF lit 0> if
-	  F lit for char H emit char i emit char ! emit cr next
+	  1 lit for char H emit char i emit char ! emit cr next
 	  \ 0 lit for aft char H emit char i emit char ! emit cr then next
 	  then
 	;t
