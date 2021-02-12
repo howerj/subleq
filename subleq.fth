@@ -246,10 +246,7 @@ assembler.1 -order
 :a opDrop tos {sp} iLOAD --sp ;a
 :a opJump w ip iLOAD w ip MOV ;a
 :a opJumpZ tos w MOV tos {sp} iLOAD --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
-:a op0>  tos w MOV  0   tos MOV w +if neg1 tos MOV then ;a
 :a op0=  tos w MOV neg1 tos MOV w  if 0   tos MOV then ;a
-:a op<   w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
-:a op>   w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
 :a opToR   ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
@@ -285,6 +282,9 @@ assembler.1 -order
 	t tos MOV
 	w {sp} iSTORE ;a
 \ TODO: Improve and remove these
+:a op0>  tos w MOV  0   tos MOV w +if neg1 tos MOV then ;a
+:a op<   w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
+:a op>   w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
 :a op0<  tos w MOV  0   tos MOV w -if neg1 tos MOV then ;a
 :a lsb
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
@@ -294,10 +294,11 @@ assembler.1 -order
 	tos if one tos MOV then ;a
 :a opTmp2/  FFFE t, tos 2/ t, NADDR ;a
 :a opTmpMsb FFFC t, tos 2/ t, NADDR ;a
-:a op2*     FFFD t, tos 2/ t, NADDR ;a
+:a op0<     FFFC t, tos 2/ t, NADDR ;a
+\ :a op2*     FFFD t, tos 2/ t, NADDR ;a
+:a op2* tos tos ADD ;a
 :a lsb      FFFB t, tos 2/ t, NADDR ;a
 \ :a op0<  FFFC t, tos 2/ t, NADDR ;a
-\ :a op2* tos tos ADD ;a
 \ :a op0<  
 \   tos w   MOV  
 \   0   tos MOV 
@@ -374,6 +375,7 @@ there 2/ primitive t!
 :to [!] [!] ;t
 :to sp@ sp@ ;t
 :to sp! sp! ;t
+\ :t 0> dup op0< if drop #0 exit then 0= 0= ;t
 :to 0> op0> ;t
 :to 0= op0= ;t
 :to 0< op0< ;t
@@ -389,7 +391,7 @@ there 2/ primitive t!
 :t bl 20 lit ;t
 :t >in {in} lit ;t
 :t hex  $10 lit {base} half lit [!] ;t
-\ :t decimal $A lit {base} half lit [!] ;t
+:t decimal $A lit {base} half lit [!] ;t
 :t source TERMBUF lit #tib half lit [@] ;t
 :t last {last} half lit [@] ;t
 :t state {state} lit ;t
@@ -406,9 +408,9 @@ there 2/ primitive t!
 :t 0<> 0= 0= ;t
 :t = - 0= ;t
 :t <> = 0= ;t
-:t >= swap - 0<= ;t
-:t <= > invert ;t
-\ :t msb dup 8000 lit - 0= if drop #-1 exit then 0< ;t
+:t >= < 0= ;t
+:t <= > 0= ;t
+\ :t msb dup 8000 lit = if drop #-1 exit then 0< ;t
 :t msb opTmpMsb ;t
 :t 0>= 0< 0= ;t
 :t negate invert 1- ;t
@@ -437,7 +439,6 @@ there 2/ primitive t!
 :t +! 2/ tuck [@] + swap [!] ;t
 :t lshift begin ?dup while 1- swap 2* swap repeat ;t
 :t rshift begin ?dup while 1- swap 2/ swap repeat ;t
-:t logical if #1 else #0 then ;t
 :t ? dup 30 lit + emit ;t \ TODO: delete when no longer needed
 :t or
    $10 lit #0 >r >r
@@ -502,7 +503,6 @@ there 2/ primitive t!
 \ TODO: Fix "8000 lshift", other operators, c@, ...
 \ TODO: Test numeric words
 \ TODO: Implement system hooks for common I/O, interpreter loop, literal
-\ TODO: Remove usage of logical operators where possible
 
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
    sp@ >r                        ( xt )   \ save data stack pointer
@@ -519,10 +519,12 @@ there 2/ primitive t!
       r> swap >r                 ( saved-sp ) \ exc# on return stack
       sp! drop r>                ( exc# )     \ restore stack
     then ;t
-:t um+ 2dup u< 0= if swap then over + swap over swap u< logical ;t ( u u -- u carry )
+:t um+ 2dup u< 0= if swap then over + swap over swap u< lsb ;t ( u u -- u carry )
+:t um+ over over + >r r@ 0 lit >= >r over over and 0< r> or >r or 0< r> and invert 1+ r> swap ;t ( u u -- u carry )
 :t um* ( u u -- ud : double cell width multiply )
-  #0 swap ( u1 0 u2 ) $F lit
-  for dup um+ >r >r dup um+ r> + r>
+  #0 swap ( u1 0 u2 ) $10 lit
+  for
+    dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
   next rot drop ;t 
 :t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
@@ -760,33 +762,46 @@ there 2/ primitive t!
 0706 tvar yy
 :t test
 	cr
-	3 lit 2 lit xor  ? space
-	3 lit 1 lit xor  ? space
-	3 lit 1 lit and  ? space
-	3 lit 2 lit and  ? space
-	2 lit 1 lit or   ? space
-	0 lit 1 lit or   ? space
-	3 lit 1 lit xor  ? space
+	3 lit 2 lit xor  ? drop space
+	3 lit 1 lit xor  ? drop space
+	3 lit 1 lit and  ? drop space
+	3 lit 2 lit and  ? drop space
+	2 lit 1 lit or   ? drop space
+	0 lit 1 lit or   ? drop space
+	3 lit 1 lit xor  ? drop space
 	cr
 
-	8000 lit 8 lit lshift 8 lit rshift ? space
-	   1 lit 8 lit lshift 8 lit rshift ? space
-	   2 lit 8 lit lshift 8 lit rshift ? space
+	8000 lit 8 lit lshift 8 lit rshift ? drop space
+	   1 lit 8 lit lshift 8 lit rshift ? drop space
+	   2 lit 8 lit lshift 8 lit rshift ? drop space
 	cr
 
-	xx lit @     ? space
-	xx lit c@    ? space
-	yy lit @     ? space
-	yy lit c@    ? space
-	yy lit 1+ c@ ? space
+	xx lit @     ? drop space
+	xx lit c@    ? drop space
+	yy lit @     ? drop space
+	yy lit c@    ? drop space
+	yy lit 1+ c@ ? drop space
 	cr
 
+	0 lit    0 lit um+ ? drop space ? drop space cr
+	1 lit    1 lit um+ ? drop space ? drop space cr
+	2 lit    1 lit um+ ? drop space ? drop space cr
+	2 lit    2 lit um+ ? drop space ? drop space cr
+	3 lit    3 lit um+ ? drop space ? drop space cr
+	4 lit    4 lit um+ ? drop space ? drop space cr
+	cr
+
+	0 lit    0 lit um* ? drop space ? drop space cr
+	1 lit    1 lit um* ? drop space ? drop space cr
 	2 lit    1 lit um* ? drop space ? drop space cr
-	0 lit 1 lit  1 lit um/mod ? drop space ? drop space
-	3 lit 3 lit um+ 30 lit + emit space 30 lit + emit space
-	5 lit FFFD lit um+ 30 lit + emit space 30 lit + emit space
-	5 lit FFFF lit um+ 30 lit + emit space 30 lit + emit space
-	FFFF lit FFFF lit um+ 30 lit + emit space 30 lit + emit space
+	2 lit    2 lit um* ? drop space ? drop space cr
+	3 lit    3 lit um* ? drop space ? drop space cr
+	4 lit    4 lit um* ? drop space ? drop space cr
+	\ 0 lit 1 lit  1 lit um/mod ? drop space ? drop space
+\	3 lit 3 lit um+ 30 lit + emit space 30 lit + emit space
+\	5 lit FFFD lit um+ 30 lit + emit space 30 lit + emit space
+\	5 lit FFFF lit um+ 30 lit + emit space 30 lit + emit space
+\	FFFF lit FFFF lit um+ 30 lit + emit space 30 lit + emit space
 	\ 4 lit -5 lit u< if char Y emit else char N emit then space
 	\ 4 lit -5 lit  < if char Y emit else char N emit then space
 	\ 4 lit 8000 lit u< if char Y emit else char N emit then space
