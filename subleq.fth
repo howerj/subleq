@@ -413,7 +413,7 @@ there 2/ primitive t!
 \ :t msb dup 8000 lit = if drop #-1 exit then 0< ;t
 :t msb opTmpMsb ;t
 :t 0>= 0< 0= ;t
-:t negate invert 1- ;t
+:t negate 1- invert ;t
 :t s>d dup 0< ;t
 :t abs s>d if negate then ;t
 :t 2* op2* ;t
@@ -421,25 +421,6 @@ there 2/ primitive t!
 :t cell+ cell + ;t
 :t key? opKey? dup 0< if drop #0 exit then #-1 ;t
 :t key begin key? until ;t
-:t u< 2dup 0>= swap 0>= = >r < r> = ;t
-:t u> swap u< ;t
-:t u>= u< 0= ;t
-:t u<= u> 0= ;t
-:t * 2dup u< if swap then opMul ;t
-:t u/mod \ opDivMod ;t
-  #0 >r begin over over u>= while r1+ tuck - swap repeat drop r> ;t
-:t umod u/mod drop ;t
-:t u/ u/mod nip ;t
-:t 2/ opTmp2/ ;t
-\ :t 2/ 2 lit u/ ;t
-:t execute 2/ >r ;t
-:t @ 2/ [@] ;t
-:t ! 2/ [!] ;t
-:t pick sp@ + [@] ;t 
-:t +! 2/ tuck [@] + swap [!] ;t
-:t lshift begin ?dup while 1- swap 2* swap repeat ;t
-:t rshift begin ?dup while 1- swap 2/ swap repeat ;t
-:t ? dup 30 lit + emit ;t \ TODO: delete when no longer needed
 :t or
    $10 lit #0 >r >r
    begin
@@ -473,6 +454,26 @@ there 2/ primitive t!
      then
      2* swap 2*
    repeat 2drop rdrop r> ;t
+:t u< 2dup msb 0= swap msb 0= xor >r < r> xor ;t
+:t u< 2dup msb 0= swap msb 0= <> >r < r> <>  ;t
+:t u> swap u< ;t
+:t u>= u< 0= ;t
+:t u<= u> 0= ;t
+:t * 2dup u< if swap then opMul ;t
+:t u/mod \ opDivMod ;t
+  #0 >r begin over over u>= while r1+ tuck - swap repeat drop r> ;t
+:t umod u/mod drop ;t
+:t u/ u/mod nip ;t
+:t 2/ opTmp2/ ;t
+\ :t 2/ 2 lit u/ ;t
+:t execute 2/ >r ;t
+:t @ 2/ [@] ;t
+:t ! 2/ [!] ;t
+:t pick sp@ + [@] ;t 
+:t +! 2/ tuck [@] + swap [!] ;t
+:t lshift begin ?dup while 1- swap 2* swap repeat ;t
+:t rshift begin ?dup while 1- swap 2/ swap repeat ;t
+:t ? dup 30 lit + emit ;t \ TODO: delete when no longer needed
 :t c@ dup @ swap lsb if 8 lit rshift else $FF lit and then ;t
 :t c!  swap $FF lit and dup 8 lit lshift or swap
    tuck dup @ swap lsb 0= $FF lit xor
@@ -799,6 +800,7 @@ there 2/ primitive t!
 	cr
 
 	10 lit 0 lit 2 lit um/mod ? drop space ? drop space cr
+	10 lit 0 lit 4 lit um/mod ? drop space ? drop space cr
 	\ 0 lit 1 lit  1 lit um/mod ? drop space ? drop space
 \	3 lit 3 lit um+ 30 lit + emit space 30 lit + emit space
 \	5 lit FFFD lit um+ 30 lit + emit space 30 lit + emit space

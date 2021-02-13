@@ -31,10 +31,10 @@ int putch(int c) {
 	return 0;
 }
 #elif defined(_WIN32)
-extern int getc(void);
+extern int getch(void);
 extern int putch(int c);
 #else
-int getc(void) { return getchar(); }
+int getch(void) { return getchar(); }
 int putch(int c) { 
 	if (putchar(c) < 0) return -1; 
 	if (fflush(stdout) < 0) return -1; 
@@ -42,6 +42,8 @@ int putch(int c) {
 }
 #endif
 int main(int argc, char **argv) { /* 16-bit SUBLEQ OISC */
+	if (setvbuf(stdin,  NULL, _IONBF, 0) < 0 || setvbuf(stdout, NULL, _IONBF, 0) < 0)
+		return 1;
 	static uint16_t m[UINT16_MAX], pc = 0;
 	for (int i = 1, d = 0, j = 0; i < argc; i++) {
 		FILE *f = fopen(argv[i], "r");
