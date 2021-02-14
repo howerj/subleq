@@ -101,6 +101,8 @@ size =cell - tep !
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
 :m half dup 1 and abort" unaligned" 2/ ;m
 :m t' ' >body @ ;m
+\ :m tcksum $C0DE -rot for r@ over + tc@ rot + $FFFF and rot next drop ;m
+\ :m mkck dup there swap - .s tcksum ." check> " dup u. cr ;m
 
 \ ---------------------------------- Forth VM --------------------------------
 
@@ -169,6 +171,7 @@ label: entry
 	0 tvar {handler} \ throw/catch handler
 	0 tvar {last}    \ last defined word
 	0 tvar #tib      \ terminal input buffer
+	0 tvar check     \ used for system check sum
 	0 tvar primitive \ any address lower than this one must be a primitive
 	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
 	=end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
@@ -259,7 +262,7 @@ assembler.1 -order
 :a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a
 :a sp! tos {sp} MOV ;a
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
-:a rp!  tos {rp} MOV --sp tos {sp} iLOAD ;a
+:a rp!  tos {rp} MOV tos {sp} iLOAD --sp ;a
 :a r1+ w {rp} iLOAD w INC w {rp} iSTORE ;a
 :a opNext
 	w {rp} iLOAD
@@ -294,27 +297,9 @@ assembler.1 -order
 	tos tos ADD tos tos ADD
 	tos if one tos MOV then ;a
 :a opTmp2/  FFFE t, tos 2/ t, NADDR ;a
+:a op0<     FFFC t, tos 2/ t, NADDR ;a
 \ TODO: op0< fails for 8000
 \ :a op0<  tos w MOV  0   tos MOV w -if neg1 tos MOV then ;a
-:a op0<     FFFC t, tos 2/ t, NADDR ;a
-\ :a op0<  
-\   tos w   MOV  
-\   0   tos MOV 
-\   w -if neg1 tos MOV vm JMP then 
-\   neg1 tos MOV
-\   highb w SUB w if 0 tos MOV then
-\ ;a
-\ 
-\ \ :t u< 2dup 0>= swap 0>= = >r < r> = ;t
-\ :a opu<
-\ 	w {sp} iLOAD
-\ 	y ZERO
-\ 	--sp
-\ 	tos +if y INC then tos if y INC then
-\ 	w   +if y INC then w   if y INC then
-\ 	w tos SUB tos -if then
-\ ;a
-\ 
 
 there 2/ primitive t!
 
@@ -373,11 +358,10 @@ there 2/ primitive t!
 :to [!] [!] ;t
 :to sp@ sp@ ;t
 :to sp! sp! ;t
-\ :t 0> dup op0< if drop #0 exit then 0= 0= ;t
 :to 0> op0> ;t
 :to 0= op0= ;t
-\ :t 0< dup 8000 lit = if drop #-1 exit then op0< ;t
 :to 0< op0< ;t
+\ :t 0< dup 8000 lit - 0= if drop #-1 exit then op0< ;t
 :to lsb lsb ;t
 :to < op< ;t
 :to > op> ;t
@@ -654,8 +638,7 @@ there 2/ primitive t!
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
 :t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 :t allot aligned h lit +! ;t
-\ TODO: Find out why "h half [!]" does not work, but adding swap does!
-:t , align ( h half lit swap [!] ) here ! cell allot ;t
+:t , align ( h half lit [@] ) here ! cell allot ;t
 :t (find) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
   swap >r dup
   begin
@@ -717,7 +700,7 @@ there 2/ primitive t!
 :to >r compile opToR ;t immediate compile-only
 :to r> compile opFromR ;t immediate compile-only
 :to r@ compile r@ ;t immediate compile-only
-:to rdrop compile rdrop ;t immediate compile-only \ TODO: check it compiles right addr
+:to rdrop compile rdrop ;t immediate compile-only
 :to exit compile opExit ;t immediate compile-only
 :to ." compile .$  [char] " word count + h half lit [!] align ;t immediate compile-only
 :to $" compile ($) [char] " word count + h half lit [!] align ;t immediate compile-only  \ "
@@ -726,7 +709,10 @@ there 2/ primitive t!
 :to immediate last nfa @ $40 lit or last nfa ! ;t 
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
+\ TODO: A more useful dump (for this system) would work on words
 :to dump begin over c@ u. +string ?dup 0= until drop ;t
+\ TODO: Implement additive checksum
+\ :t cksum $C0DE lit -rot for r@ over + c@ rot + ( FFFF lit and ) rot next drop ;t
 :t (ok) ."  ok" cr ;t
 :t <ok> {ok} lit ;t
 :t eval begin bl word dup c@ while interpret #1 ?depth repeat drop {ok} half lit [@] execute ;t ( "word" -- )
@@ -735,10 +721,15 @@ there 2/ primitive t!
     #0 {in} half lit [!] 
     #-1 {dpl} half lit [!]
     t' (ok) lit {ok} half lit [!] ;t ( -- )
-:t quit ( -- : interpreter loop [and more, does more than most QUITs] )
+:t quit ( -- : interpreter loop, and more, does more than most QUITs )
    there half {cold} t! \ program entry point set here
    ini 
-   ." eForth v0.2" here . cr
+   ." eForth v0.3" here . cr
+ \  ." check-sum: " primitive half lit [@] dup here swap - .s cksum u. cr
+ \  ." actual: " check half lit [@] u. cr
+   \ ." Richard James Howe" cr
+   \ ." howe.r.j.89@gmail.com" cr
+   \ ." https://github.com/howerj/subleq" cr
    begin
     query t' eval lit catch
     ( ?error -> ) ?dup if space . [char] ? emit cr ini then 
@@ -748,6 +739,7 @@ there 2/ primitive t!
 
 \ ---------------------------------- Image Generation ------------------------
 
+\ primitive t@ there mkck check t!
 there h t!
 atlast {last} t!
 save-target subleq.dec
