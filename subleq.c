@@ -17,7 +17,7 @@ int getch(void) {
 	const int ch = getchar();
 	if (tcsetattr(STDIN_FILENO, TCSANOW, &oldattr) < 0)
 		goto fail;
-	if (ch == 0x1b) 
+	if (ch == 0x1b)
 		exit(0);
 	return ch == 127 ? 8 : ch;
 fail:
@@ -25,9 +25,9 @@ fail:
 	return -1;
 }
 
-int putch(int c) { 
-	if (putchar(c) < 0) return -1; 
-	if (fflush(stdout) < 0) return -1; 
+int putch(int c) {
+	if (putchar(c) < 0) return -1;
+	if (fflush(stdout) < 0) return -1;
 	return 0;
 }
 #elif defined(_WIN32)
@@ -35,9 +35,9 @@ extern int getch(void);
 extern int putch(int c);
 #else
 int getch(void) { return getchar(); }
-int putch(int c) { 
-	if (putchar(c) < 0) return -1; 
-	if (fflush(stdout) < 0) return -1; 
+int putch(int c) {
+	if (putchar(c) < 0) return -1;
+	if (fflush(stdout) < 0) return -1;
 	return 0;
 }
 #endif
