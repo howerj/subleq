@@ -116,17 +116,21 @@ assembler.1 +order also definitions
 : again JMP ;
 : mark there 0 t, ;
 \ TODO: "if" does not work for 8000
-: if 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t, mark ;
+: if 
+  2/ dup t, Z there 2/ 4 + dup t, 
+  Z Z 6 + t, 
+  Z Z NADDR 
+  Z t, mark ;
 : until
-	2/ dup t, Z there 2/ 4 + dup t,
-	Z Z 6 + t,
-	Z Z NADDR
-	Z t, 2/ t, ;
+  2/ dup t, Z there 2/ 4 + dup t,
+  Z Z 6 + t,
+  Z Z NADDR
+  Z t, 2/ t, ;
 : +if   Z 2/ t, mark ;
 : -if
-	2/ t, Z there 2/ 4 + t,
-	Z Z there 2/ 4 + t,
-	Z Z mark ;
+  2/ t, Z there 2/ 4 + t,
+  Z Z there 2/ 4 + t,
+  Z Z mark ;
 : then begin 2/ swap t! ;
 : else mark swap then ;
 : while if swap ;
@@ -138,40 +142,42 @@ meta.1 +order also definitions
 :m iJMP there 2/ E + 2* MOV NOP ;m
 :m iSTORE swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV r> 0 MOV ;m ( addr w -- )
 
-	0 t, 0 t,
+  0 t, 0 t,
 label: entry
-	-1 t,
-	-1 tvar neg1     \ must contain -1
-	1 tvar one       \ must contain  1
-\	8000 tvar hbit   \ must contain 8000
-	0 tvar INVREG    \ temporary register used for inversion only
-	0 tvar {cold}    \ entry point of virtual machine program, set later on
-	0 tvar {key}     \ execution vector for key?
-	0 tvar {emit}    \ execution vector for emit
-	0 tvar {literal} \ execution vector for literal
-	0 tvar {ok}      \ execution vector for .ok
-	0 tvar {echo}    \ execution vector for echo
-	0 tvar ip        \ instruction pointer
-	0 tvar w         \ working pointer
-	0 tvar x         \ working pointer
-	0 tvar t         \ temporary register for Virtual Machine
-	0 tvar tos       \ top of stack
-	0 tvar h         \ dictionary pointer
-	0 tvar {state}   \ compiler state
-	0 tvar {hld}     \ hold space pointer
-	10 tvar {base}   \ input/output radix, default = 16
-	-1 tvar {dpl}    \ number of places after fraction
-	0 tvar {in}      \ position in query string
-	0 tvar {handler} \ throw/catch handler
-	0 tvar {last}    \ last defined word
-	0 tvar #tib      \ terminal input buffer
-	0 tvar check     \ used for system checksum
-	-1 tvar checkEn  \ is checksum enabled
-	0 tvar primitive \ any address lower than this one must be a primitive
-	=end                       dup tvar {sp0} tvar {sp} \ grows downwards
-	=end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
-	=end =stksz 4 * - =buf - constant TERMBUF \ pad buffer space
-	TERMBUF =buf + constant =tbufend
+  -1 t,
+  -1 tvar neg1     \ must contain -1
+  1 tvar one       \ must contain  1
+  2 tvar two       \ must contain  1
+  FFFE tvar ntwo   \ must contain -2
+\  8000 tvar hbit   \ must contain 8000
+  0 tvar INVREG    \ temporary register used for inversion only
+  0 tvar {cold}    \ entry point of virtual machine program, set later on
+  0 tvar {key}     \ execution vector for key?
+  0 tvar {emit}    \ execution vector for emit
+  0 tvar {literal} \ execution vector for literal
+  0 tvar {ok}      \ execution vector for .ok
+  0 tvar {echo}    \ execution vector for echo
+  0 tvar ip        \ instruction pointer
+  0 tvar w         \ working pointer
+  0 tvar x         \ working pointer
+  0 tvar t         \ temporary register for Virtual Machine
+  0 tvar tos       \ top of stack
+  0 tvar h         \ dictionary pointer
+  0 tvar {state}   \ compiler state
+  0 tvar {hld}     \ hold space pointer
+  10 tvar {base}   \ input/output radix, default = 16
+  -1 tvar {dpl}    \ number of places after fraction
+  0 tvar {in}      \ position in query string
+  0 tvar {handler} \ throw/catch handler
+  0 tvar {last}    \ last defined word
+  0 tvar #tib      \ terminal input buffer
+  0 tvar check     \ used for system checksum
+  -1 tvar checkEn  \ is checksum enabled
+  0 tvar primitive \ any address lower than this one must be a primitive
+  =end                       dup tvar {sp0} tvar {sp} \ grows downwards
+  =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
+  =end =stksz 4 * - =buf - constant TERMBUF \ pad buffer space
+  TERMBUF =buf + constant =tbufend
 
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
@@ -183,22 +189,22 @@ label: entry
 
 assembler.1 +order
 label: start
-	start 2/ entry t!
-	{sp0} {sp} MOV
-	{rp0} {rp} MOV
-	{cold} ip MOV
-	( fall-through )
+  start 2/ entry t!
+  {sp0} {sp} MOV
+  {rp0} {rp} MOV
+  {cold} ip MOV
+  ( fall-through )
 label: vm
-	ip w MOV
-	ip INC
-	t w iLOAD
-	t w MOV
-	primitive t SUB
-	t -if w iJMP then
-	++rp
-	ip {rp} iSTORE
-	w ip MOV
-	vm JMP
+  ip w MOV
+  ip INC
+  t w iLOAD
+  t w MOV
+  primitive t SUB
+  t -if w iJMP then
+  ++rp
+  ip {rp} iSTORE
+  w ip MOV
+  vm JMP
 assembler.1 -order
 
 :m :ht ( "name" -- : forth routine, no header )
@@ -244,8 +250,6 @@ assembler.1 -order
 :a opDrop tos {sp} iLOAD --sp ;a
 :a opJump ip ip iLOAD ;a
 :a opJumpZ tos w MOV tos {sp} iLOAD --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
-\ TODO: "8000 0=" is incorrect!
-:a op0= tos w MOV neg1 tos MOV w if 0 tos MOV then ;a
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
@@ -260,42 +264,61 @@ assembler.1 -order
 :a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a
 :a r1+ w {rp} iLOAD w INC w {rp} iSTORE ;a
 :a opNext
-	w {rp} iLOAD
-	w if
-		w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP
-	then
-	ip INC --rp ;a
+  w {rp} iLOAD
+  w if
+    w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP
+  then
+  ip INC --rp ;a
 :a opDivMod \ NB. a "op2/" instruction would improve speed even more
-	w {sp} iLOAD
-	t ZERO
-	begin
-		one x MOV
-		w -if 0 x MOV then \ TODO: Replace with u>=
-		x
-	while
-		t INC
-		tos w SUB
-	repeat
-	tos w ADD
-	t DEC
-	t tos MOV
-	w {sp} iSTORE ;a
-\ TODO: Improve and remove these
-:a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
-:a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
-:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
+  w {sp} iLOAD
+  t ZERO
+  begin
+    one x MOV
+    w -if 0 x MOV then \ TODO: Replace with u>=
+    x
+  while
+    t INC
+    tos w SUB
+  repeat
+  tos w ADD
+  t DEC
+  t tos MOV
+  w {sp} iSTORE ;a
+:a lsb \ TODO: This does not work for all values
+  tos w MOV ntwo w SUB w if \ Fix this for "FFFE"
+    tos tos ADD tos tos ADD tos tos ADD tos tos ADD
+    tos tos ADD tos tos ADD tos tos ADD tos tos ADD
+    tos tos ADD tos tos ADD tos tos ADD tos tos ADD
+    tos tos ADD tos tos ADD
+    tos if one tos MOV then
+    vm JMP
+  then
+  0 tos MOV ;a 
 :a op2* tos tos ADD ;a
-\ TODO: Does not work correctly for "FFFE" due to "if"
-:a lsb
-	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
-	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
-	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
-	tos tos ADD tos tos ADD
-	tos if one tos MOV then ;a
+:a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
+:a op0= tos w MOV neg1 tos MOV w if 0 tos MOV then ;a \ TODO: "8000 0=" is incorrect!
+:a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
+\ :a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then w DEC w +if 0 tos MOV then ;a
+:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
+\ TODO: Improve and remove these
 :a opTmp2/ FFFE t, tos 2/ t, NADDR ;a
-:a op0< FFFC t, tos 2/ t, NADDR ;a
-\ TODO: op0< fails for 8000
-\ :a op0< tos w MOV  0 tos MOV w -if neg1 tos MOV then ;a
+:a op0= tos w MOV neg1 tos MOV w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
+:a lsb  FFFB t, tos 2/ t, NADDR ;a
+:a op0< tos w MOV  0 tos MOV w -if neg1 tos MOV then w INC w -if neg1 tos MOV then  ;a
+\ :a op2/
+\   tos -if tos DEC tos INV then
+\   t ZERO
+\   begin
+\ 	one w MOV
+\ 	tos -if 0 w MOV then
+\ 	w
+\   while
+\ 	two tos SUB
+\ 	t INC
+\   repeat 
+\   t DEC
+\   t tos MOV ;a
+
 
 there 2/ primitive t!
 
@@ -355,7 +378,6 @@ there 2/ primitive t!
 :to 0> op0> ;t
 :to 0= op0= ;t
 :to 0< op0< ;t
-\ :t 0< dup 8000 lit - 0= if drop #-1 exit then op0< ;t
 :to lsb lsb ;t
 :to < op< ;t
 :to > op> ;t
@@ -438,7 +460,7 @@ there 2/ primitive t!
 :t u>= u< 0= ;t
 :t u<= u> 0= ;t
 :t * 2dup u< if swap then opMul ;t
-:t u/mod \ opDivMod ;t
+:t u/mod \ opDivMod ;t \ TODO: should throw on 0
   #0 >r begin 2dup u>= while r1+ tuck - swap repeat drop r> ;t
 :t umod u/mod drop ;t
 :t u/ u/mod nip ;t

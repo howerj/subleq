@@ -56,7 +56,7 @@ int main(int argc, char **argv) { /* 16-bit SUBLEQ OISC */
 		const uint16_t a = m[pc++], b = m[pc++], c = m[pc++];
 		if (a == 0xFFFFu) { m[b] = (int16_t)getch(); }
 		else if (a == 0xFFFE) { m[b] = m[b] >> 1; } /* TODO: Remove temporary instruction */
-		else if (a == 0xFFFC) { m[b] = m[b] & 0x8000 ? 0xFFFF : 0; } /* TODO: Remove temporary instruction */
+		else if (a == 0xFFFB) { m[b] = m[b] & 1u ? 0xFFFF : 0;  } /* TODO: Remove temporary instruction */
 		else if (b == 0xFFFFu) { if (putch(m[a]) < 0) return 3; }
 		else {
 			const uint16_t r = m[b] - m[a];
