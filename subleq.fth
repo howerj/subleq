@@ -100,9 +100,10 @@ size =cell - tep !
 :m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
 :m half dup 1 and abort" unaligned" 2/ ;m
+:m double 2* ;m
 :m t' ' >body @ ;m
-\ :m tcksum $C0DE -rot for r@ over + tc@ rot + $FFFF and rot next drop ;m
-\ :m mkck dup there swap - .s tcksum ." check> " dup u. cr ;m
+:m tcksum $C0DE >r begin over tc@ r> + $FFFF and >r +string ?dup 0= until drop r> ;m
+:m mkck dup there swap - .s tcksum ." check> " dup u. cr ;m
 
 \ ---------------------------------- Forth VM --------------------------------
 
@@ -122,6 +123,7 @@ assembler.1 +order also definitions
 : begin talign there ;
 : again JMP ;
 : mark there 0 t, ;
+\ TODO: "if" does not work for 8000
 : if 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t, mark ;
 : until
 	2/ dup t, Z there 2/ 4 + dup t,
@@ -149,6 +151,7 @@ label: entry
 	-1 t,
 	-1 tvar neg1     \ must contain -1
 	1 tvar one       \ must contain  1
+\	8000 tvar hbit   \ must contain 8000
 	0 tvar INVREG    \ temporary register used for inversion only
 	0 tvar {cold}    \ entry point of virtual machine program, set later on
 	\ 0 tvar {key}     \ execution vector for key?
@@ -234,7 +237,6 @@ assembler.1 -order
 :m ;a (a); vm JMP ;m
 :m postpone t' 2/ t, ;m
 
-\ TODO: Optimize! (make ;a modify previous instruction for quicker jumping)
 :a bye HALT ;a
 :a 1- tos DEC ;a
 :a 1+ tos INC ;a
@@ -250,6 +252,7 @@ assembler.1 -order
 :a opDrop tos {sp} iLOAD --sp ;a
 :a opJump ip ip iLOAD ;a
 :a opJumpZ tos w MOV tos {sp} iLOAD --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
+\ TODO: "8000 0=" is incorrect!
 :a op0=  tos w MOV neg1 tos MOV w  if 0   tos MOV then ;a
 :a opToR   ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
@@ -290,6 +293,7 @@ assembler.1 -order
 :a op<   w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
 :a op>   w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
 :a op2* tos tos ADD ;a
+\ TODO: Does not work correctly for "FFFE" due to "if"
 :a lsb
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
 	tos tos ADD tos tos ADD tos tos ADD tos tos ADD
@@ -711,8 +715,7 @@ there 2/ primitive t!
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
 \ TODO: A more useful dump (for this system) would work on words
 :to dump begin over c@ u. +string ?dup 0= until drop ;t
-\ TODO: Implement additive checksum
-\ :t cksum $C0DE lit -rot for r@ over + c@ rot + ( FFFF lit and ) rot next drop ;t
+:t cksum $C0DE lit >r begin over c@ r> + >r +string ?dup 0= until drop r> ;t
 :t (ok) ."  ok" cr ;t
 :t <ok> {ok} lit ;t
 :t eval begin bl word dup c@ while interpret #1 ?depth repeat drop {ok} half lit [@] execute ;t ( "word" -- )
@@ -721,15 +724,19 @@ there 2/ primitive t!
     #0 {in} half lit [!] 
     #-1 {dpl} half lit [!]
     t' (ok) lit {ok} half lit [!] ;t ( -- )
+:t info
+   cr
+   ." Author:  Richard James Howe" cr
+   ." Email:   howe.r.j.89@gmail.com" cr
+   ." Repo:    https://github.com/howerj/subleq" cr
+   ." License: The Unlicense / Public Domain" cr
+   ;t
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
-   there half {cold} t! \ program entry point set here
    ini 
    ." eForth v0.3" here . cr
- \  ." check-sum: " primitive half lit [@] dup here swap - .s cksum u. cr
- \  ." actual: " check half lit [@] u. cr
-   \ ." Richard James Howe" cr
-   \ ." howe.r.j.89@gmail.com" cr
-   \ ." https://github.com/howerj/subleq" cr
+   primitive half lit [@] 2* dup here swap - cksum
+   check half lit [@] <> if ." cksum fail" bye then
+   {ok} half lit [@] execute
    begin
     query t' eval lit catch
     ( ?error -> ) ?dup if space . [char] ? emit cr ini then 
@@ -739,8 +746,9 @@ there 2/ primitive t!
 
 \ ---------------------------------- Image Generation ------------------------
 
-\ primitive t@ there mkck check t!
+t' quit half {cold} t!
 there h t!
+primitive t@ double mkck check t!
 atlast {last} t!
 save-target subleq.dec
 .stat
