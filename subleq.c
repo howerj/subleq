@@ -1,49 +1,6 @@
-#include <stdio.h>
 #include <stdint.h>
-#include <stdlib.h>
-/* TODO: Remove this junk */
-#if defined(unix) || defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__))
-#include <unistd.h>
-#include <termios.h>
-int getch(void) {
-	struct termios oldattr, newattr;
-	if (tcgetattr(STDIN_FILENO, &oldattr) < 0)
-		goto fail;
-	newattr = oldattr;
-	newattr.c_iflag &= ~(ICRNL);
-	newattr.c_lflag &= ~(ICANON | ECHO);
-	if (tcsetattr(STDIN_FILENO, TCSANOW, &newattr) < 0)
-		goto fail;
-	const int ch = getchar();
-	if (tcsetattr(STDIN_FILENO, TCSANOW, &oldattr) < 0)
-		goto fail;
-	if (ch == 0x1b)
-		exit(0);
-	return ch == 127 ? 8 : ch;
-fail:
-	exit(1);
-	return -1;
-}
-
-int putch(int c) {
-	if (putchar(c) < 0) return -1;
-	if (fflush(stdout) < 0) return -1;
-	return 0;
-}
-#elif defined(_WIN32)
-extern int getch(void);
-extern int putch(int c);
-#else
-int getch(void) { return getchar(); }
-int putch(int c) {
-	if (putchar(c) < 0) return -1;
-	if (fflush(stdout) < 0) return -1;
-	return 0;
-}
-#endif
+#include <stdio.h>
 int main(int argc, char **argv) { /* 16-bit SUBLEQ OISC */
-	if (setvbuf(stdin,  NULL, _IONBF, 0) < 0 || setvbuf(stdout, NULL, _IONBF, 0) < 0)
-		return 1;
 	static uint16_t m[UINT16_MAX], pc = 0;
 	for (int i = 1, d = 0, j = 0; i < argc; i++) {
 		FILE *f = fopen(argv[i], "r");
@@ -54,9 +11,11 @@ int main(int argc, char **argv) { /* 16-bit SUBLEQ OISC */
 	}
 	do {
 		const uint16_t a = m[pc++], b = m[pc++], c = m[pc++];
-		if (a == 0xFFFFu) { m[b] = (int16_t)getch(); }
-		else if (b == 0xFFFFu) { if (putch(m[a]) < 0) return 3; }
-		else {
+		if (a == 0xFFFFu) { m[b] = (int16_t)getchar(); }
+		else if (b == 0xFFFFu) {
+			if (putchar(m[a]) < 0) return 3;
+			if (fflush(stdout) < 0) return 4;
+		} else {
 			const uint16_t r = m[b] - m[a];
 			if (r & 0x8000u || r == 0u) pc = c;
 			m[b] = r;

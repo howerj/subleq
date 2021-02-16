@@ -110,40 +110,29 @@ size =cell - tep !
 :m PUT 2/ t, -1 t, NADDR ;m
 :m GET 2/ -1 t, t, NADDR ;m
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR Z Z NADDR ;m
+:m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
+:m iJMP there 2/ E + 2* MOV NOP ;m
+:m iSTORE swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV r> 0 MOV ;m ( addr w -- )
 
 assembler.1 +order also definitions
 : begin talign there ;
 : again JMP ;
 : mark there 0 t, ;
-: if \ NB. "if" does not work for 8000
-  2/ dup t, Z there 2/ 4 + dup t, 
-  Z Z 6 + t, 
-  Z Z NADDR 
-  Z t, mark ;
-: until
-  2/ dup t, Z there 2/ 4 + dup t,
-  Z Z 6 + t,
-  Z Z NADDR
-  Z t, 2/ t, ;
+: if 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t, mark ; \ NB. "if" does not work for 8000
+: until 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t, 2/ t, ;
 : +if   Z 2/ t, mark ;
-: -if
-  2/ t, Z there 2/ 4 + t,
-  Z Z there 2/ 4 + t,
-  Z Z mark ;
+: -if 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;
 : then begin 2/ swap t! ;
-: else mark swap then ;
 : while if swap ;
 : repeat JMP then ;
 assembler.1 -order
 meta.1 +order also definitions
 
-:m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
-:m iJMP there 2/ E + 2* MOV NOP ;m
-:m iSTORE swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV r> 0 MOV ;m ( addr w -- )
-
-  0 t, 0 t,
-label: entry
-  -1 t,
+  0 t, 0 t,        \ both locations must be zero
+label: entry       \ used to set entry point in next cell
+  -1 t,            \ system entry point
+  3 tvar options   \ system options: bit 1 = echo off, bit 2 = checksum on
+  0 tvar check     \ used for system checksum
   8000 tvar hbit   \ must contain 8000
   -2   tvar ntwo   \ must contain -2
   -1 tvar neg1     \ must contain -1
@@ -164,14 +153,12 @@ label: entry
   0 tvar h         \ dictionary pointer
   0 tvar {state}   \ compiler state
   0 tvar {hld}     \ hold space pointer
-  10 tvar {base}   \ input/output radix, default = 16
+  $A tvar {base}   \ input/output radix
   -1 tvar {dpl}    \ number of places after fraction
   0 tvar {in}      \ position in query string
   0 tvar {handler} \ throw/catch handler
   0 tvar {last}    \ last defined word
   0 tvar #tib      \ terminal input buffer
-  0 tvar check     \ used for system checksum
-  -1 tvar checkEn  \ is checksum enabled
   0 tvar primitive \ any address lower than this one must be a primitive
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
   =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
@@ -193,45 +180,36 @@ label: start
   {rp0} {rp} MOV
   {cold} ip MOV
   ( fall-through )
-label: vm
+label: vm ( Forth Inner Interpreter )
   ip w MOV
   ip INC
   t w iLOAD
   t w MOV
   primitive t SUB
-  t -if w iJMP then
+  t -if w iJMP then ( jump straight to VM functions )
   ++rp
   ip {rp} iSTORE
   w ip MOV
   vm JMP
 assembler.1 -order
 
+:m header >in @ thead >in ! ;m
 :m :ht ( "name" -- : forth routine, no header )
   get-current >r target.1 set-current create
   r> set-current CAFEBABE talign there ,
-  does> @ 2/ t, ( really a call ) ;m
-
-:m :t ( "name" -- : forth routine )
-  >in @ thead >in !
-  get-current >r target.1 set-current create
-  r> set-current CAFEBABE talign there ,
-  does> @ 2/ t, ( really a call ) ;m
-
+  does> @ 2/ t, ;m
+:m :t header :ht ;m ( "name" -- : forth routine )
 :m :to ( "name" -- : forth, target only routine )
-  >in @ thead >in !
+  header
   get-current >r target.only.1 set-current create r> set-current
   CAFEBABE talign there ,
   does> @ 2/ t, ;m
-
 :m :a ( "name" -- : assembly routine, no header )
   $CAFED00D
   target.1 +order also definitions
-  create talign there ,
-  assembler.1 +order
-  does> @ 2/ t, ;m
-:m (a);
-   $CAFED00D <> if abort" unstructured" then assembler.1 -order ;m
-:m ;a (a); vm JMP ;m
+  create talign there , assembler.1 +order does> @ 2/ t, ;m
+:m (a); $CAFED00D <> if abort" unstructured" then assembler.1 -order ;m
+:m ;a (a); ( there =cell - vm 2/ t! ) vm JMP ;m
 :m postpone t' 2/ t, ;m
 
 :a bye HALT ;a
@@ -239,7 +217,7 @@ assembler.1 -order
 :a 1+ tos INC ;a
 :a invert tos INV ;a
 :a [@] tos tos iLOAD ;a
-:a [!] tos w MOV tos {sp} iLOAD --sp tos w iSTORE tos {sp} iLOAD --sp ;a
+:a [!] w {sp} iLOAD w tos iSTORE --sp tos {sp} iLOAD --sp ;a
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
 :a opKey? ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
@@ -262,43 +240,21 @@ assembler.1 -order
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
 :a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a
 :a r1+ w {rp} iLOAD w INC w {rp} iSTORE ;a
-:a opNext
-  w {rp} iLOAD
-  w if
-    w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP
-  then
-  ip INC --rp ;a
-:a opDivMod
-  w {sp} iLOAD
-  t ZERO
-  begin
-    one x MOV
-    w -if 0 x MOV then \ TODO: Replace with u>=
-    x
-  while
-    t INC
-    tos w SUB
-  repeat
-  tos w ADD
-  t DEC
-  t tos MOV
-  w {sp} iSTORE ;a
+:a opNext w {rp} iLOAD w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then ip INC --rp ;a
 :a lsb
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD
-    tos w MOV
-    0 tos MOV
-    w if neg1 tos MOV then ;a
+    tos w MOV 0 tos MOV w if neg1 tos MOV then ;a
 :a op2* tos tos ADD ;a
 :a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
 :a op0= tos w MOV neg1 tos MOV w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
-:a op0< tos w MOV  0 tos MOV w -if neg1 tos MOV then w INC w -if neg1 tos MOV then  ;a
-:a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
+:a op0< tos w MOV 0 tos MOV w -if neg1 tos MOV then w INC w -if neg1 tos MOV then ;a
+:a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a \ TODO: Fails for "8000 1 <" and "8001 1 <"
 \ :a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then w DEC w +if 0 tos MOV then ;a
 :a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
-:a op2/
+:a op2/ ( u -- u : unsigned division by 2 )
   x ZERO
   t ZERO
   tos -if tos INV neg1 x MOV  then
@@ -314,7 +270,6 @@ assembler.1 -order
   x if hbit t SUB t INV then
   t tos MOV ;a
 
-
 there 2/ primitive t!
 
 :m ;t CAFEBABE <> if abort" unstructured" then talign opExit target.only.1 -order ;m
@@ -325,7 +280,7 @@ there 2/ primitive t!
 :m begin talign there ;m
 :m until talign opJumpZ 2/ t, ;m
 :m again talign opJump  2/ t, ;m
-:m if opJumpZ there 0 t, ;m
+:m if opJumpZ there 0 t, ;m \ TODO: Does not jump on "$8000"
 :m mark opJump there 0 t, ;m
 :m then there 2/ swap t! ;m
 :m else mark swap then ;m
@@ -450,17 +405,12 @@ there 2/ primitive t!
      then
      2* swap 2*
    repeat 2drop rdrop r> ;t
-\ TODO: Works for "4000 1 u<" and "-1 1 u<", fails for "8000 1 u<"
-:t u< 2dup 0< 0= swap 0< 0= <> >r < r> <>  ;t
+:t u< 2dup 0< 0= swap 0< 0= <> >r < r> <>  ;t \ TODO: Works for "4000 1 u<" and "-1 1 u<", fails for "8000 1 u<"
 \ :t u< 2dup 0< 0= swap 0< 0= xor >r < r> xor ;t
 :t u> swap u< ;t
 :t u>= u< 0= ;t
 :t u<= u> 0= ;t
 :t * 2dup u< if swap then opMul ;t
-:t u/mod \ opDivMod ;t \ TODO: should throw on 0
-  #0 >r begin 2dup u>= while r1+ tuck - swap repeat drop r> ;t
-:t umod u/mod drop ;t
-:t u/ u/mod nip ;t
 :t execute 2/ >r ;t
 :t key? opKey? dup 0< if drop #0 exit then #-1 ;t
 :t key begin {key} half lit [@] execute until ;t
@@ -479,7 +429,7 @@ there 2/ primitive t!
 :t max 2dup < if nip else drop then ;t
 :t min 2dup > if nip else drop then ;t
 :t count dup 1+ swap c@ ;t
-:t logical if #1 else #0 then ;t
+:t logical 0<> if #1 else #0 then ;t
 :t aligned dup lsb logical + ;t
 :t align here aligned h half lit [!] ;t
 :t +string #1 over min rot over + rot rot - ;t
@@ -527,7 +477,17 @@ there 2/ primitive t!
     next
     drop swap exit
   then 2drop drop #-1 dup ;t
-:t depth {sp0} half lit [@] sp@ - 1- ;t ( -- u : variable stack depth )
+:t m/mod ( d n -- r q ) \ floored division
+  dup 0< dup >r
+  if
+    negate >r dnegate r>
+  then
+  >r dup 0< if r@ + then r> um/mod r>
+  if swap negate swap exit then ;t
+:t /mod  over 0< swap m/mod ;t
+:t mod  /mod drop ;t
+:t /    /mod nip ;t
+:t depth {sp0} half lit [@] sp@ - 1- ;t
 :t (emit) opEmit ;t
 :t (drop) drop ;t
 :t echo {echo} half lit [@] execute ;t
@@ -545,20 +505,14 @@ there 2/ primitive t!
     exit
   then drop nip dup ;t
 :t accept ( b u -- b u : read in a line of user input )
-  over + over
-  begin
+  over + over begin
     2dup <>
   while
     key dup bl - $5F lit u< if tap else ktap then
   repeat drop over - ;t
 :t query TERMBUF lit =buf lit accept #tib lit ! drop #0 >in ! ;t ( -- : get line)
 :t ?depth depth > if -4 lit throw then ;t ( u -- : check stack depth )
-:t -trailing ( b u -- b u : remove trailing spaces )
-  for
-    aft bl over r@ + c@ <
-      if r> 1+ exit then
-    then
-  next #0 ;t
+:t -trailing for aft bl over r@ + c@ < if r> 1+ exit then then next #0 ;t
 :t look ( b u c xt -- b u : skip until *xt* test succeeds )
   swap >r rot rot
   begin
@@ -582,20 +536,12 @@ there 2/ primitive t!
 :t #> 2drop hld @ =tbufend lit over - ;t  ( u -- b u )
 :t extract dup >r um/mod r> swap >r um/mod r> rot ;t ( ud ud -- ud u )
 :t digit 9 lit over < 7 lit and + [char] 0 + ;t ( u -- c )
-:t #  ( d -- d : add next character in number to hold space )
-   2 lit ?depth
-   #0 base @
-   extract    digit hold ;t
+:t #  2 lit ?depth #0 base @ extract digit hold ;t ( d -- d)
 :t #s begin # 2dup ( d0= -> ) or 0= until ;t       ( d -- 0 )
 :t <# =tbufend lit hld ! ;t                        ( -- )
 :t sign 0< if [char] - hold then ;t                ( n -- )
-:t h.
-   dup $C lit rshift F lit and digit emit
-   dup $8 lit rshift F lit and digit emit
-   dup $4 lit rshift F lit and digit emit
-                     F lit and digit emit space ;t
-:t u.r >r #0 <# #s #>  r> over - spaces type ;t    ( u +n -- : print u right justified by +n )
-:t u.  ( base @ $10 lit = if h. exit then ) #0 <# #s #> space type ;t ( u -- : print unsigned number )
+:t u.r >r #0 <# #s #>  r> over - spaces type ;t
+:t u.     #0 <# #s #> space type ;t
 :t . dup >r abs #0 <# #s r> sign #> space type ;t  ( n -- print number )
 :t >number ( ud b u -- ud b u : convert string to number )
   begin
@@ -635,9 +581,9 @@ there 2/ primitive t!
   next 2drop #0 ;t
 :t .s depth  for aft r@ pick . then next ;t ( -- : print variable stack )
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
-:t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
+:t cfa nfa dup c@ $1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 :t allot aligned h lit +! ;t
-:t , align ( h half lit [@] ) here ! cell allot ;t
+:t , align here ! cell allot ;t
 :t (find) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
   swap >r dup
   begin
@@ -679,7 +625,7 @@ there 2/ primitive t!
     postpone literal exit
   then
   r> #0 ?found ;t \ Could vector ?found here, to handle arbitrary words
-:t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
+:t word ( 2 lit ?depth ) parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :t words last begin dup nfa count 1F lit and space type @ ?dup 0= until ;t
 :to : align here last , {last} half lit [!] ( "name" -- : define a new word )
     bl word
@@ -708,44 +654,40 @@ there 2/ primitive t!
 :to immediate last nfa @ $40 lit or last nfa ! ;t
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
-:to dump begin over c@ u. +string ?dup 0= until drop ;t
-\ :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
+:to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
 :t cksum dup $C0DE lit - >r begin over c@ r> + >r +string ?dup 0= until drop r> ;t
 :t (ok) ."  ok" cr ;t
 :t eval begin bl word dup c@ while interpret #1 ?depth repeat drop {ok} half lit [@] execute ;t ( "word" -- )
-:t ini
-    hex postpone [
-    #0 {in} half lit [!]
-    #-1 {dpl} half lit [!]
-    t' key? lit {key} half lit [!]
-\   t' (drop) lit {echo} half lit [!] \ Could make this conditional
-    t' (emit) lit {echo} half lit [!]
-    t' (emit) lit {emit} half lit [!]
-    t' (ok) lit {ok} half lit [!]
-    t' (literal) lit {literal} half lit [!] ;t ( -- )
 :t info cr
-   ." Author:  Richard James Howe" cr
-   ." Email:   howe.r.j.89@gmail.com" cr
-   ." Repo:    https://github.com/howerj/subleq" cr
-   ." License: The Unlicense / Public Domain" cr ;t
+  ." Author:  Richard James Howe" cr
+  ." Email:   howe.r.j.89@gmail.com" cr
+  ." Repo:    https://github.com/howerj/subleq" cr
+  ." License: The Unlicense / Public Domain" cr ;t
+:t ini decimal postpone [ #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
-   ini
-   ." eForth v0.5" here . cr
-\   checkEn half lit [@] if
-\     primitive half lit [@] 2* dup here swap - cksum
-\     check half lit [@] <> if ." cksum fail" bye then
-\     #0 checkEn half lit [!]
-\   then
-   {ok} half lit [@] execute
-   begin
-    query t' eval lit catch
-    ( ?error -> ) ?dup if space . [char] ? emit cr ini then
-   again ;t
+  ini
+  options half lit [@] lsb if t' (drop) lit {echo} half lit [!] then
+  ." eForth v1.0" here . cr
+  options half lit [@] 2 lit and if
+    primitive half lit [@] 2* dup here swap - cksum
+    check half lit [@] <> if ." cksum fail" bye then
+    options half lit [@] 2 lit xor options half lit [!]
+  then
+  {ok} half lit [@] execute
+  begin
+   query t' eval lit catch
+   ( ?error -> ) ?dup if space . [char] ? emit cr ini then
+  again ;t
 :t cold {cold} half lit [@] execute ;t
 
 \ ---------------------------------- Image Generation ------------------------
 
 t' quit half {cold} t!
+t' key? {key} t!
+t' (emit) {echo} t!
+t' (emit) {emit} t!
+t' (ok) {ok} t!
+t' (literal) {literal} t!
 there h t!
 primitive t@ double mkck check t!
 atlast {last} t!
