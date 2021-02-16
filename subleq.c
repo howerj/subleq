@@ -11,8 +11,9 @@ int main(int argc, char **argv) { /* 16-bit SUBLEQ OISC */
 	}
 	do {
 		const uint16_t a = m[pc++], b = m[pc++], c = m[pc++];
-		if (a == 0xFFFFu) { m[b] = (int16_t)getchar(); }
-		else if (b == 0xFFFFu) {
+		if (a == 0xFFFFu) {
+			m[b] = (int16_t)getchar();
+		} else if (b == 0xFFFFu) {
 			if (putchar(m[a]) < 0) return 3;
 			if (fflush(stdout) < 0) return 4;
 		} else {

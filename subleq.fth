@@ -13,9 +13,16 @@
 \ - <https://www.bradrodriguez.com/papers/>
 \ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
 \
-\ Tested with GForth version 0.7.3
-\
-
+\ Tested with GForth version 0.7.3. 
+\ 
+\ It should be possible to make the system self hosting, as there is enough
+\ memory to do so, it would require implementing more words (the vocabulary
+\ word set, CREATE, DOES>, and a few others), but is well worth doing as
+\ it would remove the dependency on GForth entirely. The welcome message
+\ would have to be removed, and saving the image done by I/O redirection
+\ on the command line. The system could do with optimizing for speed as well,
+\ as it is already quite slow and cross-compilation would take too long.
+\ 
 only forth also definitions hex
 
 wordlist constant meta.1
@@ -225,8 +232,6 @@ assembler.1 -order
 :a opDup ++sp tos {sp} iSTORE ;a
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
 :a opDrop tos {sp} iLOAD --sp ;a
-:a opJump ip ip iLOAD ;a
-:a opJumpZ tos w MOV tos {sp} iLOAD --sp w if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opMul w {sp} iLOAD t ZERO begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
@@ -247,25 +252,21 @@ assembler.1 -order
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD
     tos w MOV 0 tos MOV w if neg1 tos MOV then ;a
-:a op2* tos tos ADD ;a
+:a opJump ip ip iLOAD ;a
+:a opJumpZ \ NB. We can simplify this and "0=" if "if" worked right for "8000"
+  tos w MOV 0 t MOV w if neg1 t MOV then w DEC w +if neg1 t MOV then
+  tos {sp} iLOAD --sp t if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 :a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
 :a op0= tos w MOV neg1 tos MOV w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
 :a op0< tos w MOV 0 tos MOV w -if neg1 tos MOV then w INC w -if neg1 tos MOV then ;a
 :a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a \ TODO: Fails for "8000 1 <" and "8001 1 <"
-\ :a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then w DEC w +if 0 tos MOV then ;a
-:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
+:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a \ Has similar bug to op<
+:a op2* tos tos ADD ;a
 :a op2/ ( u -- u : unsigned division by 2 )
   x ZERO
   t ZERO
   tos -if tos INV neg1 x MOV  then
-  begin
-	one w MOV
-	tos -if 0 w MOV then
-	w
-  while
-	two tos SUB
-	t INC
-  repeat
+  begin one w MOV tos -if 0 w MOV then w while two tos SUB t INC repeat
   t DEC
   x if hbit t SUB t INV then
   t tos MOV ;a
@@ -280,7 +281,7 @@ there 2/ primitive t!
 :m begin talign there ;m
 :m until talign opJumpZ 2/ t, ;m
 :m again talign opJump  2/ t, ;m
-:m if opJumpZ there 0 t, ;m \ TODO: Does not jump on "$8000"
+:m if opJumpZ there 0 t, ;m
 :m mark opJump there 0 t, ;m
 :m then there 2/ swap t! ;m
 :m else mark swap then ;m
@@ -642,6 +643,8 @@ there 2/ primitive t!
 :to next =next lit , 2/ , ;t immediate compile-only
 :to ' bl word find ?found cfa literal ;t immediate
 :t compile r> dup 2* @ , 1+ >r ;t compile-only
+:to rp! compile rp! ;t immediate compile-only
+:to rp@ compile rp@ ;t immediate compile-only
 :to >r compile opToR ;t immediate compile-only
 :to r> compile opFromR ;t immediate compile-only
 :to r@ compile r@ ;t immediate compile-only
@@ -667,7 +670,7 @@ there 2/ primitive t!
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini
   options half lit [@] lsb if t' (drop) lit {echo} half lit [!] then
-  ." eForth v1.0" here . cr
+  ." eForth v1.1" here . cr
   options half lit [@] 2 lit and if
     primitive half lit [@] 2* dup here swap - cksum
     check half lit [@] <> if ." cksum fail" bye then
