@@ -115,8 +115,7 @@ assembler.1 +order also definitions
 : begin talign there ;
 : again JMP ;
 : mark there 0 t, ;
-\ TODO: "if" does not work for 8000
-: if 
+: if \ NB. "if" does not work for 8000
   2/ dup t, Z there 2/ 4 + dup t, 
   Z Z 6 + t, 
   Z Z NADDR 
@@ -145,11 +144,11 @@ meta.1 +order also definitions
   0 t, 0 t,
 label: entry
   -1 t,
+  8000 tvar hbit   \ must contain 8000
+  -2   tvar ntwo   \ must contain -2
   -1 tvar neg1     \ must contain -1
   1 tvar one       \ must contain  1
   2 tvar two       \ must contain  1
-  FFFE tvar ntwo   \ must contain -2
-\  8000 tvar hbit   \ must contain 8000
   0 tvar INVREG    \ temporary register used for inversion only
   0 tvar {cold}    \ entry point of virtual machine program, set later on
   0 tvar {key}     \ execution vector for key?
@@ -269,7 +268,7 @@ assembler.1 -order
     w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP
   then
   ip INC --rp ;a
-:a opDivMod \ NB. a "op2/" instruction would improve speed even more
+:a opDivMod
   w {sp} iLOAD
   t ZERO
   begin
@@ -284,40 +283,36 @@ assembler.1 -order
   t DEC
   t tos MOV
   w {sp} iSTORE ;a
-:a lsb \ TODO: This does not work for all values
-  tos w MOV ntwo w SUB w if \ Fix this for "FFFE"
+:a lsb
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD
-    tos if one tos MOV then
-    vm JMP
-  then
-  0 tos MOV ;a 
+    tos w MOV
+    0 tos MOV
+    w if neg1 tos MOV then ;a
 :a op2* tos tos ADD ;a
 :a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
-:a op0= tos w MOV neg1 tos MOV w if 0 tos MOV then ;a \ TODO: "8000 0=" is incorrect!
+:a op0= tos w MOV neg1 tos MOV w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
+:a op0< tos w MOV  0 tos MOV w -if neg1 tos MOV then w INC w -if neg1 tos MOV then  ;a
 :a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
 \ :a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then w DEC w +if 0 tos MOV then ;a
 :a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
-\ TODO: Improve and remove these
-:a opTmp2/ FFFE t, tos 2/ t, NADDR ;a
-:a op0= tos w MOV neg1 tos MOV w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
-:a lsb  FFFB t, tos 2/ t, NADDR ;a
-:a op0< tos w MOV  0 tos MOV w -if neg1 tos MOV then w INC w -if neg1 tos MOV then  ;a
-\ :a op2/
-\   tos -if tos DEC tos INV then
-\   t ZERO
-\   begin
-\ 	one w MOV
-\ 	tos -if 0 w MOV then
-\ 	w
-\   while
-\ 	two tos SUB
-\ 	t INC
-\   repeat 
-\   t DEC
-\   t tos MOV ;a
+:a op2/
+  x ZERO
+  t ZERO
+  tos -if tos INV neg1 x MOV  then
+  begin
+	one w MOV
+	tos -if 0 w MOV then
+	w
+  while
+	two tos SUB
+	t INC
+  repeat
+  t DEC
+  x if hbit t SUB t INV then
+  t tos MOV ;a
 
 
 there 2/ primitive t!
@@ -357,6 +352,7 @@ there 2/ primitive t!
 :m < op< ;m
 :m > op> ;m
 :m exit opExit ;m
+:m 2/ op2/ ;m
 
 :ht #0 0 lit ;t
 :ht #1 1 lit ;t
@@ -381,6 +377,7 @@ there 2/ primitive t!
 :to lsb lsb ;t
 :to < op< ;t
 :to > op> ;t
+:to 2/ op2/ ;t
 :t <emit> {emit} lit ;t
 :t <key>  {key} lit ;t
 :t <literal> {literal} lit ;t
@@ -464,8 +461,6 @@ there 2/ primitive t!
   #0 >r begin 2dup u>= while r1+ tuck - swap repeat drop r> ;t
 :t umod u/mod drop ;t
 :t u/ u/mod nip ;t
-:t 2/ opTmp2/ ;t
-\ :t 2/ 2 lit u/ ;t
 :t execute 2/ >r ;t
 :t key? opKey? dup 0< if drop #0 exit then #-1 ;t
 :t key begin {key} half lit [@] execute until ;t
@@ -585,17 +580,22 @@ there 2/ primitive t!
 :t spaces begin dup 0> while space 1- repeat drop ;t ( +n -- )
 :t hold #-1 hld +! hld @ c! ;t ( c -- : save a character in hold space )
 :t #> 2drop hld @ =tbufend lit over - ;t  ( u -- b u )
+:t extract dup >r um/mod r> swap >r um/mod r> rot ;t ( ud ud -- ud u )
+:t digit 9 lit over < 7 lit and + [char] 0 + ;t ( u -- c )
 :t #  ( d -- d : add next character in number to hold space )
    2 lit ?depth
    #0 base @
-   ( extract ->) dup >r um/mod r> swap >r um/mod r> rot ( ud ud -- ud u )
-   ( digit -> ) 9 lit over < 7 lit and + [char] 0 + ( u -- c )
-   hold ;t
+   extract    digit hold ;t
 :t #s begin # 2dup ( d0= -> ) or 0= until ;t       ( d -- 0 )
 :t <# =tbufend lit hld ! ;t                        ( -- )
 :t sign 0< if [char] - hold then ;t                ( n -- )
+:t h.
+   dup $C lit rshift F lit and digit emit
+   dup $8 lit rshift F lit and digit emit
+   dup $4 lit rshift F lit and digit emit
+                     F lit and digit emit space ;t
 :t u.r >r #0 <# #s #>  r> over - spaces type ;t    ( u +n -- : print u right justified by +n )
-:t u.  #0 <# #s #> space type ;t                   ( u -- : print unsigned number )
+:t u.  ( base @ $10 lit = if h. exit then ) #0 <# #s #> space type ;t ( u -- : print unsigned number )
 :t . dup >r abs #0 <# #s r> sign #> space type ;t  ( n -- print number )
 :t >number ( ud b u -- ud b u : convert string to number )
   begin
@@ -709,6 +709,7 @@ there 2/ primitive t!
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
 :to dump begin over c@ u. +string ?dup 0= until drop ;t
+\ :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
 :t cksum dup $C0DE lit - >r begin over c@ r> + >r +string ?dup 0= until drop r> ;t
 :t (ok) ."  ok" cr ;t
 :t eval begin bl word dup c@ while interpret #1 ?depth repeat drop {ok} half lit [@] execute ;t ( "word" -- )
@@ -717,6 +718,7 @@ there 2/ primitive t!
     #0 {in} half lit [!]
     #-1 {dpl} half lit [!]
     t' key? lit {key} half lit [!]
+\   t' (drop) lit {echo} half lit [!] \ Could make this conditional
     t' (emit) lit {echo} half lit [!]
     t' (emit) lit {emit} half lit [!]
     t' (ok) lit {ok} half lit [!]
@@ -728,12 +730,12 @@ there 2/ primitive t!
    ." License: The Unlicense / Public Domain" cr ;t
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
    ini
-   ." eForth v0.4" here . cr
-   checkEn half lit [@] if
-     primitive half lit [@] 2* dup here swap - cksum
-     check half lit [@] <> if ." cksum fail" bye then
-     #0 checkEn half lit [!]
-   then
+   ." eForth v0.5" here . cr
+\   checkEn half lit [@] if
+\     primitive half lit [@] 2* dup here swap - cksum
+\     check half lit [@] <> if ." cksum fail" bye then
+\     #0 checkEn half lit [!]
+\   then
    {ok} half lit [@] execute
    begin
     query t' eval lit catch
