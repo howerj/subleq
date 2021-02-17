@@ -3,7 +3,7 @@
 * Author: Richard James Howe
 * Email: <mailto:howe.r.j.89@gmail.com>
 * Repo: <https://github.com/howerj/subleq>
-* License: The Unlicense / Public Domain
+* License: [The Unlicense](LICENSE) / Public Domain
 
 This project contains a working Forth interpreter that runs on top
 of a SUBLEQ 16-bit machine. SUBLEQ machines belong to the class of One
@@ -25,7 +25,11 @@ To build and run you will need a C compiler and Make, type "make run",
 failing that:
 
 	cc subleq.c -o subleq
-	subleq subleq.dec
+	./subleq subleq.dec
+
+[subleq.dec](subleq.dec) is generated from [subleq.fth](subleq.fth), which
+requires [gforth](https://gforth.org/) to compile. Unless you want to change
+the eForth interpreter just stick with the pre-generated image.
 
 Happy hacking!
 

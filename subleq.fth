@@ -23,6 +23,10 @@
 \ on the command line. The system could do with optimizing for speed as well,
 \ as it is already quite slow and cross-compilation would take too long.
 \ 
+\ 32-bit and 64-bit versions would be good, but potentially very slow, it
+\ would allow more of the SUBLEQ VMs online to run the eForth, most seem
+\ to implicitly target a 32-bit SUBLEQ.
+\ 
 only forth also definitions hex
 
 wordlist constant meta.1
@@ -65,6 +69,7 @@ size =cell - tep !
 :m tc@ tflash + c@ ;m
 :m t! over ff and over tc! swap 8 rshift swap 1+ tc! ;m
 :m t@ dup tc@ swap 1+ tc@ 8 lshift or ;m
+:m taligned dup 1 and + ;m
 :m talign there 1 and tdp +! ;m
 :m tc, there tc! 1 tdp +! ;m
 :m t, there t! 2 tdp +! ;m
@@ -88,8 +93,7 @@ size =cell - tep !
    begin
       dup dup tlen + 2/ .d tflash + =cell + count 1f and type space t@
    ?dup 0= until ;m
-:m .stat ." used> " there dup ." 0x" .h ." / " .d cr ;m
-:m .end .stat only forth also definitions decimal ;m
+:m .end only forth also definitions decimal ;m
 :m atlast tlast @ ;m
 :m tvar   get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
 :m label: get-current >r meta.1 set-current create r> set-current there ,    does> @ ;m
@@ -101,8 +105,10 @@ size =cell - tep !
 :m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
 :m t' ' >body @ ;m
-:m tcksum dup $C0DE - $FFFF and >r begin over tc@ r> + $FFFF and >r +string ?dup 0= until drop r> ;m
-:m mkck dup there swap - tcksum ." check> " dup u. cr ;m
+:m tcksum taligned dup $C0DE - $FFFF and >r
+   begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat 
+   drop r> ;m
+:m mkck dup there swap - tcksum ;m
 
 \ ---------------------------------- Forth VM --------------------------------
 
@@ -138,13 +144,14 @@ meta.1 +order also definitions
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
-  3 tvar options   \ system options: bit 1 = echo off, bit 2 = checksum on
+  7 tvar options   \ system options: bit 1 = echo off, bit 2 = checksum on
   0 tvar check     \ used for system checksum
   8000 tvar hbit   \ must contain 8000
   -2   tvar ntwo   \ must contain -2
   -1 tvar neg1     \ must contain -1
   1 tvar one       \ must contain  1
   2 tvar two       \ must contain  1
+ $10 tvar bwidth   \ must contain 16
   0 tvar INVREG    \ temporary register used for inversion only
   0 tvar {cold}    \ entry point of virtual machine program, set later on
   0 tvar {key}     \ execution vector for key?
@@ -156,6 +163,9 @@ label: entry       \ used to set entry point in next cell
   0 tvar w         \ working pointer
   0 tvar x         \ working pointer
   0 tvar t         \ temporary register for Virtual Machine
+  0 tvar bl1       \ bitwise extra register
+  0 tvar bl2       \ bitwise extra register
+  0 tvar bt        \ bitwise extra register
   0 tvar tos       \ top of stack
   0 tvar h         \ dictionary pointer
   0 tvar {state}   \ compiler state
@@ -271,6 +281,58 @@ assembler.1 -order
   x if hbit t SUB t INV then
   t tos MOV ;a
 
+:a opOr
+  bwidth w MOV
+  x ZERO
+  t {sp} iLOAD
+  --sp
+  begin
+   w
+  while
+   x x ADD
+   tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+   t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+   bl1 bl2 ADD bl2 if x INC then
+   t t ADD
+   tos tos ADD
+   w DEC
+  repeat
+  x tos MOV ;a
+:a opXor
+  bwidth w MOV
+  x ZERO
+  t {sp} iLOAD
+  --sp
+  begin
+   w
+  while
+   x x ADD
+   tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+   t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+   bl1 bl2 ADD bl2 INC one bl1 MOV bl2 if 0 bl1 MOV then bl1 x ADD
+   t t ADD
+   tos tos ADD
+   w DEC
+  repeat
+  x tos MOV ;a
+:a opAnd
+  bwidth w MOV
+  x ZERO
+  t {sp} iLOAD
+  --sp
+  begin
+   w
+  while
+   x x ADD
+   tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+   t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+   bl1 bl2 ADD two bl2 ADD one bl1 MOV bl2 if 0 bl1 MOV then bl1 x ADD
+   t t ADD
+   tos tos ADD
+   w DEC
+  repeat
+  x tos MOV ;a
+
 there 2/ primitive t!
 
 :m ;t CAFEBABE <> if abort" unstructured" then talign opExit target.only.1 -order ;m
@@ -307,6 +369,9 @@ there 2/ primitive t!
 :m 0< op0< ;m
 :m < op< ;m
 :m > op> ;m
+:m or opOr ;m
+:m xor opXor ;m
+:m and opAnd ;m
 :m exit opExit ;m
 :m 2/ op2/ ;m
 
@@ -334,6 +399,9 @@ there 2/ primitive t!
 :to < op< ;t
 :to > op> ;t
 :to 2/ op2/ ;t
+:to or opOr ;t
+:to xor opXor ;t
+:to and opAnd ;t
 :t <emit> {emit} lit ;t
 :t <key>  {key} lit ;t
 :t <literal> {literal} lit ;t
@@ -373,39 +441,6 @@ there 2/ primitive t!
 :t 2* op2* ;t
 :t cell 2 lit ;t
 :t cell+ cell + ;t
-:t or
-   $10 lit #0 >r >r
-   begin
-     r> dup 1- >r
-   while
-     r> r> 2* >r >r
-     2dup 0< swap 0< + if
-       r> r1+ >r
-     then
-     2* swap 2*
-   repeat 2drop rdrop r> ;t
-:t xor
-   $10 lit #0 >r >r
-   begin
-     r> dup 1- >r
-   while
-     r> r> 2* >r >r
-     2dup 0< swap 0< + #-1 = if
-       r> r1+ >r
-     then
-     2* swap 2*
-   repeat 2drop rdrop r> ;t
-:t and
-   $10  lit #0 >r >r
-   begin
-     r> dup 1- >r
-   while
-     r> r> 2* >r >r
-     2dup 0< swap 0< + -2 lit = if
-       r> r1+ >r
-     then
-     2* swap 2*
-   repeat 2drop rdrop r> ;t
 :t u< 2dup 0< 0= swap 0< 0= <> >r < r> <>  ;t \ TODO: Works for "4000 1 u<" and "-1 1 u<", fails for "8000 1 u<"
 \ :t u< 2dup 0< 0= swap 0< 0= xor >r < r> xor ;t
 :t u> swap u< ;t
@@ -457,9 +492,12 @@ there 2/ primitive t!
       r> swap >r                 ( saved-sp ) \ exc# on return stack
       sp! drop r>                ( exc# )     \ restore stack
     then ;t
-\ TODO: Use this version of um+ when u< is fixed
+\ TODO: Use this version of um+ when u< is fixed, this would be well worth
+\ converting to assembly.
 \ :t um+ 2dup u< 0= if swap then over + swap over swap u< lsb logical ;t ( u u -- u carry )
 :t um+ 2dup + >r r@ #0 >= >r 2dup and 0< r> or >r or 0< r> and invert 1+ r> swap ;t ( u u -- u carry )
+\ :t bor 0<> swap 0<> + 0<> ;t
+\ :t um+ 2dup + >r r@ 0>= >r 2dup = 0< r> bor >r or 0< r> = invert 1+ r> swap ;t ( u u -- u carry )
 :t dnegate invert >r invert #1 um+ r> + ;t ( d -- d )
 :t d+ >r swap >r um+ r> + r> + ;t         ( d d -- d )
 :t um* ( u u -- ud : double cell width multiply )
@@ -658,7 +696,8 @@ there 2/ primitive t!
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
 :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
-:t cksum dup $C0DE lit - >r begin over c@ r> + >r +string ?dup 0= until drop r> ;t
+:t cksum aligned dup $C0DE lit - >r
+     begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;t
 :t (ok) ."  ok" cr ;t
 :t eval begin bl word dup c@ while interpret #1 ?depth repeat drop {ok} half lit [@] execute ;t ( "word" -- )
 :t info cr
@@ -670,7 +709,7 @@ there 2/ primitive t!
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini
   options half lit [@] lsb if t' (drop) lit {echo} half lit [!] then
-  ." eForth v1.1" here . cr
+  options half lit [@] 4 lit and if ." eForth v1.2" here . cr then
   options half lit [@] 2 lit and if
     primitive half lit [@] 2* dup here swap - cksum
     check half lit [@] <> if ." cksum fail" bye then
@@ -696,4 +735,5 @@ primitive t@ double mkck check t!
 atlast {last} t!
 save-target subleq.dec
 .end
+.( STICK A FORK IN ME, I'M DONE ) cr
 bye
