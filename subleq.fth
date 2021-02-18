@@ -27,6 +27,10 @@
 \ would allow more of the SUBLEQ VMs online to run the eForth, most seem
 \ to implicitly target a 32-bit SUBLEQ.
 \ 
+\ The image is quite large, some experiments suggest that using LZSS for
+\ compression could save as much as 25%, the generated image would only need
+\ a (tiny) decoder to decompress the image at runtime.
+\
 only forth also definitions hex
 
 wordlist constant meta.1
@@ -105,6 +109,7 @@ size =cell - tep !
 :m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
 :m t' ' >body @ ;m
+:m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 :m tcksum taligned dup $C0DE - $FFFF and >r
    begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat 
    drop r> ;m
@@ -121,7 +126,6 @@ size =cell - tep !
 :m NOP Z Z NADDR ;m
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
 :m PUT 2/ t, -1 t, NADDR ;m
-:m GET 2/ -1 t, t, NADDR ;m
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR Z Z NADDR ;m
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
 :m iJMP there 2/ E + 2* MOV NOP ;m
@@ -236,7 +240,6 @@ assembler.1 -order
 :a [@] tos tos iLOAD ;a
 :a [!] w {sp} iLOAD w tos iSTORE --sp tos {sp} iLOAD --sp ;a
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
-:a opKey? ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a
@@ -280,7 +283,6 @@ assembler.1 -order
   t DEC
   x if hbit t SUB t INV then
   t tos MOV ;a
-
 :a opOr
   bwidth w MOV
   x ZERO
@@ -378,6 +380,7 @@ there 2/ primitive t!
 :ht #0 0 lit ;t
 :ht #1 1 lit ;t
 :ht #-1 FFFF lit ;t
+( It should be possible to merge the header definitions with the assembly )
 :to 1+ 1+ ;t
 :to 1- 1- ;t
 :to + + ;t
@@ -448,7 +451,7 @@ there 2/ primitive t!
 :t u<= u> 0= ;t
 :t * 2dup u< if swap then opMul ;t
 :t execute 2/ >r ;t
-:t key? opKey? dup 0< if drop #0 exit then #-1 ;t
+:t key? #-1 [@] negate dup 0< if drop #0 exit then #-1 ;t
 :t key begin {key} half lit [@] execute until ;t
 :t emit {emit} half lit [@] execute ;t
 :t cr =cr lit emit =lf lit emit ;t
@@ -511,7 +514,7 @@ there 2/ primitive t!
   2dup u<
   if negate $F lit
     for >r dup um+ >r >r dup um+ r> + dup
-      r> r@ swap >r um+ r> ( 0<> swap 0<> + ) or
+      r> r@ swap >r um+ r> ( or -> ) 0<> swap 0<> + 
       if >r drop 1+ r> else drop then r>
     next
     drop swap exit
@@ -527,8 +530,7 @@ there 2/ primitive t!
 :t mod  /mod drop ;t
 :t /    /mod nip ;t
 :t depth {sp0} half lit [@] sp@ - 1- ;t
-:t (emit) opEmit ;t
-:t (drop) drop ;t
+:t (emit) opEmit ( negate #-1 [!] ) ;t
 :t echo {echo} half lit [@] execute ;t
 :t tap dup echo over c! 1+ ;t ( bot eot cur c -- bot eot cur )
 :t ktap ( bot eot cur c -- bot eot cur )
@@ -562,7 +564,7 @@ there 2/ primitive t!
     +string
   repeat rdrop rot drop ;t
 :t no-match if 0> exit then 0<> ;t ( c1 c2 -- t )
-:t match no-match invert ;t          ( c1 c2 -- t )
+:t match no-match invert ;t        ( c1 c2 -- t )
 :t parse ( c -- b u ; <string> )
     >r source drop >in @ + #tib lit @ >in @ - r@
     >r over r> swap >r >r
@@ -604,7 +606,7 @@ there 2/ primitive t!
   >r >r #0 dup r> r>
   begin
     >number dup
-  while over c@ [char] . xor
+  while over c@ [char] . <>
     if rot drop rot r> 2drop #0 r> base ! exit then
     1- dpl ! 1+ dpl @
   repeat
@@ -618,7 +620,7 @@ there 2/ primitive t!
       if rdrop nip nip exit then
     then
   next 2drop #0 ;t
-:t .s depth  for aft r@ pick . then next ;t ( -- : print variable stack )
+:t .s depth for aft r@ pick . then next ;t
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
 :t cfa nfa dup c@ $1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 :t allot aligned h lit +! ;t
@@ -666,12 +668,13 @@ there 2/ primitive t!
   r> #0 ?found ;t \ Could vector ?found here, to handle arbitrary words
 :t word ( 2 lit ?depth ) parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :t words last begin dup nfa count 1F lit and space type @ ?dup 0= until ;t
-:to : align here last , {last} half lit [!] ( "name" -- : define a new word )
+:t : align here last , {last} half lit [!] ( "name" -- : define a new word )
     bl word
     dup c@ 0= if -A lit throw then
     count + h half lit [!] align
     ] $BABE lit ;t
 :to ; postpone [ $BABE lit <> if -16 lit throw then  =unnest lit , ;t immediate compile-only
+:to :noname here $BABE lit ] ;t
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
 :to again =jump  lit , 2/ , ;t immediate compile-only
@@ -681,6 +684,10 @@ there 2/ primitive t!
 :to next =next lit , 2/ , ;t immediate compile-only
 :to ' bl word find ?found cfa literal ;t immediate
 :t compile r> dup 2* @ , 1+ >r ;t compile-only
+:t recurse {last} lit @ cfa compile, ;t immediate compile-only
+:t (var) r> 2* ;t
+:t create postpone : drop postpone [ compile (var) ;t
+:to variable create #0 , ;t
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
 :to >r compile opToR ;t immediate compile-only
@@ -708,8 +715,8 @@ there 2/ primitive t!
 :t ini decimal postpone [ #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini
-  options half lit [@] lsb if t' (drop) lit {echo} half lit [!] then
-  options half lit [@] 4 lit and if ." eForth v1.2" here . cr then
+  options half lit [@] lsb if to' drop lit {echo} half lit [!] then
+  options half lit [@] 4 lit and if ." eForth v1.3" here . cr then
   options half lit [@] 2 lit and if
     primitive half lit [@] 2* dup here swap - cksum
     check half lit [@] <> if ." cksum fail" bye then
