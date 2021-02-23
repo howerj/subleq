@@ -226,7 +226,7 @@ assembler.1 -order
   create talign there , assembler.1 +order does> @ 2/ t, ;m
 :m (a); $CAFED00D <> if abort" unstructured" then assembler.1 -order ;m
 :m ;a (a); vm a-optim vm JMP ;m
-:m postpone t' 2/ t, ;m
+:m postpone target.only.1 +order t' target.only.1 -order 2/ t, ;m
 
 :a bye HALT ;a
 :a 1- tos DEC ;a
@@ -677,6 +677,7 @@ there 2/ primitive t!
 :to again =jump  lit , 2/ , ;t immediate compile-only
 :to if =jumpz lit , here #0 , ;t immediate compile-only
 :to then here 2/ swap ! ;t immediate compile-only
+:to else =jump lit , here #0 , swap postpone then ;t immediate compile-only
 :to for =>r lit , here ;t immediate compile-only
 :to next =next lit , 2/ , ;t immediate compile-only
 :to ' bl word find ?found cfa literal ;t immediate
