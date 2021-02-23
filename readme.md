@@ -31,7 +31,8 @@ failing that:
 requires [gforth](https://gforth.org/) to compile. Unless you want to change
 the eForth interpreter just stick with the pre-generated image.
 
-Happy hacking!
+Happy hacking, and a shiny penny for anyone that manages to do something
+useful with this project!
 
 ## References
 
