@@ -96,6 +96,7 @@ size =cell - tep !
       dup dup tlen + 2/ .d tflash + =cell + count 1f and type space t@
    ?dup 0= until ;m
 :m .end only forth also definitions decimal ;m
+:m setlast tlast ! ;m
 :m atlast tlast @ ;m
 :m tvar   get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
 :m label: get-current >r meta.1 set-current create r> set-current there ,    does> @ ;m
@@ -384,7 +385,6 @@ there 2/ primitive t!
 :ht #0 0 lit ;t
 :ht #1 1 lit ;t
 :ht #-1 FFFF lit ;t
-\ TODO: It should be possible to merge the header definitions with the assembly
 :to 1+ 1+ ;t
 :to 1- 1- ;t
 :to + + ;t
@@ -418,7 +418,6 @@ there 2/ primitive t!
 :t <echo> {echo} lit ;t
 :t current {current} lit ;t
 :t root-voc {root-voc} lit ;t
-:t forth-wordlist {forth-wordlist} lit ;t
 :t #vocs 8 lit ;t
 :t context {context} lit ;t
 :t here h half lit [@] ;t
@@ -692,21 +691,29 @@ there 2/ primitive t!
     postpone literal exit
   then
   r> #0 ?found ;t \ Could vector ?found here, to handle arbitrary words
+:t .id nfa count $1F lit and type space ;t ( pwd -- : print out a word )
 :t get-order ( -- widn ... wid1 n : get the current search order )
   context
   ( find empty cell -> ) #0 >r begin dup @ r@ xor while cell+ repeat rdrop
   dup cell - swap
   context - 2/ dup >r 1- s>d if -50 lit throw then
   for aft dup @ swap cell - then next @ r> ;t
+
+atlast 0 setlast
 :t set-order ( widn ... wid1 n -- : set the current search order )
   dup #-1 = if drop root-voc #1 set-order exit then ( NB. Recursion! )
   dup #vocs > if -49 lit throw then
   context swap for aft tuck ! cell+ then next #0 swap ! ;t
-\ TODO: "forth" should be in root-voc along with some other words
+:t forth-wordlist {forth-wordlist} lit ;t ( -- wid )
 :t forth root-voc forth-wordlist 2 lit set-order ;t ( -- )
-:t only #-1 set-order ;t                         ( -- )
-:t also get-order over swap 1+ set-order ;t     ( wid -- )
-\ TODO: "definitions" should pop wid off stack
+:t only #-1 set-order ;t                            ( -- )
+:t words
+  get-order begin ?dup while swap dup cr u. ." : " @ 
+    begin ?dup while dup nfa c@ $80 lit and 0= if dup .id then @ repeat cr
+  1- repeat ;t
+atlast {root-voc} t! setlast
+
+:t also get-order over swap 1+ set-order ;t         ( wid -- )
 :t definitions context @ set-current ;t           ( -- )
 :t (order) ( w wid*n n -- wid*n w n )
   dup if
@@ -717,11 +724,6 @@ there 2/ primitive t!
   then ;t
 :t -order get-order (order) nip set-order ;t             ( wid -- )
 :t +order dup >r -order get-order r> swap 1+ set-order ;t ( wid -- )
-:t .id nfa count $1F lit and type space ;t ( pwd -- : print out a word )
-:t words
-  get-order begin ?dup while swap dup cr u. ." : " @ 
-    begin ?dup while dup nfa c@ $80 lit and 0= if dup .id then @ repeat cr
-  1- repeat ;t
 :t word ( 2 lit ?depth ) parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :t ?unique ( a -- a : print a message if a word definition is not unique )
  dup get-current (search-wordlist) 0= if exit then
