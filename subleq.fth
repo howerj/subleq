@@ -17,12 +17,16 @@
 \ 
 \ * Implement an LZSS CODEC to compress the Forth image and decompress it
 \ as run time to save as much space (and obfuscate the image.
-\ * Implement the vocabulary word-set and "does>".
+\ * Implement "does>".
 \ * Make the system self-hosting and remove the dependency on gforth.
 \ * Make a 32-bit version.
 \ * Optimize the assembly and virtual machine to shrink the image size and
 \ speed up the interpreter (there is a lot that could be done).
 \ * Fix the bugs in "u<".
+\ * Making this system self hosting will mean speeding up printing out numbers
+\ as it is currently too slow (about 2 minutes to print out an image).
+\ * Adding a system word order and putting in non-standard words in it will
+\ speed up compilation.
 \
 
 only forth also definitions hex
@@ -174,6 +178,10 @@ label: entry       \ used to set entry point in next cell
   0 tvar {handler} \ throw/catch handler
   0 tvar {last}    \ last defined word
   0 tvar #tib      \ terminal input buffer
+  0 tvar {context} $E tallot \ vocabulary context
+  0 tvar {current} 
+  0 tvar {forth-wordlist}
+  0 tvar {root-voc}
   0 tvar primitive \ any address lower than this one must be a primitive
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
   =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
@@ -376,7 +384,7 @@ there 2/ primitive t!
 :ht #0 0 lit ;t
 :ht #1 1 lit ;t
 :ht #-1 FFFF lit ;t
-( TODO: It should be possible to merge the header definitions with the assembly )
+\ TODO: It should be possible to merge the header definitions with the assembly
 :to 1+ 1+ ;t
 :to 1- 1- ;t
 :to + + ;t
@@ -408,6 +416,11 @@ there 2/ primitive t!
 :t <cold> {cold} lit ;t
 :t <ok> {ok} lit ;t
 :t <echo> {echo} lit ;t
+:t current {current} lit ;t
+:t root-voc {root-voc} lit ;t
+:t forth-wordlist {forth-wordlist} lit ;t
+:t #vocs 8 lit ;t
+:t context {context} lit ;t
 :t here h half lit [@] ;t
 :t base {base} lit ;t
 :t dpl {dpl} lit ;t
@@ -417,7 +430,6 @@ there 2/ primitive t!
 :t hex  $10 lit {base} half lit [!] ;t
 :t decimal $A lit {base} half lit [!] ;t
 :t source TERMBUF lit #tib half lit [@] ;t
-:t last {last} half lit [@] ;t
 :t state {state} lit ;t
 :t ] #-1 {state} half lit [!] ;t
 :t [ #0  {state} half lit [!] ;t immediate
@@ -453,6 +465,9 @@ there 2/ primitive t!
 :t cr =cr lit emit =lf lit emit ;t
 :t @ 2/ [@] ;t
 :t ! 2/ [!] ;t
+:t get-current current @ ;t            ( -- wid )
+:t set-current current ! ;t            ( wid -- )
+:t last get-current @ ;t  \ {last} half lit [@] ;t
 :t pick sp@ + [@] ;t
 :t +! 2/ tuck [@] + swap [!] ;t
 :t lshift begin ?dup while 1- swap 2* swap repeat ;t
@@ -622,7 +637,7 @@ there 2/ primitive t!
 :t cfa nfa dup c@ $1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 :t allot aligned h lit +! ;t
 :t , align here ! cell allot ;t
-:t (find) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
+:t (search-wordlist) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
   swap >r dup
   begin
     dup
@@ -635,13 +650,27 @@ there 2/ primitive t!
     then
     nip dup @
   repeat
-  2drop #0 r> #0 ;t
-:t find last (find) rot drop ;t  ( "name" -- b )
+  rdrop 2drop #0 ;t
+:t (find) ( a -- pwd pwd 1 | pwd pwd -1 | 0 a 0 : find a word dictionary )
+  >r
+  context
+  begin
+    dup @
+  while
+    dup @ @ r@ swap (search-wordlist) ?dup
+    if
+      >r rot drop r> rdrop exit
+    then
+    cell+
+  repeat drop #0 r> #0 ;t
+:t search-wordlist (search-wordlist) rot drop ;t ( a wid -- PWD 1|PWD -1|a 0 )
+:t find ( a -- pwd 1 | pwd -1 | a 0 : find a word in the dictionary )
+  (find) rot drop ;t
 :t (literal) state @ if =push lit , , then ;t
 :t literal <literal> @ execute ;t immediate ( u -- )
 :t compile, 2/ align , ;t  ( xt -- )
 :t ?found if exit then space count type [char] ? emit cr -D lit throw ;t ( u f -- )
-:t interpret                                          ( b -- )
+:t interpret ( b -- )
   find ?dup if
     state @
     if
@@ -663,16 +692,47 @@ there 2/ primitive t!
     postpone literal exit
   then
   r> #0 ?found ;t \ Could vector ?found here, to handle arbitrary words
+:t get-order ( -- widn ... wid1 n : get the current search order )
+  context
+  ( find empty cell -> ) #0 >r begin dup @ r@ xor while cell+ repeat rdrop
+  dup cell - swap
+  context - 2/ dup >r 1- s>d if -50 lit throw then
+  for aft dup @ swap cell - then next @ r> ;t
+:t set-order ( widn ... wid1 n -- : set the current search order )
+  dup #-1 = if drop root-voc #1 set-order exit then ( NB. Recursion! )
+  dup #vocs > if -49 lit throw then
+  context swap for aft tuck ! cell+ then next #0 swap ! ;t
+\ TODO: "forth" should be in root-voc along with some other words
+:t forth root-voc forth-wordlist 2 lit set-order ;t ( -- )
+:t only #-1 set-order ;t                         ( -- )
+:t also get-order over swap 1+ set-order ;t     ( wid -- )
+\ TODO: "definitions" should pop wid off stack
+:t definitions context @ set-current ;t           ( -- )
+:t (order) ( w wid*n n -- wid*n w n )
+  dup if
+    1- swap >r (order) over r@ xor
+    if
+      1+ r> -rot exit
+    then rdrop
+  then ;t
+:t -order get-order (order) nip set-order ;t             ( wid -- )
+:t +order dup >r -order get-order r> swap 1+ set-order ;t ( wid -- )
+:t .id nfa count $1F lit and type space ;t ( pwd -- : print out a word )
+:t words
+  get-order begin ?dup while swap dup cr u. ." : " @ 
+    begin ?dup while dup nfa c@ $80 lit and 0= if dup .id then @ repeat cr
+  1- repeat ;t
 :t word ( 2 lit ?depth ) parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
-:t words last begin dup nfa count 1F lit and space type @ ?dup 0= until ;t
-:t : align here last , {last} half lit [!] ( "name" -- : define a new word )
-    bl word
-    dup c@ 0= if -A lit throw then
-    count + h half lit [!] align
-    ] $BABE lit ;t
-:to ; 
-   postpone [ 
-   $BABE lit <> if -16 lit throw then =unnest lit , ;t immediate compile-only
+:t ?unique ( a -- a : print a message if a word definition is not unique )
+ dup get-current (search-wordlist) 0= if exit then
+   ( source type )
+ space
+ 2drop {last} lit @ .id ." redefined" cr ;t
+:t ?nul dup c@ if exit then -10 lit throw ;t ( b -- : check for zero length strings )
+:to ; ( ?quit ) $BABE lit <> if -16 lit throw then =unnest lit , postpone [ 
+ ?dup if get-current ! exit then ;t immediate compile-only ( -- wid )
+:to : align here dup {last} lit ! ( "name", -- colon-sys )
+  last , bl word ?nul ?unique count + h lit ! $BABE lit postpone ] ;t
 :to :noname here $BABE lit ] ;t
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
@@ -685,15 +745,15 @@ there 2/ primitive t!
 :to ' bl word find ?found cfa literal ;t immediate
 :t compile r> dup 2* @ , 1+ >r ;t compile-only
 :t recurse {last} lit @ cfa compile, ;t immediate compile-only
+:t toggle tuck @ xor swap ! ;t
+:t hide bl word find ?found nfa $80 lit swap toggle ;t
 :t (var) r> 2* ;t
-:t create postpone : drop postpone [ compile (var) ;t
+:t create postpone : drop postpone [ compile (var) get-current ! ;t
 :to variable create #0 , ;t
 :t >body cell+ ;t ( a -- a )
-:t doLit =push lit , , ;t
-\ :t (does) r> 2/ here 2/ {last} lit @ cfa dup cell+ doLit ! , ;t
+:t (lit) =push lit , , ;t
+\ :t (does) r> 2/ here 2/ {last} lit @ cfa dup cell+ (lit) ! , ;t
 \ :t does> compile (does) ;t immediate compile-only
-\ :t toggle tuck @ xor swap ! ;t
-\ :t hide bl word find ?found nfa $80 lit swap toggle ;t
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
 :to >r compile opToR ;t immediate compile-only
@@ -704,10 +764,17 @@ there 2/ primitive t!
 :to ." compile .$  [char] " word count + h half lit [!] align ;t immediate compile-only
 :to $" compile ($) [char] " word count + h half lit [!] align ;t immediate compile-only
 :to ( [char] ) parse 2drop ;t immediate
+:to .( [char] ) parse type ;t immediate
+:to ) ;t immediate
 :to \ source drop @ {in} half lit [!] ;t immediate
 :to immediate last nfa @ $40 lit or last nfa ! ;t
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
+\ :t h.
+\  dup $C lit rshift            digit emit
+\  dup $8 lit rshift $F lit and digit emit
+\  dup $4 lit rshift $F lit and digit emit
+\                    $F lit and digit emit space ;t
 :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
 :t cksum aligned dup $C0DE lit - >r
      begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;t
@@ -717,12 +784,13 @@ there 2/ primitive t!
      interpret #1 ?depth 
    repeat drop {ok} half lit [@] execute ;t ( "word" -- )
 :t info cr
-  ." Project: eForth v1.4" cr
+  ." Project: eForth v1.5 " ( here . ) cr
   ." Author:  Richard James Howe" cr
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;t
-:t ini decimal postpone [ #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
+:t ini only forth ( also ) definitions decimal postpone [ 
+  #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini
   options half lit [@] lsb if to' drop lit {echo} half lit [!] then
@@ -738,56 +806,34 @@ there 2/ primitive t!
   again ;t
 :t cold {cold} half lit [@] execute ;t
 
-\ 0 tvar {context} $E tallot
-\ 0 tvar {current}
-\ 0 tvar {forth-wordlist}
-\ 0 tvar {root-voc}
-\ :t current {current} lit ;t
-\ :t root-voc {root-voc} lit ;t
-\ :t forth-wordlist {forth-wordlist} lit ;t
-\ :t #vocs 8 lit ;t
-\ :t context {context} lit ;t
-\ :t get-current current @ ;t            ( -- wid )
-\ :t set-current current ! ;t            ( wid -- )
-\ :t .id nfa count $1F lit and type space ;t ( pwd -- : print out a word )
-\ :t ?unique ( a -- a : print a message if a word definition is not unique )
-\  dup get-current (search-wordlist) 0= if exit then
-\    ( source type )
-\  space
-\  2drop last-def @ .id ." redefined" cr ;t
-\ :t .words
-\     begin
-\       ?dup
-\     while dup nfa c@ $80 lit and 0= if dup .id then @ repeat cr ;t
-\ :t get-order ( -- widn ... wid1 n : get the current search order )
-\   context
-\   ( find empty cell -> ) >r begin dup @ r@ xor while cell+ repeat rdrop
-\   dup cell - swap
-\   context - chars dup >r 1- s>d if -50 lit throw then
-\   for aft dup @ swap cell - then next @ r> ;t
-\ :t words
-\  get-order begin ?dup while swap dup cr u. ." : " @ .words 1- repeat ;t
-\ :t set-order ( widn ... wid1 n -- : set the current search order )
-\   dup #-1 = if drop root-voc #1 set-order exit then ( NB. Recursion! )
-\   dup #vocs > if -49 lit throw then
-\   context swap for aft tuck ! cell+ then next #0 swap ! ;t
-\ :t forth root-voc forth-wordlist 2 lit set-order ;t ( -- )
-\ :t only #-1 set-order ;t                         ( -- )
-\ :t definitions context @ set-current ;t           ( -- )
-\ :t (order)                                      ( w wid*n n -- wid*n w n )
-\   dup if
-\     1- swap >r (order) over r@ xor
-\     if
-\       1+ r> -rot exit
-\     then rdrop
-\   then ;t
-\ :t -order get-order (order) nip set-order ;t             ( wid -- )
-\ :t +order dup >r -order get-order r> swap 1+ set-order ;t ( wid -- )
-\ :t ; ( ?quit ) ?check =exit , postpone [ ?dup if get-current ! exit then ;t  immediate compile-only ( -- wid )
-\ : : align here dup last-def ! ( "name", -- colon-sys )
-\ last , token ?nul ?unique count+ cp! magic postpone ] ;
+\ h: (do) r@ swap rot >r >r cell+ >r ; ( hi lo -- index )
+\ : do compile (do) 0 , here ; compile-only immediate ( hi lo -- )
+\ h: (leave) rdrop rdrop rdrop ; compile-only
+\ : leave compile (leave) nop ; compile-only immediate
+\ h: (loop)
+\    r> r> 1+ r> 2dup-xor if
+\     >r >r @ >r exit
+\    then >r 1- >r cell+ >r ; compile-only
+\ h: (unloop) r>rdrop rdrop rdrop >r ; compile-only
+\ : unloop compile (unloop) nop ; compile-only immediate
+\ h: (?do)
+\   2dup-xor if r@ swap rot >r >r cell+ >r exit then 2drop ; compile-only
+\ : ?do compile (?do) 0 , here ; compile-only immediate ( hi lo -- )
+\ : loop  compile (loop) dup , compile (unloop) cell- here chars ( -- )
+\     swap! ; compile-only immediate
+\ h: (+loop)
+\    r> swap r> r> 2dup - >r
+\    2 pick r@ + r@ xor 0< 0=
+\    3 pick r> xor 0< 0= or if
+\     >r + >r @ >r exit
+\    then >r >r drop cell+ >r ; compile-only
+\ : +loop ( n -- ) compile (+loop) dup , compile
+\   (unloop) cell- here chars swap! ; compile-only immediate
+\ h: (i)  2r> tuck 2>r nop ; compile-only ( -- index )
+\ : i  compile (i) nop ; compile-only immediate ( -- index )
 
 \ ---------------------------------- Image Generation ------------------------
+
 
 t' quit half {cold} t!
 t' key? {key} t!
@@ -795,10 +841,12 @@ t' (emit) {echo} t!
 t' (emit) {emit} t!
 t' (ok) {ok} t!
 t' (literal) {literal} t!
+atlast {forth-wordlist} t!
+{forth-wordlist} {current} t! \ Correct?
 there h t!
 primitive t@ double mkck check t!
 atlast {last} t!
 save-target subleq.dec
-.end
-.( STICK A FORK IN ME, I'M DONE ) cr
+there .end
+cr .( STICK A FORK IN ME, I'M DONE ) . cr
 bye
