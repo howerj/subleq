@@ -785,8 +785,9 @@ atlast {root-voc} t! setlast
 :t create postpone : drop postpone [ compile (var) get-current ! ;t
 :to variable create #0 , ;t
 :t >body cell+ ;t ( a -- a )
-\ :t (does) r> here 2/ {last} lit @ cfa dup cell+ =push lit , , ! , compile exit ;t
-\ :t does> compile (does) ;t immediate compile-only
+\ TODO: Optimize this / Check it works under all conditions
+:t (does) r> here 2/ {last} lit @ cfa dup cell+ =push lit , , ! , compile rdrop compile exit ;t
+:t does> compile (does) ;t immediate compile-only
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
 :to >r compile opToR ;t immediate compile-only
@@ -818,7 +819,7 @@ atlast {root-voc} t! setlast
      interpret #1 ?depth 
    repeat drop {ok} half lit [@] execute ;t ( "word" -- )
 :t info cr
-  ." Project: eForth v1.5 " ( here . ) cr
+  ." Project: eForth v1.4 " ( here . ) cr
   ." Author:  Richard James Howe" cr
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
