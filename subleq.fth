@@ -16,7 +16,10 @@
 \ Tested with GForth version 0.7.3. 
 \ 
 \ * Implement an LZSS CODEC to compress the Forth image and decompress it
-\ as run time to save as much space (and obfuscate the image.
+\ as run time to save as much space (and obfuscate the image). In reality, a
+\ decompressor would only be of much utility if written in SUBLEQ assembly, as
+\ the SUBLEQ VM is the most compressible part of the image. Perhaps the C VM
+\ could contain the decompressor? It already contains the program loader.
 \ * Implement "does>".
 \ * Make the system self-hosting and remove the dependency on gforth.
 \ * Make a 32-bit version.
@@ -27,9 +30,19 @@
 \ as it is currently too slow (about 2 minutes to print out an image).
 \ * Adding a system word order and putting in non-standard words in it will
 \ speed up compilation.
+\ * A 16-bit SUBLEQ machine could be made in either VHDL or 7400 series
+\ Integrated Circuits, just for fun.
+\ * The following interpreter should be used in the complete project:
 \
-
-only forth also definitions hex
+\   #include <stdio.h>
+\   int main(int x,char**v){FILE*f=fopen(v[1],"r");short p=0,m[1<<16],*i=m;
+\   while(fscanf(f,"%hd",i++)>0);for(;p>=0;){int a=m[p++],b=m[p++],c=m[p++];
+\   a<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])<=0?p=c:0;}}
+\
+\ It could perhaps be code-golfed to be smaller, or integrated with the image
+\ when it is generated through meta-compilation.
+\
+only forth definitions hex
 
 wordlist constant meta.1
 wordlist constant target.1
@@ -43,7 +56,7 @@ wordlist constant target.only.1
 : -order ( wid -- ) get-order (order) nip set-order ;
 : +order ( wid -- ) dup >r -order get-order r> swap 1+ set-order ;
 
-meta.1 +order also definitions
+meta.1 +order definitions
 
    2 constant =cell
 8000 constant size ( 16384 bytes, 8192 cells )
@@ -64,7 +77,7 @@ variable tlast
 size =cell - tep !
 0 tlast !
 
-: :m meta.1 +order also definitions : ;
+: :m meta.1 +order definitions : ;
 : ;m postpone ; ; immediate
 :m there tdp @ ;m
 :m tc! tflash + c! ;m
@@ -95,7 +108,7 @@ size =cell - tep !
    begin
       dup dup tlen + 2/ .d tflash + =cell + count 1f and type space t@
    ?dup 0= until ;m
-:m .end only forth also definitions decimal ;m
+:m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
 :m atlast tlast @ ;m
 :m tvar   get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
@@ -130,7 +143,7 @@ size =cell - tep !
 :m iJMP there 2/ E + 2* MOV NOP ;m
 :m iSTORE swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV r> 0 MOV ;m ( addr w -- )
 
-assembler.1 +order also definitions
+assembler.1 +order definitions
 : begin talign there ;
 : again JMP ;
 : mark there 0 t, ;
@@ -142,12 +155,12 @@ assembler.1 +order also definitions
 : while if swap ;
 : repeat JMP then ;
 assembler.1 -order
-meta.1 +order also definitions
+meta.1 +order definitions
 
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
-  3 tvar options   \ system options: bit 1 = echo off, bit 2 = checksum on
+  B tvar options   \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
   0 tvar check     \ used for system checksum
   8000 tvar hbit   \ must contain 8000
   -2   tvar ntwo   \ must contain -2
@@ -180,9 +193,9 @@ label: entry       \ used to set entry point in next cell
   0 tvar {last}    \ last defined word
   0 tvar #tib      \ terminal input buffer
   0 tvar {context} $E tallot \ vocabulary context
-  0 tvar {current} 
-  0 tvar {forth-wordlist}
-  0 tvar {root-voc}
+  0 tvar {current} \ vocabulary which new definitions are added to
+  0 tvar {forth-wordlist} \ forth word list (main vocabulary)
+  0 tvar {root-voc} \ absolute minimum vocabulary
   0 tvar primitive \ any address lower than this one must be a primitive
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
   =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
@@ -231,7 +244,7 @@ assembler.1 -order
   does> @ 2/ t, ;m
 :m :a ( "name" -- : assembly routine, no header )
   $CAFED00D
-  target.1 +order also definitions
+  target.1 +order definitions
   create talign there , assembler.1 +order does> @ 2/ t, ;m
 :m (a); $CAFED00D <> if abort" unstructured" then assembler.1 -order ;m
 :m ;a (a); vm a-optim vm JMP ;m
@@ -278,15 +291,34 @@ assembler.1 -order
 :a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a \ TODO: Fails for "8000 1 <" and "8001 1 <"
 :a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a \ Has similar bug to op<
 :a op2* tos tos ADD ;a
-\ TODO: Optimize by allowing division by 2^N
 :a op2/ ( u -- u : unsigned division by 2 )
+  bwidth w MOV
   x ZERO
-  t ZERO
-  tos -if tos INV neg1 x MOV  then
-  begin one w MOV tos -if 0 w MOV then w while two tos SUB t INC repeat
-  t DEC
-  x if hbit t SUB t INV then
-  t tos MOV ;a
+  begin
+   w DEC
+   w
+  while
+    x x ADD
+    tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+    bl1 if x INC then
+    tos tos ADD
+  repeat
+  x tos MOV ;a
+:a rshift
+  bwidth w MOV
+  tos w SUB
+  tos {sp} iLOAD --sp
+  x ZERO
+  begin
+   w
+  while
+    x x ADD
+    tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+    bl1 if x INC then
+    tos tos ADD
+    w DEC
+  repeat
+  x tos MOV ;a
 :a opOr
   bwidth w MOV
   x ZERO
@@ -395,6 +427,7 @@ there 2/ primitive t!
 :to drop opDrop ;t
 :to over opOver ;t
 :to swap opSwap ;t
+:to rshift rshift  ;t
 :to [@] [@] ;t
 :to [!] [!] ;t
 :to sp@ sp@ ;t
@@ -458,19 +491,19 @@ there 2/ primitive t!
 :t u>= u< 0= ;t
 :t u<= u> 0= ;t
 :t execute 2/ >r ;t
-:t key? #-1 [@] negate dup 0< if drop #0 exit then #-1 ;t
+:t key? #-1 [@] negate s>d if 
+      options half lit [@] 8 lit and if bye then drop #0 exit then #-1 ;t
 :t key begin {key} half lit [@] execute until ;t
 :t emit {emit} half lit [@] execute ;t
 :t cr =cr lit emit =lf lit emit ;t
 :t @ 2/ [@] ;t
 :t ! 2/ [!] ;t
-:t get-current current @ ;t            ( -- wid )
-:t set-current current ! ;t            ( wid -- )
-:t last get-current @ ;t  \ {last} half lit [@] ;t
+:t get-current current @ ;t
+:t set-current current ! ;t
+:t last get-current @ ;t
 :t pick sp@ + [@] ;t
 :t +! 2/ tuck [@] + swap [!] ;t
 :t lshift begin ?dup while 1- swap 2* swap repeat ;t
-:t rshift begin ?dup while 1- swap 2/ swap repeat ;t ( NB. Could be optimized )
 :t c@ dup @ swap lsb if 8 lit rshift else $FF lit and then ;t
 :t c!  swap $FF lit and dup 8 lit lshift or swap
    tuck dup @ swap lsb 0= $FF lit xor
@@ -530,11 +563,11 @@ there 2/ primitive t!
     drop swap exit
   then 2drop drop #-1 dup ;t
 :t m/mod ( d n -- r q : floored division )
-  dup 0< dup >r
+  s>d dup >r
   if
     negate >r dnegate r>
   then
-  >r dup 0< if r@ + then r> um/mod r>
+  >r s>d if r@ + then r> um/mod r>
   if swap negate swap exit then ;t
 :t /mod  over 0< swap m/mod ;t
 :t mod  /mod drop ;t
@@ -713,8 +746,7 @@ atlast 0 setlast
   1- repeat ;t
 atlast {root-voc} t! setlast
 
-:t also get-order over swap 1+ set-order ;t         ( wid -- )
-:t definitions context @ set-current ;t           ( -- )
+:t definitions context @ set-current ;t     ( -- )
 :t (order) ( w wid*n n -- wid*n w n )
   dup if
     1- swap >r (order) over r@ xor
@@ -745,7 +777,7 @@ atlast {root-voc} t! setlast
 :to for =>r lit , here ;t immediate compile-only
 :to next =next lit , 2/ , ;t immediate compile-only
 :to ' bl word find ?found cfa literal ;t immediate
-:t compile r> dup 2* @ , 1+ >r ;t compile-only
+:t compile r> dup [@] , 1+ >r ;t compile-only
 :t recurse {last} lit @ cfa compile, ;t immediate compile-only
 :t toggle tuck @ xor swap ! ;t
 :t hide bl word find ?found nfa $80 lit swap toggle ;t
@@ -753,8 +785,7 @@ atlast {root-voc} t! setlast
 :t create postpone : drop postpone [ compile (var) get-current ! ;t
 :to variable create #0 , ;t
 :t >body cell+ ;t ( a -- a )
-:t (lit) =push lit , , ;t
-\ :t (does) r> 2/ here 2/ {last} lit @ cfa dup cell+ (lit) ! , ;t
+\ :t (does) r> here 2/ {last} lit @ cfa dup cell+ =push lit , , ! , compile exit ;t
 \ :t does> compile (does) ;t immediate compile-only
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
@@ -767,6 +798,7 @@ atlast {root-voc} t! setlast
 :to $" compile ($) [char] " word count + h half lit [!] align ;t immediate compile-only
 :to ( [char] ) parse 2drop ;t immediate
 :to .( [char] ) parse type ;t immediate
+:to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
 :to \ source drop @ {in} half lit [!] ;t immediate
 :to immediate last nfa @ $40 lit or last nfa ! ;t
@@ -791,7 +823,7 @@ atlast {root-voc} t! setlast
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;t
-:t ini only forth ( also ) definitions decimal postpone [ 
+:t ini only forth definitions decimal postpone [ 
   #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini
@@ -807,6 +839,14 @@ atlast {root-voc} t! setlast
    ( ?error -> ) ?dup if space . [char] ? emit cr ini then
   again ;t
 :t cold {cold} half lit [@] execute ;t
+
+\ :t disp 5 lit u.r ;t
+\ :t #2d 2dup swap disp disp ;t
+\ :t test
+\  hex ." HEX" cr
+\     0 lit 1 lit #2d < disp cr
+\  8000 lit 1 lit #2d < disp cr
+\  decimal ;t
 
 \ h: (do) r@ swap rot >r >r cell+ >r ; ( hi lo -- index )
 \ : do compile (do) 0 , here ; compile-only immediate ( hi lo -- )

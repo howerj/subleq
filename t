@@ -2,8 +2,8 @@
 set -eu
 make subleq subleq.dec
 testing () {
-	echo "Testing: {$1} -> {$2}"
-	echo "$1" | ./subleq subleq.dec > a.txt
+	echo -n "Testing: {$1} {$2}"
+	echo "$1" | time -f " {real %e user %U sys %S}" ./subleq subleq.dec > a.txt
 	echo "$2" > b.txt
 	diff -w a.txt b.txt
 	rm a.txt b.txt
