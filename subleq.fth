@@ -20,18 +20,12 @@
 \ decompressor would only be of much utility if written in SUBLEQ assembly, as
 \ the SUBLEQ VM is the most compressible part of the image. Perhaps the C VM
 \ could contain the decompressor? It already contains the program loader.
-\ * Implement "does>".
 \ * Make the system self-hosting and remove the dependency on gforth.
-\ * Make a 32-bit version.
-\ * Optimize the assembly and virtual machine to shrink the image size and
-\ speed up the interpreter (there is a lot that could be done).
 \ * Fix the bugs in "u<".
-\ * Making this system self hosting will mean speeding up printing out numbers
-\ as it is currently too slow (about 2 minutes to print out an image).
 \ * Adding a system word order and putting in non-standard words in it will
 \ speed up compilation.
 \ * A 16-bit SUBLEQ machine could be made in either VHDL or 7400 series
-\ Integrated Circuits, just for fun.
+\ Integrated Circuits, just for fun, or a web-page for the SUBLEQ system.
 \ * The following interpreter should be used in the complete project:
 \
 \   #include <stdio.h>
@@ -160,7 +154,7 @@ meta.1 +order definitions
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
-  B tvar options   \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
+  B tvar {options}   \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
   0 tvar check     \ used for system checksum
   8000 tvar hbit   \ must contain 8000
   -2   tvar ntwo   \ must contain -2
@@ -492,7 +486,7 @@ there 2/ primitive t!
 :t u<= u> 0= ;t
 :t execute 2/ >r ;t
 :t key? #-1 [@] negate s>d if 
-      options half lit [@] 8 lit and if bye then drop #0 exit then #-1 ;t
+      {options} half lit [@] 8 lit and if bye then drop #0 exit then #-1 ;t
 :t key begin {key} half lit [@] execute until ;t
 :t emit {emit} half lit [@] execute ;t
 :t cr =cr lit emit =lf lit emit ;t
@@ -813,7 +807,7 @@ atlast {root-voc} t! setlast
 :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
 :t cksum aligned dup $C0DE lit - >r
      begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;t
-:t (ok) ."  ok" cr ;t
+:t ok state @ 0= if ."  ok" cr then ;t
 :t eval 
    begin bl word dup c@ while 
      interpret #1 ?depth 
@@ -828,18 +822,22 @@ atlast {root-voc} t! setlast
   #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini
-  options half lit [@] lsb if to' drop lit {echo} half lit [!] then
-  options half lit [@] 4 lit and if info then
-  options half lit [@] 2 lit and if
+  {options} half lit [@] lsb if to' drop lit {echo} half lit [!] then
+  {options} half lit [@] 4 lit and if info then
+  {options} half lit [@] 2 lit and if
     primitive half lit [@] 2* dup here swap - cksum
     check half lit [@] <> if ." cksum fail" bye then
-    options half lit [@] 2 lit xor options half lit [!]
+    {options} half lit [@] 2 lit xor {options} half lit [!]
   then
   begin
    query t' eval lit catch
    ( ?error -> ) ?dup if space . [char] ? emit cr ini then
   again ;t
 :t cold {cold} half lit [@] execute ;t
+
+\ :t tst
+\   for dup r@  2dup < >r 2dup > r> = if 2dup . . cr then 2drop next drop ;t
+\ :t tst2 for r@ tst next ;t
 
 \ :t disp 5 lit u.r ;t
 \ :t #2d 2dup swap disp disp ;t
@@ -849,31 +847,32 @@ atlast {root-voc} t! setlast
 \  8000 lit 1 lit #2d < disp cr
 \  decimal ;t
 
-\ h: (do) r@ swap rot >r >r cell+ >r ; ( hi lo -- index )
-\ : do compile (do) 0 , here ; compile-only immediate ( hi lo -- )
-\ h: (leave) rdrop rdrop rdrop ; compile-only
-\ : leave compile (leave) nop ; compile-only immediate
-\ h: (loop)
-\    r> r> 1+ r> 2dup-xor if
+\ \ NB. Not working
+\ :t (do) r@ swap rot >r >r cell+ >r ;t ( hi lo -- index )
+\ :t do compile (do) #0 , here ;t compile-only immediate ( hi lo -- )
+\ :t (leave) rdrop rdrop rdrop ;t compile-only
+\ :t leave compile (leave) ;t compile-only immediate
+\ :t (loop)
+\    r> r> 1+ r> 2dup <> if
 \     >r >r @ >r exit
-\    then >r 1- >r cell+ >r ; compile-only
-\ h: (unloop) r>rdrop rdrop rdrop >r ; compile-only
-\ : unloop compile (unloop) nop ; compile-only immediate
-\ h: (?do)
-\   2dup-xor if r@ swap rot >r >r cell+ >r exit then 2drop ; compile-only
-\ : ?do compile (?do) 0 , here ; compile-only immediate ( hi lo -- )
-\ : loop  compile (loop) dup , compile (unloop) cell- here chars ( -- )
-\     swap! ; compile-only immediate
-\ h: (+loop)
+\    then >r 1- >r cell+ >r ;t compile-only
+\ :t (unloop) r> rdrop rdrop rdrop >r ;t compile-only
+\ :t unloop compile (unloop) ;t compile-only immediate
+\ :t (?do)
+\   2dup <> if r@ swap rot >r >r cell+ >r exit then 2drop ;t compile-only
+\ :t ?do compile (?do) #0 , here ;t compile-only immediate ( hi lo -- )
+\ :t loop  compile (loop) dup , compile (unloop) cell - here 2/ ( -- )
+\     swap ! ;t compile-only immediate
+\ :t (+loop)
 \    r> swap r> r> 2dup - >r
-\    2 pick r@ + r@ xor 0< 0=
-\    3 pick r> xor 0< 0= or if
+\    2 lit pick r@ + r@ xor 0< 0=
+\    3 lit pick r> xor 0< 0= or if
 \     >r + >r @ >r exit
-\    then >r >r drop cell+ >r ; compile-only
-\ : +loop ( n -- ) compile (+loop) dup , compile
-\   (unloop) cell- here chars swap! ; compile-only immediate
-\ h: (i)  2r> tuck 2>r nop ; compile-only ( -- index )
-\ : i  compile (i) nop ; compile-only immediate ( -- index )
+\    then >r >r drop cell+ >r ;t compile-only
+\ :t +loop ( n -- ) compile (+loop) dup , compile
+\   (unloop) cell - here 2/ swap ! ;t compile-only immediate
+\ :t (i)  2r> tuck 2>r ;t compile-only ( -- index )
+\ :t i  compile (i) ;t compile-only immediate ( -- index )
 
 \ ---------------------------------- Image Generation ------------------------
 
@@ -882,7 +881,7 @@ t' quit half {cold} t!
 t' key? {key} t!
 t' (emit) {echo} t!
 t' (emit) {emit} t!
-t' (ok) {ok} t!
+t' ok {ok} t!
 t' (literal) {literal} t!
 atlast {forth-wordlist} t!
 {forth-wordlist} {current} t! \ Correct?

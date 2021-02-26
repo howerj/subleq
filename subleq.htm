@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>SUBLEQ eForth</title>
+	<meta charset="UTF-8">
+	<style type="text/css">
+		body{margin:40px auto;max-width:650px;line-height:1.6;font-size:18px;color:#444;padding:0 10px}
+		h1,h2,h3{line-height:1.2}
+		canvas{ border: 1px solid black; }
+	</style>
+</head>
+<body>
+	<!-- TODO: CSS/Styling, better image loading, fix input/output, cursor,
+	 delete, cleanup code */
+	<!--<object id="image" type="text/html" data="subleq.dec">-->
+	<div id="subleq"> </div>
+	<canvas id="keydown" width="300" height="200" tabindex="0" class="default"></canvas>
+	<script type="text/javascript">
+		/*var f = "subleq.dec"*/
+		var f = "https://raw.githubusercontent.com/howerj/subleq/master/subleq.dec"
+		var element = "subleq";
+		var input = "";
+		var pc = 0, m = new Uint16Array(65536);
+		var hkd = function (e) {
+			/* TODO: toLowerCase is a dirty hack, fix it, also handle control chars */
+			var key = String.fromCharCode(e.which || e.keyCode).toLowerCase(); 
+			input += key;
+			if (key == '\n') { key = '<p></p>' }
+			document.getElementById('subleq').innerHTML += key;
+			window.scrollTo(0,document.body.scrollHeight);
+			return false; 
+		}
+		var k = document.getElementById('keydown');
+		k.addEventListener('keydown', hkd, false);
+		k.width = document.body.clientWidth;
+		k.height = document.body.clientHeight;
+
+		function subleq() {
+			while (pc >= 0 && pc < (65536 - 3)) {
+				var a = m[pc+0];
+				var b = m[pc+1];
+				var c = m[pc+2];
+				if (a == 0xFFFF) { 
+					if (input.length != 0) {
+						m[b] = input.charCodeAt(0);
+						input = input.substring(1);
+					} else {
+						setTimeout(subleq, 20);
+						return;
+					}
+					pc += 3;
+				} else if (b == 0xFFFF) {
+					var o = String.fromCharCode(m[a]);
+					if (o == '\n') { o = '<p></p>' }
+					document.getElementById(element).innerHTML += o;
+					pc += 3;
+				} else {
+					var d = m[b] - m[a];
+					m[b] = d;
+					if ((d & 0x8000) != 0 || d == 0) pc = c;
+					else pc += 3;
+				}
+			}
+		}
+
+		console.log("loading file: " + f);
+		var t = fetch(f).then(r => r.text()).then(t => {
+			var txt = t.split(/[\r?\n]/g);
+			for (var i = 0; i < 65536; i++) {
+				if (undefined == txt[i]) {
+					m[i] = 0;
+				} else {
+					m[i] = parseInt(txt[i]);
+				}
+			}
+			document.getElementById(element).innerHTML += '<p>eForth system starting</p>';
+			console.log(m);
+			console.log("load complete");
+			subleq();
+		});
+	</script>
+</body>
+</html>
