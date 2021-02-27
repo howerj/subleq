@@ -12,18 +12,17 @@
 		.tab button:hover { background-color: #ddd; }
 		.tab button.active { background-color: #ccc; } 
 		.tabcontent { display: none; padding: 6px 12px; border: 1px solid #ccc; border-top: none; } 
-		.blink { animation: blinker 0.6s linear infinite; color: #1c87c9; font-size: 30px; font-weight: bold; font-family: sans-serif; }
+		.blink { animation: blinker 0.6s linear infinite; color: #1f1f1f; font-size: 24px; font-weight: bold; }
 		@keyframes blinker { 50% { opacity: 0; } }
 	</style>
 </head>
 <body>
-	<!-- TODO: better image loading,  only active on correct tab, 
-	 make an unstyled minimalistic version? Test it with chrome, on the phone, etc. */
-	<!--<object id="image" type="text/html" data="subleq.dec">-->
+	<!-- TODO: better image loading, save/load image, input only active on correct tab, -->
 	<div class="tab">
-		<button class="tablinks" style=display:block" onclick="openTab(event, 'subleq')">subleq</button>
+		<button class="tablinks" onclick="openTab(event, 'subleq')">subleq</button>
 		<button class="tablinks" onclick="openTab(event, 'help')">help</button>
 		<button class="tablinks" onclick="openTab(event, 'about')">about</button>
+		<!--<button class="tablinks" onclick="openTab(event, 'image')">image</button>-->
 	</div>
 
 	<div id="subleq" class="tabcontent"> </div>
@@ -65,6 +64,7 @@
 			<tr> <th>License</th> <td>The Unlicense / Public Domain</td> </tr>
 		</table> 
 	</div>
+	<!--<div id="image" class="tabcontent"> <object id="decimal" type="text/html" data="subleq.dec"> </div>-->
 	<canvas id="keydown"></canvas>
 	<script type="text/javascript">
 		function openTab(evt, name) {
@@ -75,11 +75,12 @@
 			document.getElementById(name).style.display = "block";
 			evt.currentTarget.className += " active";
 		}
-		document.getElementsByClassName('tablinks')[0].click()
+		document.getElementsByClassName('tablinks')[0].click();
 
-		var file = "https://raw.githubusercontent.com/howerj/subleq/master/subleq.dec"
-		var screen = "", input = ".( EFORTH LOADED - USED) here u. cr\n", cursor = '<b class="blink">_</b>';
+		var file = "https://raw.githubusercontent.com/howerj/subleq/master/subleq.dec";
+		var screen = "", input = ".( EFORTH LOADED - USED:) here u. cr\n", cursor = '<b class="blink">_</b>';
 		var pc = 0, m = new Uint16Array(65536);
+		var redrawTimeout;
 
 		function esc(i) {
 			i = i.replace(/&/g, '&amp;');
@@ -88,65 +89,93 @@
 			return i;
 		}
 
-		function draw() { 
-			document.getElementById('subleq').innerHTML = "<pre>" + esc(screen) + cursor + "</pre>";
+		function colorize(i) { 
+			i = i.replace(/\b[0-9]+\b/g, function(x) { return "<b>" + x + "</b>" });
+			i = i.replace(/\b(if|else|for|next|aft|then|begin|repeat|until|again)\b/g, function(x) { return "<i>" + x + "</i>" });
+			return i;
+		}
+
+		function doDraw() {
+			document.getElementById('subleq').innerHTML = "<pre>" + colorize(esc(screen)) + cursor + "</pre>";
 			window.scrollTo(0, document.body.scrollHeight);
 		}
 
-		document.documentElement.addEventListener('keydown', function (e) {
-			var key = e.key;
-			switch (key) {
-			case "Enter": key = '\n'; break;
-			case "Escape": screen=""; draw(); window.location.reload(); return false;
-			case "Delete": /* fall-through */
-			case "Backspace": 
-				key = '\u0008';
-				let last = screen.slice(-1);
-				if (last != '\n' && last != '\r')
-					screen = screen.substring(0, screen.length - 1);
-				break;
-			default:
-				if (key.length != 1) return false;
-				break;
+		function draw() { 
+			if (redrawTimeout) { /* expensive operation, do not redraw every key-press */
+				clearTimeout(redrawTimeout);
+				redrawTimeout = null;
 			}
+			redrawTimeout = setTimeout(doDraw, 50);
+		}
+
+		function backspace() {
+			let last = screen.slice(-1);
+			if (last != '\n' && last != '\r')
+				screen = screen.substring(0, screen.length - 1);
+		}
+
+		function key2key(k) { /* NB. Fun to funky */
+			switch (k) {
+			case "Enter": k = '\n'; break;
+			case "Escape": k = '\u001B'; break;
+			case "Delete": case "Backspace": k = '\u0008'; break;
+			default: if (k.length != 1) k = ''; break;
+			}
+			return k;
+		}
+
+		document.documentElement.addEventListener('keydown', function (e) {
+			var key = key2key(e.key);
+			if (key.length == 0) { return false; }
+			else if (key == '\u0008') { backspace(); }
+			else if (key == '\u001B') { screen=""; draw(); window.location.reload(); return false; }
+			else { screen += key; }
 			input += key;
-			if (key != '\u0008')
-				screen += key;
 			draw();
 			return false; 
 		}, false);
 
-		function subleq() {
+		function getch() {
+			if (input.length == 0)
+				return -1;
+			let r = input.charCodeAt(0);
+			input = input.substring(1);
+			return r;
+		}
+
+		function putch(ch) {
+			let o = String.fromCharCode(ch);
+			if (o == '\u0008') {
+				backspace();
+			} else {
+				screen += o;
+			}
+			draw();
+		}
+
+		function subleq() { /* That's all folks! */
 			while ((pc & 0x8000) == 0) {
-				var a = m[pc+0];
-				var b = m[pc+1];
-				var c = m[pc+2];
-				if (a == 0xFFFF) { 
-					if (input.length != 0) {
-						m[b] = input.charCodeAt(0);
-						input = input.substring(1);
-					} else {
+				let a = m[pc+0];
+				let b = m[pc+1];
+				let c = m[pc+2];
+				if (a == 0xFFFF) {
+					let ch = getch();
+					if (ch < 0) {
 						setTimeout(subleq, 20);
 						return;
 					}
+					m[b] = ch;
 					pc += 3;
 				} else if (b == 0xFFFF) {
-					var o = String.fromCharCode(m[a]);
-					if (o == '\u0008') {
-						let last = screen.slice(-1);
-						if (last != '\n' && last != '\r')
-							screen = screen.substring(0, screen.length - 1);
-					} else {
-						screen += o;
-					}
-					draw();
+					putch(m[a]);
 					pc += 3;
 				} else {
-					var d = m[b] - m[a];
+					let d = m[b] - m[a];
 					m[b] = d;
 					if ((d & 0x8000) != 0 || d == 0) pc = c;
 					else pc += 3;
 				}
+				pc &= 0xFFFF;
 			}
 			window.location.reload();
 		}

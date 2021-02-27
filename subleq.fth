@@ -759,7 +759,7 @@ atlast {root-voc} t! setlast
 :to ; ( ?quit ) $BABE lit <> if -16 lit throw then =unnest lit , postpone [ 
  ?dup if get-current ! exit then ;t immediate compile-only ( -- wid )
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
-  last , bl word ?nul ?unique count + h lit ! $BABE lit postpone ] ;t
+  last , bl word ?nul ?unique count + h lit ! align $BABE lit postpone ] ;t
 :to :noname here $BABE lit ] ;t
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
@@ -812,7 +812,7 @@ atlast {root-voc} t! setlast
      interpret #1 ?depth 
    repeat drop {ok} half lit [@] execute ;t ( "word" -- )
 :t info cr
-  ." Project: eForth v1.4 " ( here . ) cr
+  ." Project: eForth v1.5 " ( here . ) cr
   ." Author:  Richard James Howe" cr
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
