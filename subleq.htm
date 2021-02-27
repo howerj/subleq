@@ -17,11 +17,11 @@
 	</style>
 </head>
 <body>
-	<!-- TODO: better image loading, delete key handling, cleanup code, only active on correct tab, 
-	 make an unstyled minimalistic version? */
+	<!-- TODO: better image loading,  only active on correct tab, 
+	 make an unstyled minimalistic version? Test it with chrome, on the phone, etc. */
 	<!--<object id="image" type="text/html" data="subleq.dec">-->
 	<div class="tab">
-		<button class="tablinks" onclick="openTab(event, 'subleq')">subleq</button>
+		<button class="tablinks" style=display:block" onclick="openTab(event, 'subleq')">subleq</button>
 		<button class="tablinks" onclick="openTab(event, 'help')">help</button>
 		<button class="tablinks" onclick="openTab(event, 'about')">about</button>
 	</div>
@@ -53,7 +53,7 @@
 		Will print the standard greeting. If the Forth interpreter is happy, "ok" will be
 		printed out after entering each line. Be careful, white-space matters a lot in Forth.
 
-		<p> You can hit ESC to clear the screen. </p>
+		<p> You can hit ESC to clear the screen and restart the system. </p>
 		<p> Happy hacking! </p>
 	</div>
 	<div id="about" class="tabcontent"> 
@@ -75,11 +75,10 @@
 			document.getElementById(name).style.display = "block";
 			evt.currentTarget.className += " active";
 		}
+		document.getElementsByClassName('tablinks')[0].click()
 
-		/* NB. It would be possible to use a regex over the text to perform syntax highlighting of the Forth typed in,
-		it would need to be kept separate from the display HTML though */
 		var file = "https://raw.githubusercontent.com/howerj/subleq/master/subleq.dec"
-		var screen = "", input = "", cursor = '<b class="blink">_</b>';
+		var screen = "", input = ".( EFORTH LOADED - USED) here u. cr\n", cursor = '<b class="blink">_</b>';
 		var pc = 0, m = new Uint16Array(65536);
 
 		function esc(i) {
@@ -98,7 +97,7 @@
 			var key = e.key;
 			switch (key) {
 			case "Enter": key = '\n'; break;
-			case "Escape": screen = ""; draw(); return false; break;
+			case "Escape": screen=""; draw(); window.location.reload(); return false;
 			case "Delete": /* fall-through */
 			case "Backspace": 
 				key = '\u0008';
@@ -162,7 +161,6 @@
 					m[i] = parseInt(txt[i]);
 				}
 			}
-			screen += "EFORTH LOADED\n"
 			draw();
 			subleq();
 		});

@@ -576,7 +576,7 @@ there 2/ primitive t!
       exit
     then
     >r over r@ < dup if
-      =bksp lit dup echo space echo
+      =bksp lit dup echo bl echo echo
     then
     r> +
     exit
