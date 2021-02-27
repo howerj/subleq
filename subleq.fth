@@ -13,8 +13,8 @@
 \ - <https://www.bradrodriguez.com/papers/>
 \ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
 \
-\ Tested with GForth version 0.7.3. 
-\ 
+\ Tested with GForth version 0.7.3.
+\
 \ * Implement an LZSS CODEC to compress the Forth image and decompress it
 \ as run time to save as much space (and obfuscate the image). In reality, a
 \ decompressor would only be of much utility if written in SUBLEQ assembly, as
@@ -116,7 +116,7 @@ size =cell - tep !
 :m t' ' >body @ ;m
 :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 :m tcksum taligned dup $C0DE - $FFFF and >r
-   begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat 
+   begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat
    drop r> ;m
 :m mkck dup there swap - tcksum ;m
 
@@ -366,7 +366,7 @@ assembler.1 -order
 
 there 2/ primitive t!
 
-:m ;t CAFEBABE <> 
+:m ;t CAFEBABE <>
      if abort" unstructured" then talign opExit target.only.1 -order ;m
 
 :m lit         opPush t, ;m
@@ -484,7 +484,7 @@ there 2/ primitive t!
 :t u>= u< 0= ;t
 :t u<= u> 0= ;t
 :t execute 2/ >r ;t
-:t key? #-1 [@] negate s>d if 
+:t key? #-1 [@] negate s>d if
       {options} half lit [@] 8 lit and if bye then drop #0 exit then #-1 ;t
 :t key begin {key} half lit [@] execute until ;t
 :t emit {emit} half lit [@] execute ;t
@@ -550,7 +550,7 @@ there 2/ primitive t!
   2dup u<
   if negate $F lit
     for >r dup um+ >r >r dup um+ r> + dup
-      r> r@ swap >r um+ r> ( or -> ) 0<> swap 0<> + 
+      r> r@ swap >r um+ r> ( or -> ) 0<> swap 0<> +
       if >r drop 1+ r> else drop then r>
     next
     drop swap exit
@@ -734,7 +734,7 @@ atlast 0 setlast
 :t forth root-voc forth-wordlist 2 lit set-order ;t ( -- )
 :t only #-1 set-order ;t                            ( -- )
 :t words
-  get-order begin ?dup while swap dup cr u. ." : " @ 
+  get-order begin ?dup while swap dup cr u. ." : " @
     begin ?dup while dup nfa c@ $80 lit and 0= if dup .id then @ repeat cr
   1- repeat ;t
 atlast {root-voc} t! setlast
@@ -756,7 +756,7 @@ atlast {root-voc} t! setlast
  space
  2drop {last} lit @ .id ." redefined" cr ;t
 :t ?nul dup c@ if exit then -10 lit throw ;t ( b -- : check for zero length strings )
-:to ; ( ?quit ) $BABE lit <> if -16 lit throw then =unnest lit , postpone [ 
+:to ; ( ?quit ) $BABE lit <> if -16 lit throw then =unnest lit , postpone [
  ?dup if get-current ! exit then ;t immediate compile-only ( -- wid )
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
   last , bl word ?nul ?unique count + h lit ! align $BABE lit postpone ] ;t
@@ -807,9 +807,9 @@ atlast {root-voc} t! setlast
 :t cksum aligned dup $C0DE lit - >r
      begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;t
 :t ok state @ 0= if ."  ok" cr then ;t
-:t eval 
-   begin bl word dup c@ while 
-     interpret #1 ?depth 
+:t eval
+   begin bl word dup c@ while
+     interpret #1 ?depth
    repeat drop {ok} half lit [@] execute ;t ( "word" -- )
 :t info cr
   ." Project: eForth v1.5 " ( here . ) cr
@@ -817,7 +817,7 @@ atlast {root-voc} t! setlast
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;t
-:t ini only forth definitions decimal postpone [ 
+:t ini only forth definitions decimal postpone [
   #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini

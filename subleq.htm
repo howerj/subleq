@@ -10,14 +10,14 @@
 		.tab { overflow: hidden; border: 1px solid #ccc; background-color: #f1f1f1; }
 		.tab button { background-color: inherit; float: left; border: none; outline: none; cursor: pointer; padding: 14px 16px; transition: 0.3s; }
 		.tab button:hover { background-color: #ddd; }
-		.tab button.active { background-color: #ccc; } 
-		.tabcontent { display: none; padding: 6px 12px; border: 1px solid #ccc; border-top: none; } 
-		.blink { animation: blinker 0.6s linear infinite; color: #1f1f1f; font-size: 24px; font-weight: bold; }
+		.tab button.active { background-color: #ccc; }
+		.tabcontent { display: none; padding: 6px 12px; border: 1px solid #ccc; border-top: none; }
+		.blink { animation: blinker 0.6s linear infinite; color: #333333; font-size: 24px; font-weight: bold; }
 		@keyframes blinker { 50% { opacity: 0; } }
 	</style>
 </head>
 <body>
-	<!-- TODO: better image loading, save/load image, input only active on correct tab, -->
+	<!-- TODO: better image loading, save/load image, used await/sync? -->
 	<div class="tab">
 		<button class="tablinks" onclick="openTab(event, 'subleq')">subleq</button>
 		<button class="tablinks" onclick="openTab(event, 'help')">help</button>
@@ -27,46 +27,70 @@
 
 	<div id="subleq" class="tabcontent"> </div>
 	<div id="help"   class="tabcontent">
-		This system contains a <a href=" https://en.wikipedia.org/wiki/One-instruction_set_computer">SUBLEQ</a> 
-		virtual machine that will automatically boot an eForth image, which is a variant of 
+		<p>This system contains a <a href=" https://en.wikipedia.org/wiki/One-instruction_set_computer">SUBLEQ</a>
+		virtual machine that will automatically boot an eForth image, which is a variant of
 		<a href="https://en.wikipedia.org/wiki/Forth_(programming_language)">Forth</a>, a stack
-		based programming language suitable for constrained system. A Forth tutorial is beyond
-		this help section. However, here are a few commands you can type into the system
-		to get started:
-
+		based programming language suitable for constrained system.  What makes this system special is that SUBLEQ is a Turing complete
+		<i>single instruction</i> machine, the instruction is short for "Subtract and Branch
+		If Less Than Or Equal To Zero", it does a little more than that, but it means we do
+		not have access to multiplication, division, addition, or even the basic bitwise
+		operators such as AND or XOR in the base instruction set, nor calls, returns, or
+		indirect load/stores. They all have to be synthesized. </p>
+		<p>The following program, written in C, is capable of executing the same images
+		that are using within this program:</>
+		<pre>
+	#include &lt;stdio.h&gt;
+	int main(int x,char**v){FILE*f=fopen(v[1],"r");short p=0,m[1&lt;&lt;16],*i=m;
+	while(fscanf(f,"%hd",i++)&gt;0);for(;p&gt;=0;){int a=m[p++],b=m[p++],c=m[p++];
+	a&lt;0?m[b]=getchar():b&lt;0?putchar(m[a]):(m[b]-=m[a])&lt;=0?p=c:0;}}
+		</pre>
+		<p> A Forth tutorial is beyond this help section. However, here are a few commands
+		you can type into the system to get started: </p>
 		<pre> words </pre>
-
-		This will print out a list of all of the built in functions defined in Forth.
-
+		<p>This will print out a list of all of the built in functions defined in Forth.</p>
 		<pre> 2 2 + . cr </pre>
-
-		Add two numbers together, both 2, and print the result, 4 along with a carriage return.
-
+		<p>Add two numbers together, both 2, and print the result, 4 along with a newline.</p>
 		<pre> : ahoy cr ." Hello, World!" ; </pre>
-
-		Define a new word (functions are called "words" in Forth) named "ahoy", which when
-		called like so:
-
+		<p>Define a new word (functions are called "words" in Forth) named "ahoy", which when
+		called like so:</p>
 		<pre> ahoy </pre>
-
-		Will print the standard greeting. If the Forth interpreter is happy, "ok" will be
-		printed out after entering each line. Be careful, white-space matters a lot in Forth.
-
+		<p>Will print the standard greeting. If the Forth interpreter is happy, "ok" will be
+		printed out after entering each line. Be careful, white-space matters a lot in Forth.</p>
 		<p> You can hit ESC to clear the screen and restart the system. </p>
 		<p> Happy hacking! </p>
 	</div>
-	<div id="about" class="tabcontent"> 
+	<div id="about" class="tabcontent">
 		<table style="width:100%">
 			<tr> <th>Author</th> <td>Richard James Howe</td> </tr>
 			<tr> <th>Project</th> <td>eForth running on SUBLEQ</td> </tr>
 			<tr> <th>Email</th> <td><a href="mailto:howe.r.j.89@gmail.com?subject=eForth SUBLEQ">howe.r.j.89@gmail.com</a></td> </tr>
 			<tr> <th>Repo</th> <td><a href="https://github.com/howerj/subleq">https://github.com/howerj/subleq</a></td> </tr>
 			<tr> <th>License</th> <td>The Unlicense / Public Domain</td> </tr>
-		</table> 
+		</table>
 	</div>
 	<!--<div id="image" class="tabcontent"> <object id="decimal" type="text/html" data="subleq.dec"> </div>-->
 	<canvas id="keydown"></canvas>
 	<script type="text/javascript">
+		var file = "https://raw.githubusercontent.com/howerj/subleq/master/subleq.dec";
+		var screen = "", input = ".( EFORTH LOADED - USED:) here u. cr\n", cursor = '<b class="blink">_</b>';
+		var pc = 0, m = new Uint16Array(65536), cycles = 0;
+		var loaded = false, focused = false, running = true;
+		var redrawTimeout;
+
+		function save(filename, data) {
+			var blob = new Blob([data], {type: 'text/plain'});
+			if(window.navigator.msSaveOrOpenBlob) {
+				window.navigator.msSaveBlob(blob, filename);
+				return;
+			}
+			var elem = window.document.createElement('a');
+			elem.href = window.URL.createObjectURL(blob);
+			elem.download = filename;
+			document.body.appendChild(elem);
+			elem.click();
+			document.body.removeChild(elem);
+		}
+
 		function openTab(evt, name) {
 			var tabcontent = document.getElementsByClassName("tabcontent");
 			for (var i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; }
@@ -74,13 +98,17 @@
 			for (var i = 0; i < tablinks.length; i++) { tablinks[i].className = tablinks[i].className.replace(" active", ""); }
 			document.getElementById(name).style.display = "block";
 			evt.currentTarget.className += " active";
+			if (name == "subleq") focused = true; else focused = false;
 		}
 		document.getElementsByClassName('tablinks')[0].click();
 
-		var file = "https://raw.githubusercontent.com/howerj/subleq/master/subleq.dec";
-		var screen = "", input = ".( EFORTH LOADED - USED:) here u. cr\n", cursor = '<b class="blink">_</b>';
-		var pc = 0, m = new Uint16Array(65536);
-		var redrawTimeout;
+		function saveImage(filename) {
+			let x = "";
+			for (let i = 0; i < 65536; i++)
+				x += m[i].toString() + "\n";
+			x = x.replace(/(0\n)+$/g, '');
+			save(filename, x);
+		}
 
 		function esc(i) {
 			i = i.replace(/&/g, '&amp;');
@@ -89,7 +117,7 @@
 			return i;
 		}
 
-		function colorize(i) { 
+		function colorize(i) { /* a little buggy */
 			i = i.replace(/\b[0-9]+\b/g, function(x) { return "<b>" + x + "</b>" });
 			i = i.replace(/\b(if|else|for|next|aft|then|begin|repeat|until|again)\b/g, function(x) { return "<i>" + x + "</i>" });
 			return i;
@@ -100,7 +128,7 @@
 			window.scrollTo(0, document.body.scrollHeight);
 		}
 
-		function draw() { 
+		function draw() {
 			if (redrawTimeout) { /* expensive operation, do not redraw every key-press */
 				clearTimeout(redrawTimeout);
 				redrawTimeout = null;
@@ -114,7 +142,7 @@
 				screen = screen.substring(0, screen.length - 1);
 		}
 
-		function key2key(k) { /* NB. Fun to funky */
+		function keyToKey(k) { /* NB. Fun to funky */
 			switch (k) {
 			case "Enter": k = '\n'; break;
 			case "Escape": k = '\u001B'; break;
@@ -125,14 +153,15 @@
 		}
 
 		document.documentElement.addEventListener('keydown', function (e) {
-			var key = key2key(e.key);
-			if (key.length == 0) { return false; }
-			else if (key == '\u0008') { backspace(); }
-			else if (key == '\u001B') { screen=""; draw(); window.location.reload(); return false; }
-			else { screen += key; }
-			input += key;
+			if (!focused) return false;
+			var k = keyToKey(e.key);
+			if (k.length == 0) { return false; }
+			else if (k == '\u0008') { backspace(); }
+			else if (k == '\u001B') { running = false; return false; }
+			else { screen += k; }
+			input += k;
 			draw();
-			return false; 
+			return false;
 		}, false);
 
 		function getch() {
@@ -145,16 +174,14 @@
 
 		function putch(ch) {
 			let o = String.fromCharCode(ch);
-			if (o == '\u0008') {
-				backspace();
-			} else {
-				screen += o;
-			}
+			if (o == '\u0008') { backspace(); } else { screen += o; }
 			draw();
 		}
 
 		function subleq() { /* That's all folks! */
-			while ((pc & 0x8000) == 0) {
+			if (!loaded) { setTimeout(subleq, 20); return; }
+			while ((pc & 0x8000) == 0 && running) {
+				if (cycles++ > 10000000 || !focused) { cycles = 0; setTimeout(subleq, 10); return; }
 				let a = m[pc+0];
 				let b = m[pc+1];
 				let c = m[pc+2];
@@ -172,27 +199,24 @@
 				} else {
 					let d = m[b] - m[a];
 					m[b] = d;
-					if ((d & 0x8000) != 0 || d == 0) pc = c;
-					else pc += 3;
+					pc = (d & 0x8000) || (d == 0) ? c : pc + 3;
 				}
 				pc &= 0xFFFF;
 			}
 			window.location.reload();
 		}
 
+		function loadImage(str) {
+			var txt = str.split(/[\r?\n]/g);
+			for (var i = 0; i < 65536; i++)
+				m[i] = undefined == txt[i] ? 0 : parseInt(txt[i]);
+			loaded = true;
+		}
+
 		console.log("loading file: " + file);
-		var t = fetch(file).then(r => r.text()).then(t => {
-			var txt = t.split(/[\r?\n]/g);
-			for (var i = 0; i < 65536; i++) {
-				if (undefined == txt[i]) {
-					m[i] = 0;
-				} else {
-					m[i] = parseInt(txt[i]);
-				}
-			}
-			draw();
-			subleq();
-		});
+		fetch(file).then(r => r.text()).then(t => { loadImage(t); draw(); });
+		console.log("subleq running...");
+		subleq();
 	</script>
 </body>
 </html>
