@@ -61,7 +61,6 @@ meta.1 +order definitions
 000A constant =lf
 000D constant =cr
 007F constant =del
-   8 constant =bs
 
 create tflash size cells here over erase allot
 
