@@ -154,6 +154,8 @@ meta.1 +order definitions
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
   B tvar {options}   \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
+  0 tvar h         \ dictionary pointer
+  0 tvar primitive \ any address lower than this one must be a primitive
   0 tvar check     \ used for system checksum
   8000 tvar hbit   \ must contain 8000
   -2   tvar ntwo   \ must contain -2
@@ -176,7 +178,6 @@ label: entry       \ used to set entry point in next cell
   0 tvar bl2       \ bitwise extra register
   0 tvar bt        \ bitwise extra register
   0 tvar tos       \ top of stack
-  0 tvar h         \ dictionary pointer
   0 tvar {state}   \ compiler state
   0 tvar {hld}     \ hold space pointer
   $A tvar {base}   \ input/output radix
@@ -189,7 +190,6 @@ label: entry       \ used to set entry point in next cell
   0 tvar {current} \ vocabulary which new definitions are added to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
   0 tvar {root-voc} \ absolute minimum vocabulary
-  0 tvar primitive \ any address lower than this one must be a primitive
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
   =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
   =end =stksz 4 * - =buf - constant TERMBUF \ pad buffer space

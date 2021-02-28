@@ -4,8 +4,7 @@
 	<title>SUBLEQ eForth</title>
 	<meta charset="UTF-8">
 	<style type="text/css">
-		body{margin:40px auto;max-width:50%;line-height:1.6;font-size:18px;color:#444;padding:0 10px}
-		h1,h2,h3{line-height:1.2}
+		body{margin:40px auto;max-width:50%;line-height:1.6;font-size:18px;color:#444;padding:0 10px;}
 		pre { white-space: pre-wrap; }
 		.tab { overflow: hidden; border: 1px solid #ccc; background-color: #f1f1f1; }
 		.tab button { background-color: inherit; float: left; border: none; outline: none; cursor: pointer; padding: 14px 16px; transition: 0.3s; }
@@ -14,30 +13,45 @@
 		.tabcontent { display: none; padding: 6px 12px; border: 1px solid #ccc; border-top: none; }
 		.blink { animation: blinker 0.6s linear infinite; color: #333333; font-size: 24px; font-weight: bold; }
 		@keyframes blinker { 50% { opacity: 0; } }
+		label.buttonHack input[type="file"] { position:absolute; top: -1000px; }
+		.buttonHack { border: 2px solid #AAA; border-radius: 4px; padding: 2px 5px; margin: 2px; background: #DDD; display: inline-block; }
+		.buttonHack :hover { background: #CCC; }
+		.buttonHack :active { background: #CCF; }
 	</style>
 </head>
 <body>
-	<!-- TODO: better image loading, save/load image, used await/sync? -->
+	<!-- TODO: better image loading, other programs (Hello world!), settings, debugger -->
 	<div class="tab">
 		<button class="tablinks" onclick="openTab(event, 'subleq')">subleq</button>
+		<button class="tablinks" onclick="openTab(event, 'image')">image</button>
+		<!--<button class="tablinks" onclick="openTab(event, 'debugger')">debugger</button>-->
+		<button class="tablinks" onclick="openTab(event, 'settings')">settings</button>
 		<button class="tablinks" onclick="openTab(event, 'help')">help</button>
 		<button class="tablinks" onclick="openTab(event, 'about')">about</button>
-		<!--<button class="tablinks" onclick="openTab(event, 'image')">image</button>-->
 	</div>
-
 	<div id="subleq" class="tabcontent"> </div>
 	<div id="help"   class="tabcontent">
 		<p>This system contains a <a href=" https://en.wikipedia.org/wiki/One-instruction_set_computer">SUBLEQ</a>
-		virtual machine that will automatically boot an eForth image, which is a variant of
+		virtual machine, a 16-bit version, that will automatically boot an eForth image, which is a variant of
 		<a href="https://en.wikipedia.org/wiki/Forth_(programming_language)">Forth</a>, a stack
-		based programming language suitable for constrained system.  What makes this system special is that SUBLEQ is a Turing complete
-		<i>single instruction</i> machine, the instruction is short for "Subtract and Branch
-		If Less Than Or Equal To Zero", it does a little more than that, but it means we do
-		not have access to multiplication, division, addition, or even the basic bitwise
-		operators such as AND or XOR in the base instruction set, nor calls, returns, or
-		indirect load/stores. They all have to be synthesized. </p>
+		based programming language suitable for constrained system.  What makes this system special 
+		is that SUBLEQ is a Turing complete <i>single instruction</i> machine, the instruction 
+		is short for "Subtract and Branch If Less Than Or Equal To Zero", it does a little more 
+		than that, but it means we do not have access to multiplication, division, addition, 
+		or even the basic bitwise operators such as AND or XOR in the base instruction set, 
+		nor calls, returns, or indirect load/stores. They all have to be synthesized.</p>
+		<p>Each SUBLEQ instruction consists of three arguments; 'a', 'b', 'c'. 'a' and 'b'
+		are addresses from which arguments are loaded from, the contents of the address
+		of 'a' are subtracted from the contents at 'b' and stored back into 'b', if the
+		result is less than or equal to zero, then 'c' is directly jumped to, otherwise
+		the program counter is incremented by three, moving to the next instruction.</p>
+		<p>There are two minor special cases, one for input, and one for output, if 'a'
+		is the address -1, then byte is loaded from input and stored into the location
+		pointed to by 'b', if 'b' is -1 then a byte is loaded from the location pointed
+		to by 'a' and stored to output. Input is taken from the keyboard and output is
+		the terminal screen in the case of this emulator.</p>
 		<p>The following program, written in C, is capable of executing the same images
-		that are using within this program:</>
+		that are used within this program:</p>
 		<pre>
 	#include &lt;stdio.h&gt;
 	int main(int x,char**v){FILE*f=fopen(v[1],"r");short p=0,m[1&lt;&lt;16],*i=m;
@@ -61,66 +75,136 @@
 	</div>
 	<div id="about" class="tabcontent">
 		<table style="width:100%">
-			<tr> <th>Author</th> <td>Richard James Howe</td> </tr>
-			<tr> <th>Project</th> <td>eForth running on SUBLEQ</td> </tr>
-			<tr> <th>Email</th> <td><a href="mailto:howe.r.j.89@gmail.com?subject=eForth SUBLEQ">howe.r.j.89@gmail.com</a></td> </tr>
-			<tr> <th>Repo</th> <td><a href="https://github.com/howerj/subleq">https://github.com/howerj/subleq</a></td> </tr>
-			<tr> <th>License</th> <td>The Unlicense / Public Domain</td> </tr>
+			<tr><th>Author</th><td>Richard James Howe</td></tr>
+			<tr><th>Project</th><td>eForth running on SUBLEQ</td></tr>
+			<tr><th>Email</th><td><a href="mailto:howe.r.j.89@gmail.com?subject=eForth SUBLEQ">howe.r.j.89@gmail.com</a></td></tr>
+			<tr><th>Repo</th><td><a href="https://github.com/howerj/subleq">https://github.com/howerj/subleq</a></td></tr>
+			<tr><th>License</th><td><a href="https://raw.githubusercontent.com/howerj/subleq/master/LICENSE">The Unlicense</a> / Public Domain</td></tr>
 		</table>
 	</div>
-	<!--<div id="image" class="tabcontent"> <object id="decimal" type="text/html" data="subleq.dec"> </div>-->
+	<div id="settings" class="tabcontent">
+		<label for="highlight">Highlight</label>
+		<input type="checkbox" id="highlight" name="highlight" checked><br>
+	</div>
+	<div id="image" class="tabcontent"> 
+		<!--<object id="decimal" type="text/html" data="subleq.dec">-->
+		<div>
+			<label class="buttonHack"> <button hidden onclick="saveImage()">save</button> <span>save</span></label>
+			<label for="fname">file</label>
+			<input type="text" id="fname" name="fname" value="subleq.dec">
+			<label for="cells">cells</label>
+			<input type="text" id="cells" name="cells" value="8192">
+		</div>
+		<label class="buttonHack">
+			<input type="file" id="input" oninput="loadImage()">
+			<span>load</span>
+		</label>
+		<hr>
+		<pre id="hexDump"></pre>
+	</div>
 	<canvas id="keydown"></canvas>
 	<script type="text/javascript">
+		const init = ".( EFORTH LOADED - USED:) here u. cr\n";
 		var file = "https://raw.githubusercontent.com/howerj/subleq/master/subleq.dec";
-		var screen = "", input = ".( EFORTH LOADED - USED:) here u. cr\n", cursor = '<b class="blink">_</b>';
+		var screen = "", input = init, cursor = '<b class="blink">_</b>';
 		var pc = 0, m = new Uint16Array(65536), cycles = 0;
 		var loaded = false, focused = false, running = true;
 		var redrawTimeout;
 
-		function save(filename, data) {
-			var blob = new Blob([data], {type: 'text/plain'});
-			if(window.navigator.msSaveOrOpenBlob) {
-				window.navigator.msSaveBlob(blob, filename);
-				return;
+		function updateDump() {
+			function hexDump(a, as) {
+				function pad(number, length) {
+					var str = '' + number;
+					while (str.length < length) str = '0' + str;
+					return str;
+				}
+				var r = "";
+				for (let i = 0; i < as; i += 16) {
+					var l = pad(i.toString(16), 4) + ": ";
+					for (let j = 0; j < 16 && (i + j) < as; j++) {
+						l += pad(m[i+j].toString(16), 4) + " ";
+					}
+					r += l + "\n";
+				}
+				return r;
 			}
-			var elem = window.document.createElement('a');
-			elem.href = window.URL.createObjectURL(blob);
-			elem.download = filename;
-			document.body.appendChild(elem);
-			elem.click();
-			document.body.removeChild(elem);
+			document.getElementById("hexDump").innerHTML = hexDump(m, 65536);
 		}
 
 		function openTab(evt, name) {
-			var tabcontent = document.getElementsByClassName("tabcontent");
-			for (var i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; }
-			var tablinks = document.getElementsByClassName("tablinks");
-			for (var i = 0; i < tablinks.length; i++) { tablinks[i].className = tablinks[i].className.replace(" active", ""); }
+			let tabcontent = document.getElementsByClassName("tabcontent");
+			for (let i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; }
+			let tablinks = document.getElementsByClassName("tablinks");
+			for (let i = 0; i < tablinks.length; i++) { tablinks[i].className = tablinks[i].className.replace(" active", ""); }
 			document.getElementById(name).style.display = "block";
 			evt.currentTarget.className += " active";
-			if (name == "subleq") focused = true; else focused = false;
+			focused = false;
+			switch (name) {
+			case "subleq": queueDraw(); focused = true; break;
+			case "image": updateDump(); break;
+			}
 		}
 		document.getElementsByClassName('tablinks')[0].click();
 
-		function saveImage(filename) {
+		function saveImage() {
+			function isNumeric(str) {
+				if (typeof str != "string") return false;
+				return !isNaN(str) && !isNaN(parseFloat(str));
+			}
+			function save(filename, data) {
+				var blob = new Blob([data], {type: 'text/plain'});
+				if (window.navigator.msSaveOrOpenBlob) {
+					window.navigator.msSaveBlob(blob, filename);
+					return;
+				}
+				var elem = window.document.createElement('a');
+				elem.href = window.URL.createObjectURL(blob);
+				elem.download = filename;
+				document.body.appendChild(elem);
+				elem.click();
+				document.body.removeChild(elem);
+			}
+			let filename = document.getElementById("fname").value;
+			let cells = document.getElementById("cells").value;
+			filename = filename == undefined || filename === "" ? "subleq.dec" : filename;
+			cells = isNumeric(cells) ? parseInt(cells) : 8192;
+			if (cells < 0)
+				cells = 0;
+			if (cells > 65536)
+				cells = 65536;
 			let x = "";
-			for (let i = 0; i < 65536; i++)
+			for (let i = 0; i < cells; i++)
 				x += m[i].toString() + "\n";
 			x = x.replace(/(0\n)+$/g, '');
 			save(filename, x);
 		}
 
+		function loadImageFromString(str) {
+			var txt = str.split(/[\r?\n]/g);
+			for (var i = 0; i < 65536; i++)
+				m[i] = undefined == txt[i] ? 0 : parseInt(txt[i]);
+			loaded = true;
+		}
+
+		function loadImage() {
+			document.getElementById('input').files[0].text().then(t => loadImageFromString(t));
+			pc = 0; 
+			screen = "";
+			input = init;
+			updateDump();
+		}
+
 		function esc(i) {
 			i = i.replace(/&/g, '&amp;');
 			i = i.replace(/</g, '&lt;');
-			i = i.replace(/>/g, '&gt;');
-			return i;
+			return i.replace(/>/g, '&gt;');
 		}
 
-		function colorize(i) { /* a little buggy */
-			i = i.replace(/\b[0-9]+\b/g, function(x) { return "<b>" + x + "</b>" });
-			i = i.replace(/\b(if|else|for|next|aft|then|begin|repeat|until|again)\b/g, function(x) { return "<i>" + x + "</i>" });
-			return i;
+		function colorize(i) { /* good enough, could also <u> things */
+			if (!document.getElementById('highlight').checked)
+				return i;
+			i = i.replace(/\b[0-9]+[^a-zA-Z=<>*\(\)\/@+&-]/g, function(x) { return "<b>" + x + "</b>" });
+			return i.replace(/\b(if|else|for|next|aft|then|begin|repeat|until|again)\b/g, function(x) { return "<i>" + x + "</i>" });
 		}
 
 		function doDraw() {
@@ -128,7 +212,7 @@
 			window.scrollTo(0, document.body.scrollHeight);
 		}
 
-		function draw() {
+		function queueDraw() { /* might be better with two timers, so redraw is done at least every X ms */
 			if (redrawTimeout) { /* expensive operation, do not redraw every key-press */
 				clearTimeout(redrawTimeout);
 				redrawTimeout = null;
@@ -155,17 +239,17 @@
 		document.documentElement.addEventListener('keydown', function (e) {
 			if (!focused) return false;
 			var k = keyToKey(e.key);
-			if (k.length == 0) { return false; }
-			else if (k == '\u0008') { backspace(); }
-			else if (k == '\u001B') { running = false; return false; }
+			if (k.length === 0) { return false; }
+			else if (k === '\u0008') { backspace(); }
+			else if (k === '\u001B') { running = false; return false; }
 			else { screen += k; }
 			input += k;
-			draw();
+			queueDraw();
 			return false;
 		}, false);
 
 		function getch() {
-			if (input.length == 0)
+			if (input.length === 0)
 				return -1;
 			let r = input.charCodeAt(0);
 			input = input.substring(1);
@@ -174,18 +258,18 @@
 
 		function putch(ch) {
 			let o = String.fromCharCode(ch);
-			if (o == '\u0008') { backspace(); } else { screen += o; }
-			draw();
+			if (o === '\u0008') { backspace(); } else { screen += o; }
+			queueDraw();
 		}
 
-		function subleq() { /* That's all folks! */
+		function subleq() { /* The ISA of the future! */
 			if (!loaded) { setTimeout(subleq, 20); return; }
-			while ((pc & 0x8000) == 0 && running) {
+			while ((pc & 0x8000) === 0 && running) {
 				if (cycles++ > 10000000 || !focused) { cycles = 0; setTimeout(subleq, 10); return; }
 				let a = m[pc+0];
 				let b = m[pc+1];
 				let c = m[pc+2];
-				if (a == 0xFFFF) {
+				if (a === 0xFFFF) {
 					let ch = getch();
 					if (ch < 0) {
 						setTimeout(subleq, 20);
@@ -193,28 +277,21 @@
 					}
 					m[b] = ch;
 					pc += 3;
-				} else if (b == 0xFFFF) {
+				} else if (b === 0xFFFF) {
 					putch(m[a]);
 					pc += 3;
 				} else {
 					let d = m[b] - m[a];
 					m[b] = d;
-					pc = (d & 0x8000) || (d == 0) ? c : pc + 3;
+					pc = (d & 0x8000) || (d === 0) ? c : pc + 3;
 				}
 				pc &= 0xFFFF;
 			}
 			window.location.reload();
 		}
 
-		function loadImage(str) {
-			var txt = str.split(/[\r?\n]/g);
-			for (var i = 0; i < 65536; i++)
-				m[i] = undefined == txt[i] ? 0 : parseInt(txt[i]);
-			loaded = true;
-		}
-
 		console.log("loading file: " + file);
-		fetch(file).then(r => r.text()).then(t => { loadImage(t); draw(); });
+		fetch(file).then(r => r.text()).then(t => { loadImageFromString(t); queueDraw(); });
 		console.log("subleq running...");
 		subleq();
 	</script>
