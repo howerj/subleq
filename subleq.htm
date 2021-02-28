@@ -83,8 +83,10 @@
 		</table>
 	</div>
 	<div id="settings" class="tabcontent">
-		<label for="highlight">Highlight</label>
+		<label for="highlight">highlight </label>
 		<input type="checkbox" id="highlight" name="highlight" checked><br>
+		<label for="quantity">base </label>
+		<input type="number" id="base" name="base" min="2" max="36" value=16> 
 	</div>
 	<div id="image" class="tabcontent"> 
 		<!--<object id="decimal" type="text/html" data="subleq.dec">-->
@@ -100,7 +102,7 @@
 			<span>load</span>
 		</label>
 		<hr>
-		<pre id="hexDump"></pre>
+		<pre id="dump"></pre>
 	</div>
 	<canvas id="keydown"></canvas>
 	<script type="text/javascript">
@@ -112,23 +114,28 @@
 		var redrawTimeout;
 
 		function updateDump() {
-			function hexDump(a, as) {
+			function dump(a, as, base) {
+				function maxPad(max, base) {
+					return Math.ceil(Math.log(max) / Math.log(base));
+				}
 				function pad(number, length) {
 					var str = '' + number;
 					while (str.length < length) str = '0' + str;
 					return str;
 				}
-				var r = "";
-				for (let i = 0; i < as; i += 16) {
-					var l = pad(i.toString(16), 4) + ": ";
-					for (let j = 0; j < 16 && (i + j) < as; j++) {
-						l += pad(m[i+j].toString(16), 4) + " ";
+				var r = "", p = maxPad(65536, base), cols = 20 - p;
+				for (let i = 0; i < as; i += cols) {
+					var l = pad(i.toString(base), p) + ": ";
+					for (let j = 0; j < cols && (i + j) < as; j++) {
+						l += pad(m[i+j].toString(base), p) + " ";
 					}
 					r += l + "\n";
 				}
 				return r;
 			}
-			document.getElementById("hexDump").innerHTML = hexDump(m, 65536);
+			let base = document.getElementById("base").value;
+			base = base > 36 || base < 2 ? 16 : base;
+			document.getElementById("dump").innerHTML = dump(m, 65536, base);
 		}
 
 		function openTab(evt, name) {

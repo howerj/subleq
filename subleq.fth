@@ -38,17 +38,21 @@
 \
 only forth definitions hex
 
+\ : wordlist here 0 , ;
+\ : constant create , does> @ ;
+
 wordlist constant meta.1
 wordlist constant target.1
 wordlist constant assembler.1
 wordlist constant target.only.1
 
-: (order) ( u wid*n n -- wid*n u n )
+ : (order) 
    dup if
     1- swap >r recurse over r@ xor if
      1+ r> -rot exit then r> drop then ;
-: -order ( wid -- ) get-order (order) nip set-order ;
-: +order ( wid -- ) dup >r -order get-order r> swap 1+ set-order ;
+ : -order  get-order (order) nip set-order ;
+ : +order  dup >r -order get-order r> swap 1+ set-order ;
+
 
 meta.1 +order definitions
 
@@ -75,7 +79,7 @@ size =cell - tep !
 :m there tdp @ ;m
 :m tc! tflash + c! ;m
 :m tc@ tflash + c@ ;m
-:m t! over ff and over tc! swap 8 rshift swap 1+ tc! ;m
+:m t! over $FF and over tc! swap 8 rshift swap 1+ tc! ;m
 :m t@ dup tc@ swap 1+ tc@ 8 lshift or ;m
 :m taligned dup 1 and + ;m
 :m talign there 1 and tdp +! ;m
@@ -478,6 +482,7 @@ there 2/ primitive t!
 :t 2* op2* ;t
 :t cell 2 lit ;t
 :t cell+ cell + ;t
+:t cells op2* ;t
 :t u< 2dup 0< 0= swap 0< 0= <> >r < r> <>  ;t \ TODO: Works for "4000 1 u<" and "-1 1 u<", fails for "8000 1 u<"
 \ :t u< 2dup 0< 0= swap 0< 0= xor >r < r> xor ;t
 :t u> swap u< ;t
@@ -510,6 +515,8 @@ there 2/ primitive t!
 :t +string #1 over min rot over + rot rot - ;t
 :t type begin dup while swap count emit swap 1- repeat 2drop ;t
 :t cmove for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;t ( b1 b2 u -- )
+:t fill  swap for swap aft 2dup c! 1+ then next 2drop ;t     ( b u c -- )
+:t erase #0 fill ;t ( NB. blank is bl fill )
 :t do$ r> r> 2* dup count + aligned 2/ >r swap >r ;t ( -- a : )
 :t ($) do$ ;t            ( -- a : do string NB. )
 :t .$ do$ count type ;t  ( -- : print string, next cells contain string )
@@ -756,6 +763,8 @@ atlast {root-voc} t! setlast
  space
  2drop {last} lit @ .id ." redefined" cr ;t
 :t ?nul dup c@ if exit then -10 lit throw ;t ( b -- : check for zero length strings )
+:to char bl word ?nul count drop c@ ;t \ TODO: Reuse in [char]
+:to [char] bl word ?nul count drop c@ =push lit , , ;t immediate
 :to ; ( ?quit ) $BABE lit <> if -16 lit throw then =unnest lit , postpone [
  ?dup if get-current ! exit then ;t immediate compile-only ( -- wid )
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
@@ -874,7 +883,6 @@ atlast {root-voc} t! setlast
 \ :t i  compile (i) ;t compile-only immediate ( -- index )
 
 \ ---------------------------------- Image Generation ------------------------
-
 
 t' quit half {cold} t!
 t' key? {key} t!
