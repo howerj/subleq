@@ -118,7 +118,7 @@ size =cell - tep !
 :m tcfa tnfa dup c@ $1F and + =cell + tdown ;m ( pwd -- cfa )
 :m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
-:m half ( dup 1 and abort" unaligned" ) 2/ ;m
+:m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
 :m t' ' >body @ ;m
 :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
@@ -541,6 +541,8 @@ there 2/ primitive t!
       r> swap >r                 ( saved-sp ) \ exc# on return stack
       sp! drop r>                ( exc# )     \ restore stack
     then ;t
+:t abort #-1 throw ;t
+:t (abort) do$ swap if count type abort then drop ;t  ( -- : print string, next cells contain string )
 \ TODO: Use this version of um+ when u< is fixed, this would be well worth
 \ converting to assembly.
 \ :t um+ 2dup u< 0= if swap then over + swap over swap u< lsb logical ;t ( u u -- u carry )
@@ -805,11 +807,14 @@ atlast {root-voc} t! setlast
 :to exit compile opExit ;t immediate compile-only
 :to ." compile .$  [char] " word count + h half lit [!] align ;t immediate compile-only
 :to $" compile ($) [char] " word count + h half lit [!] align ;t immediate compile-only
+:to abort" compile (abort) [char] " word count + h half lit [!] align ;t immediate compile-only
 :to ( [char] ) parse 2drop ;t immediate
 :to .( [char] ) parse type ;t immediate
 :to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
 :to \ source drop @ {in} half lit [!] ;t immediate
+\ :to ?\ if source drop @ {in} half lit [!] then ;t immediate
+\ :to ?exit if rdrop exit then ;t
 :to immediate last nfa @ $40 lit or last nfa ! ;t
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
@@ -845,7 +850,7 @@ atlast {root-voc} t! setlast
   then
   begin
    query t' eval lit catch
-   ( ?error -> ) ?dup if space . [char] ? emit cr ini then
+   ?dup if dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
 :t cold {cold} half lit [@] execute ;t
 
