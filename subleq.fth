@@ -85,25 +85,28 @@ size =cell - tep !
 :m talign there 1 and tdp +! ;m
 :m tc, there tc! 1 tdp +! ;m
 :m t, there t! 2 tdp +! ;m
-:m $literal talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
+ :m $literal talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
+\ :m $literal talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
 :m tallot tdp +! ;m
+\ :m parse-word bl word ?nul count ;m
 :m thead
   talign
   there tlast @ t, tlast !
+\  parse-word talign dup tc, for aft count tc, then next drop talign ;m
   parse-word talign dup tc, 0 ?do count tc, loop drop talign ;m
 :m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m
-:m >neg dup 7FFF u> if 10000 - then ;
-:m save-target ( <name> -- )
+ :m >neg dup 7FFF u> if 10000 - then ;
+ :m save-target ( <name> -- )
   parse-word w/o create-file throw
   there 0 do i t@  over >r >neg dec# r> write-file throw =cell +loop
    close-file throw ;m
 :m .h base @ >r hex     u. r> base ! ;m
 :m .d base @ >r decimal u. r> base ! ;m
-:m tlen dup tflash + =cell + count 1f and nip ;m
+:m tlen dup tflash + =cell + count $1F and nip ;m
 :m twords
    cr tlast @
    begin
-      dup dup tlen + 2/ .d tflash + =cell + count 1f and type space t@
+      dup dup tlen + 2/ .d tflash + =cell + count $1F and type space t@
    ?dup 0= until ;m
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
@@ -115,7 +118,7 @@ size =cell - tep !
 :m tcfa tnfa dup c@ $1F and + =cell + tdown ;m ( pwd -- cfa )
 :m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
-:m half dup 1 and abort" unaligned" 2/ ;m
+:m half ( dup 1 and abort" unaligned" ) 2/ ;m
 :m double 2* ;m
 :m t' ' >body @ ;m
 :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
@@ -775,8 +778,11 @@ atlast {root-voc} t! setlast
 :to again =jump  lit , 2/ , ;t immediate compile-only
 :to if =jumpz lit , here #0 , ;t immediate compile-only
 :to then here 2/ swap ! ;t immediate compile-only
+:to while postpone if ;t immediate compile-only
+:to repeat swap postpone again postpone then ;t immediate compile-only
 :to else =jump lit , here #0 , swap postpone then ;t immediate compile-only
 :to for =>r lit , here ;t immediate compile-only
+:to aft drop =jump lit , here #0 , align here swap ;t immediate compile-only
 :to next =next lit , 2/ , ;t immediate compile-only
 :to ' bl word find ?found cfa literal ;t immediate
 :t compile r> dup [@] , 1+ >r ;t compile-only

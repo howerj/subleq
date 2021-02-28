@@ -211,7 +211,7 @@
 			if (!document.getElementById('highlight').checked)
 				return i;
 			i = i.replace(/\b[0-9]+[^a-zA-Z=<>*\(\)\/@+&-]/g, function(x) { return "<b>" + x + "</b>" });
-			return i.replace(/\b(if|else|for|next|aft|then|begin|repeat|until|again)\b/g, function(x) { return "<i>" + x + "</i>" });
+			return i.replace(/\b(if|else|for|next|aft|then|while|begin|repeat|until|again)\b/g, function(x) { return "<i>" + x + "</i>" });
 		}
 
 		function doDraw() {
