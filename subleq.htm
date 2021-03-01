@@ -20,7 +20,9 @@
 	</style>
 </head>
 <body>
-	<!-- TODO: better image loading, other programs (Hello world!), settings, debugger -->
+	<!-- TODO: Better image loading, other programs (Hello world!), debugger, make 
+	this a standalone project with a built in image that is loaded if fetch() fails, 
+	save settings with a cookie. -->
 	<div class="tab">
 		<button class="tablinks" onclick="openTab(event, 'subleq')">subleq</button>
 		<button class="tablinks" onclick="openTab(event, 'image')">image</button>
@@ -83,15 +85,16 @@
 		</table>
 	</div>
 	<div id="settings" class="tabcontent">
-		<label for="highlight">highlight </label>
-		<input type="checkbox" id="highlight" name="highlight" checked><br>
-		<label for="scroll">scroll </label>
-		<input type="checkbox" id="scroll" name="scroll" checked><br>
-		<label for="quantity">base </label>
+		<input type="checkbox" id="highlight" name="highlight" checked>
+		<label for="highlight">highlight </label><br>
+		<input type="checkbox" id="scroll" name="scroll" checked>
+		<label for="scroll">scroll </label><br>
+		<input type="checkbox" id="optimizeImage" name="optimizeImage" checked>
+		<label for="optimizeImage">remove trailing zeros on save </label><br>
+		<label for="base">base </label>
 		<input type="number" id="base" name="base" min="2" max="36" value=16> 
 	</div>
 	<div id="image" class="tabcontent"> 
-		<!--<object id="decimal" type="text/html" data="subleq.dec">-->
 		<div>
 			<label class="buttonHack"> <button hidden onclick="saveImage()">save</button> <span>save</span></label>
 			<label for="fname">file</label>
@@ -184,7 +187,8 @@
 			let x = "";
 			for (let i = 0; i < cells; i++)
 				x += m[i].toString() + "\n";
-			x = x.replace(/(0\n)+$/g, '');
+			if (document.getElementById('optimizeImage').checked)
+				x = x.replace(/(0\n)+$/g, '');
 			save(filename, x);
 		}
 

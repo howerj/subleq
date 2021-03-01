@@ -775,6 +775,7 @@ atlast {root-voc} t! setlast
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
   last , bl word ?nul ?unique count + h lit ! align $BABE lit postpone ] ;t
 :to :noname here $BABE lit ] ;t
+\ TODO: implement mark, reuse things in control structures
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
 :to again =jump  lit , 2/ , ;t immediate compile-only
@@ -795,9 +796,10 @@ atlast {root-voc} t! setlast
 :t create postpone : drop postpone [ compile (var) get-current ! ;t
 :to variable create #0 , ;t
 :t >body cell+ ;t ( a -- a )
-\ TODO: Optimize this / Check it works under all conditions
-:t (does) r> here 2/ {last} lit @ cfa dup cell+ =push lit , , ! , compile rdrop compile exit ;t
-:t does> compile (does) ;t immediate compile-only
+\ TODO: Optimize?
+:t (does) r> r> 2* swap >r ;t
+:t (comp) r> {last} lit @ cfa ! ;t
+:t does> compile (comp) compile (does) ;t immediate compile-only
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
 :to >r compile opToR ;t immediate compile-only
