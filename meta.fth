@@ -14,14 +14,11 @@
 \ - <https://www.bradrodriguez.com/papers/>
 \ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
 \
-\ Tested with GForth version 0.7.3.
-\
 \ * Implement an LZSS CODEC to compress the Forth image and decompress it
 \ as run time to save as much space (and obfuscate the image). In reality, a
 \ decompressor would only be of much utility if written in SUBLEQ assembly, as
 \ the SUBLEQ VM is the most compressible part of the image. Perhaps the C VM
 \ could contain the decompressor? It already contains the program loader.
-\ * Make the system self-hosting and remove the dependency on gforth.
 \ * Fix the bugs in "u<".
 \ * Adding a system word order and putting in non-standard words in it will
 \ speed up compilation.
@@ -46,14 +43,6 @@ wordlist constant meta.1
 wordlist constant target.1
 wordlist constant assembler.1
 wordlist constant target.only.1
-
-\  : (order) 
-\    dup if
-\     1- swap >r recurse over r@ xor if
-\      1+ r> -rot exit then r> drop then ;
-\  : -order  get-order (order) nip set-order ;
-\  : +order  dup >r -order get-order r> swap 1+ set-order ;
-
 
 meta.1 +order definitions
 
@@ -86,24 +75,16 @@ size =cell - tep !
 :m talign there 1 and tdp +! ;m
 :m tc, there tc! 1 tdp +! ;m
 :m t, there t! 2 tdp +! ;m
-\  :m $literal talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
- :m $literal talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
+:m $literal talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
 :m tallot tdp +! ;m
  :m parse-word bl word ?nul count ;m
 :m thead
   talign
   there tlast @ t, tlast !
   parse-word talign dup tc, for aft count tc, then next drop talign ;m
-\  parse-word talign dup tc, 0 ?do count tc, loop drop talign ;m
-:m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m
-\ :m >neg dup 7FFF u> if 10000 - then ;
-\ :m save-target ( <name> -- )
-\  parse-word w/o create-file throw
-\  there 0 do i t@  over >r >neg dec# r> write-file throw =cell +loop
-\   close-file throw ;m
-:m save-target
-   parse-word drop
-   decimal tflash there dump ;m
+:m #dec dup >r abs 0 <# #s r> sign #> $A emit type ;m  ( n -- print number )
+:m mdump aligned begin ?dup while swap dup @ #dec cell+ swap cell - repeat drop ;m
+:m save-target parse-word drop decimal tflash there mdump ;m
 :m .h base @ >r hex     u. r> base ! ;m
 :m .d base @ >r decimal u. r> base ! ;m
 :m tlen dup tflash + =cell + count $1F and nip ;m
@@ -122,7 +103,7 @@ size =cell - tep !
 :m tcfa tnfa dup c@ $1F and + =cell + tdown ;m ( pwd -- cfa )
 :m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
-:m half ( dup 1 and abort" unaligned" ) 2/ ;m
+:m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
 :m (') bl word find ?found cfa ;m \ TODO: make ' more standards compliant?
 :m t' (') >body @ ;m
@@ -165,7 +146,7 @@ meta.1 +order definitions
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
-  A tvar {options}  \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
+  B tvar {options}  \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
   0 tvar h         \ dictionary pointer
   0 tvar primitive \ any address lower than this one must be a primitive
   0 tvar check     \ used for system checksum
@@ -251,7 +232,7 @@ assembler.1 -order
   $CAFED00D
   target.1 +order definitions
   create talign there , assembler.1 +order does> @ 2/ t, ;m
-:m (a); $CAFED00D <> if .s abort" unstructured" then assembler.1 -order ;m
+:m (a); $CAFED00D <> if abort" unstructured" then assembler.1 -order ;m
 :m ;a (a); vm a-optim vm JMP ;m
 :m postpone target.only.1 +order t' target.only.1 -order 2/ t, ;m
 
@@ -786,9 +767,9 @@ atlast {root-voc} t! setlast
 :to again =jump  lit , 2/ , ;t immediate compile-only
 :to if =jumpz lit , here #0 , ;t immediate compile-only
 :to then here 2/ swap ! ;t immediate compile-only
- :to while postpone if ;t immediate compile-only
-\ :to repeat swap postpone again postpone then ;t immediate compile-only
-\ :to else =jump lit , here #0 , swap postpone then ;t immediate compile-only
+:to while postpone if ;t immediate compile-only
+:to repeat swap postpone again postpone then ;t immediate compile-only
+:to else =jump lit , here #0 , swap postpone then ;t immediate compile-only
 :to for =>r lit , here ;t immediate compile-only
 :to aft drop =jump lit , here #0 , align here swap ;t immediate compile-only
 :to next =next lit , 2/ , ;t immediate compile-only
@@ -844,8 +825,8 @@ atlast {root-voc} t! setlast
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;t
- :t ini only forth definitions decimal postpone [ 
- #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
+:t ini only forth definitions decimal postpone [
+  #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini
   {options} half lit [@] lsb if to' drop lit {echo} half lit [!] then
@@ -915,5 +896,4 @@ primitive t@ double mkck check t!
 atlast {last} t!
 save-target subleq.dec
 there .end
-cr
 bye

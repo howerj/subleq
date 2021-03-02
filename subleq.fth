@@ -38,20 +38,18 @@
 \
 only forth definitions hex
 
-\ : wordlist here 0 , ;
-\ : constant create , does> @ ;
 
 wordlist constant meta.1
 wordlist constant target.1
 wordlist constant assembler.1
 wordlist constant target.only.1
 
- : (order) 
+: (order) 
    dup if
     1- swap >r recurse over r@ xor if
      1+ r> -rot exit then r> drop then ;
- : -order  get-order (order) nip set-order ;
- : +order  dup >r -order get-order r> swap 1+ set-order ;
+: -order  get-order (order) nip set-order ;
+: +order  dup >r -order get-order r> swap 1+ set-order ;
 
 
 meta.1 +order definitions
@@ -86,13 +84,10 @@ size =cell - tep !
 :m tc, there tc! 1 tdp +! ;m
 :m t, there t! 2 tdp +! ;m
  :m $literal talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
-\ :m $literal talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
 :m tallot tdp +! ;m
-\ :m parse-word bl word ?nul count ;m
 :m thead
   talign
   there tlast @ t, tlast !
-\  parse-word talign dup tc, for aft count tc, then next drop talign ;m
   parse-word talign dup tc, 0 ?do count tc, loop drop talign ;m
 :m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m
  :m >neg dup 7FFF u> if 10000 - then ;
@@ -160,7 +155,7 @@ meta.1 +order definitions
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
-  B tvar {options}   \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
+  B tvar {options}  \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
   0 tvar h         \ dictionary pointer
   0 tvar primitive \ any address lower than this one must be a primitive
   0 tvar check     \ used for system checksum
@@ -910,5 +905,4 @@ primitive t@ double mkck check t!
 atlast {last} t!
 save-target subleq.dec
 there .end
-cr .( STICK A FORK IN ME, I'M DONE ) . cr
 bye
