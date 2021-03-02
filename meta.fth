@@ -361,7 +361,7 @@ there 2/ primitive t!
 :m ;t $BABE <>
      if abort" unstructured" then talign opExit target.only.1 -order ;m
 :m :s tlast @ {system} t@ tlast ! $F00D :t drop 0 ;m
-:m :so :to ;m
+:m :so  tlast @ {system} t@ tlast ! $F00D :to drop 0 ;m
 :m ;s drop $BABE ;t $F00D <> if abort" unstructured" then tlast @ {system} t! tlast ! ;m
 
 
@@ -417,10 +417,9 @@ there 2/ primitive t!
 :to over opOver ;t
 :to swap opSwap ;t
 :to rshift rshift  ;t
-\ TODO: move to system vocab
-:to [@] [@] ;t
-:to [!] [!] ;t
-:to lsb lsb ;t
+:so [@] [@] ;s
+:so [!] [!] ;s
+:so lsb lsb ;s
 :to sp@ sp@ ;t
 :to sp! sp! ;t
 :to 0> op0> ;t
@@ -617,7 +616,7 @@ there 2/ primitive t!
 :t #> 2drop hld @ =tbufend lit over - ;t  ( u -- b u )
 :s extract dup >r um/mod r> swap >r um/mod r> rot ;s ( ud ud -- ud u )
 :s digit 9 lit over < 7 lit and + [char] 0 + ;s ( u -- c )
-:t #  2 lit ?depth #0 base @ extract digit hold ;t ( d -- d)
+:t #  2 lit ?depth #0 base @ extract digit hold ;t ( d -- d )
 :t #s begin # 2dup ( d0= -> ) or 0= until ;t       ( d -- 0 )
 :t <# =tbufend lit hld ! ;t                        ( -- )
 :t sign 0< if [char] - hold then ;t                ( n -- )
@@ -758,8 +757,8 @@ atlast {root-voc} t! setlast
  dup get-current (search-wordlist) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s
 :s ?nul dup c@ if exit then -10 lit throw ;s ( b -- : check for zero length strings )
-:to char bl word ?nul count drop c@ ;t \ TODO: Reuse in [char]
-:to [char] bl word ?nul count drop c@ =push lit , , ;t immediate
+:to char bl word ?nul count drop c@ ;t
+:to [char] postpone char =push lit , , ;t immediate
 :to ; ( ?quit ) $BABE lit <> if -16 lit throw then =unnest lit , postpone [
  ?dup if get-current ! exit then ;t immediate compile-only ( -- wid )
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
