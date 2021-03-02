@@ -48,7 +48,7 @@ meta.1 +order definitions
 
    2 constant =cell
 4000 constant size ( 16384 bytes, 8192 cells )
-4000 constant =end
+8000 constant =end
   40 constant =stksz
  100 constant =buf
 0008 constant =bksp
