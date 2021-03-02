@@ -1,4 +1,4 @@
-: nop ; ' nop <ok> !
+' nop <ok> ! \ TODO: add error handling vector
 \ Project: Cross Compiler and eForth interpreter for a SUBLEQ CPU
 \ License: The Unlicense
 \ Author:  Richard James Howe
@@ -14,11 +14,6 @@
 \ - <https://www.bradrodriguez.com/papers/>
 \ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
 \
-\ * Implement an LZSS CODEC to compress the Forth image and decompress it
-\ as run time to save as much space (and obfuscate the image). In reality, a
-\ decompressor would only be of much utility if written in SUBLEQ assembly, as
-\ the SUBLEQ VM is the most compressible part of the image. Perhaps the C VM
-\ could contain the decompressor? It already contains the program loader.
 \ * Fix the bugs in "u<".
 \ * Adding a system word order and putting in non-standard words in it will
 \ speed up compilation.
@@ -33,21 +28,20 @@
 \
 \ It could perhaps be code-golfed to be smaller, or integrated with the image
 \ when it is generated through meta-compilation.
+\ * The USER variable words and mechanisms would be useful, along with the
+\ cooperative multithreading words.
 \
 only forth definitions hex
 
- : wordlist here 0 , ;
- : constant create , does> @ ;
-
-wordlist constant meta.1
-wordlist constant target.1
-wordlist constant assembler.1
-wordlist constant target.only.1
+variable meta.1
+variable target.1
+variable assembler.1
+variable target.only.1
 
 meta.1 +order definitions
 
    2 constant =cell
-4000 constant size ( 16384 bytes, 8192 cells )
+4000 constant size
 8000 constant =end
   40 constant =stksz
  100 constant =buf
@@ -77,12 +71,12 @@ size =cell - tep !
 :m t, there t! 2 tdp +! ;m
 :m $literal talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
 :m tallot tdp +! ;m
- :m parse-word bl word ?nul count ;m
+:m parse-word bl word ?nul count ;m
 :m thead
   talign
   there tlast @ t, tlast !
   parse-word talign dup tc, for aft count tc, then next drop talign ;m
-:m #dec dup >r abs 0 <# #s r> sign #> $A emit type ;m  ( n -- print number )
+:m #dec dup >r abs 0 <# $A hold #s r> sign #> type ;m  ( n -- print number )
 :m mdump aligned begin ?dup while swap dup @ #dec cell+ swap cell - repeat drop ;m
 :m save-target parse-word drop decimal tflash there mdump ;m
 :m .h base @ >r hex     u. r> base ! ;m
@@ -429,6 +423,7 @@ there 2/ primitive t!
 :to xor opXor ;t
 :to and opAnd ;t
 :to * opMul ;t
+:to nop ;t
 :t <emit> {emit} lit ;t
 :t <key>  {key} lit ;t
 :t <literal> {literal} lit ;t
@@ -564,7 +559,7 @@ there 2/ primitive t!
 :t mod  /mod drop ;t
 :t /    /mod nip ;t
 :t depth {sp0} half lit [@] sp@ - 1- ;t
-:t (emit) opEmit ( negate #-1 [!] ) ;t
+:t (emit) opEmit ;t
 :t echo {echo} half lit [@] execute ;t
 :t tap dup echo over c! 1+ ;t ( bot eot cur c -- bot eot cur )
 :t ktap ( bot eot cur c -- bot eot cur )
@@ -588,7 +583,6 @@ there 2/ primitive t!
 :t query TERMBUF lit =buf lit accept #tib lit ! drop #0 >in ! ;t ( -- : get line)
 :t ?depth depth > if -4 lit throw then ;t ( u -- : check stack depth )
 :t -trailing for aft bl over r@ + c@ < if r> 1+ exit then then next #0 ;t
-\ TODO: Move "bl = " into match/no-match
 :t look ( b u c xt -- b u : skip until *xt* test succeeds )
   swap >r rot rot
   begin
@@ -749,9 +743,7 @@ atlast {root-voc} t! setlast
 :t +order dup >r -order get-order r> swap 1+ set-order ;t ( wid -- )
 :t word ( 2 lit ?depth ) parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :t ?unique ( a -- a : print a message if a word definition is not unique )
- dup get-current (search-wordlist) 0= if exit then
-   ( source type )
- space
+ dup get-current (search-wordlist) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;t
 :t ?nul dup c@ if exit then -10 lit throw ;t ( b -- : check for zero length strings )
 :to char bl word ?nul count drop c@ ;t \ TODO: Reuse in [char]
@@ -761,7 +753,6 @@ atlast {root-voc} t! setlast
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
   last , bl word ?nul ?unique count + h lit ! align $BABE lit postpone ] ;t
 :to :noname here $BABE lit ] ;t
-\ TODO: implement mark, reuse things in control structures
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
 :to again =jump  lit , 2/ , ;t immediate compile-only
@@ -778,13 +769,14 @@ atlast {root-voc} t! setlast
 :t recurse {last} lit @ cfa compile, ;t immediate compile-only
 :t toggle tuck @ xor swap ! ;t
 :t hide bl word find ?found nfa $80 lit swap toggle ;t
-:t (var) r> 2* ;t
+:t (var) r> 2* ;t compile-only
+:t (const) r> [@] ;t compile-only
 :t create postpone : drop postpone [ compile (var) get-current ! ;t
 :to variable create #0 , ;t
+:to constant create cell negate allot compile (const) , ;t
 :t >body cell+ ;t ( a -- a )
-\ TODO: Optimize?
-:t (does) r> r> 2* swap >r ;t
-:t (comp) r> {last} lit @ cfa ! ;t
+:t (does) r> r> 2* swap >r ;t compile-only
+:t (comp) r> {last} lit @ cfa ! ;t compile-only
 :t does> compile (comp) compile (does) ;t immediate compile-only
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
@@ -801,8 +793,6 @@ atlast {root-voc} t! setlast
 :to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
 :to \ source drop @ {in} half lit [!] ;t immediate
-\ :to ?\ if source drop @ {in} half lit [!] then ;t immediate
-\ :to ?exit if rdrop exit then ;t
 :to immediate last nfa @ $40 lit or last nfa ! ;t
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
@@ -841,6 +831,10 @@ atlast {root-voc} t! setlast
    ?dup if dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
 :t cold {cold} half lit [@] execute ;t
+\ A "many" word is useful for debugging hardware, it would work like this
+\     $FF led toggle 100 ms many
+\ By looking at "source", the same line can be executed again, and again,
+\ until a key is hit. "marker" would also be a good word to add.
 
 \ :t tst
 \   for dup r@  2dup < >r 2dup > r> = if 2dup . . cr then 2drop next drop ;t
@@ -890,7 +884,7 @@ t' (emit) {emit} t!
 t' ok {ok} t!
 t' (literal) {literal} t!
 atlast {forth-wordlist} t!
-{forth-wordlist} {current} t! \ Correct?
+{forth-wordlist} {current} t!
 there h t!
 primitive t@ double mkck check t!
 atlast {last} t!

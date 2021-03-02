@@ -31,6 +31,10 @@ failing that:
 requires [gforth](https://gforth.org/) to compile. Unless you want to change
 the eForth interpreter just stick with the pre-generated image.
 
+There is a HTML/CSS/JavaScript version of this system, available in
+[subleq.htm](subleq.htm). It would be nice to make a physical SUBLEQ processor
+in either 7400 series Integrated Circuits, or more realistically, on an FPGA.
+
 Happy hacking, and a shiny penny for anyone that manages to do something
 useful with this project!
 
