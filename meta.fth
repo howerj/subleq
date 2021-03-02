@@ -14,25 +14,6 @@
 \ - <https://www.bradrodriguez.com/papers/>
 \ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
 \
-\ * Fix the bugs in "u<".
-\ * Adding a system word order and putting in non-standard words in it will
-\ speed up compilation.
-\ * A 16-bit SUBLEQ machine could be made in either VHDL or 7400 series
-\ Integrated Circuits, just for fun, or a web-page for the SUBLEQ system.
-\ * The following interpreter should be used in the complete project:
-\
-\   #include <stdio.h>
-\   int main(int x,char**v){FILE*f=fopen(v[1],"r");short p=0,m[1<<16],*i=m;
-\   while(fscanf(f,"%hd",i++)>0);for(;p>=0;){int a=m[p++],b=m[p++],c=m[p++];
-\   a<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])<=0?p=c:0;}}
-\
-\ It could perhaps be code-golfed to be smaller, or integrated with the image
-\ when it is generated through meta-compilation.
-\ * After self-hosting is complete, we can vector off literal and use that
-\ to make the code more readable. An error vector might be useful as well.
-\ * The USER variable words and mechanisms would be useful, along with the
-\ cooperative multithreading words.
-\
 only forth definitions hex
 system +order
 
@@ -742,7 +723,7 @@ atlast 0 setlast
   1- repeat ;t
 atlast {root-voc} t! setlast
 
-:t definitions context @ set-current ;t     ( -- )
+:t definitions context @ set-current ;t
 :t (order) ( w wid*n n -- wid*n w n )
   dup if
     1- swap >r (order) over r@ xor
@@ -750,13 +731,13 @@ atlast {root-voc} t! setlast
       1+ r> -rot exit
     then rdrop
   then ;t
-:t -order get-order (order) nip set-order ;t             ( wid -- )
-:t +order dup >r -order get-order r> swap 1+ set-order ;t ( wid -- )
-:t word ( 2 lit ?depth ) parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
+:t -order get-order (order) nip set-order ;t
+:t +order dup >r -order get-order r> swap 1+ set-order ;t
+:t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :s ?unique ( a -- a : print a message if a word definition is not unique )
  dup get-current (search-wordlist) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s
-:s ?nul dup c@ if exit then -10 lit throw ;s ( b -- : check for zero length strings )
+:s ?nul dup c@ if exit then -10 lit throw ;s
 :to char bl word ?nul count drop c@ ;t
 :to [char] postpone char =push lit , , ;t immediate
 :to ; ( ?quit ) $BABE lit <> if -16 lit throw then =unnest lit , postpone [
@@ -830,15 +811,17 @@ atlast {root-voc} t! setlast
   ." License: The Unlicense / Public Domain" cr ;s
 :s ini only forth definitions decimal postpone [
   #0 {in} half lit [!] #-1 {dpl} half lit [!] ;s ( -- )
-:t quit ( -- : interpreter loop, and more, does more than most QUITs )
-  ini
+:s opts
   {options} half lit [@] lsb if to' drop lit {echo} half lit [!] then
   {options} half lit [@] 4 lit and if info then
   {options} half lit [@] 2 lit and if
     primitive half lit [@] 2* dup here swap - cksum
     check half lit [@] <> if ." cksum fail" bye then
     {options} half lit [@] 2 lit xor {options} half lit [!]
-  then
+  then ;s
+:t quit ( -- : interpreter loop, and more, does more than most QUITs )
+  ini
+  opts
   begin
    query t' eval lit catch
    ?dup if dup space . [char] ? emit cr #-1 = if bye then ini then
