@@ -124,8 +124,9 @@ size =cell - tep !
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
 :m half ( dup 1 and abort" unaligned" ) 2/ ;m
 :m double 2* ;m
-:m t' ' >body @ ;m
-:m to' target.only.1 +order ' >body @ target.only.1 -order ;m
+:m (') bl word find ?found cfa ;m \ TODO: make ' more standards compliant?
+:m t' (') >body @ ;m
+:m to' target.only.1 +order (') >body @ target.only.1 -order ;m
 :m tcksum taligned dup $C0DE - $FFFF and >r
    begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat
    drop r> ;m
@@ -785,7 +786,7 @@ atlast {root-voc} t! setlast
 :to again =jump  lit , 2/ , ;t immediate compile-only
 :to if =jumpz lit , here #0 , ;t immediate compile-only
 :to then here 2/ swap ! ;t immediate compile-only
-\ :to while postpone if ;t immediate compile-only
+ :to while postpone if ;t immediate compile-only
 \ :to repeat swap postpone again postpone then ;t immediate compile-only
 \ :to else =jump lit , here #0 , swap postpone then ;t immediate compile-only
 :to for =>r lit , here ;t immediate compile-only
@@ -797,7 +798,7 @@ atlast {root-voc} t! setlast
 :t toggle tuck @ xor swap ! ;t
 :t hide bl word find ?found nfa $80 lit swap toggle ;t
 :t (var) r> 2* ;t
-\ :t create postpone : drop postpone [ compile (var) get-current ! ;t
+:t create postpone : drop postpone [ compile (var) get-current ! ;t
 :to variable create #0 , ;t
 :t >body cell+ ;t ( a -- a )
 \ TODO: Optimize?
@@ -816,7 +817,7 @@ atlast {root-voc} t! setlast
 :to abort" compile (abort) [char] " word count + h half lit [!] align ;t immediate compile-only
 :to ( [char] ) parse 2drop ;t immediate
 :to .( [char] ) parse type ;t immediate
-\ :to postpone bl word find ?found cfa compile, ;t immediate
+:to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
 :to \ source drop @ {in} half lit [!] ;t immediate
 \ :to ?\ if source drop @ {in} half lit [!] then ;t immediate
@@ -843,10 +844,10 @@ atlast {root-voc} t! setlast
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;t
-\ :t ini only forth definitions decimal postpone [
-\  #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
+ :t ini only forth definitions decimal postpone [ 
+ #0 {in} half lit [!] #-1 {dpl} half lit [!] ;t ( -- )
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
-\  ini
+  ini
   {options} half lit [@] lsb if to' drop lit {echo} half lit [!] then
   {options} half lit [@] 4 lit and if info then
   {options} half lit [@] 2 lit and if
@@ -856,7 +857,7 @@ atlast {root-voc} t! setlast
   then
   begin
    query t' eval lit catch
-   ?dup if dup space . [char] ? emit cr #-1 = if bye then then \ ini then
+   ?dup if dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
 :t cold {cold} half lit [@] execute ;t
 
@@ -914,5 +915,5 @@ primitive t@ double mkck check t!
 atlast {last} t!
 save-target subleq.dec
 there .end
-cr .( STICK A FORK IN ME, I'M DONE ) . cr
+cr
 bye
