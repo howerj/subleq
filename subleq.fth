@@ -20,7 +20,7 @@ wordlist constant target.1
 wordlist constant assembler.1
 wordlist constant target.only.1
 
-: (order) 
+: (order)
    dup if
     1- swap >r recurse over r@ xor if
      1+ r> -rot exit then r> drop then ;
@@ -58,7 +58,7 @@ size =cell - tep !
 :m talign there 1 and tdp +! ;m
 :m tc, there tc! 1 tdp +! ;m
 :m t, there t! 2 tdp +! ;m
-:m $literal 
+:m $literal
   talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
 :m tallot tdp +! ;m
 :m thead
@@ -74,9 +74,9 @@ size =cell - tep !
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
 :m atlast tlast @ ;m
-:m tvar   
+:m tvar
   get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
-:m label: 
+:m label:
   get-current >r meta.1 set-current create r> set-current there ,    does> @ ;m
 :m tdown =cell negate and ;m
 :m tnfa =cell + ;m ( pwd -- nfa : move to name field address )
@@ -165,7 +165,7 @@ label: entry       \ used to set entry point in next cell
   0 tvar {current} \ vocabulary which new definitions are added to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
   0 tvar {root-voc} \ absolute minimum vocabulary
-  0 tvar {system}  \ system functions vocabulary 
+  0 tvar {system}  \ system functions vocabulary
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
   =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
   =end =stksz 4 * - =buf - constant TERMBUF \ pad buffer space
@@ -174,7 +174,7 @@ label: entry       \ used to set entry point in next cell
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
 :m INV ( b -- : invert NB. b - a = b + ~a + 1 )
-  INVREG ZERO dup INVREG SUB dup INVREG swap MOV DEC ;m 
+  INVREG ZERO dup INVREG SUB dup INVREG swap MOV DEC ;m
 :m ++sp {sp} DEC ;m
 :m --sp {sp} INC ;m
 :m --rp {rp} DEC ;m
@@ -235,7 +235,7 @@ assembler.1 -order
 :a opDrop tos {sp} iLOAD --sp ;a
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
-:a opMul w {sp} iLOAD t ZERO 
+:a opMul w {sp} iLOAD t ZERO
    begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
 :a opExit ip {rp} iLOAD --rp ;a
 :a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
@@ -246,7 +246,7 @@ assembler.1 -order
 :a sp! tos {sp} MOV ;a
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
 :a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a
-:a opNext w {rp} iLOAD 
+:a opNext w {rp} iLOAD
    w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then ip INC --rp ;a
 :a lsb
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
@@ -259,21 +259,19 @@ assembler.1 -order
   tos w MOV 0 t MOV w if neg1 t MOV then w DEC w +if neg1 t MOV then
   tos {sp} iLOAD --sp t if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 :a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
-:a op0= 
+:a op0=
    tos w MOV neg1 tos MOV w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
-:a op0< 
+:a op0<
    tos w MOV 0 tos MOV w -if neg1 tos MOV then w INC w -if neg1 tos MOV then ;a
-:a op< 
-    w {sp} iLOAD --sp 
-    tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a 
-:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a ( Has similar bug to op< )
+:a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
+:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
 :a op2* tos tos ADD ;a
 :a op2/
   bwidth w MOV
   x ZERO
   begin w DEC w while
     x x ADD
-    tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+  tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
     bl1 if x INC then
     tos tos ADD
   repeat
@@ -285,7 +283,7 @@ assembler.1 -order
   x ZERO
   begin w while
     x x ADD
-    tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+  tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
     bl1 if x INC then
     tos tos ADD
     w DEC
@@ -298,8 +296,8 @@ assembler.1 -order
   --sp
   begin w while
    x x ADD
-   tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
-   t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+ tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+ t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
    bl1 bl2 ADD bl2 if x INC then
    t t ADD
    tos tos ADD
@@ -313,8 +311,8 @@ assembler.1 -order
   --sp
   begin w while
    x x ADD
-   tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
-   t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+ tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+ t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
    bl1 bl2 ADD bl2 INC one bl1 MOV bl2 if 0 bl1 MOV then bl1 x ADD
    t t ADD
    tos tos ADD
@@ -328,8 +326,8 @@ assembler.1 -order
   --sp
   begin w while
    x x ADD
-   tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
-   t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+ tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+ t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
    bl1 bl2 ADD two bl2 ADD one bl1 MOV bl2 if 0 bl1 MOV then bl1 x ADD
    t t ADD
    tos tos ADD
@@ -343,10 +341,10 @@ there 2/ primitive t!
      if abort" unstructured" then talign opExit target.only.1 -order ;m
 :m :s tlast @ {system} t@ tlast ! $F00D :t drop 0 ;m
 :m :so  tlast @ {system} t@ tlast ! $F00D :to drop 0 ;m
-:m ;s drop $BABE ;t $F00D <> if abort" unstructured" then 
+:m ;s drop $BABE ;t $F00D <> if abort" unstructured" then
    tlast @ {system} t! tlast ! ;m
 :m :r tlast @ {root-voc} t@ tlast ! $F00D :t drop 0 ;m
-:m ;r drop $BABE ;t $F00D <> if abort" unstructured" then 
+:m ;r drop $BABE ;t $F00D <> if abort" unstructured" then
    tlast @ {root-voc} t! tlast ! ;m
 
 :m lit         opPush t, ;m
@@ -517,7 +515,7 @@ there 2/ primitive t!
     then ;t
 :t abort #-1 throw ;t
 :s (abort) do$ swap if count type abort then drop ;s
-:t um+ 
+:t um+
   2dup + >r r@ #0 >= >r 2dup and 0< r> or >r or 0< r> and invert 1+ r> swap ;t
 :t dnegate invert >r invert #1 um+ r> + ;t ( d -- d )
 :t d+ >r swap >r um+ r> + r> + ;t         ( d d -- d )
@@ -648,7 +646,7 @@ there 2/ primitive t!
   begin
     dup
   while
-    dup nfa count $9F lit ( $1F:word-length + $80:hidden ) 
+    dup nfa count $9F lit ( $1F:word-length + $80:hidden )
     and r@ count compare 0=
     if ( found! )
       rdrop
@@ -676,7 +674,7 @@ there 2/ primitive t!
 :s (literal) state @ if =push lit , , then ;s
 :t literal <literal> @ execute ;t immediate ( u -- )
 :t compile, 2/ align , ;t  ( xt -- )
-:s ?found 
+:s ?found
    if exit then space count type [char] ? emit cr -D lit throw ;s ( u f -- )
 :t interpret ( b -- )
   find ?dup if
@@ -777,9 +775,9 @@ there 2/ primitive t!
 :to exit compile opExit ;t immediate compile-only
 :to ." compile .$
   [char] " word count + h half lit [!] align ;t immediate compile-only
-:to $" compile ($) 
+:to $" compile ($)
   [char] " word count + h half lit [!] align ;t immediate compile-only
-:to abort" compile (abort) 
+:to abort" compile (abort)
   [char] " word count + h half lit [!] align ;t immediate compile-only
 :to ( [char] ) parse 2drop ;t immediate
 :to .( [char] ) parse type ;t immediate
@@ -789,11 +787,6 @@ there 2/ primitive t!
 :to immediate last nfa @ $40 lit or last nfa ! ;t
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
-\ :t h.
-\  dup $C lit rshift            digit emit
-\  dup $8 lit rshift $F lit and digit emit
-\  dup $4 lit rshift $F lit and digit emit
-\                    $F lit and digit emit space ;t
 :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
 :s cksum aligned dup $C0DE lit - >r
      begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;s

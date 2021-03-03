@@ -35,11 +35,11 @@
 		<p>This system contains a <a href=" https://en.wikipedia.org/wiki/One-instruction_set_computer">SUBLEQ</a>
 		virtual machine, a 16-bit version, that will automatically boot an eForth image, which is a variant of
 		<a href="https://en.wikipedia.org/wiki/Forth_(programming_language)">Forth</a>, a stack
-		based programming language suitable for constrained system.  What makes this system special 
-		is that SUBLEQ is a Turing complete <i>single instruction</i> machine, the instruction 
-		is short for "Subtract and Branch If Less Than Or Equal To Zero", it does a little more 
-		than that, but it means we do not have access to multiplication, division, addition, 
-		or even the basic bitwise operators such as AND or XOR in the base instruction set, 
+		based programming language suitable for constrained system.  What makes this system special
+		is that SUBLEQ is a Turing complete <i>single instruction</i> machine, the instruction
+		is short for "Subtract and Branch If Less Than Or Equal To Zero", it does a little more
+		than that, but it means we do not have access to multiplication, division, addition,
+		or even the basic bitwise operators such as AND or XOR in the base instruction set,
 		nor calls, returns, or indirect load/stores. They all have to be synthesized.</p>
 		<p>Each SUBLEQ instruction consists of three arguments; 'a', 'b', 'c'. 'a' and 'b'
 		are addresses from which arguments are loaded from, the contents of the address
@@ -91,9 +91,9 @@
 		<input type="checkbox" id="optimizeImage" name="optimizeImage" onchange="saveCookies()" checked>
 		<label for="optimizeImage">remove trailing zeros on save </label><br>
 		<label for="base">base </label>
-		<input type="number" id="base" name="base" min="2" max="36" onchange="saveCookies()" value=16> 
+		<input type="number" id="base" name="base" min="2" max="36" onchange="saveCookies()" value=16>
 	</div>
-	<div id="image" class="tabcontent"> 
+	<div id="image" class="tabcontent">
 		<div>
 			<label class="buttonHack"> <button hidden onclick="saveImage()">save</button> <span>save</span></label>
 			<label for="fname">file</label>
@@ -201,7 +201,7 @@
 
 		function loadImage() {
 			document.getElementById('input').files[0].text().then(t => loadImageFromString(t));
-			pc = 0; 
+			pc = 0;
 			screen = "";
 			input = init;
 			updateDump();
@@ -305,7 +305,7 @@
 
 		function putch(ch) {
 			let o = String.fromCharCode(ch);
-			if (o === '\u0008') { backspace(); } 
+			if (o === '\u0008') { backspace(); }
 			else { screen += o; }
 			queueDraw();
 		}
