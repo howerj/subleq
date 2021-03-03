@@ -20,9 +20,7 @@
 	</style>
 </head>
 <body>
-	<!-- TODO: Better image loading, other programs (Hello world!), debugger, make 
-	this a standalone project with a built in image that is loaded if fetch() fails, 
-	save settings with a cookie. -->
+	<!-- TODO: Better image loading/Default Image -->
 	<div class="tab">
 		<button class="tablinks" onclick="openTab(event, 'subleq')">subleq</button>
 		<button class="tablinks" onclick="openTab(event, 'image')">image</button>
@@ -85,14 +83,14 @@
 		</table>
 	</div>
 	<div id="settings" class="tabcontent">
-		<input type="checkbox" id="highlight" name="highlight" checked>
+		<input type="checkbox" id="highlight" name="highlight" onchange="cookies()" checked>
 		<label for="highlight">highlight </label><br>
-		<input type="checkbox" id="scroll" name="scroll" checked>
+		<input type="checkbox" id="scroll" name="scroll" onchange="cookies()"  checked>
 		<label for="scroll">scroll </label><br>
-		<input type="checkbox" id="optimizeImage" name="optimizeImage" checked>
+		<input type="checkbox" id="optimizeImage" name="optimizeImage" onchange="cookies()" checked>
 		<label for="optimizeImage">remove trailing zeros on save </label><br>
 		<label for="base">base </label>
-		<input type="number" id="base" name="base" min="2" max="36" value=16> 
+		<input type="number" id="base" name="base" min="2" max="36" onchange="cookies()" value=16> 
 	</div>
 	<div id="image" class="tabcontent"> 
 		<div>
@@ -156,7 +154,6 @@
 			case "image": updateDump(); break;
 			}
 		}
-		document.getElementsByClassName('tablinks')[0].click();
 
 		function saveImage() {
 			function isNumeric(str) {
@@ -209,24 +206,40 @@
 
 		function setCookie(cname, cvalue, exdays) {
 			let d = new Date();
-			d.setTime(d.getTime() + (exdays*24*60*60*1000));
+			d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
 			let expires = "expires="+ d.toUTCString();
-			document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+			document.cookie = cname + "=" + cvalue + "; SameSite=Strict; " + expires + ";path=/";
 		}
 
-		function getCookie(cname) {
+		function getCookie(cname, defaultVal) {
 			let name = cname + "=";
 			let decodedCookie = decodeURIComponent(document.cookie);
 			let ca = decodedCookie.split(';');
-			for(let i = 0; i <ca.length; i++) {
+			for(let i = 0; i < ca.length; i++) {
 				let c = ca[i];
 				while (c.charAt(0) == ' ')
 					c = c.substring(1);
 				if (c.indexOf(name) == 0)
 					return c.substring(name.length, c.length);
 			}
-			return "";
+			return defaultVal;
 		}
+
+		function cookies() {
+			let expire = 10;
+			setCookie("highlight",     document.getElementById('highlight').checked,     expire);
+			setCookie("scroll",        document.getElementById('scroll').checked,        expire);
+			setCookie("optimizeImage", document.getElementById('optimizeImage').checked, expire);
+			setCookie("base",          document.getElementById("base").value,            expire);
+		}
+
+		function setCookies() {
+			document.getElementById('highlight').checked     = getCookie("highlight", true) == "true" ? true : false;
+			document.getElementById('scroll').checked        = getCookie("scroll", true) == "true" ? true : false;
+			document.getElementById('optimizeImage').checked = getCookie("optimizeImage", true) == "true" ? true : false;
+			document.getElementById("base").value            = getCookie("base", 16);
+		}
+
 
 		function esc(i) {
 			i = i.replace(/&/g, '&amp;');
@@ -325,6 +338,8 @@
 			window.location.reload();
 		}
 
+		document.getElementsByClassName('tablinks')[0].click();
+		setCookies();
 		console.log("loading file: " + file);
 		fetch(file).then(r => r.text()).then(t => { loadImageFromString(t); queueDraw(); });
 		console.log("subleq running...");
