@@ -1,3 +1,4 @@
+' nop <ok> !
 \ Project: Cross Compiler and eForth interpreter for a SUBLEQ CPU
 \ License: The Unlicense
 \ Author:  Richard James Howe
@@ -13,19 +14,23 @@
 \ - <https://www.bradrodriguez.com/papers/>
 \ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
 \
+\ Notes:
+\
+\ - If "see", the decompiler, was advanced enough we could dispense with the
+\ source code, which is an interesting concept.
+\ - The image could be compressed with LZSS to save on space.
+\ - A website with an interactive simulator is available at:
+\   <https://github.com/howerj/subleq-js>
+\ - It would be nice to make a 7400 Integrated Circuit board that could run
+\ and execute this code, or a project in VHDL for an FPGA that could do it.
+\
 only forth definitions hex
+system +order
 
-wordlist constant meta.1
-wordlist constant target.1
-wordlist constant assembler.1
-wordlist constant target.only.1
-
-: (order)
-   dup if
-    1- swap >r recurse over r@ xor if
-     1+ r> -rot exit then r> drop then ;
-: -order  get-order (order) nip set-order ;
-: +order  dup >r -order get-order r> swap 1+ set-order ;
+variable meta.1
+variable target.1
+variable assembler.1
+variable target.only.1
 
 meta.1 +order definitions
 
@@ -59,18 +64,16 @@ size =cell - tep !
 :m tc, there tc! 1 tdp +! ;m
 :m t, there t! 2 tdp +! ;m
 :m $literal
-  talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
+  talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
 :m tallot tdp +! ;m
+:m parse-word bl word ?nul count ;m
 :m thead
   talign
   there tlast @ t, tlast !
-  parse-word talign dup tc, 0 ?do count tc, loop drop talign ;m
-:m dec# base @ >r decimal dup >r abs 0 <# =lf hold #s r> sign #> r> base ! ;m
-:m >neg dup 7FFF u> if 10000 - then ;
-:m save-target ( <name> -- )
-  parse-word w/o create-file throw
-  there 0 do i t@  over >r >neg dec# r> write-file throw =cell +loop
-  close-file throw ;m
+  parse-word talign dup tc, for aft count tc, then next drop talign ;m
+:m #dec dup >r abs 0 <# $A hold #s r> sign #> type ;m  ( n -- print number )
+:m mdump aligned begin ?dup while swap dup @ #dec cell+ swap cell - repeat drop ;m
+:m save-target parse-word drop decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
 :m atlast tlast @ ;m
@@ -85,13 +88,14 @@ size =cell - tep !
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
 :m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
-:m (') ' ;m
+:m (') bl word find ?found cfa ;m
 :m t' (') >body @ ;m
 :m to' target.only.1 +order (') >body @ target.only.1 -order ;m
 :m tcksum taligned dup $C0DE - $FFFF and >r
    begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat
    drop r> ;m
 :m mkck dup there swap - tcksum ;m
+system -order
 
 \ ---------------------------------- Forth VM --------------------------------
 

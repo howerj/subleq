@@ -1,21 +1,17 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O3
 
-.PHONY: all clean test meta run
+.PHONY: all clean test run
 
-all: subleq.dec subleq
-
-test:
-	./t
+all: subleq
 
 run: subleq subleq.dec
 	./subleq subleq.dec
 
-meta: subleq meta.fth
-	./subleq subleq.dec < meta.fth > meta.dec
-
-subleq.dec: subleq.fth
-	gforth subleq.fth
+test: subleq
+	./subleq subleq.dec < subleq.fth > 1.dec
+	./subleq      1.dec < subleq.fth > 2.dec
+	diff -w 1.dec 2.dec
 
 clean:
-	rm -fv subleq *.hex *.exe
+	rm -fv subleq 1.dec 2.dec *.exe
 
