@@ -234,9 +234,9 @@
 		}
 
 		function setCookies() {
-			document.getElementById('highlight').checked     = getCookie("highlight", true) == "true" ? true : false;
-			document.getElementById('scroll').checked        = getCookie("scroll", true) == "true" ? true : false;
-			document.getElementById('optimizeImage').checked = getCookie("optimizeImage", true) == "true" ? true : false;
+			document.getElementById('highlight').checked     = getCookie("highlight", "true") == "true" ? true : false;
+			document.getElementById('scroll').checked        = getCookie("scroll", "true") == "true" ? true : false;
+			document.getElementById('optimizeImage').checked = getCookie("optimizeImage", "true") == "true" ? true : false;
 			document.getElementById("base").value            = getCookie("base", 16);
 		}
 
