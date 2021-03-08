@@ -35,7 +35,8 @@ like so:
 
 There is a website available that runs an interactive SUBLEQ interpreter
 in the browser in case you do not want to both compiling things, it is
-available at <https://github.com/howerj/subleq-js>.
+available at <https://github.com/howerj/subleq-js>. Or if you just want to
+try it out directly <https://howerj.github.io/subleq.htm>.
 
 Happy hacking, and a shiny penny for anyone that manages to do something
 useful with this project!
