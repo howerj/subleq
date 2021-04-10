@@ -1,4 +1,4 @@
-' nop <ok> !
+defined eforth [if] ' nop <ok> ! [then]
 \ Project: Cross Compiler and eForth interpreter for a SUBLEQ CPU
 \ License: The Unlicense
 \ Author:  Richard James Howe
@@ -18,19 +18,42 @@
 \
 \ - If "see", the decompiler, was advanced enough we could dispense with the
 \ source code, which is an interesting concept.
+\ - The image could determine the virtual machine size, and adjust itself
+\ accordingly, it would not even require a power-of-two integer width, just
+\ one capable of accessing 16KiB of memory (or 14-bits at least).
 \ - The image could be compressed with LZSS to save on space.
 \ - A website with an interactive simulator is available at:
 \   <https://github.com/howerj/subleq-js>
 \ - It would be nice to make a 7400 Integrated Circuit board that could run
 \ and execute this code, or a project in VHDL for an FPGA that could do it.
+\ - The virtual machine could be sped up with optimization magic
+\
+\ TODO: Fast div by 10 for numbers, run in subleq & gforth, fix comparison
+\ Require "defined" word, [if], [else], [then], Move To Front dictionary, 
 \
 only forth definitions hex
-system +order
+defined eforth [if] system +order [then]
 
-variable meta.1
-variable target.1
-variable assembler.1
-variable target.only.1
+defined eforth 0= [if]
+  : (order) ( w wid*n n -- wid*n w n )
+    dup if
+      1- swap >r recurse over r@ xor
+      if
+        1+ r> -rot exit
+      then rdrop
+    then ;
+  : -order get-order (order) nip set-order ;
+  : +order dup >r -order get-order r> swap 1+ set-order ;
+  wordlist constant meta.1
+  wordlist constant target.1
+  wordlist constant assembler.1
+  wordlist constant target.only.1
+[else]
+  variable meta.1
+  variable target.1
+  variable assembler.1
+  variable target.only.1
+[then]
 
 meta.1 +order definitions
 
@@ -54,6 +77,7 @@ size =cell - tep !
 
 : :m meta.1 +order definitions : ;
 : ;m postpone ; ; immediate
+:m tcell 2 ;m
 :m there tdp @ ;m
 :m tc! tflash + c! ;m
 :m tc@ tflash + c@ ;m
@@ -63,16 +87,28 @@ size =cell - tep !
 :m talign there 1 and tdp +! ;m
 :m tc, there tc! 1 tdp +! ;m
 :m t, there t! 2 tdp +! ;m
-:m $literal
-  talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
 :m tallot tdp +! ;m
-:m parse-word bl word ?nul count ;m
-:m thead
-  talign
-  there tlast @ t, tlast !
-  parse-word talign dup tc, for aft count tc, then next drop talign ;m
+defined eforth [if]
+  :m parse-word bl word ?nul count ;m
+  :m $literal
+    talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
+  :m thead
+    talign
+    there tlast @ t, tlast !
+    parse-word talign dup tc, for aft count tc, then next drop talign ;m
+  :m limit ;m
+[else]
+  :m $literal 
+    talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
+  :m thead
+    talign
+    there tlast @ t, tlast !
+    parse-word talign dup tc, 0 ?do count tc, loop drop talign ;m
+  :m limit $FFFF and ;m
+[then]
 :m #dec dup >r abs 0 <# $A hold #s r> sign #> type ;m  ( n -- print number )
-:m mdump aligned begin ?dup while swap dup @ #dec cell+ swap cell - repeat drop ;m
+:m mdump aligned 
+    begin ?dup while swap dup @ limit #dec tcell + swap tcell - repeat drop ;m
 :m save-target parse-word drop decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
@@ -88,14 +124,19 @@ size =cell - tep !
 :m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
 :m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
-:m (') bl word find ?found cfa ;m
-:m t' (') >body @ ;m
-:m to' target.only.1 +order (') >body @ target.only.1 -order ;m
+defined eforth [if]
+  :m (') bl word find ?found cfa ;m
+  :m t' (') >body @ ;m
+  :m to' target.only.1 +order (') >body @ target.only.1 -order ;m
+[else]
+  :m t' ' >body @ ;m
+  :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
+[then]
 :m tcksum taligned dup $C0DE - $FFFF and >r
    begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat
    drop r> ;m
 :m mkck dup there swap - tcksum ;m
-system -order
+defined eforth [if] system -order [then]
 
 \ ---------------------------------- Forth VM --------------------------------
 
@@ -794,13 +835,22 @@ there 2/ primitive t!
 :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
 :s cksum aligned dup $C0DE lit - >r
      begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;s
+:t defined bl word find nip 0<> ;t
+:t [then] ;t immediate
+:t [else] 
+   begin 
+     begin bl word dup c@ while 
+       find drop cfa dup t' [else] lit = swap t' [then] lit = or 
+       if exit then repeat query again ;t immediate
+:t [if] if exit then postpone [else] ;t immediate
 :s ok state @ 0= if ."  ok" cr then ;s
 :t eval
    begin bl word dup c@ while
      interpret #1 ?depth
    repeat drop {ok} half lit [@] execute ;t ( "word" -- )
+:t eforth $0106 lit ;t ( -- version )
 :s info cr
-  ." Project: eForth v1.5 " ( here . ) cr
+  ." Project: eForth v1.6 " ( here . ) cr
   ." Author:  Richard James Howe" cr
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr

@@ -12,6 +12,9 @@ test: subleq
 	./subleq      1.dec < subleq.fth > 2.dec
 	diff -w 1.dec 2.dec
 
+gforth.dec: subleq.fth
+	gforth $< > $@
+
 clean:
 	rm -fv subleq 1.dec 2.dec *.exe
 
