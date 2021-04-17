@@ -15,6 +15,9 @@ test: subleq
 gforth.dec: subleq.fth
 	gforth $< > $@
 
+gforth: subleq gforth.dec
+	./subleq gforth.dec
+
 clean:
 	rm -fv subleq 1.dec 2.dec *.exe
 

@@ -13,48 +13,49 @@ defined eforth [if] ' nop <ok> ! [then]
 \ - <https://github.com/samawati/j1eforth>
 \ - <https://www.bradrodriguez.com/papers/>
 \ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
+\ - <https://www.bradrodriguez.com/papers/mtasking.html> For multitasking
+\ - <https://forth-standard.org/standard/block> For the block word-set
 \
 \ Notes:
 \
 \ - If "see", the decompiler, was advanced enough we could dispense with the
 \ source code, which is an interesting concept.
 \ - The image could determine the virtual machine size, and adjust itself
-\ accordingly, it would not even require a power-of-two integer width, just
-\ one capable of accessing 16KiB of memory (or 14-bits at least).
+\ accordingly, it would not even require a power-of-two integer width.
 \ - The image could be compressed with LZSS to save on space.
 \ - A website with an interactive simulator is available at:
 \   <https://github.com/howerj/subleq-js>
 \ - It would be nice to make a 7400 Integrated Circuit board that could run
 \ and execute this code, or a project in VHDL for an FPGA that could do it.
-\ - The virtual machine could be sped up with optimization magic
-\
-\ TODO: Fast div by 10 for numbers, run in subleq & gforth, fix comparison
-\ Require "defined" word, [if], [else], [then], Move To Front dictionary, 
-\
+\ - The virtual machine could be sped up with optimization magic, it should
+\ be noted that nearly half the memory used by this system is used by the
+\ virtual machine needed to run a higher level language. Also of note, it
+\ would be possible to make the virtual machine support the TASK and USER
+\ word-sets, allowing for cooperative multitasking.
+\ 
+\ TODO: Fast div by 10 for numbers, run in subleq & gforth, fix comparison,
+\ support more of the numeric words (perhaps one that accepts a buffer).
+\ Perhaps the TASK and USER word set could also be supported.
 only forth definitions hex
+
+: (order) ( w wid*n n -- wid*n w n )
+  dup if
+    1- swap >r recurse over r@ xor
+    if
+      1+ r> -rot exit
+    then rdrop
+  then ;
+: -order get-order (order) nip set-order ;
+: +order dup >r -order get-order r> swap 1+ set-order ;
+
+defined eforth [if] : wordlist here cell allot 0 over ! ; [then]
+
+wordlist constant meta.1
+wordlist constant target.1
+wordlist constant assembler.1
+wordlist constant target.only.1
+
 defined eforth [if] system +order [then]
-
-defined eforth 0= [if]
-  : (order) ( w wid*n n -- wid*n w n )
-    dup if
-      1- swap >r recurse over r@ xor
-      if
-        1+ r> -rot exit
-      then rdrop
-    then ;
-  : -order get-order (order) nip set-order ;
-  : +order dup >r -order get-order r> swap 1+ set-order ;
-  wordlist constant meta.1
-  wordlist constant target.1
-  wordlist constant assembler.1
-  wordlist constant target.only.1
-[else]
-  variable meta.1
-  variable target.1
-  variable assembler.1
-  variable target.only.1
-[then]
-
 meta.1 +order definitions
 
    2 constant =cell
@@ -89,23 +90,15 @@ size =cell - tep !
 :m t, there t! 2 tdp +! ;m
 :m tallot tdp +! ;m
 defined eforth [if]
+  :m tpack dup tc, for aft count tc, then next drop ;m
   :m parse-word bl word ?nul count ;m
-  :m $literal
-    talign [char] " word count dup tc, for aft count tc, then next drop talign ;m
-  :m thead
-    talign
-    there tlast @ t, tlast !
-    parse-word talign dup tc, for aft count tc, then next drop talign ;m
   :m limit ;m
 [else]
-  :m $literal 
-    talign [char] " word count dup tc, 0 ?do count tc, loop drop talign ;m
-  :m thead
-    talign
-    there tlast @ t, tlast !
-    parse-word talign dup tc, 0 ?do count tc, loop drop talign ;m
+  :m tpack dup tc, 0 ?do count tc, loop drop ;m
   :m limit $FFFF and ;m
 [then]
+:m $literal talign [char] " word count tpack talign ;m
+:m thead talign there tlast @ t, tlast ! parse-word talign tpack talign ;m
 :m #dec dup >r abs 0 <# $A hold #s r> sign #> type ;m  ( n -- print number )
 :m mdump aligned 
     begin ?dup while swap dup @ limit #dec tcell + swap tcell - repeat drop ;m
@@ -209,6 +202,7 @@ label: entry       \ used to set entry point in next cell
   0 tvar {context} $E tallot \ vocabulary context
   0 tvar {current} \ vocabulary which new definitions are added to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
+  0 tvar {editor}   \ editor vocabulary
   0 tvar {root-voc} \ absolute minimum vocabulary
   0 tvar {system}  \ system functions vocabulary
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
@@ -388,9 +382,12 @@ there 2/ primitive t!
 :m :so  tlast @ {system} t@ tlast ! $F00D :to drop 0 ;m
 :m ;s drop $BABE ;t $F00D <> if abort" unstructured" then
    tlast @ {system} t! tlast ! ;m
-:m :r tlast @ {root-voc} t@ tlast ! $F00D :t drop 0 ;m
-:m ;r drop $BABE ;t $F00D <> if abort" unstructured" then
+:m :r tlast @ {root-voc} t@ tlast ! $BEEF :t drop 0 ;m
+:m ;r drop $BABE ;t $BEEF <> if abort" unstructured" then
    tlast @ {root-voc} t! tlast ! ;m
+:m :e tlast @ {editor} t@ tlast ! $DEAD :t drop 0 ;m
+:m ;e drop $BABE ;t $DEAD <> if abort" unstructured" then
+   tlast @ {editor} t! tlast ! ;m
 
 :m lit         opPush t, ;m
 :m [char] char opPush t, ;m
@@ -763,15 +760,6 @@ there 2/ primitive t!
     begin ?dup while dup nfa c@ $80 lit and 0= if dup .id then @ repeat cr
   1- repeat ;r
 :t definitions context @ set-current ;t
-:t (order) ( w wid*n n -- wid*n w n )
-  dup if
-    1- swap >r (order) over r@ xor
-    if
-      1+ r> -rot exit
-    then rdrop
-  then ;t
-:t -order get-order (order) nip set-order ;t
-:t +order dup >r -order get-order r> swap 1+ set-order ;t
 :t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :s ?unique ( a -- a : print a message if a word definition is not unique )
  dup get-current (search-wordlist) 0= if exit then space
@@ -844,11 +832,11 @@ there 2/ primitive t!
        if exit then repeat query again ;t immediate
 :t [if] if exit then postpone [else] ;t immediate
 :s ok state @ 0= if ."  ok" cr then ;s
-:t eval
+:s eval
    begin bl word dup c@ while
      interpret #1 ?depth
-   repeat drop {ok} half lit [@] execute ;t ( "word" -- )
-:t eforth $0106 lit ;t ( -- version )
+   repeat drop {ok} half lit [@] execute ;s ( "word" -- )
+:r eforth $0106 lit ;r ( -- version )
 :s info cr
   ." Project: eForth v1.6 " ( here . ) cr
   ." Author:  Richard James Howe" cr
@@ -873,6 +861,55 @@ there 2/ primitive t!
    ?dup if dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
 :t cold {cold} half lit [@] execute ;t
+
+\ TODO: Create an in memory file system optimized for constrained system
+\ that only requires the block word set ("block", "blk", "update", "flush").
+\ This could then be used to make a DOS like program OS for computer games...
+\ TODO: Blank editing area
+0 tvar {blk}
+0 tvar {dirty}
+$2F tvar {scr}
+$C00 tvar {ms}
+:s calibration {ms} lit ;s
+:t bell 7 lit emit ;t
+:t ms for $800 lit for next next ;t
+:s csi $1B lit emit $5B lit emit ;s
+:t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
+:t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
+:t blk {blk} lit ;t
+:t scr {scr} lit ;t
+:t editor root-voc {editor} lit 2 lit set-order ;t
+:t b/buf 1024 lit ;t
+:t block dup blk ! $A lit lshift ;t ( NB. No mass storage! )
+:t update {dirty} lit ! ;t
+:t flush ;t ( NOP, no mass storage )
+:t blank bl fill ;t
+:t list dup scr ! block $F lit for $3F lit for count emit next cr next drop ;t
+:e q only forth ;e
+:e l scr @ list ;e
+:e x scr @ block b/buf blank ;e
+\ :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
+\ :t set-input <ok> ! id ! >in ! #tib 2! ;t     ( n1...n5 -- )
+\ : evaluate ( a u -- )
+\  get-input 2>r 2>r >r
+\  #0 #-1 #0 set-input
+\  ' eval catch
+\  r> 2r> 2r> set-input
+\  throw ;t
+\ : loadline line evaluate ;             ( k u -- )
+\ : load 0 l/b-1 for 2dup 2>r loadline 2r> 1+ next 2drop ; ( k -- )
+\ :e e scr @ load ;e
+\ :e ia c/l* + [block] + tib >in @ +
+\   swap source nip >in @ - cmove postpone \ update ;e
+\ :e i 0 swap ia ;e
+\ :e k [line] c/l blank ;e         ( u -- : delete/Kill line )
+\ :e w words ;e
+\ ;e h ." help" cr ;e
+:e s update flush ;e
+:e n  #1 scr +! l ;e
+:e p #-1 scr +! l ;e
+:e ? scr @ . ;e
+:e d >r scr @ block r> 4 lit lshift + $10 lit blank ;e
 
 \ ---------------------------------- Image Generation ------------------------
 
