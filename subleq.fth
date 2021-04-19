@@ -33,7 +33,7 @@ defined eforth [if] ' nop <ok> ! [then]
 \ would be possible to make the virtual machine support the TASK and USER
 \ word-sets, allowing for cooperative multitasking.
 \
-\ TODO: Fast div by 10 for numbers, run in subleq & gforth, fix comparison,
+\ TODO: Fast div by 10 for numbers, fix comparison,
 \ support more of the numeric words (perhaps one that accepts a buffer).
 \ Perhaps the TASK and USER word set could also be supported. Fix "COLD",
 \ it does not work quite right.
@@ -94,9 +94,9 @@ defined eforth [if]
   :m tpack dup tc, for aft count tc, then next drop ;m
   :m parse-word bl word ?nul count ;m
   :m limit ;m
-\ [else]
-\  :m tpack dup tc, 0 ?do count tc, loop drop ;m
-\  :m limit $FFFF and ;m
+[else]
+  :m tpack dup tc, 0 ?do count tc, loop drop ;m
+  :m limit $FFFF and ;m
 [then]
 :m $literal talign [char] " word count tpack talign ;m
 :m thead talign there tlast @ t, tlast ! parse-word talign tpack talign ;m
@@ -122,9 +122,9 @@ defined eforth [if]
   :m (') bl word find ?found cfa ;m
   :m t' (') >body @ ;m
   :m to' target.only.1 +order (') >body @ target.only.1 -order ;m
-\ [else]
-\  :m t' ' >body @ ;m
-\  :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
+ [else]
+  :m t' ' >body @ ;m
+  :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 [then]
 :m tcksum taligned dup $C0DE - $FFFF and >r
    begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat
@@ -536,7 +536,7 @@ there 2/ primitive t!
 :t 2@ dup cell+ @ swap @ ;t
 :t source {tib} lit 2@ ;t
 :t 2>r r> swap >r swap >r >r ;t compile-only
-:t 2r> r> r> swap r> swap >r ;t compile-only
+:t 2r> r> r> swap r> swap >r nop ;t compile-only
 :t count dup 1+ swap c@ ;t
 :s logical 0<> if #1 else #0 then ;s
 :t aligned dup lsb logical + ;t
@@ -621,7 +621,8 @@ there 2/ primitive t!
   while
     key dup bl - $5F lit u< if tap else ktap then
   repeat drop over - ;t
-:t query source drop =buf lit accept {tib} lit ! drop #0 >in ! ;t
+:t tib source drop ;t
+:t query tib =buf lit accept {tib} lit ! drop #0 >in ! ;t
 :s ?depth depth > if -4 lit throw then ;s ( u -- : check stack depth )
 :t -trailing for aft bl over r@ + c@ < if r> 1+ exit then then next #0 ;t
 :s look ( b u c xt -- b u : skip until *xt* test succeeds )
@@ -636,7 +637,7 @@ there 2/ primitive t!
 :s unmatch if 0> exit then 0<> ;s ( c1 c2 -- t )
 :s match unmatch invert ;s        ( c1 c2 -- t )
 :t parse ( c -- b u ; <string> )
-    >r source drop >in @ + {tib} lit @ >in @ - r@
+    >r tib >in @ + {tib} lit @ >in @ - r@
     >r over r> swap >r >r
     r@ t' unmatch lit look 2dup
     r> t' match   lit look swap r> - >r - r> 1+  ( b u c -- b u delta )
@@ -828,7 +829,7 @@ there 2/ primitive t!
 :to .( [char] ) parse type ;t immediate
 :to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
-:to \ source drop @ {in} half lit [!] ;t immediate
+:to \ tib @ {in} half lit [!] ;t immediate
 :to immediate last nfa @ $40 lit or last nfa ! ;t
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
@@ -878,6 +879,9 @@ there 2/ primitive t!
 \ TODO: Create an in memory file system optimized for constrained system
 \ that only requires the block word set ("block", "blk", "update", "flush").
 \ This could then be used to make a DOS like program OS for computer games...
+\ TODO: Editor should catch errors, use different 'ini'
+\ TODO: Make a simpler list? With the following format:
+\       number line cr
 :s calibration {ms} lit ;s
 :t bell 7 lit emit ;t
 :t ms for $800 lit for next next ;t
@@ -889,7 +893,7 @@ there 2/ primitive t!
 :t editor root-voc {editor} lit 2 lit set-order ;t
 :t b/buf $400 lit ;t
 :t block dup blk ! $A lit lshift ;t ( NB. No mass storage! )
-:t update {dirty} lit ! ;t
+:t update #-1 {dirty} lit ! ;t
 :t flush ;t ( NOP, no mass storage )
 :t blank bl fill ;t
 :t within over - >r - r> u< ;t ( u lo hi -- t )
@@ -899,7 +903,9 @@ there 2/ primitive t!
 :s head space space space space $40 lit banner cr ;s
 :s display dup $20 lit $7F lit within 0= if drop [char] . then emit ;s
 :t list page cr head dup scr ! block $F lit
-    for $F lit r@ - 3 lit u.r left $3F lit for count display next right cr next drop head ;t
+    for 
+      $F lit r@ - 3 lit u.r left $3F lit for count display next right cr 
+    next drop head ;t
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
 :t set-input <ok> ! {id} lit ! >in ! {tib} lit 2! ;t     ( n1...n5 -- )
 :t evaluate ( a u -- ) \ TODO: Fix/Buggy
@@ -925,17 +931,18 @@ there 2/ primitive t!
 :e q only forth ;e
 :e ? scr @ . ;e
 :e l scr @ list scr @ . cr ;e
-:e x scr @ block b/buf blank ;e
-:e e scr @ load ;e
-\ :e ia c/l* + [block] + tib >in @ +
-\   swap source nip >in @ - cmove postpone \ update ;e
-\ :e i 0 swap ia ;e
+:e e q scr @ load editor ;e
+:e ia 6 lit lshift + scr @ block + tib >in @ +
+   swap source nip >in @ - cmove
+   tib @ {in} lit ! ( <- *OR* postpone \ ) update l ;e
+:e i #0 swap ia ;e
 :e w words ;e
 :e s update flush ;e
 :e n  #1 scr +! l ;e
 :e p #-1 scr +! l ;e
-:e r scr ! ;e
-:e d >r scr @ block r> 6 lit lshift + $40 lit blank ;e
+:e r scr ! l ;e
+:e x scr @ block b/buf blank l ;e
+:e d >r scr @ block r> 6 lit lshift + $40 lit blank l ;e
 
 \ ---------------------------------- Image Generation ------------------------
 
