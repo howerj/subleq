@@ -16,13 +16,27 @@ defined eforth [if] ' nop <ok> ! [then]
 \ - <https://www.bradrodriguez.com/papers/mtasking.html> For multitasking
 \ - <https://forth-standard.org/standard/block> For the block word-set
 \
+\ The way this cross compiler works is the following:
+\
+\ 1. An assembler for the SUBLEQ machine is made.
+\ 2. A virtual machine is made with that assembler that can support
+\    higher level programming constructs, specifically, the easy execution
+\    of Forth.
+\ 3. Forth word definitions are built up, which are then used to construct
+\    a full Forth interpreter.
+\ 4. The resulting image is output to standard out.
+\
+\ Check the references for more detailed examples for other systems. Some
+\ keywords that will help are; Forth, Meta-compilation, Cross compiler, eForth,
+\ 8086 eForth, JonesForth.
+\
 \ Notes:
 \
 \ - If "see", the decompiler, was advanced enough we could dispense with the
 \ source code, which is an interesting concept.
-\ - The image could determine the virtual machine size, and adjust itself
+\ - The eForth image could determine the SUBLEQ machine size, and adjust itself
 \ accordingly, it would not even require a power-of-two integer width.
-\ - The image could be compressed with LZSS to save on space.
+\ - The eForth image could be compressed with LZSS to save on space.
 \ - A website with an interactive simulator is available at:
 \   <https://github.com/howerj/subleq-js>
 \ - It would be nice to make a 7400 Integrated Circuit board that could run
@@ -32,10 +46,13 @@ defined eforth [if] ' nop <ok> ! [then]
 \ virtual machine needed to run a higher level language. Also of note, it
 \ would be possible to make the virtual machine support the TASK and USER
 \ word-sets, allowing for cooperative multitasking.
-\ 
-\ TODO: Fast div by 10 for numbers, run in subleq & gforth, fix comparison,
+\ - The BLOCK word-set does not use mass storage, but maps blocks to memory,
+\ if a mass storage peripheral were to be added these functions would have
+\ to be modified. It might be nice to make a Forth File System based on blocks
+\ as well, then this system could act like a primitive DOS.
+\
+\ TODO: Fast dump, fix comparison,
 \ support more of the numeric words (perhaps one that accepts a buffer).
-\ Perhaps the TASK and USER word set could also be supported.
 only forth definitions hex
 
 : (order) ( w wid*n n -- wid*n w n )
@@ -99,8 +116,12 @@ defined eforth [if]
 [then]
 :m $literal talign [char] " word count tpack talign ;m
 :m thead talign there tlast @ t, tlast ! parse-word talign tpack talign ;m
+defined eforth [if]
+:m #dec dup 0< if [char] - emit then (.) $A emit ;m ( n -- print number )
+[else]
 :m #dec dup >r abs 0 <# $A hold #s r> sign #> type ;m  ( n -- print number )
-:m mdump aligned 
+[then]
+:m mdump aligned
     begin ?dup while swap dup @ limit #dec tcell + swap tcell - repeat drop ;m
 :m save-target parse-word drop decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
@@ -121,7 +142,7 @@ defined eforth [if]
   :m (') bl word find ?found cfa ;m
   :m t' (') >body @ ;m
   :m to' target.only.1 +order (') >body @ target.only.1 -order ;m
-[else]
+ [else]
   :m t' ' >body @ ;m
   :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 [then]
@@ -198,7 +219,13 @@ label: entry       \ used to set entry point in next cell
   0 tvar {in}      \ position in query string
   0 tvar {handler} \ throw/catch handler
   0 tvar {last}    \ last defined word
-  0 tvar #tib      \ terminal input buffer
+  $2F tvar {blk}   \ current loaded block
+  $2F tvar {scr}   \ last viewed screen
+  0 tvar {dirty}   \ is block dirty?
+  0 tvar {id}      \ executing from block or terminal?
+  $C00 tvar {ms}   \ delay loop calibration variable
+  0 tvar {tib}     \ terminal input buffer
+  =cell tallot
   0 tvar {context} $E tallot \ vocabulary context
   0 tvar {current} \ vocabulary which new definitions are added to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
@@ -207,7 +234,7 @@ label: entry       \ used to set entry point in next cell
   0 tvar {system}  \ system functions vocabulary
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
   =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
-  =end =stksz 4 * - =buf - constant TERMBUF \ pad buffer space
+  =end =stksz 4 * - =buf - constant TERMBUF \ buffer space
   TERMBUF =buf + constant =tbufend
 
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
@@ -373,6 +400,21 @@ assembler.1 -order
    w DEC
   repeat
   x tos MOV ;a
+:a opDivMod
+  w {sp} iLOAD
+  t ZERO
+  begin
+    one x MOV
+    w -if 0 x MOV then
+    x
+  while
+    t INC
+    tos w SUB
+  repeat
+  tos w ADD
+  t DEC
+  t tos MOV
+  w {sp} iSTORE ;a
 
 there 2/ primitive t!
 
@@ -427,9 +469,9 @@ there 2/ primitive t!
 :m exit opExit ;m
 :m 2/ op2/ ;m
 
-:ht #0 0 lit ;t
-:ht #1 1 lit ;t
-:ht #-1 FFFF lit ;t
+:s #0 0 lit ;s
+:s #1 1 lit ;s
+:s #-1 FFFF lit ;s
 :to 1+ 1+ ;t
 :to 1- 1- ;t
 :to + + ;t
@@ -468,6 +510,7 @@ there 2/ primitive t!
 :t #vocs 8 lit ;t
 :t context {context} lit ;t
 :t here h half lit [@] ;t
+:t pad here =buf lit + ;t
 :t base {base} lit ;t
 :t dpl {dpl} lit ;t
 :t hld {hld} lit ;t
@@ -475,7 +518,6 @@ there 2/ primitive t!
 :t >in {in} lit ;t
 :t hex  $10 lit {base} half lit [!] ;t
 :t decimal $A lit {base} half lit [!] ;t
-:t source TERMBUF lit #tib half lit [@] ;t
 :s many #0 {in} half lit [!] ;s
 :t state {state} lit ;t
 :t ] #-1 {state} half lit [!] ;t
@@ -525,6 +567,12 @@ there 2/ primitive t!
    >r over xor r> and xor swap ! ;t
 :t max 2dup < if nip else drop then ;t
 :t min 2dup > if nip else drop then ;t
+:t source-id {id} lit @ ;t
+:t 2! tuck ! cell+ ! ;t    
+:t 2@ dup cell+ @ swap @ ;t
+:t source {tib} lit 2@ ;t
+:t 2>r r> swap >r swap >r >r ;t compile-only
+:t 2r> r> r> swap r> swap >r nop ;t compile-only
 :t count dup 1+ swap c@ ;t
 :s logical 0<> if #1 else #0 then ;s
 :t aligned dup lsb logical + ;t
@@ -609,7 +657,8 @@ there 2/ primitive t!
   while
     key dup bl - $5F lit u< if tap else ktap then
   repeat drop over - ;t
-:t query TERMBUF lit =buf lit accept #tib lit ! drop #0 >in ! ;t
+:t tib source drop ;t
+:t query tib =buf lit accept {tib} lit ! drop #0 >in ! ;t
 :s ?depth depth > if -4 lit throw then ;s ( u -- : check stack depth )
 :t -trailing for aft bl over r@ + c@ < if r> 1+ exit then then next #0 ;t
 :s look ( b u c xt -- b u : skip until *xt* test succeeds )
@@ -624,7 +673,7 @@ there 2/ primitive t!
 :s unmatch if 0> exit then 0<> ;s ( c1 c2 -- t )
 :s match unmatch invert ;s        ( c1 c2 -- t )
 :t parse ( c -- b u ; <string> )
-    >r source drop >in @ + #tib lit @ >in @ - r@
+    >r tib >in @ + {tib} lit @ >in @ - r@
     >r over r> swap >r >r
     r@ t' unmatch lit look 2dup
     r> t' match   lit look swap r> - >r - r> 1+  ( b u c -- b u delta )
@@ -641,7 +690,9 @@ there 2/ primitive t!
 :t sign 0< if [char] - hold then ;t                ( n -- )
 :t u.r >r #0 <# #s #>  r> over - spaces type ;t
 :t u.     #0 <# #s #> space type ;t
-:t . dup >r abs #0 <# #s r> sign #> space type ;t  ( n -- print number )
+:t (.) abs base @ opDivMod ?dup if (.) then digit emit ;t
+:t . space dup 0< if [char] - emit then (.) ;t
+\ :t . dup >r abs #0 <# #s r> sign #> space type ;t  ( n -- print number )
 :t >number ( ud b u -- ud b u : convert string to number )
   begin
     2dup >r >r drop c@ base @        ( get next character )
@@ -816,7 +867,7 @@ there 2/ primitive t!
 :to .( [char] ) parse type ;t immediate
 :to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
-:to \ source drop @ {in} half lit [!] ;t immediate
+:to \ tib @ {in} half lit [!] ;t immediate
 :to immediate last nfa @ $40 lit or last nfa ! ;t
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
@@ -824,13 +875,13 @@ there 2/ primitive t!
 :s cksum aligned dup $C0DE lit - >r
      begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;s
 :t defined bl word find nip 0<> ;t
-:t [then] ;t immediate
-:t [else] 
-   begin 
-     begin bl word dup c@ while 
-       find drop cfa dup t' [else] lit = swap t' [then] lit = or 
+:to [then] ;t immediate
+:to [else]
+   begin
+     begin bl word dup c@ while
+       find drop cfa dup to' [else] lit = swap to' [then] lit = or
        if exit then repeat query again ;t immediate
-:t [if] if exit then postpone [else] ;t immediate
+:to [if] if exit then postpone [else] ;t immediate
 :s ok state @ 0= if ."  ok" cr then ;s
 :s eval
    begin bl word dup c@ while
@@ -844,7 +895,8 @@ there 2/ primitive t!
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;s
 :s ini only forth definitions decimal postpone [
-  #0 {in} half lit [!] #-1 {dpl} half lit [!] ;s ( -- )
+  #0 {in} half lit [!] #-1 {dpl} half lit [!]
+  TERMBUF lit #0 {tib} lit 2! ;s ( -- )
 :s opts
   {options} half lit [@] lsb if to' drop lit {echo} half lit [!] then
   {options} half lit [@] 4 lit and if info then
@@ -862,14 +914,9 @@ there 2/ primitive t!
   again ;t
 :t cold {cold} half lit [@] execute ;t
 
-\ TODO: Create an in memory file system optimized for constrained system
-\ that only requires the block word set ("block", "blk", "update", "flush").
-\ This could then be used to make a DOS like program OS for computer games...
-\ TODO: Blank editing area
-0 tvar {blk}
-0 tvar {dirty}
-$2F tvar {scr}
-$C00 tvar {ms}
+\ TODO: Editor should catch errors, use different 'ini'
+\ TODO: Make a simpler list? With the following format:
+\       number line cr
 :s calibration {ms} lit ;s
 :t bell 7 lit emit ;t
 :t ms for $800 lit for next next ;t
@@ -878,38 +925,59 @@ $C00 tvar {ms}
 :t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
 :t blk {blk} lit ;t
 :t scr {scr} lit ;t
-:t editor root-voc {editor} lit 2 lit set-order ;t
-:t b/buf 1024 lit ;t
+:t b/buf $400 lit ;t
 :t block dup blk ! $A lit lshift ;t ( NB. No mass storage! )
-:t update {dirty} lit ! ;t
-:t flush ;t ( NOP, no mass storage )
+:t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
+:t update #-1 {dirty} lit ! ;t
 :t blank bl fill ;t
-:t list dup scr ! block $F lit for $3F lit for count emit next cr next drop ;t
+:t within over - >r - r> u< ;t ( u lo hi -- t )
+:s banner 1- for [char] - emit next ;s
+:s right [char] | emit ;s
+:s left right ;s
+:s head space space space space $40 lit banner cr ;s
+:s display dup $20 lit $7F lit within 0= if drop [char] . then emit ;s
+:t list page cr head dup scr ! block $F lit ( NB. Could simplify this )
+    for 
+      $F lit r@ - 3 lit u.r left $3F lit for count display next right cr 
+    next drop head ;t
+:t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
+:t set-input <ok> ! {id} lit ! >in ! {tib} lit 2! ;t     ( n1...n5 -- )
+:t evaluate ( a u -- ) \ TODO: Fix/Buggy
+  get-input 2>r 2>r >r
+  #0 #-1 t' nop lit set-input
+  t' eval lit catch
+  r> 2r> 2r> set-input
+  throw ;t
+:s line 6 lit lshift swap block + $40 lit ;s
+:s loadline line evaluate ;s
+:t load #0 $F lit for 2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
+\ 0 [if]
+\ :e h
+\   ."                    FORTH BLOCK EDITOR" cr
+\   ."   w - list commands.               l - list current block." cr
+\   ."   x - execute current block.       e - erase current block." cr
+\   ."   h - display help.                s - save and flush." cr
+\   ."   q - exit back to forth.          ? - display current block." cr
+\   ."   n - move to next block.          p - move to previous block." cr
+\   ." # d - delete line #.             # r - set current block." cr
+\   ." # i ... - replace line.      #1 #2 ia ... - replace line at." cr ;e
+\ [then]
+:t editor {editor} lit #1 set-order ;t
 :e q only forth ;e
-:e l scr @ list ;e
-:e x scr @ block b/buf blank ;e
-\ :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
-\ :t set-input <ok> ! id ! >in ! #tib 2! ;t     ( n1...n5 -- )
-\ : evaluate ( a u -- )
-\  get-input 2>r 2>r >r
-\  #0 #-1 #0 set-input
-\  ' eval catch
-\  r> 2r> 2r> set-input
-\  throw ;t
-\ : loadline line evaluate ;             ( k u -- )
-\ : load 0 l/b-1 for 2dup 2>r loadline 2r> 1+ next 2drop ; ( k -- )
-\ :e e scr @ load ;e
-\ :e ia c/l* + [block] + tib >in @ +
-\   swap source nip >in @ - cmove postpone \ update ;e
-\ :e i 0 swap ia ;e
-\ :e k [line] c/l blank ;e         ( u -- : delete/Kill line )
-\ :e w words ;e
-\ ;e h ." help" cr ;e
+:e ? scr @ . ;e
+:e l scr @ list ."      BLK " scr @ . cr ;e
+:e e q scr @ load editor ;e
+:e ia 6 lit lshift + scr @ block + tib >in @ +
+   swap source nip >in @ - cmove tib @ {in} lit ! update l ;e
+:e i #0 swap ia ;e
+:e w words ;e
 :e s update flush ;e
 :e n  #1 scr +! l ;e
 :e p #-1 scr +! l ;e
-:e ? scr @ . ;e
-:e d >r scr @ block r> 4 lit lshift + $10 lit blank ;e
+:e r scr ! l ;e
+:e x scr @ block b/buf blank l ;e
+:e d >r scr @ block r> 6 lit lshift + $40 lit blank l ;e
+
 
 \ ---------------------------------- Image Generation ------------------------
 
