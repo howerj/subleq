@@ -1,6 +1,6 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O3
 
-.PHONY: all clean test run
+.PHONY: all clean test run dump gforth
 
 all: subleq
 
@@ -17,6 +17,9 @@ gforth.dec: subleq.fth
 
 gforth: subleq gforth.dec
 	./subleq gforth.dec
+
+dump: subleq subleq.dec
+	echo "' nop <ok> ! 0 here dump bye" | ./subleq subleq.dec 
 
 clean:
 	rm -fv subleq 1.dec 2.dec *.exe
