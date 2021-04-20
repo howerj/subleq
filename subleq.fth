@@ -498,6 +498,9 @@ there 2/ primitive t!
 :to xor opXor ;t
 :to and opAnd ;t
 :to * opMul ;t
+:s n1 ;s \ BUG: For some reason, this breaks t' nop if not present, or
+	\ is longer than 3 characters. This is probably an alignment or
+	\ This is not a permanent fix...
 :t nop ;t
 :t <ok> {ok} lit ;t
 :s <emit> {emit} lit ;s
@@ -572,7 +575,7 @@ there 2/ primitive t!
 :t 2@ dup cell+ @ swap @ ;t
 :t source {tib} lit 2@ ;t
 :t 2>r r> swap >r swap >r >r ;t compile-only
-:t 2r> r> r> swap r> swap >r nop ;t compile-only
+:t 2r> r> r> swap r> swap >r ;t compile-only
 :t count dup 1+ swap c@ ;t
 :s logical 0<> if #1 else #0 then ;s
 :t aligned dup lsb logical + ;t
@@ -942,9 +945,10 @@ there 2/ primitive t!
     next drop head ;t
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
 :t set-input <ok> ! {id} lit ! >in ! {tib} lit 2! ;t     ( n1...n5 -- )
+\ 0 tvar exe :t xxx exe lit ;t
 :t evaluate ( a u -- ) \ TODO: Fix/Buggy
   get-input 2>r 2>r >r
-  #0 #-1 t' nop lit set-input
+  #0 #-1 ( xxx @ ) ( t' nop lit ) $1D1A lit set-input
   t' eval lit catch
   r> 2r> 2r> set-input
   throw ;t
@@ -977,7 +981,6 @@ there 2/ primitive t!
 :e r scr ! l ;e
 :e x scr @ block b/buf blank l ;e
 :e d >r scr @ block r> 6 lit lshift + $40 lit blank l ;e
-
 
 \ ---------------------------------- Image Generation ------------------------
 
