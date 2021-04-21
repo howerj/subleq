@@ -41,18 +41,16 @@ defined eforth [if] ' nop <ok> ! [then]
 \   <https://github.com/howerj/subleq-js>
 \ - It would be nice to make a 7400 Integrated Circuit board that could run
 \ and execute this code, or a project in VHDL for an FPGA that could do it.
-\ - The virtual machine could be sped up with optimization magic, it should
-\ be noted that nearly half the memory used by this system is used by the
-\ virtual machine needed to run a higher level language. Also of note, it
-\ would be possible to make the virtual machine support the TASK and USER
+\ - The virtual machine could be sped up with optimization magic,
+\ - Half of the memory used is just for the virtual machine that allows Forth
+\ to be written.
+\ - It would be possible to make the virtual machine support the TASK and USER
 \ word-sets, allowing for cooperative multitasking.
 \ - The BLOCK word-set does not use mass storage, but maps blocks to memory,
 \ if a mass storage peripheral were to be added these functions would have
 \ to be modified. It might be nice to make a Forth File System based on blocks
 \ as well, then this system could act like a primitive DOS.
 \
-\ TODO: Fast dump, fix comparison,
-\ support more of the numeric words (perhaps one that accepts a buffer).
 only forth definitions hex
 
 : (order) ( w wid*n n -- wid*n w n )
@@ -85,13 +83,14 @@ meta.1 +order definitions
 000D constant =cr
 007F constant =del
 
-create tflash size cells here over erase allot
+create tflash tflash dup size cells allot size erase
 
 variable tdp
 variable tep
 variable tlast
 size =cell - tep !
 0 tlast !
+0 tdp !
 
 : :m meta.1 +order definitions : ;
 : ;m postpone ; ; immediate
@@ -99,7 +98,7 @@ size =cell - tep !
 :m there tdp @ ;m
 :m tc! tflash + c! ;m
 :m tc@ tflash + c@ ;m
-:m t! over $FF and over tc! swap 8 rshift swap 1+ tc! ;m
+:m t! over FF and over tc! swap 8 rshift swap 1+ tc! ;m
 :m t@ dup tc@ swap 1+ tc@ 8 lshift or ;m
 :m taligned dup 1 and + ;m
 :m talign there 1 and tdp +! ;m
@@ -112,14 +111,14 @@ defined eforth [if]
   :m limit ;m
 [else]
   :m tpack dup tc, 0 ?do count tc, loop drop ;m
-  :m limit $FFFF and ;m
+  :m limit FFFF and ;m
 [then]
 :m $literal talign [char] " word count tpack talign ;m
 :m thead talign there tlast @ t, tlast ! parse-word talign tpack talign ;m
 defined eforth [if]
-:m #dec dup 0< if [char] - emit then (.) $A emit ;m ( n -- print number )
+:m #dec dup 0< if [char] - emit then (.) A emit ;m ( n -- print number )
 [else]
-:m #dec dup >r abs 0 <# $A hold #s r> sign #> type ;m  ( n -- print number )
+:m #dec dup >r abs 0 <# A hold #s r> sign #> type ;m  ( n -- print number )
 [then]
 :m mdump aligned
     begin ?dup while swap dup @ limit #dec tcell + swap tcell - repeat drop ;m
@@ -133,9 +132,9 @@ defined eforth [if]
   get-current >r meta.1 set-current create r> set-current there ,    does> @ ;m
 :m tdown =cell negate and ;m
 :m tnfa =cell + ;m ( pwd -- nfa : move to name field address )
-:m tcfa tnfa dup c@ $1F and + =cell + tdown ;m ( pwd -- cfa )
-:m compile-only tlast @ tnfa t@ $20 or tlast @ tnfa t! ;m ( -- )
-:m immediate    tlast @ tnfa t@ $40 or tlast @ tnfa t! ;m ( -- )
+:m tcfa tnfa dup c@ 1F and + =cell + tdown ;m ( pwd -- cfa )
+:m compile-only tlast @ tnfa t@ 20 or tlast @ tnfa t! ;m ( -- )
+:m immediate    tlast @ tnfa t@ 40 or tlast @ tnfa t! ;m ( -- )
 :m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
 defined eforth [if]
@@ -146,8 +145,8 @@ defined eforth [if]
   :m t' ' >body @ ;m
   :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 [then]
-:m tcksum taligned dup $C0DE - $FFFF and >r
-   begin ?dup while swap dup t@ r> + $FFFF and >r =cell + swap =cell - repeat
+:m tcksum taligned dup C0DE - FFFF and >r
+   begin ?dup while swap dup t@ r> + FFFF and >r =cell + swap =cell - repeat
    drop r> ;m
 :m mkck dup there swap - tcksum ;m
 defined eforth [if] system -order [then]
@@ -196,37 +195,38 @@ label: entry       \ used to set entry point in next cell
   -1 tvar neg1     \ must contain -1
   1 tvar one       \ must contain  1
   2 tvar two       \ must contain  1
- $10 tvar bwidth   \ must contain 16
+ 10 tvar bwidth   \ must contain 16
   0 tvar INVREG    \ temporary register used for inversion only
-  0 tvar {cold}    \ entry point of virtual machine program, set later on
-  0 tvar {key}     \ execution vector for key?
-  0 tvar {emit}    \ execution vector for emit
-  0 tvar {literal} \ execution vector for literal
-  0 tvar {ok}      \ execution vector for .ok
-  0 tvar {echo}    \ execution vector for echo
-  0 tvar ip        \ instruction pointer
   0 tvar w         \ working pointer
   0 tvar x         \ working pointer
   0 tvar t         \ temporary register for Virtual Machine
   0 tvar bl1       \ bitwise extra register
   0 tvar bl2       \ bitwise extra register
   0 tvar bt        \ bitwise extra register
+
+  0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
+  0 tvar {cold}    \ entry point of virtual machine program, set later on
+  0 tvar {key}     \ execution vector for key?
+  0 tvar {emit}    \ execution vector for emit
+  0 tvar {literal} \ execution vector for literal
+  0 tvar {ok}      \ execution vector for .ok
+  0 tvar {echo}    \ execution vector for echo
   0 tvar {state}   \ compiler state
   0 tvar {hld}     \ hold space pointer
-  $A tvar {base}   \ input/output radix
+  A tvar {base}   \ input/output radix
   -1 tvar {dpl}    \ number of places after fraction
   0 tvar {in}      \ position in query string
   0 tvar {handler} \ throw/catch handler
   0 tvar {last}    \ last defined word
-  $2F tvar {blk}   \ current loaded block
-  $2F tvar {scr}   \ last viewed screen
+  2F tvar {blk}   \ current loaded block
+  2F tvar {scr}   \ last viewed screen
   0 tvar {dirty}   \ is block dirty?
   0 tvar {id}      \ executing from block or terminal?
-  $C00 tvar {ms}   \ delay loop calibration variable
-  0 tvar {tib}     \ terminal input buffer
-  =cell tallot
-  0 tvar {context} $E tallot \ vocabulary context
+  F00 tvar {ms}   \ delay loop calibration variable
+  0 tvar {tib}     \ terminal input buffer: cell 1,
+  =cell tallot     \ terminal input buffer: cell 2
+  0 tvar {context} E tallot \ vocabulary context
   0 tvar {current} \ vocabulary which new definitions are added to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
   0 tvar {editor}   \ editor vocabulary
@@ -270,13 +270,13 @@ assembler.1 -order
 :m header >in @ thead >in ! ;m
 :m :ht ( "name" -- : forth routine, no header )
   get-current >r target.1 set-current create
-  r> set-current $BABE talign there ,
+  r> set-current BABE talign there ,
   does> @ 2/ t, ;m
 :m :t header :ht ;m ( "name" -- : forth routine )
 :m :to ( "name" -- : forth, target only routine )
   header
   get-current >r target.only.1 set-current create r> set-current
-  $BABE talign there ,
+  BABE talign there ,
   does> @ 2/ t, ;m
 :m :a ( "name" -- : assembly routine, no header )
   D00D
@@ -418,17 +418,17 @@ assembler.1 -order
 
 there 2/ primitive t!
 
-:m ;t $BABE <>
+:m ;t BABE <>
      if abort" unstructured" then talign opExit target.only.1 -order ;m
-:m :s tlast @ {system} t@ tlast ! $F00D :t drop 0 ;m
-:m :so  tlast @ {system} t@ tlast ! $F00D :to drop 0 ;m
-:m ;s drop $BABE ;t $F00D <> if abort" unstructured" then
+:m :s tlast @ {system} t@ tlast ! F00D :t drop 0 ;m
+:m :so  tlast @ {system} t@ tlast ! F00D :to drop 0 ;m
+:m ;s drop BABE ;t F00D <> if abort" unstructured" then
    tlast @ {system} t! tlast ! ;m
-:m :r tlast @ {root-voc} t@ tlast ! $BEEF :t drop 0 ;m
-:m ;r drop $BABE ;t $BEEF <> if abort" unstructured" then
+:m :r tlast @ {root-voc} t@ tlast ! BEEF :t drop 0 ;m
+:m ;r drop BABE ;t BEEF <> if abort" unstructured" then
    tlast @ {root-voc} t! tlast ! ;m
-:m :e tlast @ {editor} t@ tlast ! $DEAD :t drop 0 ;m
-:m ;e drop $BABE ;t $DEAD <> if abort" unstructured" then
+:m :e tlast @ {editor} t@ tlast ! DEAD :t drop 0 ;m
+:m ;e drop BABE ;t DEAD <> if abort" unstructured" then
    tlast @ {editor} t! tlast ! ;m
 
 :m lit         opPush t, ;m
@@ -498,9 +498,6 @@ there 2/ primitive t!
 :to xor opXor ;t
 :to and opAnd ;t
 :to * opMul ;t
-:s n1 ;s \ BUG: For some reason, this breaks t' nop if not present, or
-	\ is longer than 3 characters. This is probably an alignment or
-	\ This is not a permanent fix...
 :t nop ;t
 :t <ok> {ok} lit ;t
 :s <emit> {emit} lit ;s
@@ -519,8 +516,8 @@ there 2/ primitive t!
 :t hld {hld} lit ;t
 :t bl 20 lit ;t
 :t >in {in} lit ;t
-:t hex  $10 lit {base} half lit [!] ;t
-:t decimal $A lit {base} half lit [!] ;t
+:t hex  10 lit {base} half lit [!] ;t
+:t decimal A lit {base} half lit [!] ;t
 :s many #0 {in} half lit [!] ;s
 :t state {state} lit ;t
 :t ] #-1 {state} half lit [!] ;t
@@ -564,9 +561,9 @@ there 2/ primitive t!
 :t pick sp@ + [@] ;t
 :t +! 2/ tuck [@] + swap [!] ;t
 :t lshift begin ?dup while 1- swap 2* swap repeat ;t
-:t c@ dup @ swap lsb if 8 lit rshift else $FF lit and then ;t
-:t c!  swap $FF lit and dup 8 lit lshift or swap
-   tuck dup @ swap lsb 0= $FF lit xor
+:t c@ dup @ swap lsb if 8 lit rshift else FF lit and then ;t
+:t c!  swap FF lit and dup 8 lit lshift or swap
+   tuck dup @ swap lsb 0= FF lit xor
    >r over xor r> and xor swap ! ;t
 :t max 2dup < if nip else drop then ;t
 :t min 2dup > if nip else drop then ;t
@@ -613,7 +610,7 @@ there 2/ primitive t!
 :t dnegate invert >r invert #1 um+ r> + ;t ( d -- d )
 :t d+ >r swap >r um+ r> + r> + ;t         ( d d -- d )
 :t um* ( u u -- ud : double cell width multiply )
-  #0 swap ( u1 0 u2 ) $F lit
+  #0 swap ( u1 0 u2 ) F lit
   for
     dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
@@ -621,7 +618,7 @@ there 2/ primitive t!
 :t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
   ?dup 0= if -A lit throw then
   2dup u<
-  if negate $F lit
+  if negate F lit
     for >r dup um+ >r >r dup um+ r> + dup
       r> r@ swap >r um+ r> ( or -> ) 0<> swap 0<> +
       if >r drop 1+ r> else drop then r>
@@ -658,7 +655,7 @@ there 2/ primitive t!
   over + over begin
     2dup <>
   while
-    key dup bl - $5F lit u< if tap else ktap then
+    key dup bl - 5F lit u< if tap else ktap then
   repeat drop over - ;t
 :t tib source drop ;t
 :t query tib =buf lit accept {tib} lit ! drop #0 >in ! ;t
@@ -700,7 +697,7 @@ there 2/ primitive t!
   begin
     2dup >r >r drop c@ base @        ( get next character )
     ( digit? -> ) >r [char] 0 - 9 lit over <
-    if 7 lit - dup $A lit < or then dup r> u< ( c base -- u f )
+    if 7 lit - dup A lit < or then dup r> u< ( c base -- u f )
     0= if                            ( d char )
       drop                           ( d char -- d )
       r> r>                          ( restore string )
@@ -734,7 +731,7 @@ there 2/ primitive t!
   next 2drop #0 ;t
 :t .s depth for aft r@ pick . then next ;t
 :t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
-:t cfa nfa dup c@ $1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
+:t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
 :t allot aligned h lit +! ;t
 :t , align here ! cell allot ;t
 :s (search-wordlist) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
@@ -742,11 +739,11 @@ there 2/ primitive t!
   begin
     dup
   while
-    dup nfa count $9F lit ( $1F:word-length + $80:hidden )
+    dup nfa count 9F lit ( $1F:word-length + $80:hidden )
     and r@ count compare 0=
     if ( found! )
       rdrop
-      dup ( immediate? -> ) nfa $40 lit swap @ and 0<>
+      dup ( immediate? -> ) nfa 40 lit swap @ and 0<>
       #1 or negate exit
     then
     nip dup @
@@ -794,7 +791,7 @@ there 2/ primitive t!
     postpone literal exit
   then
   r> #0 ?found ;t \ Could vector ?found here, to handle arbitrary words
-:s .id nfa count $1F lit and type space ;s ( pwd -- : print out a word )
+:s .id nfa count 1F lit and type space ;s ( pwd -- : print out a word )
 :t get-order ( -- widn ... wid1 n : get the current search order )
   context
   ( find empty cell -> ) #0 >r begin dup @ r@ xor while cell+ repeat rdrop
@@ -811,7 +808,7 @@ there 2/ primitive t!
 :r only #-1 set-order ;r                            ( -- )
 :r words
   get-order begin ?dup while swap dup cr u. ." : " @
-    begin ?dup while dup nfa c@ $80 lit and 0= if dup .id then @ repeat cr
+    begin ?dup while dup nfa c@ 80 lit and 0= if dup .id then @ repeat cr
   1- repeat ;r
 :t definitions context @ set-current ;t
 :t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
@@ -821,11 +818,11 @@ there 2/ primitive t!
 :s ?nul dup c@ if exit then -10 lit throw ;s
 :to char bl word ?nul count drop c@ ;t
 :to [char] postpone char =push lit , , ;t immediate
-:to ; $BABE lit <> if -16 lit throw then =unnest lit , postpone [
+:to ; BABE lit <> if -16 lit throw then =unnest lit , postpone [
  ?dup if get-current ! exit then ;t immediate compile-only ( -- wid )
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
-  last , bl word ?nul ?unique count + h lit ! align $BABE lit postpone ] ;t
-:to :noname here $BABE lit ] ;t
+  last , bl word ?nul ?unique count + h lit ! align BABE lit postpone ] ;t
+:to :noname here BABE lit ] ;t
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
 :to again =jump  lit , 2/ , ;t immediate compile-only
@@ -841,7 +838,7 @@ there 2/ primitive t!
 :t compile r> dup [@] , 1+ >r ;t compile-only
 :t recurse {last} lit @ cfa compile, ;t immediate compile-only
 :s toggle tuck @ xor swap ! ;s
-:s hide bl word find ?found nfa $80 lit swap toggle ;s
+:s hide bl word find ?found nfa 80 lit swap toggle ;s
 :s (var) r> 2* ;s compile-only
 :s (const) r> [@] ;s compile-only
 :s (marker) r> 2* dup @ h lit ! cell+ @ get-current ! ;s compile-only
@@ -871,11 +868,11 @@ there 2/ primitive t!
 :to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
 :to \ tib @ {in} half lit [!] ;t immediate
-:to immediate last nfa @ $40 lit or last nfa ! ;t
+:to immediate last nfa @ 40 lit or last nfa ! ;t
 :to see bl word find ?found
     cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
 :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
-:s cksum aligned dup $C0DE lit - >r
+:s cksum aligned dup C0DE lit - >r
      begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;s
 :t defined bl word find nip 0<> ;t
 :to [then] ;t immediate
@@ -890,7 +887,7 @@ there 2/ primitive t!
    begin bl word dup c@ while
      interpret #1 ?depth
    repeat drop {ok} half lit [@] execute ;s ( "word" -- )
-:r eforth $0106 lit ;r ( -- version )
+:r eforth 0106 lit ;r ( -- version )
 :s info cr
   ." Project: eForth v1.6 " ( here . ) cr
   ." Author:  Richard James Howe" cr
@@ -917,59 +914,42 @@ there 2/ primitive t!
   again ;t
 :t cold {cold} half lit [@] execute ;t
 
-\ TODO: Editor should catch errors, use different 'ini'
-\ TODO: Make a simpler list? With the following format:
-\       number line cr
 :s calibration {ms} lit ;s
 :t bell 7 lit emit ;t
-:t ms for $800 lit for next next ;t
-:s csi $1B lit emit $5B lit emit ;s
+:t ms for calibration @ for next next ;t
+:s csi 1B lit emit 5B lit emit ;s
 :t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
 :t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
 :t blk {blk} lit ;t
 :t scr {scr} lit ;t
-:t b/buf $400 lit ;t
-:t block dup blk ! $A lit lshift ;t ( NB. No mass storage! )
+:t b/buf 400 lit ;t
+:t block dup blk ! A lit lshift ;t ( NB. No mass storage! )
 :t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
 :t update #-1 {dirty} lit ! ;t
 :t blank bl fill ;t
 :t within over - >r - r> u< ;t ( u lo hi -- t )
-:s banner 1- for [char] - emit next ;s
-:s right [char] | emit ;s
-:s left right ;s
-:s head space space space space $40 lit banner cr ;s
-:s display dup $20 lit $7F lit within 0= if drop [char] . then emit ;s
-:t list page cr head dup scr ! block $F lit ( NB. Could simplify this )
-    for 
-      $F lit r@ - 3 lit u.r left $3F lit for count display next right cr 
-    next drop head ;t
+:t list page cr dup scr ! block F lit
+   for F lit r@ - 3 lit u.r space 3F lit for count emit next cr next drop ;t
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
-:t set-input <ok> ! {id} lit ! >in ! {tib} lit 2! ;t     ( n1...n5 -- )
-\ 0 tvar exe :t xxx exe lit ;t
-:t evaluate ( a u -- ) \ TODO: Fix/Buggy
+:t set-input <ok> ! {id} lit ! >in ! {tib} lit 2! ;t ( n1...n5 -- )
+\ TODO: There is a bug that seems to manifest with gforth, junk appears to
+\ be written in "t' nop lit" for some reason, which is not the case when
+\ cross compiling with the SUBLEQ image itself. The image produced by SUBLEQ
+\ and gforth differ in other ways as well.
+:t evaluate ( a u -- )
   get-input 2>r 2>r >r
-  #0 #-1 ( xxx @ ) ( t' nop lit ) $1D1A lit set-input
+  #0 #-1 t' nop lit set-input
   t' eval lit catch
   r> 2r> 2r> set-input
   throw ;t
-:s line 6 lit lshift swap block + $40 lit ;s
+:s line 6 lit lshift swap block + 40 lit ;s
 :s loadline line evaluate ;s
-:t load #0 $F lit for 2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
-\ 0 [if]
-\ :e h
-\   ."                    FORTH BLOCK EDITOR" cr
-\   ."   w - list commands.               l - list current block." cr
-\   ."   x - execute current block.       e - erase current block." cr
-\   ."   h - display help.                s - save and flush." cr
-\   ."   q - exit back to forth.          ? - display current block." cr
-\   ."   n - move to next block.          p - move to previous block." cr
-\   ." # d - delete line #.             # r - set current block." cr
-\   ." # i ... - replace line.      #1 #2 ia ... - replace line at." cr ;e
-\ [then]
-:t editor {editor} lit #1 set-order ;t
+:t load #0 F lit for 2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
+\ TODO: Editor should catch errors, use different 'ini'
+:t editor {editor} lit #1 set-order ;t ( Tiny BLOCK text editor )
 :e q only forth ;e
 :e ? scr @ . ;e
-:e l scr @ list ."      BLK " scr @ . cr ;e
+:e l scr @ list ;e
 :e e q scr @ load editor ;e
 :e ia 6 lit lshift + scr @ block + tib >in @ +
    swap source nip >in @ - cmove tib @ {in} lit ! update l ;e
@@ -980,7 +960,7 @@ there 2/ primitive t!
 :e p #-1 scr +! l ;e
 :e r scr ! l ;e
 :e x scr @ block b/buf blank l ;e
-:e d >r scr @ block r> 6 lit lshift + $40 lit blank l ;e
+:e d >r scr @ block r> 6 lit lshift + 40 lit blank l ;e
 
 \ ---------------------------------- Image Generation ------------------------
 
