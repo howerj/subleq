@@ -7,9 +7,13 @@ all: subleq
 run: subleq subleq.dec
 	./subleq subleq.dec
 
-test: subleq
-	./subleq subleq.dec < subleq.fth > 1.dec
-	./subleq      1.dec < subleq.fth > 2.dec
+1.dec: subleq subleq.dec subleq.fth
+	./subleq subleq.dec < subleq.fth > $@
+
+2.dec: subleq 1.dec subleq.fth
+	./subleq 1.dec < subleq.fth > $@
+
+test: 1.dec 2.dec
 	diff -w 1.dec 2.dec
 
 gforth.dec: subleq.fth

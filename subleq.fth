@@ -50,15 +50,17 @@ defined eforth [if] ' nop <ok> ! [then]
 \ if a mass storage peripheral were to be added these functions would have
 \ to be modified. It might be nice to make a Forth File System based on blocks
 \ as well, then this system could act like a primitive DOS.
+\ - Reformatting the text for a 64 byte line width would allow storage in
+\ Forth blocks.
+\
+\ TODO: TASK words, USER variables, WAIT/SIGNAL, ACTIVATE, PAUSE, SLEEP/WAIT
 \
 only forth definitions hex
 
 : (order) ( w wid*n n -- wid*n w n )
   dup if
     1- swap >r recurse over r@ xor
-    if
-      1+ r> -rot exit
-    then rdrop
+    if 1+ r> -rot exit then rdrop
   then ;
 : -order get-order (order) nip set-order ;
 : +order dup >r -order get-order r> swap 1+ set-order ;
@@ -122,7 +124,7 @@ defined eforth [if]
 [then]
 :m mdump aligned
     begin ?dup while swap dup @ limit #dec tcell + swap tcell - repeat drop ;m
-:m save-target parse-word drop decimal tflash there mdump ;m
+:m save-target decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
 :m atlast tlast @ ;m
@@ -162,6 +164,7 @@ defined eforth [if] system -order [then]
 :m NOP Z Z NADDR ;m
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
 :m PUT 2/ t, -1 t, NADDR ;m
+:m GET 2/ -1 t, t, NADDR ;m
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR Z Z NADDR ;m
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
 :m iJMP there 2/ E + 2* MOV NOP ;m
@@ -204,8 +207,22 @@ label: entry       \ used to set entry point in next cell
   0 tvar bl2       \ bitwise extra register
   0 tvar bt        \ bitwise extra register
 
+  0 tvar {up}      \ Current task block
+  0 tvar {context} E tallot \ vocabulary context
+  0 tvar {current} \ vocabulary which new definitions are added to
+  0 tvar {forth-wordlist} \ forth word list (main vocabulary)
+  0 tvar {editor}   \ editor vocabulary
+  0 tvar {root-voc} \ absolute minimum vocabulary
+  0 tvar {system}  \ system functions vocabulary
+
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
+  \ TODO: Make these USER variables
+  A tvar {base}    \ input/output radix
+  -1 tvar {dpl}    \ number of places after fraction
+  2F tvar {blk}    \ current loaded block
+  2F tvar {scr}    \ last viewed screen
+  F00 tvar {ms}    \ delay loop calibration variable
   0 tvar {cold}    \ entry point of virtual machine program, set later on
   0 tvar {key}     \ execution vector for key?
   0 tvar {emit}    \ execution vector for emit
@@ -214,24 +231,14 @@ label: entry       \ used to set entry point in next cell
   0 tvar {echo}    \ execution vector for echo
   0 tvar {state}   \ compiler state
   0 tvar {hld}     \ hold space pointer
-  A tvar {base}   \ input/output radix
-  -1 tvar {dpl}    \ number of places after fraction
   0 tvar {in}      \ position in query string
   0 tvar {handler} \ throw/catch handler
   0 tvar {last}    \ last defined word
-  2F tvar {blk}   \ current loaded block
-  2F tvar {scr}   \ last viewed screen
   0 tvar {dirty}   \ is block dirty?
   0 tvar {id}      \ executing from block or terminal?
-  F00 tvar {ms}   \ delay loop calibration variable
   0 tvar {tib}     \ terminal input buffer: cell 1,
   =cell tallot     \ terminal input buffer: cell 2
-  0 tvar {context} E tallot \ vocabulary context
-  0 tvar {current} \ vocabulary which new definitions are added to
-  0 tvar {forth-wordlist} \ forth word list (main vocabulary)
-  0 tvar {editor}   \ editor vocabulary
-  0 tvar {root-voc} \ absolute minimum vocabulary
-  0 tvar {system}  \ system functions vocabulary
+  \ NOTE: {sp}/{rp} are not user variables, they are handled specially
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
   =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
   =end =stksz 4 * - =buf - constant TERMBUF \ buffer space
@@ -279,8 +286,7 @@ assembler.1 -order
   BABE talign there ,
   does> @ 2/ t, ;m
 :m :a ( "name" -- : assembly routine, no header )
-  D00D
-  target.1 +order definitions
+  D00D target.1 +order definitions
   create talign there , assembler.1 +order does> @ 2/ t, ;m
 :m (a); D00D <> if abort" unstructured" then assembler.1 -order ;m
 :m ;a (a); vm a-optim vm JMP ;m
@@ -294,6 +300,7 @@ assembler.1 -order
 :a [@] tos tos iLOAD ;a
 :a [!] w {sp} iLOAD w tos iSTORE --sp tos {sp} iLOAD --sp ;a
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
+:a opKey ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a
@@ -415,6 +422,12 @@ assembler.1 -order
   t DEC
   t tos MOV
   w {sp} iSTORE ;a
+:a pause
+  \ TODO: 
+  \ 1. Save SP, RP, IP, UP
+  \ 2. Get next task
+  \ 3. Restore task context 
+  ;a
 
 there 2/ primitive t!
 
@@ -498,6 +511,7 @@ there 2/ primitive t!
 :to xor opXor ;t
 :to and opAnd ;t
 :to * opMul ;t
+:to pause pause ;t
 :t nop ;t
 :t <ok> {ok} lit ;t
 :s <emit> {emit} lit ;s
@@ -550,7 +564,7 @@ there 2/ primitive t!
 :t execute 2/ >r ;t
 :t key? #-1 [@] negate s>d if
       {options} half lit [@] 8 lit and if bye then drop #0 exit then #-1 ;t
-:t key begin {key} half lit [@] execute until ;t
+:t key begin ( pause ) {key} half lit [@] execute until ;t
 :t emit {emit} half lit [@] execute ;t
 :t cr =cr lit emit =lf lit emit ;t
 :t @ 2/ [@] ;t
@@ -807,8 +821,8 @@ there 2/ primitive t!
 :r forth root-voc forth-wordlist 2 lit set-order ;r ( -- )
 :r only #-1 set-order ;r                            ( -- )
 :r words
-  get-order begin ?dup while swap dup cr u. ." : " @
-    begin ?dup while dup nfa c@ 80 lit and 0= if dup .id then @ repeat cr
+  cr get-order begin ?dup while swap ( dup u. ." : " ) @
+    begin ?dup while dup nfa c@ 80 lit and 0= if dup .id then @ repeat ( cr )
   1- repeat ;r
 :t definitions context @ set-current ;t
 :t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
@@ -869,8 +883,9 @@ there 2/ primitive t!
 :to ) ;t immediate
 :to \ tib @ {in} half lit [!] ;t immediate
 :to immediate last nfa @ 40 lit or last nfa ! ;t
-:to see bl word find ?found
-    cr begin dup @ =unnest lit <> while dup @ u. cell+ repeat @ u. ;t
+:to see bl word find ?found cr 
+  begin dup @ =unnest lit <> while dup @ . cell+ here over < if drop exit then
+  repeat @ u. ;t
 :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
 :s cksum aligned dup C0DE lit - >r
      begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;s
@@ -927,8 +942,9 @@ there 2/ primitive t!
 :t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
 :t update #-1 {dirty} lit ! ;t
 :t blank bl fill ;t
-:t within over - >r - r> u< ;t ( u lo hi -- t )
-:t list page cr dup scr ! block F lit
+:t list page cr dup scr ! block 
+   ( space 10 lit for 10 lit r@ - 2* 2* 4 lit u.r next cr )
+   F lit
    for F lit r@ - 3 lit u.r space 3F lit for count emit next cr next drop ;t
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
 :t set-input <ok> ! {id} lit ! >in ! {tib} lit 2! ;t ( n1...n5 -- )
@@ -936,6 +952,7 @@ there 2/ primitive t!
 \ be written in "t' nop lit" for some reason, which is not the case when
 \ cross compiling with the SUBLEQ image itself. The image produced by SUBLEQ
 \ and gforth differ in other ways as well.
+\ TODO: Non blocking I/O should be tested on both input and output.
 :t evaluate ( a u -- )
   get-input 2>r 2>r >r
   #0 #-1 t' nop lit set-input
@@ -962,6 +979,26 @@ there 2/ primitive t!
 :e x scr @ block b/buf blank l ;e
 :e d >r scr @ block r> 6 lit lshift + 40 lit blank l ;e
 
+( https://www.bradrodriguez.com/papers/mtasking.html )
+:t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
+:t signal #1 swap ! ;t ( addr -- ) 
+:t task: create 400 lit allot ;t \ TODO: Initialize task
+
+\ user variable message     \ a 16-bit message
+\      variable sender      \ holds address of the sending task
+\ forth
+\ : mytask ( -- a)   up @ ;     \ returns addr of the running task
+\ 
+\ : send ( msg taskadr -- )     \ send msg to the given task
+\    mytask  over sender local  \ -- msg taskadr mytask senderadr
+\    begin pause dup @ 0= until \ wait until his sender is zero
+\    !   message local ! ;      \ store mytask,msg in his user var
+\ 
+\ : receive ( -- msg taskadr)     \ wait for a message from anyone
+\    begin pause sender @ until   \ wait until my sender nonzero
+\    message @  sender @          \ get message and sending task
+\    0# sender ! ;                 \ now ready for another message!
+
 \ ---------------------------------- Image Generation ------------------------
 
 t' quit half {cold} t!
@@ -975,6 +1012,6 @@ atlast {forth-wordlist} t!
 there h t!
 primitive t@ double mkck check t!
 atlast {last} t!
-save-target subleq.dec
+save-target
 there .end
 bye
