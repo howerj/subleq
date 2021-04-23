@@ -190,16 +190,14 @@ meta.1 +order definitions
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
-  B tvar {options}  \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
-  0 tvar h         \ dictionary pointer
+  B tvar {options} \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
   0 tvar primitive \ any address lower than this one must be a primitive
-  0 tvar check     \ used for system checksum
   8000 tvar hbit   \ must contain 8000
   -2   tvar ntwo   \ must contain -2
   -1 tvar neg1     \ must contain -1
   1 tvar one       \ must contain  1
   2 tvar two       \ must contain  1
- 10 tvar bwidth   \ must contain 16
+ 10 tvar bwidth    \ must contain 16
   0 tvar INVREG    \ temporary register used for inversion only
   0 tvar w         \ working pointer
   0 tvar x         \ working pointer
@@ -208,37 +206,45 @@ label: entry       \ used to set entry point in next cell
   0 tvar bl2       \ bitwise extra register
   0 tvar bt        \ bitwise extra register
 
+  0 tvar h         \ dictionary pointer
   FC00 tvar {up}   \ Current task address
   F00 tvar {ms}    \ delay loop calibration variable
+  0 tvar check     \ used for system checksum
   0 tvar {context} E tallot \ vocabulary context
   0 tvar {current} \ vocabulary which new definitions are added to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
   0 tvar {editor}   \ editor vocabulary
   0 tvar {root-voc} \ absolute minimum vocabulary
   0 tvar {system}  \ system functions vocabulary
+  0 tvar {cold}    \ entry point of virtual machine program, set later on
+  0 tvar {dirty}   \ is block dirty?
+  0 tvar {last}    \ last defined word
 
+  \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
   \ TODO: Make these USER variables
-  0 tvar {base}    \ input/output radix
-  0 tvar {dpl}    \ number of places after fraction
-  0 tvar {blk}    \ current loaded block
-  0 tvar {scr}    \ last viewed screen
-  0 tvar {cold}    \ entry point of virtual machine program, set later on
-  0 tvar {key}     \ execution vector for key?
-  0 tvar {emit}    \ execution vector for emit
-  0 tvar {literal} \ execution vector for literal
-  0 tvar {ok}      \ execution vector for .ok
-  0 tvar {echo}    \ execution vector for echo
-  0 tvar {state}   \ compiler state
-  0 tvar {hld}     \ hold space pointer
-  0 tvar {in}      \ position in query string
-  0 tvar {handler} \ throw/catch handler
-  0 tvar {last}    \ last defined word
-  0 tvar {dirty}   \ is block dirty?
-  0 tvar {id}      \ executing from block or terminal?
-  0 tvar {tib}     \ terminal input buffer: cell 1,
-  =cell tallot     \ terminal input buffer: cell 2
+  tuser {next-task} \ next task in task list
+  tuser {ip-save}   \ saved instruction pointer
+  tuser {tos-save}  \ saved top of variable stack
+  tuser {rp-save}   \ saved return stack pointer
+  tuser {sp-save}   \ saved variable stack pointer
+  tuser {base}      \ input/output radix
+  tuser {dpl}       \ number of places after fraction
+  tuser {blk}       \ current loaded block
+  tuser {scr}       \ last viewed screen
+  tuser {hld}       \ hold space pointer
+  tuser {in}        \ position in query string
+  tuser {key}       \ execution vector for key?
+  tuser {emit}      \ execution vector for emit
+  tuser {literal}   \ execution vector for literal
+  tuser {ok}        \ execution vector for .ok
+  tuser {echo}      \ execution vector for echo
+  tuser {state}     \ compiler state
+  tuser {handler}   \ throw/catch handler
+  tuser {id}        \ executing from block or terminal?
+  0 tvar {tib}      \ terminal input buffer: cell 1,
+  =cell tallot      \ terminal input buffer: cell 2
   \ NOTE: {sp}/{rp} are not user variables, they are handled specially
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
   =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
@@ -425,10 +431,10 @@ assembler.1 -order
   t tos MOV
   w {sp} iSTORE ;a
 :a pause
-  \ TODO: 
+  \ TODO:
   \ 1. Save SP, RP, IP, UP
   \ 2. Get next task
-  \ 3. Restore task context 
+  \ 3. Restore task context
   ;a
 
 there 2/ primitive t!
@@ -518,26 +524,26 @@ there 2/ primitive t!
 :t nop ;t
 :t @ 2/ [@] ;t
 :t ! 2/ [!] ;t
-:t <ok> {ok} lit ;t
-:s <emit> {emit} lit ;s
-:s <key>  {key} lit ;s
-:s <literal> {literal} lit ;s
+:t <ok> {ok} up ;t
+:s <emit> {emit} up ;s
+:s <key>  {key} up ;s
+:s <echo> {echo} up ;s
+:s <literal> {literal} up ;s
 :s <cold> {cold} lit ;s
-:s <echo> {echo} lit ;s
 :t current {current} lit ;t
 :t root-voc {root-voc} lit ;t
 :t #vocs 8 lit ;t
 :t context {context} lit ;t
 :t here h lit @ ;t
-:t pad here =buf lit + ;t
-:t base {base} lit ;t
-:t dpl {dpl} lit ;t
-:t hld {hld} lit ;t
-:t state {state} lit ;t
+:t pad here =buf lit + ;t \ TODO: Move to user
+:t base {base} up ;t
+:t dpl {dpl} up ;t
+:t hld {hld} up ;t
+:t state {state} up ;t
 :s calibration {ms} lit ;s
-:t blk {blk} lit ;t
-:t scr {scr} lit ;t
-:t >in {in} lit ;t
+:t blk {blk} up ;t
+:t scr {scr} up ;t
+:t >in {in} up ;t
 :t bl 20 lit ;t
 :t hex  10 lit base ! ;t
 :t decimal A lit base ! ;t
@@ -570,10 +576,10 @@ there 2/ primitive t!
 :t u>= u< 0= ;t
 :t u<= u> 0= ;t
 :t execute 2/ >r ;t
-:t key? #-1 [@] negate s>d if
+:t key? #-1 [@] negate s>d if \ TODO, changed to opKey
       {options} lit @ 8 lit and if bye then drop #0 exit then #-1 ;t
-:t key begin ( pause ) {key} lit @ execute until ;t
-:t emit {emit} lit @ execute ;t
+:t key begin pause <key> @ execute until ;t
+:t emit <emit> @ execute ;t
 :t cr =cr lit emit =lf lit emit ;t
 :t get-current current @ ;t
 :t set-current current ! ;t
@@ -587,8 +593,8 @@ there 2/ primitive t!
    >r over xor r> and xor swap ! ;t
 :t max 2dup < if nip else drop then ;t
 :t min 2dup > if nip else drop then ;t
-:t source-id {id} lit @ ;t
-:t 2! tuck ! cell+ ! ;t    
+:t source-id {id} up @ ;t
+:t 2! tuck ! cell+ ! ;t
 :t 2@ dup cell+ @ swap @ ;t
 :t source {tib} lit 2@ ;t
 :t 2>r r> swap >r swap >r >r ;t compile-only
@@ -610,16 +616,16 @@ there 2/ primitive t!
 :t space bl emit ;t
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
    sp@ >r              ( xt )   \ save data stack pointer
-   {handler} lit @ >r  ( xt )   \ and previous handler
-   rp@ {handler} lit ! ( xt )   \ set current handler
+   {handler} up @ >r  ( xt )   \ and previous handler
+   rp@ {handler} up ! ( xt )   \ set current handler
    execute             ( )      \ execute returns if no throw
-   r> {handler} lit !  ( )      \ restore previous handler
+   r> {handler} up !  ( )      \ restore previous handler
    rdrop               ( )      \ discard saved stack ptr
    #0 ;t               ( 0 )    \ normal completion
 :t throw ( ??? exception# -- ??? exception# )
     ?dup if                      ( exc# )     \ 0 throw is no-op
-      {handler} lit @ rp! ( exc# )     \ restore prev return stack
-      r> {handler} lit !  ( exc# )     \ restore prev handler
+      {handler} up @ rp! ( exc# )     \ restore prev return stack
+      r> {handler} up !  ( exc# )     \ restore prev handler
       r> swap >r                 ( saved-sp ) \ exc# on return stack
       sp! drop r>                ( exc# )     \ restore stack
     then ;t
@@ -657,7 +663,7 @@ there 2/ primitive t!
 :t /    /mod nip ;t
 :s depth {sp0} lit @ sp@ - 1- ;s
 :s (emit) opEmit ;s
-:t echo {echo} lit @ execute ;t
+:t echo <echo> @ execute ;t
 :s tap dup echo over c! 1+ ;s ( bot eot cur c -- bot eot cur )
 :s ktap ( bot eot cur c -- bot eot cur )
   dup dup =cr lit <> >r  =lf lit <> r> and if ( Not End of Line? )
@@ -889,7 +895,7 @@ there 2/ primitive t!
 :to ) ;t immediate
 :to \ tib @ >in ! ;t immediate
 :to immediate last nfa @ 40 lit or last nfa ! ;t
-:to see bl word find ?found cr 
+:to see bl word find ?found cr
   begin dup @ =unnest lit <> while dup @ . cell+ here over < if drop exit then
   repeat @ u. ;t
 :to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
@@ -907,7 +913,7 @@ there 2/ primitive t!
 :s eval
    begin bl word dup c@ while
      interpret #1 ?depth
-   repeat drop {ok} lit @ execute ;s ( "word" -- )
+   repeat drop <ok> @ execute ;s ( "word" -- )
 :r eforth 0106 lit ;r ( -- version )
 :s info cr
   ." Project: eForth v1.6 " ( here . ) cr
@@ -915,12 +921,18 @@ there 2/ primitive t!
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;s
-:s ini only forth definitions decimal postpone [
+:s ini 
+  only forth definitions decimal postpone [
+  t' key? lit <key> !
+  t' (emit) lit <echo> !
+  t' (emit) lit <emit> !
+  t' ok lit <ok> !
+  t' (literal) lit <literal> !
   #0 >in ! #-1 dpl !
-  2E lit dup blk ! scr !
+  2F lit dup blk ! scr !
   TERMBUF lit #0 {tib} lit 2! ;s ( -- )
 :s opts
-  {options} lit @ lsb if to' drop lit {echo} lit ! then
+  {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
   {options} lit @ 2 lit and if
     primitive lit @ 2* dup here swap - cksum
@@ -946,12 +958,12 @@ there 2/ primitive t!
 :t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
 :t update #-1 {dirty} lit ! ;t
 :t blank bl fill ;t
-:t list page cr dup scr ! block 
+:t list page cr dup scr ! block
    ( space 10 lit for 10 lit r@ - 2* 2* 4 lit u.r next cr )
    F lit
    for F lit r@ - 3 lit u.r space 3F lit for count emit next cr next drop ;t
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
-:t set-input <ok> ! {id} lit ! >in ! {tib} lit 2! ;t ( n1...n5 -- )
+:t set-input <ok> ! {id} up ! >in ! {tib} lit 2! ;t ( n1...n5 -- )
 \ TODO: There is a bug that seems to manifest with gforth, junk appears to
 \ be written in "t' nop lit" for some reason, which is not the case when
 \ cross compiling with the SUBLEQ image itself. The image produced by SUBLEQ
@@ -985,19 +997,19 @@ there 2/ primitive t!
 
 ( https://www.bradrodriguez.com/papers/mtasking.html )
 :t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
-:t signal #1 swap ! ;t ( addr -- ) 
+:t signal #1 swap ! ;t ( addr -- )
 :t task: create 400 lit allot ;t \ TODO: Initialize task
 
 \ user variable message     \ a 16-bit message
 \      variable sender      \ holds address of the sending task
 \ forth
 \ : mytask ( -- a)   up @ ;     \ returns addr of the running task
-\ 
+\
 \ : send ( msg taskadr -- )     \ send msg to the given task
 \    mytask  over sender local  \ -- msg taskadr mytask senderadr
 \    begin pause dup @ 0= until \ wait until his sender is zero
 \    !   message local ! ;      \ store mytask,msg in his user var
-\ 
+\
 \ : receive ( -- msg taskadr)     \ wait for a message from anyone
 \    begin pause sender @ until   \ wait until my sender nonzero
 \    message @  sender @          \ get message and sending task
@@ -1006,11 +1018,6 @@ there 2/ primitive t!
 \ ---------------------------------- Image Generation ------------------------
 
 t' quit half {cold} t!
-t' key? {key} t!
-t' (emit) {echo} t!
-t' (emit) {emit} t!
-t' ok {ok} t!
-t' (literal) {literal} t!
 atlast {forth-wordlist} t!
 {forth-wordlist} {current} t!
 there h t!
