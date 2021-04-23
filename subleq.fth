@@ -87,12 +87,10 @@ meta.1 +order definitions
 
 create tflash tflash dup size cells allot size erase
 
-variable tdp
-variable tep
-variable tlast
-size =cell - tep !
-0 tlast !
-0 tdp !
+variable tdp 0 tdp !
+variable tlast 0 tlast !
+variable tlocal 0 tlocal !
+variable tep size =cell - tep !
 
 : :m meta.1 +order definitions : ;
 : ;m postpone ; ; immediate
@@ -128,6 +126,9 @@ defined eforth [if]
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
 :m atlast tlast @ ;m
+:m lalloc tlocal @ dup =cell + tlocal ! ;m
+:m tuser
+  get-current >r meta.1 set-current create r> set-current lalloc , does> @ ;m
 :m tvar
   get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
 :m label:
@@ -207,7 +208,8 @@ label: entry       \ used to set entry point in next cell
   0 tvar bl2       \ bitwise extra register
   0 tvar bt        \ bitwise extra register
 
-  0 tvar {up}      \ Current task block
+  FC00 tvar {up}   \ Current task address
+  F00 tvar {ms}    \ delay loop calibration variable
   0 tvar {context} E tallot \ vocabulary context
   0 tvar {current} \ vocabulary which new definitions are added to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
@@ -218,11 +220,10 @@ label: entry       \ used to set entry point in next cell
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
   \ TODO: Make these USER variables
-  A tvar {base}    \ input/output radix
-  -1 tvar {dpl}    \ number of places after fraction
-  2F tvar {blk}    \ current loaded block
-  2F tvar {scr}    \ last viewed screen
-  F00 tvar {ms}    \ delay loop calibration variable
+  0 tvar {base}    \ input/output radix
+  0 tvar {dpl}    \ number of places after fraction
+  0 tvar {blk}    \ current loaded block
+  0 tvar {scr}    \ last viewed screen
   0 tvar {cold}    \ entry point of virtual machine program, set later on
   0 tvar {key}     \ execution vector for key?
   0 tvar {emit}    \ execution vector for emit
@@ -302,6 +303,7 @@ assembler.1 -order
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
 :a opKey ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
+:a opUp ++sp tos {sp} iSTORE tos ip iLOAD ip INC {up} tos ADD ;a
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
@@ -445,6 +447,7 @@ there 2/ primitive t!
    tlast @ {editor} t! tlast ! ;m
 
 :m lit         opPush t, ;m
+:m up          opUp   t, ;m
 :m [char] char opPush t, ;m
 :m char   char opPush t, ;m
 :m begin talign there ;m
@@ -513,6 +516,8 @@ there 2/ primitive t!
 :to * opMul ;t
 :to pause pause ;t
 :t nop ;t
+:t @ 2/ [@] ;t
+:t ! 2/ [!] ;t
 :t <ok> {ok} lit ;t
 :s <emit> {emit} lit ;s
 :s <key>  {key} lit ;s
@@ -523,19 +528,22 @@ there 2/ primitive t!
 :t root-voc {root-voc} lit ;t
 :t #vocs 8 lit ;t
 :t context {context} lit ;t
-:t here h half lit [@] ;t
+:t here h lit @ ;t
 :t pad here =buf lit + ;t
 :t base {base} lit ;t
 :t dpl {dpl} lit ;t
 :t hld {hld} lit ;t
-:t bl 20 lit ;t
-:t >in {in} lit ;t
-:t hex  10 lit {base} half lit [!] ;t
-:t decimal A lit {base} half lit [!] ;t
-:s many #0 {in} half lit [!] ;s
 :t state {state} lit ;t
-:t ] #-1 {state} half lit [!] ;t
-:t [ #0  {state} half lit [!] ;t immediate
+:s calibration {ms} lit ;s
+:t blk {blk} lit ;t
+:t scr {scr} lit ;t
+:t >in {in} lit ;t
+:t bl 20 lit ;t
+:t hex  10 lit base ! ;t
+:t decimal A lit base ! ;t
+:s many #0 >in ! ;s
+:t ] #-1 state ! ;t
+:t [ #0  state ! ;t immediate
 :t nip swap drop ;t
 :t tuck swap over ;t
 :t ?dup dup if dup then ;t
@@ -563,12 +571,10 @@ there 2/ primitive t!
 :t u<= u> 0= ;t
 :t execute 2/ >r ;t
 :t key? #-1 [@] negate s>d if
-      {options} half lit [@] 8 lit and if bye then drop #0 exit then #-1 ;t
-:t key begin ( pause ) {key} half lit [@] execute until ;t
-:t emit {emit} half lit [@] execute ;t
+      {options} lit @ 8 lit and if bye then drop #0 exit then #-1 ;t
+:t key begin ( pause ) {key} lit @ execute until ;t
+:t emit {emit} lit @ execute ;t
 :t cr =cr lit emit =lf lit emit ;t
-:t @ 2/ [@] ;t
-:t ! 2/ [!] ;t
 :t get-current current @ ;t
 :t set-current current ! ;t
 :s last get-current @ ;s
@@ -590,7 +596,7 @@ there 2/ primitive t!
 :t count dup 1+ swap c@ ;t
 :s logical 0<> if #1 else #0 then ;s
 :t aligned dup lsb logical + ;t
-:t align here aligned h half lit [!] ;t
+:t align here aligned h lit ! ;t
 :t +string #1 over min rot over + rot rot - ;t
 :t type begin dup while swap count emit swap 1- repeat 2drop ;t
 :t cmove for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;t ( b1 b2 u -- )
@@ -603,17 +609,17 @@ there 2/ primitive t!
 :m $" ($) $literal ;m
 :t space bl emit ;t
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
-   sp@ >r                        ( xt )   \ save data stack pointer
-   {handler} half lit [@] >r     ( xt )   \ and previous handler
-   rp@ {handler} half lit [!]    ( xt )   \ set current handler
-   execute                       ( )      \ execute returns if no throw
-   r> {handler} half lit [!]     ( )      \ restore previous handler
-   rdrop                         ( )      \ discard saved stack ptr
-   #0 ;t                         ( 0 )    \ normal completion
+   sp@ >r              ( xt )   \ save data stack pointer
+   {handler} lit @ >r  ( xt )   \ and previous handler
+   rp@ {handler} lit ! ( xt )   \ set current handler
+   execute             ( )      \ execute returns if no throw
+   r> {handler} lit !  ( )      \ restore previous handler
+   rdrop               ( )      \ discard saved stack ptr
+   #0 ;t               ( 0 )    \ normal completion
 :t throw ( ??? exception# -- ??? exception# )
     ?dup if                      ( exc# )     \ 0 throw is no-op
-      {handler} half lit [@] rp! ( exc# )     \ restore prev return stack
-      r> {handler} half lit [!]  ( exc# )     \ restore prev handler
+      {handler} lit @ rp! ( exc# )     \ restore prev return stack
+      r> {handler} lit !  ( exc# )     \ restore prev handler
       r> swap >r                 ( saved-sp ) \ exc# on return stack
       sp! drop r>                ( exc# )     \ restore stack
     then ;t
@@ -649,9 +655,9 @@ there 2/ primitive t!
 :t /mod  over 0< swap m/mod ;t
 :t mod  /mod drop ;t
 :t /    /mod nip ;t
-:s depth {sp0} half lit [@] sp@ - 1- ;s
+:s depth {sp0} lit @ sp@ - 1- ;s
 :s (emit) opEmit ;s
-:t echo {echo} half lit [@] execute ;t
+:t echo {echo} lit @ execute ;t
 :s tap dup echo over c! 1+ ;s ( bot eot cur c -- bot eot cur )
 :s ktap ( bot eot cur c -- bot eot cur )
   dup dup =cr lit <> >r  =lf lit <> r> and if ( Not End of Line? )
@@ -872,16 +878,16 @@ there 2/ primitive t!
 :to rdrop compile rdrop ;t immediate compile-only
 :to exit compile opExit ;t immediate compile-only
 :to ." compile .$
-  [char] " word count + h half lit [!] align ;t immediate compile-only
+  [char] " word count + h lit ! align ;t immediate compile-only
 :to $" compile ($)
-  [char] " word count + h half lit [!] align ;t immediate compile-only
+  [char] " word count + h lit ! align ;t immediate compile-only
 :to abort" compile (abort)
-  [char] " word count + h half lit [!] align ;t immediate compile-only
+  [char] " word count + h lit ! align ;t immediate compile-only
 :to ( [char] ) parse 2drop ;t immediate
 :to .( [char] ) parse type ;t immediate
 :to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
-:to \ tib @ {in} half lit [!] ;t immediate
+:to \ tib @ >in ! ;t immediate
 :to immediate last nfa @ 40 lit or last nfa ! ;t
 :to see bl word find ?found cr 
   begin dup @ =unnest lit <> while dup @ . cell+ here over < if drop exit then
@@ -901,7 +907,7 @@ there 2/ primitive t!
 :s eval
    begin bl word dup c@ while
      interpret #1 ?depth
-   repeat drop {ok} half lit [@] execute ;s ( "word" -- )
+   repeat drop {ok} lit @ execute ;s ( "word" -- )
 :r eforth 0106 lit ;r ( -- version )
 :s info cr
   ." Project: eForth v1.6 " ( here . ) cr
@@ -910,15 +916,16 @@ there 2/ primitive t!
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;s
 :s ini only forth definitions decimal postpone [
-  #0 {in} half lit [!] #-1 {dpl} half lit [!]
+  #0 >in ! #-1 dpl !
+  2E lit dup blk ! scr !
   TERMBUF lit #0 {tib} lit 2! ;s ( -- )
 :s opts
-  {options} half lit [@] lsb if to' drop lit {echo} half lit [!] then
-  {options} half lit [@] 4 lit and if info then
-  {options} half lit [@] 2 lit and if
-    primitive half lit [@] 2* dup here swap - cksum
-    check half lit [@] <> if ." cksum fail" bye then
-    {options} half lit [@] 2 lit xor {options} half lit [!]
+  {options} lit @ lsb if to' drop lit {echo} lit ! then
+  {options} lit @ 4 lit and if info then
+  {options} lit @ 2 lit and if
+    primitive lit @ 2* dup here swap - cksum
+    check lit @ <> if ." cksum fail" bye then
+    {options} lit @ 2 lit xor {options} lit !
   then ;s
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
   ini
@@ -927,16 +934,13 @@ there 2/ primitive t!
    query t' eval lit catch
    ?dup if dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
-:t cold {cold} half lit [@] execute ;t
+:t cold {cold} lit @ execute ;t
 
-:s calibration {ms} lit ;s
 :t bell 7 lit emit ;t
 :t ms for calibration @ for next next ;t
 :s csi 1B lit emit 5B lit emit ;s
 :t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
 :t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
-:t blk {blk} lit ;t
-:t scr {scr} lit ;t
 :t b/buf 400 lit ;t
 :t block dup blk ! A lit lshift ;t ( NB. No mass storage! )
 :t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
@@ -969,7 +973,7 @@ there 2/ primitive t!
 :e l scr @ list ;e
 :e e q scr @ load editor ;e
 :e ia 6 lit lshift + scr @ block + tib >in @ +
-   swap source nip >in @ - cmove tib @ {in} lit ! update l ;e
+   swap source nip >in @ - cmove tib @ >in ! update l ;e
 :e i #0 swap ia ;e
 :e w words ;e
 :e s update flush ;e
