@@ -76,7 +76,6 @@ meta.1 +order definitions
    2 constant =cell
 4000 constant size
 8000 constant =end
-  40 constant =stksz
  100 constant =buf
 0008 constant =bksp
 000A constant =lf
@@ -125,9 +124,9 @@ defined eforth [if]
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
 :m atlast tlast @ ;m
-:m lalloc tlocal @ dup =cell + tlocal ! ;m
+:m lallot tlocal @ dup =cell + tlocal ! ;m
 :m tuser
-  get-current >r meta.1 set-current create r> set-current lalloc , does> @ ;m
+  get-current >r meta.1 set-current create r> set-current lallot , does> @ ;m
 :m tvar
   get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
 :m label:
@@ -222,7 +221,11 @@ label: entry       \ used to set entry point in next cell
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
-  \ TODO: Make these USER variables
+  0 tvar xxx \ TODO: Looks like address 80 is being overwritten!
+  FD00 half dup tvar {rp0} tvar {rp}
+  FE00 half dup tvar {sp0} tvar {sp}
+  200 constant =tib
+  380 constant =num
   tuser {next-task} \ next task in task list
   tuser {ip-save}   \ saved instruction pointer
   tuser {tos-save}  \ saved top of variable stack
@@ -242,14 +245,8 @@ label: entry       \ used to set entry point in next cell
   tuser {state}     \ compiler state
   tuser {handler}   \ throw/catch handler
   tuser {id}        \ executing from block or terminal?
-  tvar  {tib}       \ terminal input buffer: cell 1,
-  tuser {000}
-  =cell tallot      \ terminal input buffer: cell 2
-  \ NOTE: {sp}/{rp} are not user variables, they are handled specially
-  =end                       dup tvar {sp0} tvar {sp} \ grows downwards
-  =end =stksz 4 * -          dup tvar {rp0} tvar {rp} \ grows upwards
-  =end =stksz 4 * - =buf - constant TERMBUF \ buffer space
-  TERMBUF =buf + constant =tbufend
+  tuser {tib}       \ terminal input buffer: cell 1,
+  =cell lallot      \ terminal input buffer: cell 2
 
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
@@ -432,6 +429,7 @@ assembler.1 -order
   w {sp} iSTORE ;a
 :a pause
   \ TODO:
+  \ If next task != 0
   \ 1. Save SP, RP, IP, UP
   \ 2. Get next task
   \ 3. Restore task context
@@ -532,10 +530,11 @@ there 2/ primitive t!
 :s <cold> {cold} lit ;s
 :t current {current} lit ;t
 :t root-voc {root-voc} lit ;t
+:t this 0 up ;t
 :t #vocs 8 lit ;t
 :t context {context} lit ;t
 :t here h lit @ ;t
-:t pad here =buf lit + ;t \ TODO: Move to user
+\ :t pad this 80 lit + ;t
 :t base {base} up ;t
 :t dpl {dpl} up ;t
 :t hld {hld} up ;t
@@ -576,7 +575,7 @@ there 2/ primitive t!
 :t u>= u< 0= ;t
 :t u<= u> 0= ;t
 :t execute 2/ >r ;t
-:t key? #-1 [@] negate s>d if \ TODO, changed to opKey
+:t key? opKey s>d if
       {options} lit @ 8 lit and if bye then drop #0 exit then #-1 ;t
 :t key begin pause <key> @ execute until ;t
 :t emit <emit> @ execute ;t
@@ -596,7 +595,7 @@ there 2/ primitive t!
 :t source-id {id} up @ ;t
 :t 2! tuck ! cell+ ! ;t
 :t 2@ dup cell+ @ swap @ ;t
-:t tup {tib} lit ;t
+:t tup {tib} up ;t
 :t source tup 2@ ;t
 :t 2>r r> swap >r swap >r >r ;t compile-only
 :t 2r> r> r> swap r> swap >r ;t compile-only
@@ -708,12 +707,12 @@ there 2/ primitive t!
     r> bl = if -trailing then #0 max ;t
 :t spaces begin dup 0> while space 1- repeat drop ;t ( +n -- )
 :t hold #-1 hld +! hld @ c! ;t ( c -- : save a character in hold space )
-:t #> 2drop hld @ =tbufend lit over - ;t  ( u -- b u )
+:t #> 2drop hld @ this =num lit + over - ;t  ( u -- b u )
 :s extract dup >r um/mod r> swap >r um/mod r> rot ;s ( ud ud -- ud u )
 :s digit 9 lit over < 7 lit and + [char] 0 + ;s ( u -- c )
 :t #  2 lit ?depth #0 base @ extract digit hold ;t ( d -- d )
 :t #s begin # 2dup ( d0= -> ) or 0= until ;t       ( d -- 0 )
-:t <# =tbufend lit hld ! ;t                        ( -- )
+:t <# this =num lit + hld ! ;t                        ( -- )
 :t sign 0< if [char] - hold then ;t                ( n -- )
 :t u.r >r #0 <# #s #>  r> over - spaces type ;t
 :t u.     #0 <# #s #> space type ;t
@@ -883,6 +882,8 @@ there 2/ primitive t!
 :to r> compile opFromR ;t immediate compile-only
 :to r@ compile r@ ;t immediate compile-only
 :to rdrop compile rdrop ;t immediate compile-only
+:to rp0 {rp0} lit ;t
+:to sp0 {sp0} lit ;t
 :to exit compile opExit ;t immediate compile-only
 :to ." compile .$
   [char] " word count + h lit ! align ;t immediate compile-only
@@ -924,6 +925,7 @@ there 2/ primitive t!
   ." License: The Unlicense / Public Domain" cr ;s
 :s task-init ( task-addr -- )
   {up} lit @ swap {up} lit !
+  this {next-task} up !
   decimal
   t' key? lit <key> !
   t' (emit) lit <echo> !
@@ -931,11 +933,11 @@ there 2/ primitive t!
   t' ok lit <ok> !
   t' (literal) lit <literal> !
   #0 >in ! #-1 dpl !
-  2F lit dup blk ! scr !
-  TERMBUF lit #0 tup 2!
+  this =tib lit + #0 tup 2! \ Set terminal input buffer location
   postpone [ 
   {up} lit ! ;s
-:s ini only forth definitions {up} lit @ task-init ;s ( -- )
+:s ini only forth definitions {up} lit @ task-init   
+  2F lit dup blk ! scr ! ;s ( -- )
 :s opts
   {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
@@ -974,6 +976,7 @@ there 2/ primitive t!
 \ cross compiling with the SUBLEQ image itself. The image produced by SUBLEQ
 \ and gforth differ in other ways as well.
 \ TODO: Non blocking I/O should be tested on both input and output.
+\ TODO: Implement; ?do, do, loop, +loop, leave
 :t evaluate ( a u -- )
   get-input 2>r 2>r >r
   #0 #-1 t' nop lit set-input
