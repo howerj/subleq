@@ -53,8 +53,6 @@ defined eforth [if] ' nop <ok> ! [then]
 \ - Reformatting the text for a 64 byte line width would allow storage in
 \ Forth blocks.
 \
-\ TODO: TASK words, USER variables, WAIT/SIGNAL, ACTIVATE, PAUSE, SLEEP/WAIT
-\
 only forth definitions hex
 
 : (order) ( w wid*n n -- wid*n w n )
@@ -110,7 +108,7 @@ defined eforth [if]
   :m parse-word bl word ?nul count ;m
   :m limit ;m
 [else]
-  :m tpack dup tc, 0 ?do count tc, loop drop ;m
+  :m tpack talign dup tc, 0 ?do count tc, loop drop ;m
   :m limit FFFF and ;m
 [then]
 :m $literal talign [char] " word count tpack talign ;m
@@ -118,9 +116,10 @@ defined eforth [if]
 defined eforth [if]
 :m #dec dup 0< if [char] - emit then (.) A emit ;m ( n -- print number )
 [else]
-:m #dec dup >r abs 0 <# A hold #s r> sign #> type ;m  ( n -- print number )
+:m #dec dup 8000 u>= if negate limit -1 >r else 0 >r then
+   0 <# A hold #s r> sign #> type ;m  ( n -- print number )
 [then]
-:m mdump aligned
+:m mdump taligned
     begin ?dup while swap dup @ limit #dec tcell + swap tcell - repeat drop ;m
 :m save-target decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
@@ -243,7 +242,8 @@ label: entry       \ used to set entry point in next cell
   tuser {state}     \ compiler state
   tuser {handler}   \ throw/catch handler
   tuser {id}        \ executing from block or terminal?
-  0 tvar {tib}      \ terminal input buffer: cell 1,
+  tvar  {tib}       \ terminal input buffer: cell 1,
+  tuser {000}
   =cell tallot      \ terminal input buffer: cell 2
   \ NOTE: {sp}/{rp} are not user variables, they are handled specially
   =end                       dup tvar {sp0} tvar {sp} \ grows downwards
@@ -596,7 +596,8 @@ there 2/ primitive t!
 :t source-id {id} up @ ;t
 :t 2! tuck ! cell+ ! ;t
 :t 2@ dup cell+ @ swap @ ;t
-:t source {tib} lit 2@ ;t
+:t tup {tib} lit ;t
+:t source tup 2@ ;t
 :t 2>r r> swap >r swap >r >r ;t compile-only
 :t 2r> r> r> swap r> swap >r ;t compile-only
 :t count dup 1+ swap c@ ;t
@@ -684,7 +685,7 @@ there 2/ primitive t!
     key dup bl - 5F lit u< if tap else ktap then
   repeat drop over - ;t
 :t tib source drop ;t
-:t query tib =buf lit accept {tib} lit ! drop #0 >in ! ;t
+:t query tib =buf lit accept tup ! drop #0 >in ! ;t
 :s ?depth depth > if -4 lit throw then ;s ( u -- : check stack depth )
 :t -trailing for aft bl over r@ + c@ < if r> 1+ exit then then next #0 ;t
 :s look ( b u c xt -- b u : skip until *xt* test succeeds )
@@ -699,7 +700,7 @@ there 2/ primitive t!
 :s unmatch if 0> exit then 0<> ;s ( c1 c2 -- t )
 :s match unmatch invert ;s        ( c1 c2 -- t )
 :t parse ( c -- b u ; <string> )
-    >r tib >in @ + {tib} lit @ >in @ - r@
+    >r tib >in @ + tup @ >in @ - r@
     >r over r> swap >r >r
     r@ t' unmatch lit look 2dup
     r> t' match   lit look swap r> - >r - r> 1+  ( b u c -- b u delta )
@@ -921,8 +922,9 @@ there 2/ primitive t!
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;s
-:s ini 
-  only forth definitions decimal postpone [
+:s task-init ( task-addr -- )
+  {up} lit @ swap {up} lit !
+  decimal
   t' key? lit <key> !
   t' (emit) lit <echo> !
   t' (emit) lit <emit> !
@@ -930,7 +932,10 @@ there 2/ primitive t!
   t' (literal) lit <literal> !
   #0 >in ! #-1 dpl !
   2F lit dup blk ! scr !
-  TERMBUF lit #0 {tib} lit 2! ;s ( -- )
+  TERMBUF lit #0 tup 2!
+  postpone [ 
+  {up} lit ! ;s
+:s ini only forth definitions {up} lit @ task-init ;s ( -- )
 :s opts
   {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
@@ -963,7 +968,7 @@ there 2/ primitive t!
    F lit
    for F lit r@ - 3 lit u.r space 3F lit for count emit next cr next drop ;t
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
-:t set-input <ok> ! {id} up ! >in ! {tib} lit 2! ;t ( n1...n5 -- )
+:t set-input <ok> ! {id} up ! >in ! tup 2! ;t ( n1...n5 -- )
 \ TODO: There is a bug that seems to manifest with gforth, junk appears to
 \ be written in "t' nop lit" for some reason, which is not the case when
 \ cross compiling with the SUBLEQ image itself. The image produced by SUBLEQ
