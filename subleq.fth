@@ -205,7 +205,7 @@ label: entry       \ used to set entry point in next cell
   0 tvar bt        \ bitwise extra register
 
   0 tvar h         \ dictionary pointer
-  FC00 tvar {up}   \ Current task address
+  FC00 half tvar {up} \ Current task address (NB. Half size)
   F00 tvar {ms}    \ delay loop calibration variable
   0 tvar check     \ used for system checksum
   0 tvar {context} E tallot \ vocabulary context
@@ -306,7 +306,7 @@ assembler.1 -order
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
 :a opKey ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
-:a opUp ++sp tos {sp} iSTORE tos ip iLOAD ip INC {up} tos ADD ;a
+:a opUp ++sp tos {sp} iSTORE tos ip iLOAD ip INC {up} tos ADD {up} tos ADD ;a
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
@@ -428,12 +428,20 @@ assembler.1 -order
   t tos MOV
   w {sp} iSTORE ;a
 :a pause
-  \ TODO:
-  \ If next task != 0
-  \ 1. Save SP, RP, IP, UP
-  \ 2. Get next task
-  \ 3. Restore task context
-  ;a
+  w {up} iLOAD
+  w if 
+    {up} t MOV t INC ( load TASK pointer and skip next task location )
+      ip t iSTORE t INC
+     tos t iSTORE t INC
+    {rp} t iSTORE t INC
+    {sp} t iSTORE t INC
+    \ TODO: rp0/sp0
+    w {up} MOV w INC   \ Set next task
+    ip w iLOAD t INC
+    tos w iLOAD t INC
+    {rp} w iLOAD t INC
+    {sp} w iLOAD t INC
+  then ;a
 
 there 2/ primitive t!
 
@@ -712,13 +720,12 @@ there 2/ primitive t!
 :s digit 9 lit over < 7 lit and + [char] 0 + ;s ( u -- c )
 :t #  2 lit ?depth #0 base @ extract digit hold ;t ( d -- d )
 :t #s begin # 2dup ( d0= -> ) or 0= until ;t       ( d -- 0 )
-:t <# this =num lit + hld ! ;t                        ( -- )
+:t <# this =num lit + hld ! ;t                     ( -- )
 :t sign 0< if [char] - hold then ;t                ( n -- )
 :t u.r >r #0 <# #s #>  r> over - spaces type ;t
 :t u.     #0 <# #s #> space type ;t
 :t (.) abs base @ opDivMod ?dup if (.) then digit emit ;t
 :t . space dup 0< if [char] - emit then (.) ;t
-\ :t . dup >r abs #0 <# #s r> sign #> space type ;t  ( n -- print number )
 :t >number ( ud b u -- ud b u : convert string to number )
   begin
     2dup >r >r drop c@ base @        ( get next character )
@@ -882,8 +889,6 @@ there 2/ primitive t!
 :to r> compile opFromR ;t immediate compile-only
 :to r@ compile r@ ;t immediate compile-only
 :to rdrop compile rdrop ;t immediate compile-only
-:to rp0 {rp0} lit ;t
-:to sp0 {sp0} lit ;t
 :to exit compile opExit ;t immediate compile-only
 :to ." compile .$
   [char] " word count + h lit ! align ;t immediate compile-only
@@ -975,7 +980,6 @@ there 2/ primitive t!
 \ be written in "t' nop lit" for some reason, which is not the case when
 \ cross compiling with the SUBLEQ image itself. The image produced by SUBLEQ
 \ and gforth differ in other ways as well.
-\ TODO: Non blocking I/O should be tested on both input and output.
 \ TODO: Implement; ?do, do, loop, +loop, leave
 :t evaluate ( a u -- )
   get-input 2>r 2>r >r
