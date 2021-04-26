@@ -151,6 +151,7 @@ defined eforth [if]
    drop r> ;m
 :m mkck dup there swap - tcksum ;m
 defined eforth [if] system -order [then]
+\ :m expect-depth depth 1- <> if ( .s cr ) abort" incorrect depth" cr then ;
 
 \ ---------------------------------- Forth VM --------------------------------
 
@@ -217,12 +218,13 @@ label: entry       \ used to set entry point in next cell
   0 tvar {cold}    \ entry point of virtual machine program, set later on
   0 tvar {dirty}   \ is block dirty?
   0 tvar {last}    \ last defined word
+  0 tvar {cycles}  \ number of times we have switched tasks
+  0 tvar {single}  \ is multi processing off?
 
   \ TODO: IP could replace <cold>
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
-  0 tvar xxx \ TODO: Looks like address 80 is being overwritten!
   FD00 half dup tvar {rp0} tvar {rp}
   FE00 half dup tvar {sp0} tvar {sp}
   200 constant =tib
@@ -429,19 +431,22 @@ assembler.1 -order
   t tos MOV
   w {sp} iSTORE ;a
 :a pause
+  {single} if vm JMP then
   w {up} iLOAD
   w if
-    {up} t MOV t INC ( load TASK pointer and skip next task location )
+    {cycles} INC
+    \ TODO: rp0/sp0
+    {up} t MOV  t INC ( load TASK pointer and skip next task location )
       ip t iSTORE t INC
      tos t iSTORE t INC
     {rp} t iSTORE t INC
     {sp} t iSTORE t INC
-    \ TODO: rp0/sp0
-      w {up} MOV w INC \ Set next task
-      ip w iLOAD t INC
-     tos w iLOAD t INC
-    {rp} w iLOAD t INC
-    {sp} w iLOAD t INC
+
+     w {up} MOV w INC \ Set next task
+      ip w iLOAD w INC
+     tos w iLOAD w INC
+    {rp} w iLOAD w INC
+    {sp} w iLOAD w INC
   then ;a
 
 there 2/ primitive t!
@@ -556,6 +561,7 @@ there 2/ primitive t!
 :t hex  10 lit base ! ;t
 :t decimal A lit base ! ;t
 :s many #0 >in ! ;s
+:t cycles {cycles} lit ;t
 :t ] #-1 state ! ;t
 :t [ #0  state ! ;t immediate
 :t nip swap drop ;t
@@ -587,7 +593,7 @@ there 2/ primitive t!
 :t key? opKey s>d if
       {options} lit @ 8 lit and if bye then drop #0 exit then #-1 ;t
 :t key begin pause <key> @ execute until ;t
-:t emit <emit> @ execute ;t
+:t emit pause <emit> @ execute ;t
 :t cr =cr lit emit =lf lit emit ;t
 :t get-current current @ ;t
 :t set-current current ! ;t
@@ -624,19 +630,19 @@ there 2/ primitive t!
 :m $" ($) $literal ;m
 :t space bl emit ;t
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
-   sp@ >r              ( xt )   \ save data stack pointer
-   {handler} up @ >r  ( xt )   \ and previous handler
-   rp@ {handler} up ! ( xt )   \ set current handler
-   execute             ( )      \ execute returns if no throw
-   r> {handler} up !  ( )      \ restore previous handler
-   rdrop               ( )      \ discard saved stack ptr
-   #0 ;t               ( 0 )    \ normal completion
+   sp@ >r                ( xt )   \ save data stack pointer
+   {handler} up @ >r     ( xt )   \ and previous handler
+   rp@ {handler} up !    ( xt )   \ set current handler
+   execute               ( )      \ execute returns if no throw
+   r> {handler} up !     ( )      \ restore previous handler
+   rdrop                 ( )      \ discard saved stack ptr
+   #0 ;t                 ( 0 )    \ normal completion
 :t throw ( ??? exception# -- ??? exception# )
-    ?dup if                      ( exc# )     \ 0 throw is no-op
+    ?dup if              ( exc# )     \ 0 throw is no-op
       {handler} up @ rp! ( exc# )     \ restore prev return stack
       r> {handler} up !  ( exc# )     \ restore prev handler
-      r> swap >r                 ( saved-sp ) \ exc# on return stack
-      sp! drop r>                ( exc# )     \ restore stack
+      r> swap >r         ( saved-sp ) \ exc# on return stack
+      sp! drop r>        ( exc# )     \ restore stack
     then ;t
 :t abort #-1 throw ;t
 :s (abort) do$ swap if count type abort then drop ;s
@@ -931,10 +937,11 @@ there 2/ primitive t!
   ." License: The Unlicense / Public Domain" cr ;s
 :s task-init ( task-addr -- )
   {up} lit @ swap {up} lit !
-  this {next-task} up !
+  this 2/ {next-task} up !
   decimal
   t' key? lit <key> !
   t' (emit) lit <echo> !
+  {options} lit @ lsb if to' drop lit <echo> ! then
   t' (emit) lit <emit> !
   t' ok lit <ok> !
   t' (literal) lit <literal> !
@@ -942,8 +949,7 @@ there 2/ primitive t!
   this =tib lit + #0 tup 2! \ Set terminal input buffer location
   postpone [
   {up} lit ! ;s
-:s ini only forth definitions {up} lit @ task-init
-  2F lit dup blk ! scr ! ;s ( -- )
+:s ini {up} lit @ task-init 2F lit dup blk ! scr ! ;s ( -- )
 :s opts
   {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
@@ -953,6 +959,7 @@ there 2/ primitive t!
     {options} lit @ 2 lit xor {options} lit !
   then ;s
 :t quit ( -- : interpreter loop, and more, does more than most QUITs )
+  only forth definitions
   ini
   opts
   begin
@@ -962,12 +969,12 @@ there 2/ primitive t!
 :t cold {cold} lit @ execute ;t
 
 :t bell 7 lit emit ;t
-:t ms for calibration @ for next next ;t
+:t ms for calibration @ for pause next next ;t
 :s csi 1B lit emit 5B lit emit ;s
 :t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
 :t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
 :t b/buf 400 lit ;t
-:t block dup blk ! A lit lshift ;t ( NB. No mass storage! )
+:t block dup blk ! A lit lshift pause ;t ( NB. No mass storage! )
 :t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
 :t update #-1 {dirty} lit ! ;t
 :t blank bl fill ;t
@@ -991,7 +998,6 @@ there 2/ primitive t!
 :s line 6 lit lshift swap block + 40 lit ;s
 :s loadline line evaluate ;s
 :t load #0 F lit for 2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
-\ TODO: Editor should catch errors, use different 'ini'
 :t editor {editor} lit #1 set-order ;t ( Tiny BLOCK text editor )
 :e q only forth ;e
 :e ? scr @ . ;e
@@ -1011,7 +1017,9 @@ there 2/ primitive t!
 ( https://www.bradrodriguez.com/papers/mtasking.html )
 :t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
 :t signal #1 swap ! ;t ( addr -- )
-:t task: create 400 lit allot ;t \ TODO: Initialize task
+:t task: create here 400 lit allot task-init ;t \ TODO: Initialize task
+:t single #1 {single} lit ! ;t
+:t multi  #0 {single} lit ! ;t
 
 \ user variable message     \ a 16-bit message
 \      variable sender      \ holds address of the sending task
@@ -1037,5 +1045,5 @@ there h t!
 primitive t@ double mkck check t!
 atlast {last} t!
 save-target
-there .end
+.end \ 0 expect-depth
 bye

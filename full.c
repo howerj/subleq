@@ -44,12 +44,18 @@ static int putch(int c) {
 	fflush(stdout);
 	return res;
 }
+
+static void sleep_ms(unsigned ms) {
+	usleep((unsigned long)ms * 1000);
+}
 #else
 #ifdef _WIN32
 
 extern int getch(void);
 extern int putch(int c);
-
+static void sleep_ms(unsigned ms) {
+	usleep((unsigned long)ms * 1000);
+}
 #else
 static int getch(void) {
 	return getchar();
@@ -58,13 +64,17 @@ static int getch(void) {
 static int putch(const int c) {
 	return putchar(c);
 }
+
+static void sleep_ms(unsigned ms) {
+	(void)ms;
+}
 #endif
 #endif /** __unix__ **/
 
 static int wrap_getch(void) {
 	const int ch = getch();
 	if (ch == EOF) {
-		usleep(1000);
+		sleep_ms(1);
 	}
 	if (ch == ESCAPE)
 		exit(0);
