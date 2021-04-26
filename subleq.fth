@@ -192,6 +192,7 @@ label: entry       \ used to set entry point in next cell
   B tvar {options} \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
   0 tvar primitive \ any address lower than this one must be a primitive
   8000 tvar hbit   \ must contain 8000
+  80 tvar hbyte    \ must contain 80
   -2   tvar ntwo   \ must contain -2
   -1 tvar neg1     \ must contain -1
   1 tvar one       \ must contain  1
@@ -442,6 +443,8 @@ assembler.1 -order
     {rp} t iSTORE t INC
     {sp} t iSTORE t INC
 
+        w {rp0} MOV hbyte {rp0} ADD
+    {rp0} {sp0} MOV hbyte {sp0} ADD
      w {up} MOV w INC \ Set next task
       ip w iLOAD w INC
      tos w iLOAD w INC
