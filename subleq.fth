@@ -218,6 +218,7 @@ label: entry       \ used to set entry point in next cell
   0 tvar {dirty}   \ is block dirty?
   0 tvar {last}    \ last defined word
 
+  \ TODO: IP could replace <cold>
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
@@ -429,16 +430,16 @@ assembler.1 -order
   w {sp} iSTORE ;a
 :a pause
   w {up} iLOAD
-  w if 
+  w if
     {up} t MOV t INC ( load TASK pointer and skip next task location )
       ip t iSTORE t INC
      tos t iSTORE t INC
     {rp} t iSTORE t INC
     {sp} t iSTORE t INC
     \ TODO: rp0/sp0
-    w {up} MOV w INC   \ Set next task
-    ip w iLOAD t INC
-    tos w iLOAD t INC
+      w {up} MOV w INC \ Set next task
+      ip w iLOAD t INC
+     tos w iLOAD t INC
     {rp} w iLOAD t INC
     {sp} w iLOAD t INC
   then ;a
@@ -939,9 +940,9 @@ there 2/ primitive t!
   t' (literal) lit <literal> !
   #0 >in ! #-1 dpl !
   this =tib lit + #0 tup 2! \ Set terminal input buffer location
-  postpone [ 
+  postpone [
   {up} lit ! ;s
-:s ini only forth definitions {up} lit @ task-init   
+:s ini only forth definitions {up} lit @ task-init
   2F lit dup blk ! scr ! ;s ( -- )
 :s opts
   {options} lit @ lsb if to' drop lit <echo> ! then
