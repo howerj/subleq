@@ -925,7 +925,6 @@ there 2/ primitive t!
 :t bell 7 lit emit ;t
 :t ms for pause calibration @ for next next ;t
 :s csi 1B lit emit 5B lit emit ;s
-\ TODO: Vector page and at-xy
 :t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
 :t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
 :t b/buf 400 lit ;t
@@ -1011,8 +1010,8 @@ there 2/ primitive t!
 ( https://www.bradrodriguez.com/papers/mtasking.html )
 :t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
 :t signal #1 swap ! ;t ( addr -- )
- \ TODO: Initialize starting word/link in
-:t task: create here 400 lit allot task-init ;t
+\ TODO: Initialize starting word/link in
+:t task: create here 400 lit allot 2/ task-init ;t
 :t single #1 {single} lit ! ;t
 :t multi  #0 {single} lit ! ;t
 
