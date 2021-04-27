@@ -2,8 +2,7 @@
 #include <stdio.h>
 #define SZ   (32768)
 #define L(X) ((X)%SZ)
-int main(int s, char **v)
-{
+int main(int s, char **v) {
 	static uint16_t m[SZ];
 	uint16_t pc = 0;
 	for (int i = 1, d = 0; i < s; i++) {
@@ -15,7 +14,7 @@ int main(int s, char **v)
 		if (fclose(f) < 0)
 			return 2;
 	}
-	for (pc = 0; !(pc & 32768);) {
+	for (pc = 0; pc < SZ;) {
 		uint16_t a = m[L(pc++)], b = m[L(pc++)], c = m[L(pc++)];
 		if (a == 65535) {
 			m[L(b)] = getchar();

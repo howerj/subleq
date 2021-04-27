@@ -82,7 +82,7 @@ meta.1 +order definitions
 000D constant =cr
 007F constant =del
 
-create tflash tflash dup size cells allot size erase
+create tflash tflash size cells allot size erase
 
 variable tdp 0 tdp !
 variable tlast 0 tlast !
@@ -124,9 +124,10 @@ defined eforth [if]
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
 :m atlast tlast @ ;m
-:m lallot tlocal @ dup =cell + tlocal ! ;m
+:m lallot >r tlocal @ r> + tlocal ! ;m
 :m tuser
-  get-current >r meta.1 set-current create r> set-current lallot , does> @ ;m
+  get-current >r meta.1 set-current create r> 
+  set-current tlocal @ =cell lallot , does> @ ;m
 :m tvar
   get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
 :m label:
@@ -151,7 +152,6 @@ defined eforth [if]
    drop r> ;m
 :m mkck dup there swap - tcksum ;m
 defined eforth [if] system -order [then]
-\ :m expect-depth depth 1- <> if ( .s cr ) abort" incorrect depth" cr then ;
 
 \ ---------------------------------- Forth VM --------------------------------
 
@@ -161,13 +161,13 @@ defined eforth [if] system -order [then]
 :m JMP 2/ Z Z t, ;m
 :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
 :m SUB swap 2/ t, 2/ t, NADDR ;m
-:m NOP Z Z NADDR ;m
+:m NOOP Z Z NADDR ;m
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
 :m PUT 2/ t, -1 t, NADDR ;m
 :m GET 2/ -1 t, t, NADDR ;m
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR Z Z NADDR ;m
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
-:m iJMP there 2/ E + 2* MOV NOP ;m
+:m iJMP there 2/ E + 2* MOV NOOP ;m
 :m iSTORE ( addr w -- )
    swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV r> 0 MOV ;m
 
@@ -221,8 +221,9 @@ label: entry       \ used to set entry point in next cell
   0 tvar {last}    \ last defined word
   0 tvar {cycles}  \ number of times we have switched tasks
   0 tvar {single}  \ is multi processing off?
+  0 tvar {blk}     \ current loaded block
+  0 tvar {scr}     \ last viewed screen
 
-  \ TODO: IP could replace <cold>
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
@@ -237,8 +238,6 @@ label: entry       \ used to set entry point in next cell
   tuser {sp-save}   \ saved variable stack pointer
   tuser {base}      \ input/output radix
   tuser {dpl}       \ number of places after fraction
-  tuser {blk}       \ current loaded block
-  tuser {scr}       \ last viewed screen
   tuser {hld}       \ hold space pointer
   tuser {in}        \ position in query string
   tuser {key}       \ execution vector for key?
@@ -436,13 +435,11 @@ assembler.1 -order
   w {up} iLOAD
   w if
     {cycles} INC
-    \ TODO: rp0/sp0
     {up} t MOV  t INC ( load TASK pointer and skip next task location )
       ip t iSTORE t INC
      tos t iSTORE t INC
     {rp} t iSTORE t INC
     {sp} t iSTORE t INC
-
         w {rp0} MOV hbyte {rp0} ADD
     {rp0} {sp0} MOV hbyte {sp0} ADD
      w {up} MOV w INC \ Set next task
@@ -557,8 +554,8 @@ there 2/ primitive t!
 :t hld {hld} up ;t
 :t state {state} up ;t
 :s calibration {ms} lit ;s
-:t blk {blk} up ;t
-:t scr {scr} up ;t
+:t blk {blk} lit ;t
+:t scr {scr} lit ;t
 :t >in {in} up ;t
 :t bl 20 lit ;t
 :t hex  10 lit base ! ;t
@@ -618,8 +615,7 @@ there 2/ primitive t!
 :t 2>r r> swap >r swap >r >r ;t compile-only
 :t 2r> r> r> swap r> swap >r ;t compile-only
 :t count dup 1+ swap c@ ;t
-:s logical 0<> if #1 else #0 then ;s
-:t aligned dup lsb logical + ;t
+:t aligned dup lsb 0<> #1 and + ;t
 :t align here aligned h lit ! ;t
 :t +string #1 over min rot over + rot rot - ;t
 :t type begin dup while swap count emit swap 1- repeat 2drop ;t
@@ -723,7 +719,7 @@ there 2/ primitive t!
     r> t' match   lit look swap r> - >r - r> 1+  ( b u c -- b u delta )
     >in +!
     r> bl = if -trailing then #0 max ;t
-:t spaces begin dup 0> while space 1- repeat drop ;t ( +n -- )
+:s banner >r begin dup 0> while r@ emit 1- repeat drop rdrop ;s ( +n c -- )
 :t hold #-1 hld +! hld @ c! ;t ( c -- : save a character in hold space )
 :t #> 2drop hld @ this =num lit + over - ;t  ( u -- b u )
 :s extract dup >r um/mod r> swap >r um/mod r> rot ;s ( ud ud -- ud u )
@@ -732,7 +728,7 @@ there 2/ primitive t!
 :t #s begin # 2dup ( d0= -> ) or 0= until ;t       ( d -- 0 )
 :t <# this =num lit + hld ! ;t                     ( -- )
 :t sign 0< if [char] - hold then ;t                ( n -- )
-:t u.r >r #0 <# #s #>  r> over - spaces type ;t
+:t u.r >r #0 <# #s #>  r> over - bl banner type ;t
 :t u.     #0 <# #s #> space type ;t
 :t (.) abs base @ opDivMod ?dup if (.) then digit emit ;t
 :t . space dup 0< if [char] - emit then (.) ;t
@@ -926,11 +922,36 @@ there 2/ primitive t!
        find drop cfa dup to' [else] lit = swap to' [then] lit = or
        if exit then repeat query again ;t immediate
 :to [if] if exit then postpone [else] ;t immediate
+:t bell 7 lit emit ;t
+:t ms for pause calibration @ for next next ;t
+:s csi 1B lit emit 5B lit emit ;s
+\ TODO: Vector page and at-xy
+:t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
+:t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
+:t b/buf 400 lit ;t
+:t block #1 ?depth dup blk ! A lit lshift pause ;t ( NB. No mass storage! )
+:t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
+:t update #-1 {dirty} lit ! ;t
+:t blank bl fill ;t
+:t list page cr dup scr ! block
+   F lit
+   for F lit r@ - 3 lit u.r space 3F lit for count emit next cr next drop ;t
+:t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
+:t set-input <ok> ! {id} up ! >in ! tup 2! ;t ( n1...n5 -- )
 :s ok state @ 0= if ."  ok" cr then ;s
 :s eval
    begin bl word dup c@ while
      interpret #1 ?depth
    repeat drop <ok> @ execute ;s ( "word" -- )
+:t evaluate ( a u -- )
+  get-input 2>r 2>r >r
+  #0 #-1 t' nop lit set-input
+  t' eval lit catch
+  r> 2r> 2r> set-input
+  throw ;t
+:s line 6 lit lshift swap block + 40 lit ;s
+:s loadline line evaluate ;s
+:t load #0 F lit for 2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
 :r eforth 0106 lit ;r ( -- version )
 :s info cr
   ." Project: eForth v1.6 " ( here . ) cr
@@ -971,42 +992,12 @@ there 2/ primitive t!
   again ;t
 :t cold {cold} lit @ execute ;t
 
-:t bell 7 lit emit ;t
-:t ms for calibration @ for pause next next ;t
-:s csi 1B lit emit 5B lit emit ;s
-:t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
-:t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
-:t b/buf 400 lit ;t
-:t block dup blk ! A lit lshift pause ;t ( NB. No mass storage! )
-:t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
-:t update #-1 {dirty} lit ! ;t
-:t blank bl fill ;t
-:t list page cr dup scr ! block
-   ( space 10 lit for 10 lit r@ - 2* 2* 4 lit u.r next cr )
-   F lit
-   for F lit r@ - 3 lit u.r space 3F lit for count emit next cr next drop ;t
-:t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
-:t set-input <ok> ! {id} up ! >in ! tup 2! ;t ( n1...n5 -- )
-\ TODO: There is a bug that seems to manifest with gforth, junk appears to
-\ be written in "t' nop lit" for some reason, which is not the case when
-\ cross compiling with the SUBLEQ image itself. The image produced by SUBLEQ
-\ and gforth differ in other ways as well.
-\ TODO: Implement; ?do, do, loop, +loop, leave
-:t evaluate ( a u -- )
-  get-input 2>r 2>r >r
-  #0 #-1 t' nop lit set-input
-  t' eval lit catch
-  r> 2r> 2r> set-input
-  throw ;t
-:s line 6 lit lshift swap block + 40 lit ;s
-:s loadline line evaluate ;s
-:t load #0 F lit for 2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
 :t editor {editor} lit #1 set-order ;t ( Tiny BLOCK text editor )
 :e q only forth ;e
 :e ? scr @ . ;e
 :e l scr @ list ;e
 :e e q scr @ load editor ;e
-:e ia 6 lit lshift + scr @ block + tib >in @ +
+:e ia 2 lit ?depth 6 lit lshift + scr @ block + tib >in @ +
    swap source nip >in @ - cmove tib @ >in ! update l ;e
 :e i #0 swap ia ;e
 :e w words ;e
@@ -1015,12 +1006,13 @@ there 2/ primitive t!
 :e p #-1 scr +! l ;e
 :e r scr ! l ;e
 :e x scr @ block b/buf blank l ;e
-:e d >r scr @ block r> 6 lit lshift + 40 lit blank l ;e
+:e d 1 lit ?depth >r scr @ block r> 6 lit lshift + 40 lit blank l ;e
 
 ( https://www.bradrodriguez.com/papers/mtasking.html )
 :t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
 :t signal #1 swap ! ;t ( addr -- )
-:t task: create here 400 lit allot task-init ;t \ TODO: Initialize task
+ \ TODO: Initialize starting word/link in
+:t task: create here 400 lit allot task-init ;t
 :t single #1 {single} lit ! ;t
 :t multi  #0 {single} lit ! ;t
 
@@ -1048,5 +1040,5 @@ there h t!
 primitive t@ double mkck check t!
 atlast {last} t!
 save-target
-.end \ 0 expect-depth
+.end
 bye

@@ -22,9 +22,6 @@ gforth.dec: subleq.fth
 gforth: subleq gforth.dec
 	./subleq gforth.dec
 
-dump: subleq subleq.dec
-	echo "' nop <ok> ! 0 here dump bye" | ./subleq subleq.dec
-
 clean:
-	rm -fv subleq 1.dec 2.dec gforth.dec *.exe
+	git clean -dffx
 
