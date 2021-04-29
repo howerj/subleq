@@ -221,8 +221,8 @@ label: entry       \ used to set entry point in next cell
   0 tvar {last}    \ last defined word
   0 tvar {cycles}  \ number of times we have switched tasks
   0 tvar {single}  \ is multi processing off?
-  0 tvar {blk}     \ current loaded block
-  0 tvar {scr}     \ last viewed screen
+  2F tvar {blk}     \ current loaded block
+  2F tvar {scr}     \ last viewed screen
 
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
@@ -430,10 +430,12 @@ assembler.1 -order
   t DEC
   t tos MOV
   w {sp} iSTORE ;a
+\ 58 tvar xxx
 :a pause
   {single} if vm JMP then
   w {up} iLOAD
   w if
+\    xxx PUT
     {cycles} INC
     {up} t MOV  t INC ( load TASK pointer and skip next task location )
       ip t iSTORE t INC
@@ -730,7 +732,7 @@ there 2/ primitive t!
 :t sign 0< if [char] - hold then ;t                ( n -- )
 :t u.r >r #0 <# #s #>  r> over - bl banner type ;t
 :t u.     #0 <# #s #> space type ;t
-:t (.) abs base @ opDivMod ?dup if (.) then digit emit ;t
+:s (.) abs base @ opDivMod ?dup if (.) then digit emit ;s
 :t . space dup 0< if [char] - emit then (.) ;t
 :t >number ( ud b u -- ud b u : convert string to number )
   begin
@@ -958,9 +960,16 @@ there 2/ primitive t!
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;s
+:t activate ( task-address -- )
+   this @ >r dup 2/ this ! r> swap ! ;t
+:t task-set swap 2/ swap {ip-save} lit + ! ;t
 :s task-init ( task-addr -- )
   {up} lit @ swap {up} lit !
   this 2/ {next-task} up !
+  t' nop lit 2/ {ip-save} up !
+  this 100 lit + 2/ {rp-save} up !
+  this 200 lit + 2/ {sp-save} up !
+  #0 {tos-save} up !
   decimal
   t' key? lit <key> !
   t' (emit) lit <echo> !
@@ -972,7 +981,7 @@ there 2/ primitive t!
   this =tib lit + #0 tup 2! \ Set terminal input buffer location
   postpone [
   {up} lit ! ;s
-:s ini {up} lit @ task-init 2F lit dup blk ! scr ! ;s ( -- )
+:s ini ( t' nop lit ) {up} lit @ task-init ;s ( -- )
 :s opts
   {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
@@ -1010,8 +1019,7 @@ there 2/ primitive t!
 ( https://www.bradrodriguez.com/papers/mtasking.html )
 :t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
 :t signal #1 swap ! ;t ( addr -- )
-\ TODO: Initialize starting word/link in
-:t task: create here 400 lit allot 2/ task-init ;t
+:t task: create ( t' nop lit ) here 400 lit allot 2/ task-init ;t
 :t single #1 {single} lit ! ;t
 :t multi  #0 {single} lit ! ;t
 
