@@ -77,10 +77,12 @@ meta.1 +order definitions
 4000 constant size
 8000 constant =end
  100 constant =buf
+ 100 constant =stksz
 0008 constant =bksp
 000A constant =lf
 000D constant =cr
 007F constant =del
+FC00 constant =stack-start
 
 create tflash tflash size cells allot size erase
 
@@ -192,7 +194,7 @@ label: entry       \ used to set entry point in next cell
   B tvar {options} \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
   0 tvar primitive \ any address lower than this one must be a primitive
   8000 tvar hbit   \ must contain 8000
-  80 tvar hbyte    \ must contain 80
+  =stksz half tvar stacksz \ must contain 80
   -2   tvar ntwo   \ must contain -2
   -1 tvar neg1     \ must contain -1
   1 tvar one       \ must contain  1
@@ -207,7 +209,7 @@ label: entry       \ used to set entry point in next cell
   0 tvar bt        \ bitwise extra register
 
   0 tvar h         \ dictionary pointer
-  FC00 half tvar {up} \ Current task address (NB. Half size)
+  =stack-start half tvar {up} \ Current task address (NB. Half size)
   F00 tvar {ms}    \ delay loop calibration variable
   0 tvar check     \ used for system checksum
   0 tvar {context} E tallot \ vocabulary context
@@ -215,22 +217,22 @@ label: entry       \ used to set entry point in next cell
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
   0 tvar {editor}   \ editor vocabulary
   0 tvar {root-voc} \ absolute minimum vocabulary
-  0 tvar {system}  \ system functions vocabulary
-  0 tvar {cold}    \ entry point of virtual machine program, set later on
-  0 tvar {dirty}   \ is block dirty?
-  0 tvar {last}    \ last defined word
-  0 tvar {cycles}  \ number of times we have switched tasks
-  0 tvar {single}  \ is multi processing off?
+  0 tvar {system}   \ system functions vocabulary
+  0 tvar {cold}     \ entry point of virtual machine program, set later on
+  0 tvar {dirty}    \ is block dirty?
+  0 tvar {last}     \ last defined word
+  0 tvar {cycles}   \ number of times we have switched tasks
+  0 tvar {single}   \ is multi processing off?
   2F tvar {blk}     \ current loaded block
   2F tvar {scr}     \ last viewed screen
 
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
-  FD00 half dup tvar {rp0} tvar {rp}
-  FE00 half dup tvar {sp0} tvar {sp}
-  200 constant =tib
-  380 constant =num
+  =stack-start =stksz        + half dup tvar {rp0} tvar {rp}
+  =stack-start =stksz double + half dup tvar {sp0} tvar {sp}
+  200 constant =tib \ Start of terminal input buffer
+  380 constant =num \ Start of numeric input buffer
   tuser {next-task} \ next task in task list
   tuser {ip-save}   \ saved instruction pointer
   tuser {tos-save}  \ saved top of variable stack
@@ -247,6 +249,8 @@ label: entry       \ used to set entry point in next cell
   tuser {echo}      \ execution vector for echo
   tuser {state}     \ compiler state
   tuser {handler}   \ throw/catch handler
+  tuser {sender}    \ multitasking; message sender, 0 = no message
+  tuser {message}   \ multitasking; the message itself
   tuser {id}        \ executing from block or terminal?
   tuser {tib}       \ terminal input buffer: cell 1,
   =cell lallot      \ terminal input buffer: cell 2
@@ -430,21 +434,19 @@ assembler.1 -order
   t DEC
   t tos MOV
   w {sp} iSTORE ;a
-\ 58 tvar xxx
 :a pause
   {single} if vm JMP then
   w {up} iLOAD
   w if
-\    xxx PUT
     {cycles} INC
     {up} t MOV  t INC ( load TASK pointer and skip next task location )
       ip t iSTORE t INC
      tos t iSTORE t INC
     {rp} t iSTORE t INC
     {sp} t iSTORE t INC
-        w {rp0} MOV hbyte {rp0} ADD
-    {rp0} {sp0} MOV hbyte {sp0} ADD
-     w {up} MOV w INC \ Set next task
+        w {rp0} MOV stacksz {rp0} ADD
+    {rp0} {sp0} MOV stacksz {sp0} ADD
+     w {up} MOV w INC ( Set next task )
       ip w iLOAD w INC
      tos w iLOAD w INC
     {rp} w iLOAD w INC
@@ -550,7 +552,7 @@ there 2/ primitive t!
 :t #vocs 8 lit ;t
 :t context {context} lit ;t
 :t here h lit @ ;t
-\ :t pad this 80 lit + ;t
+:t pad this 3C0 lit + ;t
 :t base {base} up ;t
 :t dpl {dpl} up ;t
 :t hld {hld} up ;t
@@ -960,15 +962,12 @@ there 2/ primitive t!
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;s
-:t activate ( task-address -- )
-   this @ >r dup 2/ this ! r> swap ! ;t
-:t task-set swap 2/ swap {ip-save} lit + ! ;t
 :s task-init ( task-addr -- )
   {up} lit @ swap {up} lit !
   this 2/ {next-task} up !
   t' nop lit 2/ {ip-save} up !
-  this 100 lit + 2/ {rp-save} up !
-  this 200 lit + 2/ {sp-save} up !
+  this =stksz        lit + 2/ {rp-save} up !
+  this =stksz double lit + 2/ {sp-save} up !
   #0 {tos-save} up !
   decimal
   t' key? lit <key> !
@@ -981,7 +980,11 @@ there 2/ primitive t!
   this =tib lit + #0 tup 2! \ Set terminal input buffer location
   postpone [
   {up} lit ! ;s
-:s ini ( t' nop lit ) {up} lit @ task-init ;s ( -- )
+:t activate ( xt task-address -- )
+   dup task-init
+   dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
+   r> this @ >r dup 2/ this ! r> swap ! ;t ( link in task )
+:s ini {up} lit @ task-init ;s ( -- )
 :s opts
   {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
@@ -1019,9 +1022,17 @@ there 2/ primitive t!
 ( https://www.bradrodriguez.com/papers/mtasking.html )
 :t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
 :t signal #1 swap ! ;t ( addr -- )
-:t task: create ( t' nop lit ) here 400 lit allot 2/ task-init ;t
+:t task: create here 400 lit allot 2/ task-init ;t
 :t single #1 {single} lit ! ;t
 :t multi  #0 {single} lit ! ;t
+:t send ( msg task-addr -- )
+  this over {sender} lit +
+  begin pause dup @ 0= until
+  ! {message} lit + !  ;t
+:t receive ( -- msg task-addr )
+  begin pause {sender} up @ until
+  {message} up @ {sender} up @
+  #0 {sender} up ! ;t
 
 \ user variable message     \ a 16-bit message
 \      variable sender      \ holds address of the sending task
