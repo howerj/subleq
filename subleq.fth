@@ -1021,33 +1021,16 @@ there 2/ primitive t!
 
 ( https://www.bradrodriguez.com/papers/mtasking.html )
 :t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
-:t signal #1 swap ! ;t ( addr -- )
+:t signal this swap ! ;t ( addr -- )
 :t task: create here 400 lit allot 2/ task-init ;t
 :t single #1 {single} lit ! ;t
 :t multi  #0 {single} lit ! ;t
 :t send ( msg task-addr -- )
-  this over {sender} lit +
-  begin pause dup @ 0= until
-  ! {message} lit + !  ;t
+  this over {sender} lit + begin pause dup @ 0= until ! {message} lit + ! ;t
 :t receive ( -- msg task-addr )
   begin pause {sender} up @ until
   {message} up @ {sender} up @
   #0 {sender} up ! ;t
-
-\ user variable message     \ a 16-bit message
-\      variable sender      \ holds address of the sending task
-\ forth
-\ : mytask ( -- a)   up @ ;     \ returns addr of the running task
-\
-\ : send ( msg taskadr -- )     \ send msg to the given task
-\    mytask  over sender local  \ -- msg taskadr mytask senderadr
-\    begin pause dup @ 0= until \ wait until his sender is zero
-\    !   message local ! ;      \ store mytask,msg in his user var
-\
-\ : receive ( -- msg taskadr)     \ wait for a message from anyone
-\    begin pause sender @ until   \ wait until my sender nonzero
-\    message @  sender @          \ get message and sending task
-\    0# sender ! ;                 \ now ready for another message!
 
 \ ---------------------------------- Image Generation ------------------------
 
