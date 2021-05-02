@@ -980,10 +980,6 @@ there 2/ primitive t!
   this =tib lit + #0 tup 2! \ Set terminal input buffer location
   postpone [
   {up} lit ! ;s
-:t activate ( xt task-address -- )
-   dup task-init
-   dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
-   r> this @ >r dup 2/ this ! r> swap ! ;t ( link in task )
 :s ini {up} lit @ task-init ;s ( -- )
 :s opts
   {options} lit @ lsb if to' drop lit <echo> ! then
@@ -1001,8 +997,23 @@ there 2/ primitive t!
    query t' eval lit catch
    ?dup if dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
-:t cold {cold} lit @ execute ;t
-
+\ Multitasking https://www.bradrodriguez.com/papers/mtasking.html
+:t task: create here 400 lit allot 2/ task-init ;t ( create a named task )
+:t activate ( xt task-address -- : start task executing xt )
+   dup task-init
+   dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
+   r> this @ >r dup 2/ this ! r> swap ! ;t ( link in task )
+:t wait begin pause dup @ until #0 swap ! ;t ( addr -- : wait for signal )
+:t signal this swap ! ;t ( addr -- : signal to wait )
+:t single #1 {single} lit ! ;t ( -- : run only current task, disable others )
+:t multi  #0 {single} lit ! ;t ( -- : enable multitasking )
+:t send ( msg task-addr -- : send message to task )
+  this over {sender} lit + begin pause dup @ 0= until ! {message} lit + ! ;t
+:t receive ( -- msg task-addr : block until message )
+  begin pause {sender} up @ until
+  {message} up @ {sender} up @
+  #0 {sender} up ! ;t
+\ <http://tunes.org/wiki/block_20editor.html> or search "FORTH BLOCK EDITOR"
 :t editor {editor} lit #1 set-order ;t ( Tiny BLOCK text editor )
 :e q only forth ;e
 :e ? scr @ . ;e
@@ -1018,19 +1029,7 @@ there 2/ primitive t!
 :e r scr ! l ;e
 :e x scr @ block b/buf blank l ;e
 :e d 1 lit ?depth >r scr @ block r> 6 lit lshift + 40 lit blank l ;e
-
-( https://www.bradrodriguez.com/papers/mtasking.html )
-:t wait begin pause dup @ until #0 swap ! ;t ( addr -- )
-:t signal this swap ! ;t ( addr -- )
-:t task: create here 400 lit allot 2/ task-init ;t
-:t single #1 {single} lit ! ;t
-:t multi  #0 {single} lit ! ;t
-:t send ( msg task-addr -- )
-  this over {sender} lit + begin pause dup @ 0= until ! {message} lit + ! ;t
-:t receive ( -- msg task-addr )
-  begin pause {sender} up @ until
-  {message} up @ {sender} up @
-  #0 {sender} up ! ;t
+:t cold {cold} lit @ execute ;t
 
 \ ---------------------------------- Image Generation ------------------------
 

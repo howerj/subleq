@@ -1,6 +1,6 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O3
 
-.PHONY: all clean test run dump gforth
+.PHONY: all clean test run gforth
 
 all: subleq
 
