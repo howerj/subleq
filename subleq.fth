@@ -225,6 +225,7 @@ label: entry       \ used to set entry point in next cell
   0 tvar {single}   \ is multi processing off?
   2F tvar {blk}     \ current loaded block
   2F tvar {scr}     \ last viewed screen
+  0 tvar padding    \ !! Getting set for some reason during image generation
 
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
