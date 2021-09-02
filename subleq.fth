@@ -1,5 +1,5 @@
 defined eforth [if] ' nop <ok> ! [then]
-\ Project: Cross Compiler and eForth interpreter for a SUBLEQ CPU
+\ Project: Cross Compiler / eForth interpreter for a SUBLEQ CPU
 \ License: The Unlicense
 \ Author:  Richard James Howe
 \ Email:   howe.r.j.89@gmail.com
@@ -13,45 +13,62 @@ defined eforth [if] ' nop <ok> ! [then]
 \ - <https://github.com/samawati/j1eforth>
 \ - <https://www.bradrodriguez.com/papers/>
 \ - 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
-\ - <https://www.bradrodriguez.com/papers/mtasking.html> For multitasking
-\ - <https://forth-standard.org/standard/block> For the block word-set
+\ - <https://www.bradrodriguez.com/papers/mtasking.html>,
+\   For multitasking support
+\ - <https://forth-standard.org/standard/block>,
+\   For the block word-set, which is partially implemented.
 \
 \ The way this cross compiler works is the following:
 \
 \ 1. An assembler for the SUBLEQ machine is made.
-\ 2. A virtual machine is made with that assembler that can support
-\    higher level programming constructs, specifically, the easy execution
-\    of Forth.
-\ 3. Forth word definitions are built up, which are then used to construct
-\    a full Forth interpreter.
+\ 2. A virtual machine is made with that assembler that can 
+\    support higher level programming constructs, specifically, 
+\    the easy execution of Forth.
+\ 3. Forth word definitions are built up, which are then used 
+\    to construct a full Forth interpreter.
 \ 4. The resulting image is output to standard out.
 \
-\ Check the references for more detailed examples for other systems. Some
-\ keywords that will help are; Forth, Meta-compilation, Cross compiler, eForth,
-\ 8086 eForth, JonesForth.
+\ Check the references for more detailed examples for other 
+\ systems. Some keywords that will help are; Forth, 
+\ Meta-compilation, Cross compiler, eForth, 8086 eForth, 
+\ JonesForth, j1eforth.
 \
 \ Notes:
 \
-\ - If "see", the decompiler, was advanced enough we could dispense with the
-\ source code, which is an interesting concept.
-\ - The eForth image could determine the SUBLEQ machine size, and adjust itself
-\ accordingly, it would not even require a power-of-two integer width.
-\ - The eForth image could be compressed with LZSS to save on space.
+\ - If "see", the decompiler, was advanced enough we could 
+\ dispense with the source code, an interesting concept.
+\ - The eForth image could determine the SUBLEQ machine size, 
+\ and adjust itself accordingly, it would not even require a 
+\ power-of-two integer width. Another interesting concept would
+\ be to adapt this eForth to a SUBLEQ machine that used bignums
+\ for each cell, this would require re-engineering functions 
+\ like bitwise AND/OR/XOR as they require a fixed cell width to 
+\ work efficiently.
+\ - The eForth image could be compressed with LZSS to save on 
+\ space. If the de-compressor was written in pure SUBLEQ it 
+\ would compression of most of the image instead of just the 
+\ eForth section of it.
 \ - A website with an interactive simulator is available at:
 \   <https://github.com/howerj/subleq-js>
-\ - It would be nice to make a 7400 Integrated Circuit board that could run
-\ and execute this code, or a project in VHDL for an FPGA that could do it.
-\ - The virtual machine could be sped up with optimization magic,
-\ - Half of the memory used is just for the virtual machine that allows Forth
-\ to be written.
-\ - It would be possible to make the virtual machine support the TASK and USER
-\ word-sets, allowing for cooperative multitasking.
-\ - The BLOCK word-set does not use mass storage, but maps blocks to memory,
-\ if a mass storage peripheral were to be added these functions would have
-\ to be modified. It might be nice to make a Forth File System based on blocks
-\ as well, then this system could act like a primitive DOS.
-\ - Reformatting the text for a 64 byte line width would allow storage in
-\ Forth blocks.
+\ - It would be nice to make a 7400 Integrated Circuit board 
+\ that could run and execute this code, or a project in VHDL 
+\ for an FPGA that could do it.
+\ - The virtual machine could be sped up with optimization 
+\ magic
+\ - Half of the memory used is just for the virtual machine 
+\ that allows Forth to be written.
+\ - The BLOCK word-set does not use mass storage, but maps 
+\ blocks to memory, if a mass storage peripheral were to be 
+\ added these functions would have to be modified. It might be 
+\ nice to make a Forth File System based on blocks as well, 
+\ then this system could act like a primitive DOS.
+\ - Reformatting the text for a 64 byte line width would allow 
+\ storage in Forth blocks. This file could then perhaps we 
+\ stored within the image.
+\ - Much like my Embed VM project and Forth interpreter, 
+\ available at \ <https://github.com/howerj/embed>, this file 
+\ could be documented extensively and explain how to build up 
+\ a Forth interpreter from scratch.
 \
 only forth definitions hex
 
@@ -63,7 +80,9 @@ only forth definitions hex
 : -order get-order (order) nip set-order ;
 : +order dup >r -order get-order r> swap 1+ set-order ;
 
-defined eforth [if] : wordlist here cell allot 0 over ! ; [then]
+defined eforth [if] 
+	: wordlist here cell allot 0 over ! ; 
+[then]
 
 wordlist constant meta.1
 wordlist constant target.1
@@ -113,27 +132,34 @@ defined eforth [if]
   :m limit FFFF and ;m
 [then]
 :m $literal talign [char] " word count tpack talign ;m
-:m thead talign there tlast @ t, tlast ! parse-word talign tpack talign ;m
+:m thead talign there tlast @ t, tlast ! 
+   parse-word talign tpack talign ;m
 defined eforth [if]
-:m #dec dup 0< if [char] - emit then (.) A emit ;m ( n -- print number )
+  :m #dec dup 0< if [char] - emit then (.) A emit ;m
 [else]
-:m #dec dup 8000 u>= if negate limit -1 >r else 0 >r then
-   0 <# A hold #s r> sign #> type ;m  ( n -- print number )
+  :m #dec dup 8000 u>= if negate limit -1 >r else 0 >r then
+     0 <# A hold #s r> sign #> type ;m
 [then]
+:m #dat dup FF and emit 8 rshift FF and emit ;m
+0 [if] :m #out #dat ;m [else] :m #out #dec ;m [then]
 :m mdump taligned
-    begin ?dup while swap dup @ limit #dec tcell + swap tcell - repeat drop ;m
+  begin ?dup 
+  while swap dup @ limit #out tcell + swap tcell - 
+  repeat drop ;m
 :m save-target decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
 :m setlast tlast ! ;m
 :m atlast tlast @ ;m
 :m lallot >r tlocal @ r> + tlocal ! ;m
 :m tuser
-  get-current >r meta.1 set-current create r> 
+  get-current >r meta.1 set-current create r>
   set-current tlocal @ =cell lallot , does> @ ;m
-:m tvar
-  get-current >r meta.1 set-current create r> set-current there , t, does> @ ;m
-:m label:
-  get-current >r meta.1 set-current create r> set-current there ,    does> @ ;m
+:m tvar get-current >r 
+     meta.1 set-current create 
+   r> set-current there , t, does> @ ;m
+:m label: get-current >r 
+     meta.1 set-current create 
+   r> set-current there ,    does> @ ;m
 :m tdown =cell negate and ;m
 :m tnfa =cell + ;m ( pwd -- nfa : move to name field address )
 :m tcfa tnfa dup c@ 1F and + =cell + tdown ;m ( pwd -- cfa )
@@ -142,20 +168,21 @@ defined eforth [if]
 :m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
 defined eforth [if]
-  :m (') bl word find ?found cfa ;m
-  :m t' (') >body @ ;m
-  :m to' target.only.1 +order (') >body @ target.only.1 -order ;m
- [else]
-  :m t' ' >body @ ;m
-  :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
+:m (') bl word find ?found cfa ;m
+:m t' (') >body @ ;m
+:m to' target.only.1 +order (') >body @ target.only.1 -order ;m
+[else]
+:m t' ' >body @ ;m
+:m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 [then]
 :m tcksum taligned dup C0DE - FFFF and >r
-   begin ?dup while swap dup t@ r> + FFFF and >r =cell + swap =cell - repeat
-   drop r> ;m
+   begin ?dup 
+   while swap dup t@ r> + FFFF and >r =cell + swap =cell - 
+   repeat drop r> ;m
 :m mkck dup there swap - tcksum ;m
 defined eforth [if] system -order [then]
 
-\ ---------------------------------- Forth VM --------------------------------
+\ ---------------------- Forth VM -----------------------------
 
 :m Z 0 t, ;m \ Address 0 must contain 0
 :m NADDR there 2/ 1+ t, ;m
@@ -167,19 +194,23 @@ defined eforth [if] system -order [then]
 :m ZERO dup 2/ t, 2/ t, NADDR ;m
 :m PUT 2/ t, -1 t, NADDR ;m
 :m GET 2/ -1 t, t, NADDR ;m
-:m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR Z Z NADDR ;m
+:m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR 
+   Z Z NADDR ;m
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
 :m iJMP there 2/ E + 2* MOV NOOP ;m
 :m iSTORE ( addr w -- )
-   swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV r> 0 MOV ;m
+   swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV 
+   r> 0 MOV ;m
 
 assembler.1 +order definitions
 : begin talign there ;
 : again JMP ;
 : mark there 0 t, ;
 : if ( NB. "if" does not work for 8000 )
-   2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t, mark ;
-: until 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t, 2/ t, ;
+   2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t, 
+   mark ;
+: until 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, 
+   Z Z NADDR Z t, 2/ t, ;
 : +if   Z 2/ t, mark ;
 : -if 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;
 : then begin 2/ swap t! ;
@@ -191,8 +222,9 @@ meta.1 +order definitions
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
-  B tvar {options} \ bit #1=echo off, #2 = checksum on, #4=info, #8=die on EOF
-  0 tvar primitive \ any address lower than this one must be a primitive
+  B tvar {options} \ bit #1=echo off, #2 = checksum on, 
+                   \ #4=info, #8=die on EOF
+  0 tvar primitive \ any address lower must be a VM primitive
   8000 tvar hbit   \ must contain 8000
   =stksz half tvar stacksz \ must contain 80
   -2   tvar ntwo   \ must contain -2
@@ -209,23 +241,23 @@ label: entry       \ used to set entry point in next cell
   0 tvar bt        \ bitwise extra register
 
   0 tvar h         \ dictionary pointer
-  =stack-start half tvar {up} \ Current task address (NB. Half size)
+  =stack-start half tvar {up} \ Current task addr. (Half size)
   F00 tvar {ms}    \ delay loop calibration variable
   0 tvar check     \ used for system checksum
   0 tvar {context} E tallot \ vocabulary context
-  0 tvar {current} \ vocabulary which new definitions are added to
+  0 tvar {current} \ vocabulary to add new definitions to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
   0 tvar {editor}   \ editor vocabulary
   0 tvar {root-voc} \ absolute minimum vocabulary
   0 tvar {system}   \ system functions vocabulary
-  0 tvar {cold}     \ entry point of virtual machine program, set later on
+  0 tvar {cold}     \ entry point of VM program, set later on
   0 tvar {dirty}    \ is block dirty?
   0 tvar {last}     \ last defined word
   0 tvar {cycles}   \ number of times we have switched tasks
   0 tvar {single}   \ is multi processing off?
   2F tvar {blk}     \ current loaded block
   2F tvar {scr}     \ last viewed screen
-  0 tvar padding    \ !! Getting set for some reason during image generation
+  0 tvar padding    \ BUG: Getting during image generation
 
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
@@ -250,7 +282,7 @@ label: entry       \ used to set entry point in next cell
   tuser {echo}      \ execution vector for echo
   tuser {state}     \ compiler state
   tuser {handler}   \ throw/catch handler
-  tuser {sender}    \ multitasking; message sender, 0 = no message
+  tuser {sender}    \ multitasking; msg. send, 0 = no message
   tuser {message}   \ multitasking; the message itself
   tuser {id}        \ executing from block or terminal?
   tuser {tib}       \ terminal input buffer: cell 1,
@@ -294,17 +326,22 @@ assembler.1 -order
 :m :t header :ht ;m ( "name" -- : forth routine )
 :m :to ( "name" -- : forth, target only routine )
   header
-  get-current >r target.only.1 set-current create r> set-current
+  get-current >r 
+    target.only.1 set-current create 
+  r> set-current
   BABE talign there ,
   does> @ 2/ t, ;m
 :m :a ( "name" -- : assembly routine, no header )
   D00D target.1 +order definitions
   create talign there , assembler.1 +order does> @ 2/ t, ;m
-:m (a); D00D <> if abort" unstructured" then assembler.1 -order ;m
+:m (a); D00D <> 
+   if abort" unstructured" then assembler.1 -order ;m
 :m ;a (a); vm a-optim vm JMP ;m
-:m postpone target.only.1 +order t' target.only.1 -order 2/ t, ;m
-\ NB. There are some bugs with the comparison operators "op<" and "op>" when
-\ they deal with extreme values like "$8000 1 <", "$8002 1 <" words fine.
+:m postpone 
+   target.only.1 +order t' target.only.1 -order 2/ t, ;m
+\ NB. There are some bugs with the comparison operators "op<" 
+\ and "op>" when they deal with extreme values like 
+\ "$8000 1 <", "$8002 1 <" works fine.
 :a bye HALT ;a
 :a 1- tos DEC ;a
 :a 1+ tos INC ;a
@@ -314,7 +351,8 @@ assembler.1 -order
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
 :a opKey ++sp tos {sp} iSTORE tos GET ;a
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
-:a opUp ++sp tos {sp} iSTORE tos ip iLOAD ip INC {up} tos ADD {up} tos ADD ;a
+:a opUp ++sp tos {sp} iSTORE tos ip iLOAD ip INC 
+   {up} tos ADD {up} tos ADD ;a
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
@@ -333,7 +371,8 @@ assembler.1 -order
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
 :a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a
 :a opNext w {rp} iLOAD
-   w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then ip INC --rp ;a
+   w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then 
+   ip INC --rp ;a
 :a lsb
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
@@ -342,22 +381,29 @@ assembler.1 -order
     tos w MOV 0 tos MOV w if neg1 tos MOV then ;a
 :a opJump ip ip iLOAD ;a
 :a opJumpZ
-  tos w MOV 0 t MOV w if neg1 t MOV then w DEC w +if neg1 t MOV then
-  tos {sp} iLOAD --sp t if ip INC vm JMP then w ip iLOAD w ip MOV ;a
+  tos w MOV 0 t MOV 
+  w if neg1 t MOV then w DEC w +if neg1 t MOV then
+  tos {sp} iLOAD --sp 
+  t if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 :a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
 :a op0=
-   tos w MOV neg1 tos MOV w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
+   tos w MOV neg1 tos MOV 
+   w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
 :a op0<
-   tos w MOV 0 tos MOV w -if neg1 tos MOV then w INC w -if neg1 tos MOV then ;a
-:a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV w -if neg1 tos MOV then ;a
-:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV w +if neg1 tos MOV then ;a
+   tos w MOV 0 tos MOV 
+   w -if neg1 tos MOV then w INC w -if neg1 tos MOV then ;a
+:a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV 
+   w -if neg1 tos MOV then ;a
+:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV 
+   w +if neg1 tos MOV then ;a
 :a op2* tos tos ADD ;a
 :a op2/
   bwidth w MOV
   x ZERO
   begin w DEC w while
     x x ADD
-  tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+  tos bt MOV 0 bl1 MOV 
+  bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
     bl1 if x INC then
     tos tos ADD
   repeat
@@ -369,7 +415,8 @@ assembler.1 -order
   x ZERO
   begin w while
     x x ADD
-  tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+  tos bt MOV 0 bl1 MOV 
+  bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
     bl1 if x INC then
     tos tos ADD
     w DEC
@@ -382,8 +429,10 @@ assembler.1 -order
   --sp
   begin w while
    x x ADD
- tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
- t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+   tos bt MOV 0 bl1 MOV 
+   bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+   t   bt MOV 0 bl2 MOV 
+   bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
    bl1 bl2 ADD bl2 if x INC then
    t t ADD
    tos tos ADD
@@ -397,9 +446,12 @@ assembler.1 -order
   --sp
   begin w while
    x x ADD
- tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
- t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
-   bl1 bl2 ADD bl2 INC one bl1 MOV bl2 if 0 bl1 MOV then bl1 x ADD
+ tos bt MOV 0 bl1 MOV bt 
+   -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+ t   bt MOV 0 bl2 MOV bt 
+   -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+   bl1 bl2 ADD bl2 INC one bl1 MOV 
+   bl2 if 0 bl1 MOV then bl1 x ADD
    t t ADD
    tos tos ADD
    w DEC
@@ -412,9 +464,12 @@ assembler.1 -order
   --sp
   begin w while
    x x ADD
- tos bt MOV 0 bl1 MOV bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
- t   bt MOV 0 bl2 MOV bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
-   bl1 bl2 ADD two bl2 ADD one bl1 MOV bl2 if 0 bl1 MOV then bl1 x ADD
+ tos bt MOV 0 bl1 MOV bt 
+   -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+ t   bt MOV 0 bl2 MOV bt 
+   -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
+   bl1 bl2 ADD two bl2 ADD one bl1 MOV 
+   bl2 if 0 bl1 MOV then bl1 x ADD
    t t ADD
    tos tos ADD
    w DEC
@@ -440,7 +495,7 @@ assembler.1 -order
   w {up} iLOAD
   w if
     {cycles} INC
-    {up} t MOV  t INC ( load TASK pointer and skip next task location )
+    {up} t MOV  t INC ( load TASK pointer, skip next task loc )
       ip t iSTORE t INC
      tos t iSTORE t INC
     {rp} t iSTORE t INC
@@ -456,18 +511,18 @@ assembler.1 -order
 
 there 2/ primitive t!
 
-:m ;t BABE <>
-     if abort" unstructured" then talign opExit target.only.1 -order ;m
+:m ;t BABE <> if abort" unstructured" then 
+  talign opExit target.only.1 -order ;m
 :m :s tlast @ {system} t@ tlast ! F00D :t drop 0 ;m
 :m :so  tlast @ {system} t@ tlast ! F00D :to drop 0 ;m
 :m ;s drop BABE ;t F00D <> if abort" unstructured" then
-   tlast @ {system} t! tlast ! ;m
+  tlast @ {system} t! tlast ! ;m
 :m :r tlast @ {root-voc} t@ tlast ! BEEF :t drop 0 ;m
 :m ;r drop BABE ;t BEEF <> if abort" unstructured" then
-   tlast @ {root-voc} t! tlast ! ;m
+  tlast @ {root-voc} t! tlast ! ;m
 :m :e tlast @ {editor} t@ tlast ! DEAD :t drop 0 ;m
 :m ;e drop BABE ;t DEAD <> if abort" unstructured" then
-   tlast @ {editor} t! tlast ! ;m
+  tlast @ {editor} t! tlast ! ;m
 
 :m lit         opPush t, ;m
 :m up          opUp   t, ;m
@@ -537,7 +592,7 @@ there 2/ primitive t!
 :to xor opXor ;t
 :to and opAnd ;t
 :to * opMul ;t
-:to pause pause ;t
+:so pause pause ;s
 :t nop ;t
 :t @ 2/ [@] ;t
 :t ! 2/ [!] ;t
@@ -595,8 +650,10 @@ there 2/ primitive t!
 :t u>= u< 0= ;t
 :t u<= u> 0= ;t
 :t execute 2/ >r ;t
-:t key? opKey s>d if
-      {options} lit @ 8 lit and if bye then drop #0 exit then #-1 ;t
+:t key? opKey s>d ( -- c 0 | -1 : get single byte of input )
+   if 
+     {options} lit @ 8 lit and if bye then drop #0 exit 
+   then #-1 ;t
 :t key begin pause <key> @ execute until ;t
 :t emit pause <emit> @ execute ;t
 :t cr =cr lit emit =lf lit emit ;t
@@ -624,12 +681,14 @@ there 2/ primitive t!
 :t align here aligned h lit ! ;t
 :t +string #1 over min rot over + rot rot - ;t
 :t type begin dup while swap count emit swap 1- repeat 2drop ;t
-:t cmove for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;t ( b1 b2 u -- )
-:t fill  swap for swap aft 2dup c! 1+ then next 2drop ;t     ( b u c -- )
+:t cmove ( b1 b2 u -- )
+   for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;t 
+:t fill ( b u c -- )
+   swap for swap aft 2dup c! 1+ then next 2drop ;t 
 :t erase #0 fill ;t ( NB. blank is bl fill )
 :s do$ r> r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a : )
-:s ($) do$ ;s            ( -- a : do string NB. )
-:s .$ do$ count type ;s  ( -- : print string, next cells contain string )
+:s ($) do$ ;s           ( -- a : do string NB. )
+:s .$ do$ count type ;s ( -- : print string in next cells )
 :m ." .$ $literal ;m
 :m $" ($) $literal ;m
 :t space bl emit ;t
@@ -643,15 +702,15 @@ there 2/ primitive t!
    #0 ;t                 ( 0 )    \ normal completion
 :t throw ( ??? exception# -- ??? exception# )
     ?dup if              ( exc# )     \ 0 throw is no-op
-      {handler} up @ rp! ( exc# )     \ restore prev return stack
+      {handler} up @ rp! ( exc# )     \ restore prev ret. stack
       r> {handler} up !  ( exc# )     \ restore prev handler
       r> swap >r         ( saved-sp ) \ exc# on return stack
       sp! drop r>        ( exc# )     \ restore stack
     then ;t
 :t abort #-1 throw ;t
 :s (abort) do$ swap if count type abort then drop ;s
-:t um+
-  2dup + >r r@ #0 >= >r 2dup and 0< r> or >r or 0< r> and invert 1+ r> swap ;t
+:t um+ 2dup + >r r@ #0 >= >r 
+   2dup and 0< r> or >r or 0< r> and invert 1+ r> swap ;t
 :t dnegate invert >r invert #1 um+ r> + ;t ( d -- d )
 :t d+ >r swap >r um+ r> + r> + ;t         ( d d -- d )
 :t um* ( u u -- ud : double cell width multiply )
@@ -660,7 +719,7 @@ there 2/ primitive t!
     dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
   next rot drop ;t
-:t um/mod ( ud u -- ur uq : unsigned double cell width divide/modulo )
+:t um/mod ( ud u -- ur uq : unsigned double cell div/mod )
   ?dup 0= if -A lit throw then
   2dup u<
   if negate F lit
@@ -685,8 +744,8 @@ there 2/ primitive t!
 :t echo <echo> @ execute ;t
 :s tap dup echo over c! 1+ ;s ( bot eot cur c -- bot eot cur )
 :s ktap ( bot eot cur c -- bot eot cur )
-  dup dup =cr lit <> >r  =lf lit <> r> and if ( Not End of Line? )
-    dup =bksp lit <> >r =del lit <> r> and if ( Not Delete Char? )
+  dup dup =cr lit <> >r  =lf lit <> r> and if ( Not EOL? )
+    dup =bksp lit <> >r =del lit <> r> and if ( Not Del Char? )
       bl tap
       exit
     then
@@ -704,8 +763,10 @@ there 2/ primitive t!
   repeat drop over - ;t
 :t tib source drop ;t
 :t query tib =buf lit accept tup ! drop #0 >in ! ;t
-:s ?depth depth > if -4 lit throw then ;s ( u -- : check stack depth )
-:t -trailing for aft bl over r@ + c@ < if r> 1+ exit then then next #0 ;t
+:s ?depth depth > if -4 lit throw then ;s
+:t -trailing for aft 
+     bl over r@ + c@ < if r> 1+ exit then 
+   then next #0 ;t
 :s look ( b u c xt -- b u : skip until *xt* test succeeds )
   swap >r rot rot
   begin
@@ -718,16 +779,20 @@ there 2/ primitive t!
 :s unmatch if 0> exit then 0<> ;s ( c1 c2 -- t )
 :s match unmatch invert ;s        ( c1 c2 -- t )
 :t parse ( c -- b u ; <string> )
-    >r tib >in @ + tup @ >in @ - r@
-    >r over r> swap >r >r
-    r@ t' unmatch lit look 2dup
-    r> t' match   lit look swap r> - >r - r> 1+  ( b u c -- b u delta )
-    >in +!
-    r> bl = if -trailing then #0 max ;t
-:s banner >r begin dup 0> while r@ emit 1- repeat drop rdrop ;s ( +n c -- )
-:t hold #-1 hld +! hld @ c! ;t ( c -- : save a character in hold space )
-:t #> 2drop hld @ this =num lit + over - ;t  ( u -- b u )
-:s extract dup >r um/mod r> swap >r um/mod r> rot ;s ( ud ud -- ud u )
+  >r tib >in @ + tup @ >in @ - r@
+  >r over r> swap >r >r
+  r@ t' unmatch lit look 2dup
+  r> t' match   lit look swap 
+    r> - >r - r> 1+ ( b u c -- b u delta )
+  >in +!
+  r> bl = if -trailing then #0 max ;t
+:s banner ( +n c -- )
+  >r begin dup 0> while r@ emit 1- repeat drop rdrop ;s 
+:t hold ( c -- : save character in hold space ) 
+  #-1 hld +! hld @ c! ;t 
+:t #> 2drop hld @ this =num lit + over - ;t ( u -- b u )
+:s extract ( ud ud -- ud u : extract digit from number )
+  dup >r um/mod r> swap >r um/mod r> rot ;s 
 :s digit 9 lit over < 7 lit and + [char] 0 + ;s ( u -- c )
 :t #  2 lit ?depth #0 base @ extract digit hold ;t ( d -- d )
 :t #s begin # 2dup ( d0= -> ) or 0= until ;t       ( d -- 0 )
@@ -749,9 +814,9 @@ there 2/ primitive t!
     then                             ( d char )
     swap base @ um* drop rot base @ um* d+ ( accumulate digit )
     r> r>                            ( restore string )
-    +string dup 0=                   ( advance string and test for end )
+    +string dup 0=                   ( advance, test for end )
   until ;t
-:t number? ( a u -- d -1 | a u 0 : string to a number [easier to use] )
+:t number? ( a u -- d -1 | a u 0 : easier to use than >number )
   #-1 dpl !
   base @ >r
   over c@ [char] - = dup >r if     +string then
@@ -774,12 +839,14 @@ there 2/ primitive t!
     then
   next 2drop #0 ;t
 :t .s depth for aft r@ pick . then next ;t
-:t nfa cell+ ;t ( pwd -- nfa : move word pointer to name field )
-:t cfa nfa dup c@ 1F lit and + cell+ cell negate and ;t ( pwd -- cfa )
+:t nfa cell+ ;t ( pwd -- nfa : move word ptr to name field )
+:t cfa ( pwd -- cfa )
+  nfa dup c@ 1F lit and + cell+ cell negate and ;t 
 :t allot aligned h lit +! ;t
 :t , align here ! cell allot ;t
-:s (search-wordlist) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0: find word in WID )
-  swap >r dup
+:s (search) ( a wid -- PWD PWD 1|PWD PWD -1|0 a 0 )
+  \ Search for word "a" in "wid"
+  swap >r dup 
   begin
     dup
   while
@@ -793,57 +860,65 @@ there 2/ primitive t!
     nip dup @
   repeat
   rdrop 2drop #0 ;s
-:s (find) ( a -- pwd pwd 1 | pwd pwd -1 | 0 a 0 : find a word dictionary )
+:s (find) ( a -- pwd pwd 1 | pwd pwd -1 | 0 a 0 : find a word )
   >r
   context
   begin
     dup @
   while
-    dup @ @ r@ swap (search-wordlist) ?dup
+    dup @ @ r@ swap (search) ?dup
     if
       >r rot drop r> rdrop exit
     then
     cell+
   repeat drop #0 r> #0 ;s
-:t search-wordlist (search-wordlist) rot drop ;t ( a wid -- PWD 1|PWD -1|a 0 )
-:t find ( a -- pwd 1 | pwd -1 | a 0 : find a word in the dictionary )
+:t search-wordlist ( a wid -- PWD 1|PWD -1|a 0 )
+   (search) rot drop ;t 
+:t find ( a -- pwd 1 | pwd -1 | a 0 : find word in dictionary )
   (find) rot drop ;t
 :s (literal) state @ if =push lit , , then ;s
 :t literal <literal> @ execute ;t immediate ( u -- )
 :t compile, 2/ align , ;t  ( xt -- )
-:s ?found
-   if exit then space count type [char] ? emit cr -D lit throw ;s ( u f -- )
+:s ?found if exit then 
+   space count type [char] ? emit cr -D lit throw ;s ( u f -- )
 :t interpret ( b -- )
   find ?dup if
     state @
     if
-      0> if cfa execute exit then \ <- immediate word are executed
-      cfa compile, exit           \ <- compiling word are...compiled.
+      0> if cfa execute exit then \ <- execute immediate words
+      cfa compile, exit \ <- compiling word are...compiled.
     then
     drop
     dup nfa c@ 20 lit and if -E lit throw then ( <- ?compile )
-    cfa execute exit  \ <- if its not, execute it, then exit *interpreter*
+    \ if it's not compiling, execute it then exit *interpreter*
+    cfa execute exit  
   then
   \ not a word
   dup >r count number? if rdrop \ it is a number!
-    dpl @ 0< if \ <- dpl will be -1 if it is a single cell number
-       drop     \ drop high cell from 'number?' for single cell output
+    dpl @ 0< if \ <- dpl is -1 if it's a single cell number
+       drop     \ drop high cell from 'number?' for single cell
     else        \ <- dpl is not -1, it is a double cell number
        state @ if swap then
-       postpone literal \ literal is executed twice if it's a double
+       postpone literal \ literal executed twice if # is double
     then
     postpone literal exit
   then
-  r> #0 ?found ;t \ Could vector ?found here, to handle arbitrary words
-:s .id nfa count 1F lit and type space ;s ( pwd -- : print out a word )
-:t get-order ( -- widn ... wid1 n : get the current search order )
+  \ NB. Could vector ?found here, to handle arbitrary words
+  r> #0 ?found ;t 
+:s .id ( pwd -- : print word ) 
+  nfa count 1F lit and type space ;s 
+:t get-order ( -- widn...wid1 n : get current search order )
   context
-  ( find empty cell -> ) #0 >r begin dup @ r@ xor while cell+ repeat rdrop
+   \ next line finds first empty cell
+   #0 >r begin dup @ r@ xor while cell+ repeat rdrop
   dup cell - swap
   context - 2/ dup >r 1- s>d if -50 lit throw then
   for aft dup @ swap cell - then next @ r> ;t
-:r set-order ( widn ... wid1 n -- : set the current search order )
-  dup #-1 = if drop root-voc #1 set-order exit then ( NB. Recursion! )
+:r set-order ( widn ... wid1 n -- : set current search order )
+  \ NB. Uses recursion, however the meta-compiler does not use
+  \ the Forth compilation mechanism, so the current definition
+  \ of "set-order" is available immediately.
+  dup #-1 = if drop root-voc #1 set-order exit then 
   dup #vocs > if -49 lit throw then
   context swap for aft tuck ! cell+ then next #0 swap ! ;r
 :r forth-wordlist {forth-wordlist} lit ;r ( -- wid )
@@ -852,20 +927,24 @@ there 2/ primitive t!
 :r only #-1 set-order ;r                            ( -- )
 :r words
   cr get-order begin ?dup while swap ( dup u. ." : " ) @
-    begin ?dup while dup nfa c@ 80 lit and 0= if dup .id then @ repeat ( cr )
+  begin ?dup 
+  while dup nfa c@ 80 lit and 0= if dup .id then @ 
+  repeat ( cr )
   1- repeat ;r
 :t definitions context @ set-current ;t
 :t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
-:s ?unique ( a -- a : print a message if a word definition is not unique )
- dup get-current (search-wordlist) 0= if exit then space
+:s ?unique ( a -- a : warn if word definition is not unique )
+ dup get-current (search) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s
 :s ?nul dup c@ if exit then -10 lit throw ;s
 :to char bl word ?nul count drop c@ ;t
 :to [char] postpone char =push lit , , ;t immediate
-:to ; BABE lit <> if -16 lit throw then =unnest lit , postpone [
- ?dup if get-current ! exit then ;t immediate compile-only ( -- wid )
+:to ; BABE lit <> if -16 lit throw then =unnest lit , 
+ postpone [ ?dup if 
+   get-current ! exit then ;t immediate compile-only ( -- wid )
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
-  last , bl word ?nul ?unique count + h lit ! align BABE lit postpone ] ;t
+  last , bl word ?nul ?unique count + h lit ! align 
+  BABE lit postpone ] ;t
 :to :noname here BABE lit ] ;t
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
@@ -873,10 +952,13 @@ there 2/ primitive t!
 :to if =jumpz lit , here #0 , ;t immediate compile-only
 :to then here 2/ swap ! ;t immediate compile-only
 :to while postpone if ;t immediate compile-only
-:to repeat swap postpone again postpone then ;t immediate compile-only
-:to else =jump lit , here #0 , swap postpone then ;t immediate compile-only
+:to repeat swap postpone again postpone then ;t 
+    immediate compile-only
+:to else =jump lit , here #0 , swap postpone then ;t 
+    immediate compile-only
 :to for =>r lit , here ;t immediate compile-only
-:to aft drop =jump lit , here #0 , align here swap ;t immediate compile-only
+:to aft drop =jump lit , here #0 , align here swap ;t 
+    immediate compile-only
 :to next =next lit , 2/ , ;t immediate compile-only
 :to ' bl word find ?found cfa literal ;t immediate
 :t compile r> dup [@] , 1+ >r ;t compile-only
@@ -885,15 +967,19 @@ there 2/ primitive t!
 :s hide bl word find ?found nfa 80 lit swap toggle ;s
 :s (var) r> 2* ;s compile-only
 :s (const) r> [@] ;s compile-only
-:s (marker) r> 2* dup @ h lit ! cell+ @ get-current ! ;s compile-only
-:t create postpone : drop postpone [ compile (var) get-current ! ;t
+:s (marker) r> 2* dup @ h lit ! cell+ @ get-current ! ;s 
+   compile-only
+:t create postpone : drop postpone [ compile (var) 
+   get-current ! ;t
 :to variable create #0 , ;t
 :to constant create cell negate allot compile (const) , ;t
-:to marker last here create cell negate allot compile (marker) , , ;t
+:to marker last here create cell negate allot compile 
+    (marker) , , ;t
 :t >body cell+ ;t ( a -- a )
 :s (does) r> r> 2* swap >r ;s compile-only
 :s (comp) r> {last} lit @ cfa ! ;s compile-only
-:t does> compile (comp) compile (does) ;t immediate compile-only
+:t does> compile (comp) compile (does) ;t 
+   immediate compile-only
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
 :to >r compile opToR ;t immediate compile-only
@@ -914,32 +1000,43 @@ there 2/ primitive t!
 :to \ tib @ >in ! ;t immediate
 :to immediate last nfa @ 40 lit or last nfa ! ;t
 :to see bl word find ?found cr
-  begin dup @ =unnest lit <> while dup @ . cell+ here over < if drop exit then
+  begin dup @ =unnest lit <> 
+  while dup @ . cell+ here over < if drop exit then
   repeat @ u. ;t
-:to dump aligned begin ?dup while swap dup @ . cell+ swap cell - repeat drop ;t
+:to dump aligned 
+  begin ?dup 
+  while swap dup @ . cell+ swap cell - 
+  repeat drop ;t
 :s cksum aligned dup C0DE lit - >r
-     begin ?dup while swap dup @ r> + >r cell+ swap cell - repeat drop r> ;s
+  begin ?dup 
+  while swap dup @ r> + >r cell+ swap cell - 
+  repeat drop r> ;s
 :t defined bl word find nip 0<> ;t
 :to [then] ;t immediate
 :to [else]
-   begin
-     begin bl word dup c@ while
-       find drop cfa dup to' [else] lit = swap to' [then] lit = or
-       if exit then repeat query again ;t immediate
+ begin
+  begin bl word dup c@ while
+   find drop cfa dup to' [else] lit = swap to' [then] lit = or
+    if exit then repeat query again ;t immediate
 :to [if] if exit then postpone [else] ;t immediate
 :t bell 7 lit emit ;t
 :t ms for pause calibration @ for next next ;t
 :s csi 1B lit emit 5B lit emit ;s
 :t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
-:t at-xy base @ decimal >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;t
+:t at-xy base @ decimal 
+   >r csi #0 u.r ." ;" #0 u.r ." H" r> 
+   base ! ;t
 :t b/buf 400 lit ;t
-:t block #1 ?depth dup blk ! A lit lshift pause ;t ( NB. No mass storage! )
-:t flush ( save-buffers empty-buffers ) ;t ( NB. No mass storage! )
+\ NB. No mass storage exists, so this is just virtual!
+:t block #1 ?depth dup blk ! A lit lshift pause ;t
+:t flush ( save-buffers empty-buffers ) ;t
 :t update #-1 {dirty} lit ! ;t
 :t blank bl fill ;t
 :t list page cr dup scr ! block
    F lit
-   for F lit r@ - 3 lit u.r space 3F lit for count emit next cr next drop ;t
+   for 
+     F lit r@ - 3 lit u.r space 3F lit for count emit next cr 
+   next drop ;t
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
 :t set-input <ok> ! {id} up ! >in ! tup 2! ;t ( n1...n5 -- )
 :s ok state @ 0= if ."  ok" cr then ;s
@@ -955,10 +1052,11 @@ there 2/ primitive t!
   throw ;t
 :s line 6 lit lshift swap block + 40 lit ;s
 :s loadline line evaluate ;s
-:t load #0 F lit for 2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
+:t load #0 F lit for 
+   2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
 :r eforth 0106 lit ;r ( -- version )
 :s info cr
-  ." Project: eForth v1.6 " ( here . ) cr
+  ." Project: eForth v1.7 " ( here . ) cr
   ." Author:  Richard James Howe" cr
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
@@ -978,7 +1076,7 @@ there 2/ primitive t!
   t' ok lit <ok> !
   t' (literal) lit <literal> !
   #0 >in ! #-1 dpl !
-  this =tib lit + #0 tup 2! \ Set terminal input buffer location
+  this =tib lit + #0 tup 2! \ Set terminal input buffer loc.
   postpone [
   {up} lit ! ;s
 :s ini {up} lit @ task-init ;s ( -- )
@@ -990,32 +1088,39 @@ there 2/ primitive t!
     check lit @ <> if ." cksum fail" bye then
     {options} lit @ 2 lit xor {options} lit !
   then ;s
-:t quit ( -- : interpreter loop, and more, does more than most QUITs )
+:t quit ( -- : interpreter loop, does more than most QUITs )
   only forth definitions
   ini
   opts
   begin
    query t' eval lit catch
-   ?dup if dup space . [char] ? emit cr #-1 = if bye then ini then
+   ?dup if 
+     dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
-\ Multitasking https://www.bradrodriguez.com/papers/mtasking.html
-:t task: create here 400 lit allot 2/ task-init ;t ( create a named task )
-:t activate ( xt task-address -- : start task executing xt )
-   dup task-init
-   dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
-   r> this @ >r dup 2/ this ! r> swap ! ;t ( link in task )
-:t wait begin pause dup @ until #0 swap ! ;t ( addr -- : wait for signal )
-:t signal this swap ! ;t ( addr -- : signal to wait )
-:t single #1 {single} lit ! ;t ( -- : run only current task, disable others )
-:t multi  #0 {single} lit ! ;t ( -- : enable multitasking )
-:t send ( msg task-addr -- : send message to task )
-  this over {sender} lit + begin pause dup @ 0= until ! {message} lit + ! ;t
-:t receive ( -- msg task-addr : block until message )
+\ Cooperative Multitasking Routines, For more information, see
+\ <https://www.bradrodriguez.com/papers/mtasking.html>
+:s task: ( create a named task ) 
+  create here 400 lit allot 2/ task-init ;s 
+:s activate ( xt task-address -- : start task executing xt )
+  dup task-init
+  dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
+  r> this @ >r dup 2/ this ! r> swap ! ;s ( link in task )
+:s wait ( addr -- : wait for signal ) 
+  begin pause dup @ until #0 swap ! ;s 
+:s signal this swap ! ;s ( addr -- : signal to wait )
+:s single #1 {single} lit ! ;s ( -- : disable other tasks )
+:s multi  #0 {single} lit ! ;s ( -- : enable multitasking )
+:s send ( msg task-addr -- : send message to task )
+  this over {sender} lit + 
+  begin pause dup @ 0= until 
+  ! {message} lit + ! ;s
+:s receive ( -- msg task-addr : block until message )
   begin pause {sender} up @ until
   {message} up @ {sender} up @
-  #0 {sender} up ! ;t
-\ <http://tunes.org/wiki/block_20editor.html> or search "FORTH BLOCK EDITOR"
-:t editor {editor} lit #1 set-order ;t ( Tiny BLOCK text editor )
+  #0 {sender} up ! ;s
+\ <http://tunes.org/wiki/block_20editor.html> or search for
+\ "FORTH BLOCK EDITOR"
+:t editor {editor} lit #1 set-order ;t ( Tiny BLOCK editor )
 :e q only forth ;e
 :e ? scr @ . ;e
 :e l scr @ list ;e
@@ -1029,10 +1134,11 @@ there 2/ primitive t!
 :e p #-1 scr +! l ;e
 :e r scr ! l ;e
 :e x scr @ block b/buf blank l ;e
-:e d 1 lit ?depth >r scr @ block r> 6 lit lshift + 40 lit blank l ;e
+:e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit 
+   blank l ;e
 :t cold {cold} lit @ execute ;t
 
-\ ---------------------------------- Image Generation ------------------------
+\ ------------------- Image Generation ------------------------
 
 t' quit half {cold} t!
 atlast {forth-wordlist} t!
