@@ -7,6 +7,15 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ * Email:   howe.r.j.89@gmail.com
 \ * Repo:    <https://github.com/howerj/subleq>
 \
+\ TODO Section
+\	- Publish on Amazon
+\	- Do all the TODOs
+\	- Separate Forth Tutorial
+\	- Separate SUBLEQ assembler Tutorial
+\	- Other SUBLEQ projects and programs
+\	- Uses; learning, puzzles, games
+\	- Modifying and extending, different options
+\
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
 \ a cross compiler capable of targeting the Forth VM, and
@@ -395,6 +404,11 @@ variable tlocal 0 tlocal !
 \ "tpack" is used to copy a string into the target image.
 \ Useful if we want to define strings in the target, which we
 \ will when defining new words in the target header.
+\
+\ "limit" is used on systems which are not 16-bit (ie. Gforth)
+\ to limit the maximum value of a number to be modulo 2 raised
+\ to the 16. It does nothing on SUBLEQ machine.
+\
 
 defined eforth [if]
   :m tpack dup tc, for aft count tc, then next drop ;m
@@ -405,19 +419,15 @@ defined eforth [if]
   :m limit FFFF and ;m
 [then]
 
-\ "$literal" is used to compile strings that can be printed
-\ out at run time into the dictionary. It is used by
-\ meta-compiler words later on. 
-
 :m $literal talign [char] " word count tpack talign ;m
-:m thead talign there tlast @ t, tlast !
-   parse-word talign tpack talign ;m
+
 defined eforth [if]
   :m #dec dup 0< if [char] - emit then (.) A emit ;m
 [else]
   :m #dec dup 8000 u>= if negate limit -1 >r else 0 >r then
      0 <# A hold #s r> sign #> type ;m
 [then]
+
 :m #dat dup FF and emit 8 rshift FF and emit ;m
 0 [if] :m #out #dat ;m [else] :m #out #dec ;m [then]
 :m mdump taligned
@@ -458,6 +468,29 @@ defined eforth [if]
    while swap dup t@ r> + FFFF and >r =cell + swap =cell -
    repeat drop r> ;m
 :m mkck dup there swap - tcksum ;m
+:m postpone
+   target.only.1 +order t' target.only.1 -order 2/ t, ;m
+:m thead talign there tlast @ t, tlast !
+   parse-word talign tpack talign ;m
+:m header >in @ thead >in ! ;m
+:m :ht ( "name" -- : forth routine, no header )
+  get-current >r target.1 set-current create
+  r> set-current BABE talign there ,
+  does> @ 2/ t, ;m
+:m :t header :ht ;m ( "name" -- : forth routine )
+:m :to ( "name" -- : forth, target only routine )
+  header
+  get-current >r
+    target.only.1 set-current create
+  r> set-current
+  BABE talign there ,
+  does> @ 2/ t, ;m
+:m :a ( "name" -- : assembly routine, no header )
+  D00D target.1 +order definitions
+  create talign there , assembler.1 +order does> @ 2/ t, ;m
+:m (a); D00D <>
+   if abort" unstructured" then assembler.1 -order ;m
+
 defined eforth [if] system -order [then]
 
 \ # Forth Virtual Machine
@@ -496,6 +529,12 @@ assembler.1 +order definitions
 : repeat JMP then ;
 assembler.1 -order
 meta.1 +order definitions
+
+\ # The System Variables
+\
+\ There is not a lot in this section in terms logic, it nearly
+\ all allocation of variables.
+\
 
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
@@ -566,6 +605,66 @@ label: entry       \ used to set entry point in next cell
   tuser {tib}       \ terminal input buffer: cell 1,
   =cell lallot      \ terminal input buffer: cell 2
 
+\ Ideally these meta-compiler macros would be defined along
+\ with the other meta-compiler words, however they require
+\ the locations of constants to be know, such as "one" or 
+\ "neg1". This will happen throughout, the definitions of
+\ meta-compiler words that require knowledge of a Forth
+\ function that has yet to be defined, or of a new constant,
+\ will require a non-contiguous grouping of these functions.
+\
+\ "INC" and "DEC" are self explanatory, they increment or
+\ decrement a memory location by subtracting negative one or
+\ subtracting one from it. They can be implemented in a single
+\ instruction. 
+\
+\ The words "++sp"/"--sp", and "++rp"/"--rp" are for
+\ incrementing and decrementing the data and return stacks
+\ of the Forth interpreter. They move in opposite directions,
+\ the data stack growing down and the return stack growing up,
+\ allowing them to use the memory area used to store both
+\ stacks more efficiently.
+\
+\ "a-optim" is used to perform a minor optimization in our
+\ SUBLEQ assembly routines, if we have an arbitrary assembly
+\ instruction that always jumps to the next instruction after
+\ it, and if that next instruction is an unconditional jump,
+\ we replace the arbitrary assembly instructions jump location
+\ to be the same as the unconditional jump, potentially saving
+\ a single cycles execution. It may help to illustrate this:
+\
+\	subleq ?, ?
+\	subleq Z, Z, c
+\
+\ The first "subleq" instruction always branches to next one,
+\ the second one always branches to "c". We can replace this
+\ with the equivalent:
+\
+\	subleq ?, ?, c
+\	subleq Z, Z, c
+\
+\ The first instruction *may* branch to "c", the second one
+\ always will. It is a minor optimization that is easy to
+\ implement, so it might as well be done.
+\
+\ The word "INV" assembles a bitwise invert, the only bitwise
+\ operation we can perform easily. It uses the fact that
+\ a subtraction using twos-compliment arithmetic is equivalent
+\ to the following:
+\
+\	b - a = b + ~a + 1
+\
+\ If we would like to invert "a", we must get rid of "b" and
+\ the +1 terms. We perform the subtraction, zeroing "b" first
+\ (which is "INVREG" in the code), then just subtract one.
+\
+\ The other bitwise operations will be much more difficult
+\ to implement. When making the system for the first time,
+\ getting those operators correct was the most onerous task
+\ of bringing the system up, as a bug in those operators makes
+\ everything else more difficult to debug.
+\
+
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
 :m INV ( b -- : invert NB. b - a = b + ~a + 1 )
@@ -576,93 +675,453 @@ label: entry       \ used to set entry point in next cell
 :m ++rp {rp} INC ;m
 :m a-optim >r there =cell - r> 2/ t! ;m
 
+\ # The Core Forth Virtual Machine
+\ 
+\ The core of the Forth Virtual Machine starts here, it is
+\ quite short and is executed for each Virtual Machine
+\ instruction, so any optimization here would make a huge
+\ difference. It only has a few tasks and the Wikipedia page
+\ on Threaded Code Interpreters would help in understanding
+\ how it works.
+\
+\ The entry point is the label "start", which is executed
+\ on startup naturally, it just sets up the initial stack
+\ positions in "{sp}" and "{rp}" for the data and return stacks
+\ respectively. It also sets the first instruction to be
+\ executed by moving the contents of "{cold}" into "ip", the
+\ Instruction Pointer.
+\
+\ The "vm" label does all the work. It implements a small
+\ "virtual machine", a Threaded Code Interpreter, also known
+\ as the Forth Inner Interpreter.
+\
+\ It only has two things it does; either execute a primitive
+\ operation (or a VM instruction) or perform a call into
+\ Forth code (which in turn can either perform calls or jump
+\ to VM instructions).
+\
+\ The VM has a number of registers that are well known across
+\ different Forth implementations, such as "ip" (the 
+\ Instruction Pointer), "w" (the Working Pointer). Also
+\ required is a stack to place the calls, which uses "{rp}"
+\ (the Return stack Pointer).
+\
+\ The way the Forth VM determines whether an instruction is a
+\ call or a VM instruction to jump to is by assuming any 
+\ address bellow a value contained in "primitive" (which will
+\ be set later) is a VM instruction, anything about that should
+\ be something that can be called instead. This is done because
+\ all that is needed to test this is a subtraction and jump,
+\ all of which the SUBLEQ machine can do easily.
+\
+\ There are three main types of threaded code interpreters;
+\ direct, indirect and subroutine. There are other kinds, but
+\ they will not be considered.
+\
+\ We can imagine a Forth program as mostly consisting of a
+\ series of calls, with a few primitives and mechanisms thrown
+\ in. For example, let us define a function that computes 
+\ the square root of "a" squared plus "b" squared (given an
+\ already defined "isqrt" for computing the integer square 
+\ root.
+\
+\	: square dup * ;
+\ 	: pythagoras square swap square + isqrt ;
+\ 
+\ In the above example, and in this interpreter, "dup", "*", 
+\ and "swap" are primitives, "square", "pythagoras" and "isqrt"
+\ are functions. What would the code potentially look like?
+\ The Forth compiler, an interactive and lightweight compiler,
+\ must generate code, there are several ways it could make it.
+\
+\ One way would be something like this:
+\
+\
+\	+:
+\		Assembly instructions...
+\		exit	
+\	*:
+\		Assembly instructions...	
+\		exit	
+\	DUP:
+\		Assembly instructions...
+\		exit	
+\	SWAP:
+\		Assembly instructions...
+\		exit	
+\ 	SQUARE:
+\		call dup
+\		call *
+\		exit
+\	PYTHAGORAS:
+\		call square
+\		call swap
+\		call square
+\		call +
+\		call isqrt
+\		exit
+\
+\ Where "call", "exit", and the assembly instructions are
+\ native instructions in the machine. This is known as
+\ subroutine threaded code. However, our SUBLEQ machine does
+\ not have those instructions built in. If we want to perform 
+\ a call or return then we must implement that in our VM.
+\
+\	+:
+\		Assembly instructions...
+\		Jump to VM
+\	*:
+\		Assembly instructions...	
+\		Jump to VM
+\	DUP:
+\		Assembly instructions...
+\		Jump to VM
+\	SWAP:
+\		Assembly instructions...
+\		Jump to VM
+\	EXIT: 	
+\		Assembly instructions... 	
+\ 		Jump to VM
+\	\ ----- END OF VM INSTRUCTIONS ----- 	
+\ 	SQUARE:
+\		Address of dup
+\		Address of *
+\		Address of exit
+\	PYTHAGORAS:
+\		Address of square
+\		Address of swap
+\		Address of square
+\		Address of +
+\		Address of isqrt
+\		Address of exit
+\
+\ In this version, our compiled words consist of addresses of
+\ functions and VM instructions, instead of raw calls to
+\ functions. The virtual machine defined later on at the
+\ label "vm" is jumped to at the end of virtual machine
+\ instructions.
+\
+\ Let us say that the entry point of the program is the
+\ "PYTHAGORAS" function, and that the numbers "3" and "4" are
+\ on the data stack.
+\
+\ The virtual machine register "ip" will point to the first
+\ address in "PYTHAGORAS", which will contain "address of
+\ square". The VM copies this into "w", the working register,
+\ does an indirect load storing the result back into "w", 
+\ and then increments "ip" so that it points to the next
+\ address in "PYTHAGORAS", "address of swap".
+\ 
+\ In this interpreter, the VM determines whether to perform  
+\ a call or a jump by seeing if the address belongs to one
+\ of the built in VM instructions by comparing to see if the
+\ address if less than the address contained in "primitive",
+\ a unique feature of this VM. It is not, as "SQUARE" is not
+\ a primitive, it is a defined function. As this is the case,
+\ the return stack point "{rp} is incremented, "ip" (which
+\ contains the next address to be executed) is pushed onto the
+\ return stack with a "iSTORE" (indirect store), and the "w"
+\ becomes the new "ip" value. We have just performed a "call"
+\ with the VM.
+\ 
+\ Our "ip" now points to the first address of "SQUARE", which 
+\ the address of "DUP", this is not a defined word, it is a
+\ VM primitive or instruction. This means we do not call it, 
+\ we do an indirect jump to it. We still copy "ip" to "w",
+\ indirect load through "w", and increment "ip" after. However,
+\ instead of doing a simulated call, we do an indirect jump
+\ through the contents of "w", a double indirect through "w".
+\ 
+\ At the end of the assembler routine that implements "DUP"
+\ the last instruction is a unconditional jump back to the
+\ VM. As the "ip" is already pointing at the next instruction
+\ in "SQUARE", it proceeds along as usual, executing the
+\ multiplication in the same fashion, until it comes to the
+\ special VM instruction "EXIT", this VM instruction performs
+\ a return, popping off a value off the return stack and
+\ putting into the "ip" register. The value is the address
+\ of the second instruction in "PYTHAGORAS", which contains
+\ the address of "SWAP". You can see how this will proceed.
+\ 
+ 
 assembler.1 +order
-label: start
-  start 2/ entry t!
-  {sp0} {sp} MOV
-  {rp0} {rp} MOV
-  {cold} ip MOV
+label: start         \ System Entry Point
+  start 2/ entry t!  \ Set the system entry point
+  {sp0} {sp} MOV     \ Setup initial variable stack
+  {rp0} {rp} MOV     \ Setup initial return stack
+  {cold} ip MOV      \ Get the first instruction to execute
   ( fall-through )
 label: vm ( Forth Inner Interpreter )
-  ip w MOV
-  ip INC
-  t w iLOAD
-  t w MOV
-  primitive t SUB
-  t -if w iJMP then ( jump straight to VM functions )
-  ++rp
-  ip {rp} iSTORE
-  w ip MOV vm a-optim
-  vm JMP
+  ip w MOV           \ Move Instruction Pointer To Working Ptr.
+  ip INC             \ IP now points to next instruction!
+  t w iLOAD          \ Get actual instruction to execute
+  t w MOV            \ Copy it, as SUB is destructive
+  primitive t SUB    \ Check if it is a primitive
+  t -if w iJMP then  \ Jump straight to VM functions if it is
+  ++rp               \ If it wasn't a VM instruction, inc {rp}
+  ip {rp} iSTORE     \ and store ip to return stack
+  w ip MOV vm a-optim \ "w" becomes our next instruction
+  vm JMP             \ Ad infinitum...
 assembler.1 -order
 
-:m header >in @ thead >in ! ;m
-:m :ht ( "name" -- : forth routine, no header )
-  get-current >r target.1 set-current create
-  r> set-current BABE talign there ,
-  does> @ 2/ t, ;m
-:m :t header :ht ;m ( "name" -- : forth routine )
-:m :to ( "name" -- : forth, target only routine )
-  header
-  get-current >r
-    target.only.1 set-current create
-  r> set-current
-  BABE talign there ,
-  does> @ 2/ t, ;m
-:m :a ( "name" -- : assembly routine, no header )
-  D00D target.1 +order definitions
-  create talign there , assembler.1 +order does> @ 2/ t, ;m
-:m (a); D00D <>
-   if abort" unstructured" then assembler.1 -order ;m
+\ This meta-compiler word, ";a", used to end the definition of
+\ assembly word, requires that the VM has been implemented
+\ first, as it jumps back to it.
+\
+
 :m ;a (a); vm a-optim vm JMP ;m
-:m postpone
-   target.only.1 +order t' target.only.1 -order 2/ t, ;m
-\ NB. There are some bugs with the comparison operators "op<"
-\ and "op>" when they deal with extreme values like
-\ "$8000 1 <", "$8002 1 <" works fine.
+
+\ # Forth Virtual Machine Instructions
+\
+\ Our Forth Virtual Machine would be useless without any
+\ instructions to execute, those instructions are defined here.
+\
+\ The choice of what functionality to implement as virtual 
+\ machine primitives and what to implement in the higher
+\ level Forth is partially a matter of style, and partially
+\ a matter of necessity.
+\
+\ The SUBLEQ machine is slow, no matter how we optimize it,
+\ however it can become usable or unusable depending on what
+\ we implement where. It is also more expensive in terms of
+\ memory to implement an instruction here than it is in a
+\ higher level Forth, a single jump here, or an increment
+\ takes up three cells. In higher level Forth it is just
+\ one cell. So there is a trade-off, we cannot put everything
+\ in assembler to make things faster, as the resulting image
+\ would be too big. It is also harder to code in assembly, than
+\ Forth. The eForth model just has about thirty primitives,
+\ which we will aim to do, other Forth implementations have
+\ hundreds, some pedagogical ones have fewer.
+\
+\ If this was on a real machine, we would want about thirty
+\ to implement a reasonably efficient machine, we would want
+\ assembly routines for things like multiplication, division,
+\ basic stack manipulation, and the like. 
+\
+\ If we implement a multiplication routine in Forth it will
+\ have to go through the virtual machine, if we do it in
+\ assembly it will not, it will still be relatively slow as
+\ we are implementing it in terms of addition, however it
+\ be much fast than the Forth version. The number of
+\ instructions in the VM is sort of hidden from the view
+\ of the programmer, for example the "MOV" macro word is
+\ comprised of four SUBLEQ instructions, an indirect load
+\ more, each VM cycle takes many of those macros, you end
+\ up spending more and more time in the VM than you should have
+\ to.
+\
+\ Other routines like "pause", "exit", or "opEmit", have to
+\ implemented as VM instructions as doing so otherwise would
+\ be too tricky or impossible.
+\
+\ We have 43 primitives, more than is ideal, but it is
+\ necessary given the nature of this system. Many of them
+\ have to be implemented in terms of primitives otherwise the
+\ system would be far too slow. For example "lsb" is a 
+\ primitive that gets the Least Significant Bit, an expensive
+\ operation that would normally be implemented by "1 and", 
+\ but for performance reasons it is not. The same goes for
+\ the multiplication and division routines, as well as "1-"
+\ and "1+".
+\
+\ It is partly a matter of philosophy and part a matter of
+\ engineering concerns as to what goes where. It is best to
+\ keep it as minimal as possible, as if this Forth were to
+\ be ported to a new platform, all of these routines would
+\ have to be rewritten. One of the reasons eForth was so
+\ portable is because there were very few primitive words in
+\ it, most of eForth was written in eForth, a higher level and
+\ more portable language than assembly.
+\
+\ ## The Assembly Primitives in Detail
+\
+\ Each of the virtual machine instructions written in assembly,
+\ or primitives, will be described, some are trivial, others
+\ less so. They will mostly be acting upon the data or variable
+\ stacks and the "tos" register, which is an optimization. That
+\ variable contains the top of the variable stack. It means
+\ fewer loads and stores have to be done to access the values
+\ on the variable stack.
+\
+\ "bye", "1-", "1+" and "invert" are nothing special, they are
+\ backed by simple assembly instructions. "bye" halts the
+\ SUBLEQ machine, "1-" decrements the top of the stack, you
+\ can work out the other two.
+\
 :a bye HALT ;a
 :a 1- tos DEC ;a
 :a 1+ tos INC ;a
 :a invert tos INV ;a
+
+\ The following two functions are use to build "@" and "!",
+\ however they deal with cell addresses and not with byte
+\ addresses. The SUBLEQ machine labels the first 16-bits as
+\ cell 0, and the next 16-bits as cell 1, however "@" and
+\ "!" require byte addressing, that is, address 0 should refer
+\ to the first 8-bits and not the first 16-bit, address 1
+\ to the next 8-bits, and so on.
+\
+\ That will be corrected later, but these two form the core
+\ of those words. It does mean that the Forth implementation
+\ can address less memory than is available is potentially
+\ available to the SUBLEQ machine. The SUBLEQ machine can
+\ address 65536 cells, or 128kiB, however the Forth can address
+\ 65536 bytes, or 64kiB.
+\
 :a [@] tos tos iLOAD ;a
 :a [!] w {sp} iLOAD w tos iSTORE --sp tos {sp} iLOAD --sp ;a
+
+\ "opEmit" and "opKey" perform the I/O functions, of which
+\ there are only two, there are Forth functions which wrap
+\ this functions but the basic I/O is done by these two. They
+\ both operate on single bytes pulled or pushed to the stack.
+\
+\ "opEmit", called by "emit", outputs a single byte. It is
+\ always blocking. "opKey" accepts a single byte of input
+\ and returns negative on error. Depending on the 
+\ implementation the negative can mean "no byte has been
+\ received yet" (it is non-blocking) or it can mean "End Of
+\ Input". There are option bits in the "{options}" variable
+\ for controlling the behavior of "key", defined later on,
+\ which uses this instruction. 
+\
+\ These two instructions provide the only real interaction
+\ with the outside world, and you can do a lot with just that.
+\
 :a opEmit tos PUT tos {sp} iLOAD --sp ;a
 :a opKey ++sp tos {sp} iSTORE tos GET ;a
+
+\ We need a way of pushing a literal value, a number, onto
+\ the variable stack, "opPush" does that. 
+\ 
+\ In order to push a literal value onto the variable stack 
+\ the instruction "opPush" has to manipulate the instruction
+\ pointer. Remember "ip" points to the next cell, if we store
+\ the number in the next cell when compiling the number into
+\ a word definition, then once we have loaded it via "ip", we
+\ just need to increment "ip" in order put it back onto a
+\ valid instruction.
+\
+\ As an example, the following word "x", pushes "2", then "3" 
+\ onto the variable stack:
+\
+\	: x 2 3 ;
+\
+\ This gets compiled to:
+\
+\	PUSH:
+\		opPush
+\		2
+\		opPush
+\		3
+\		exit
+\
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
+
+\ The "opUp" function is similar to the "opPush" function,
+\ however it is used to access USER variables instead, that
+\ is variables stored in thread local store, or to think of
+\ them another way, variables stored relative to a tasks
+\ memory area. They are part of the cooperative multitasking
+\ system. This instruction should be understood in conjunction 
+\ with "tuser", "pause" (defined later on in this section) and
+\ the multitasking words defined towards the end of this
+\ document.
+\
+\ Where this function differs to "opPush" is that instead of
+\ pushing a literal, it loads a literal, adds it to the current
+\ task address stored in "{up}", and pushes that onto the
+\ stack. The address should be cell and not byte address, so
+\ 
+\	opUp 0
+\
+\ Would refer to the first thread local cell and push the
+\ address of it onto the stack.
+\
+\ "tuser" is used to reserve those thread local variables by
+\ the meta-compiler, which has already been described.
+\
 :a opUp ++sp tos {sp} iSTORE tos ip iLOAD ip INC
    {up} tos ADD {up} tos ADD ;a
+
+\ The following instructions are nothing special, just simple
+\ stack manipulation functions, they implement the following
+\ Forth functions, as is to be expected:
+\
+\	opSwap  -> swap
+\	opDup   -> dup
+\	opOver  -> over
+\	opDrop  -> drop
+\	opToR   -> >r
+\	opFromR -> r>
+\
+\ There is nothing much to say about them, but see if you can
+\ understand how they work.
+\
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
 :a opDrop tos {sp} iLOAD --sp ;a
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
+
+:a opExit ip {rp} iLOAD --rp ;a
+
 :a opMul w {sp} iLOAD t ZERO
    begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
-:a opExit ip {rp} iLOAD --rp ;a
+
+\ Subtraction and addition need no real explanation, just note
+\ that they are quite fast to execute.
+\
+\
+\
 :a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
 :a + w {sp} iLOAD w tos ADD --sp ;a
+
 :a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
 :a rdrop --rp ;a
 :a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a
 :a sp! tos {sp} MOV ;a
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
 :a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a
+
 :a opNext w {rp} iLOAD
    w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then
    ip INC --rp ;a
+
+\ "lsb" is similar to the expression "1 and", but with an
+\ added "0= 0=", that is it gets the Least Significant Bit and
+\ turns it into a Forth boolean (0 or false, -1 for true).
+\
+\ It is used in functions later on that need to be fast and do
+\ the same operation, for example the "c@", or "c!", which both
+\ need to test the lowest bit.
+\
+\ "lsb" is not usually a Forth word because "1 and" is usually
+\ fast.
+\
+\ The instruction works by repeatedly doubling the input number
+\ until the lowest bit has been shifted into the highest bit
+\ location and then testing whether it is set or not.
+\
 :a lsb
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD
     tos w MOV 0 tos MOV w if neg1 tos MOV then ;a
+
 :a opJump ip ip iLOAD ;a
 :a opJumpZ
   tos w MOV 0 t MOV
   w if neg1 t MOV then w DEC w +if neg1 t MOV then
   tos {sp} iLOAD --sp
   t if ip INC vm JMP then w ip iLOAD w ip MOV ;a
+
+\ NB. There are some bugs with the comparison operators "op<"
+\ and "op>" when they deal with extreme values like
+\ "$8000 1 <", "$8002 1 <" works fine.
 :a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
 :a op0=
    tos w MOV neg1 tos MOV
@@ -674,18 +1133,92 @@ assembler.1 -order
    w -if neg1 tos MOV then ;a
 :a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV
    w +if neg1 tos MOV then ;a
+
+\ "op2/" is used to implement "2/", it is common for Forth
+\ implementations to implement "2/" incorrectly and this one
+\ is no exception, it is however done deliberately.
+\
+\ It is meant to be a fast division by two, which is not the
+\ same as a right shift by one. It can also differ subtly from
+\ an arithmetic right shift by one, which it is also sometimes
+\ implemented as. Either way, we will need a fast logical
+\ right shift, and left shift, by one, to convert from
+\ different types of addresses understood by the Forth 
+\ interpreter and the underlying SUBLEQ machine.
+\
+\ "op2/" is more complex than "op2*", as "op2*" just adds the
+\ "tos" register to itself, a doubling is equivalent to a
+\ left shift by one. One some platforms that might not be
+\ the case as the carry flag might be affected, not on this
+\ one however.
+\
+\ As is common for all bitwise operations on the SUBLEQ
+\ machine, it is expensive to compute. If the SUBLEQ machine
+\ could have any extra instructions a bitwise AND and left
+\ and right shifts would be it. You could gain back quite a lot
+\ in terms of efficiency just from those three extra additions.
+\
+\ "op2/" works by looping for each bit in the 16-bit machine 
+\ less on, and it tests whether the topmost bit is set (a 
+\ relatively cheap operation on twos compliment SUBLEQ 
+\ machines, as the top bit is set when the value is negative). 
+\
+\ If the topmost bit is set, then one is added to an 
+\ accumulator register ("x" in this case), "x" will be our
+\ result, and it is built up bit by bit in reverse, on the
+\ next loop "x" is doubled, which will shift it left. 
+\
+\ We can illustrate this, however we will only do it with
+\ four bits to save space, let us imagine we want to shift
+\ the binary string "1010" right by one, for our four bit
+\ machine we will only need to loop three times. After each
+\ iteration the "x" will be as shown, given the "tos":
+\
+\	tos      x
+\	         0000 ( x starts as 0 )
+\	1010     0001
+\	0100     0010
+\	1000     0101
+\
+\ In each cycle, "x" is first doubled, but as it starts as
+\ zero, this is has no effect, if the top most bit of "tos"
+\ is non-zero then 1 is added to "x", then "tos" is doubled.
+\
+\ The algorithms for "AND", "OR", and "XOR" are similar.
+\ As well as for left and right shifts by many places.
+\
+
 :a op2* tos tos ADD ;a
 :a op2/
   bwidth w MOV
   x ZERO
   begin w DEC w while
     x x ADD
-  tos bt MOV 0 bl1 MOV
-  bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+    tos bt MOV 0 bl1 MOV
+    bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
     bl1 if x INC then
     tos tos ADD
   repeat
   x tos MOV ;a
+
+\ "rshift" is implemented as a virtual machine instruction,
+\ but "lshift" is not as it can be implemented in Forth
+\ with little performance loss compared to "rshift", division
+\ by even a power of two is slow on a SUBLEQ machine.
+\
+\ It works bit by bit, much like "op2/", but it shifts right
+\ by a variable instead of fixed number of bits, it still
+\ builds up the result by adding in one, and doubling the
+\ "x" and "tos" registers.
+\
+\ It needs to pull the number to shift by off the stack but
+\ there is no real complication. 
+\
+\ A consequence of how this "rshift" works is that it is faster
+\ the more bits it shifts by, it takes the longest to shift by
+\ a single bit as the result is produced in reverse order.
+\
+
 :a rshift
   bwidth w MOV
   tos w SUB
@@ -693,13 +1226,46 @@ assembler.1 -order
   x ZERO
   begin w while
     x x ADD
-  tos bt MOV 0 bl1 MOV
-  bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+    tos bt MOV 0 bl1 MOV
+    bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
     bl1 if x INC then
     tos tos ADD
     w DEC
   repeat
   x tos MOV ;a
+
+\ The logical operators, OR, XOR, and AND, have the same
+\ pattern to how they work, and the borrow from how "op2/" and
+\ "rshift" work. They both work by testing if the highest bit
+\ is set and doubling both inputs and the output in order to
+\ shift bits.
+\
+\ If we have the following table of bits, if we add those
+\ bits together we can then use the comparison operators to
+\ determine what the new bit should be in the output.
+\
+\	0 + 0 = 0
+\       0 + 1 = 1
+\       1 + 0 = 1
+\       1 + 1 = 2 
+\
+\ None of the operators output should be 1 when the result is
+\ zero, XOR should 1 when the result is equal to zero, OR when
+\ it is greater or equal to 1, and AND should only be 1 when
+\ the output is 2. Otherwise the output should be 0 for the new
+\ bit.
+\
+\ The following Stack Overflow question goes over this in more
+\ detail <https://stackoverflow.com/questions/34120161>.
+\
+\ Making these operators fast is especially important, in all
+\ other Forth systems they have the reasonable expectation that
+\ these operators are fast, that is that they operate in a
+\ single clock cycle. The bitwise operators usually are, but
+\ for SUBLEQ the opposite is the case. Subtraction and addition
+\ are, so some words later on have be rewritten to use
+\ arithmetic instead.
+\
 :a opOr
   bwidth w MOV
   x ZERO
@@ -724,9 +1290,9 @@ assembler.1 -order
   --sp
   begin w while
    x x ADD
- tos bt MOV 0 bl1 MOV bt
+   tos bt MOV 0 bl1 MOV bt
    -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
- t   bt MOV 0 bl2 MOV bt
+   t   bt MOV 0 bl2 MOV bt
    -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
    bl1 bl2 ADD bl2 INC one bl1 MOV
    bl2 if 0 bl1 MOV then bl1 x ADD
@@ -744,7 +1310,7 @@ assembler.1 -order
    x x ADD
  tos bt MOV 0 bl1 MOV bt
    -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
- t   bt MOV 0 bl2 MOV bt
+   t   bt MOV 0 bl2 MOV bt
    -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
    bl1 bl2 ADD two bl2 ADD one bl1 MOV
    bl2 if 0 bl1 MOV then bl1 x ADD
@@ -753,6 +1319,7 @@ assembler.1 -order
    w DEC
   repeat
   x tos MOV ;a
+
 :a opDivMod
   w {sp} iLOAD
   t ZERO
@@ -768,23 +1335,87 @@ assembler.1 -order
   t DEC
   t tos MOV
   w {sp} iSTORE ;a
+
+\ "pause" is quite simple, but explaining its usage is more
+\ complex, it is a word that is implemented in assembly
+\ because it needs to be. It is at the core of the cooperative
+\ multitasking system that this implementation of Forth has.
+\
+\ Despite the underlying SUBLEQ machine being quite spartan,
+\ it is possible to implement or approximate many things. We
+\ will see that later on with the delay loop "ms", and with
+\ fake Forth Block system. This however, implements a fairly
+\ usable multitasking system of a type which is more common
+\ in embedded control systems than on desktop computers. As
+\ it is not preemptive we do not need a way of doing 
+\ interrupts. The multitasking system has interactions with
+\ the Input/Output layer which is blocking in the default C
+\ implementation of the SUBLEQ machine, and it also interacts
+\ with the USER variables.
+\
+\ Each Forth task, of which there is guaranteed to be at least
+\ one, has its own area in which is can store thread local
+\ variables. The system setups the first thread on boot, and
+\ more can be added later. Each task consists of a 1024 byte
+\ thread local storage area, which contain the buffers used
+\ for the terminal input, the return and variable stacks,
+\ the numeric formatting buffer, and an area for the USER
+\ variables and some registers. 
+\
+\ The job of "pause" is to switch from one task to another,
+\ if another task exists. Task switching can be disabled by
+\ setting the variable "{single}" to non-zero as well.
+\
+\ A good description of this concurrency model is here:
+\
+\ <https://www.bradrodriguez.com/papers/mtasking.html>
+\
+\ Which formed the inspiration for this implementation of the
+\ multitasking word-set.
+\
+\ The tasks exist as a linked list, and there is no priority,
+\ it is the job of each task within the scheduler list to yield
+\ to the next one. If it does not, it can lock up the system,
+\ or too much time could be spent in one task. This is why
+\ cooperative multithreading is not used in modern operating
+\ systems (but might be used within programs running on those
+\ systems, or in embedded real-time systems). 
+\ 
+\ The I/O functions defined later on all call "pause", this
+\ is so that they can yield to the next task as soon as 
+\ possible, but also in case the non-blocking versions of the
+\ I/O functions are implemented in the SUBLEQ machine. This
+\ allows the I/O functions to wait for the reception of a 
+\ character without holding up the rest of the system.
+\ 
+\ It is also caused within the "ms" function (which causes 
+\ problems in its current implementation), and in the Forth 
+\ Block words (which usually would perform I/O, however the
+\ block system is virtual and not backed by massed storage).
+\ 
+\ With this VM instruction, USER variables, and a few other
+\ variables, it is possible to make a viable, if primitive, 
+\ threading model. Making this preemptive would require
+\ hardware support and greatly complicate the system. 
+\ 
+
 :a pause
   {single} if vm JMP then
-  w {up} iLOAD
+  w {up} iLOAD \ load next task pointer from user storage
   w if
-    {cycles} INC
-    {up} t MOV  t INC ( load TASK pointer, skip next task loc )
-      ip t iSTORE t INC
+    {cycles} INC        \ increment "pause" count
+    {up} t MOV  t INC   \ load TASK pointer, skip next task loc
+      ip t iSTORE t INC \ save registers to current task
      tos t iSTORE t INC
     {rp} t iSTORE t INC
     {sp} t iSTORE t INC
-        w {rp0} MOV stacksz {rp0} ADD
-    {rp0} {sp0} MOV stacksz {sp0} ADD
-     w {up} MOV w INC ( Set next task )
-      ip w iLOAD w INC
+        w {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
+    {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
+     w {up} MOV w INC  \ set next task
+      ip w iLOAD w INC \ reverse of save registers
      tos w iLOAD w INC
     {rp} w iLOAD w INC
-    {sp} w iLOAD w INC
+    {sp} w iLOAD w INC \ we're all golden
   then ;a
 
 there 2/ primitive t!
@@ -803,6 +1434,9 @@ there 2/ primitive t!
 :m :e tlast @ {editor} t@ tlast ! DEAD :t drop 0 ;m
 :m ;e drop BABE ;t DEAD <> if abort" unstructured" then
   tlast @ {editor} t! tlast ! ;m
+
+\ TODO: Describe "lit" and why it has to be used as opposed
+\ to a hook, because of gforth.
 
 :m lit         opPush t, ;m
 :m up          opUp   t, ;m
@@ -843,11 +1477,59 @@ there 2/ primitive t!
 :m exit opExit ;m
 :m 2/ op2/ ;m
 
-\ # The Forth Image
-
+\ # The Forth (section of the) Image
+\
+\ We are now ready to define actual Forth words, everything up
+\ until now has just been to make an environment that is
+\ capable of hosting a Forth system, and about half the size
+\ of the generated image is used to create a those conditions.
+\
+\ The first words will mostly be generic utility functions,
+\ words the embody a virtual machine instruction, and a few
+\ other miscellaneous things.
+\
+\ To both save space, and because using "lit" as a postfix is
+\ annoying, for the most common constants; 0, 1, and -1, we
+\ will define words for them and place them in the system
+\ vocabulary with ":s".
+\
+\ Compiling a number into a word definition takes up two
+\ cells, one for "opPush" and another for the value. A 
+\ reference to a word only takes up one cell, hence the saving.
+\ The trade off is that it takes longer to execute and space
+\ must be reserved for the words that push those constants.
+\
 :s #0 0 lit ;s
 :s #1 1 lit ;s
 :s #-1 FFFF lit ;s
+\ The next section adds all the words that are implemented in
+\ a single virtual machine instruction.
+\
+\ We want to make sure that we use references to the virtual
+\ machine instructions when we call things like "1+" or "xor"
+\ when we use them later in the program, and references to 
+\ these words, so we put those words in the "target.only.1"
+\ dictionary to make sure they will not be found.
+\
+\ The definitions looks odd, for example:
+\
+\	:to 1+ 1+ ;t
+\
+\ Looks like it would be a recursive function that never
+\ terminates, however due to the way ":to" defines words the
+\ new word definition is not visible when we are filling out
+\ the word body, so the second "1+" refers to the assembly
+\ definition we defined with ":a", or the VM instruction for
+\ "1+".
+\
+\ The reason they are placed in the "target.only.1" is because
+\ of speed, it is better to call the VM instruction directly
+\ than to call a function that will just call the VM 
+\ instruction.
+\
+\ There is not much else to say about these words. Some of them
+\ go into the system vocabulary, but should also not be
+\ referenced moving on.
 :to 1+ 1+ ;t
 :to 1- 1- ;t
 :to + + ;t
@@ -875,22 +1557,112 @@ there 2/ primitive t!
 :to and opAnd ;t
 :to * opMul ;t
 :so pause pause ;s
+
+\ "nop" stands for 'no-operation', it is useful for some of
+\ the hooks we have. It does nothing.
 :t nop ;t
+
+\ Notice how "@" and "!" divide the address by two, which drops
+\ the very lowest bit that is used to select the upper or lower
+\ byte in a word. Division is expensive to compute, so it is
+\ better to use "\[@\]" and "\[!\]" where possible.
+\
+\ However, from the point of view of the developer, using
+\ "@" and "!" is easier.
+\
 :t @ 2/ [@] ;t
 :t ! 2/ [!] ;t
+
+\ These words are just used to push the address of a variable
+\ onto the stack. Some of them are local variables (using "up")
+\ and others are global addresses (using "lit").
+\
+\ Note which variables are USER variables and which are just
+\ normal memory locations.
+\
+\ "<ok>", "<emit>", "<echo>", "<literal>" and "<cold>" are used
+\ for system hooks. This allows the words they are used in to
+\ change at run time. For example, "<ok>" contains the 
+\ execution token used to print the "ok" prompt, which we have
+\ already encountered. By changing that execution token we
+\ can change that prompt. For example:
+\
+\	: prompt cr ." ok>" ;
+\	' prompt <ok> !
+\
+\ Will print a prompt that says "ok>" after each line is
+\ executed.
+\
+\ "<cold>" is a normal variable and not a USER variable as it
+\ needs to be available before the first thread is set up, it
+\ contains the execution token of the first Forth word to be
+\ executed.
+\
+\ "<ok> is in the normal Forth vocabulary despite it being a
+\ non-standard word, this is because we need to silence the ok
+\ prompt at the start of the script to ensure our output is
+\ not corrupted.
+\
+\ It is not a hard rule, but usually hook variables have the
+\ "<>" brackets enclosing them, and the functionality is
+\ provided by a word with a name like "(name)", the word that
+\ executes the hook will be called just "name".
+\
+\
 :t <ok> {ok} up ;t
 :s <emit> {emit} up ;s
 :s <key>  {key} up ;s
 :s <echo> {echo} up ;s
 :s <literal> {literal} up ;s
 :s <cold> {cold} lit ;s
+
+\ There are quite a lot of variables in this part of the code,
+\ much like at the beginning of the image, and they will all
+\ be explained again.
+\
+\ "current" and "root-voc" are to do with word vocabularies.
+\ The "root-voc" contains the minimal Forth vocabulary, hence
+\ why "root" is part of its name. It contains only several
+\ words such as "eforth", "words", "only", "forth", "system",
+\ "forth-wordlist" and "set-order". 
+\
+\ "current" contains the vocabulary for which newly defined
+\ words are to be added to. It is used to place words in
+\ the "target.1", "meta.1", "assembler.1" and "target.only.1"
+\ vocabularies. It is not usually used directly however, but
+\ is used by words like "definitions".
+\
+
 :t current {current} lit ;t
 :t root-voc {root-voc} lit ;t
+
+\ The word "this" allows us to access the USER task area,
+\ it pushes the pointer to that area onto the stack. The
+\ USER task is a 1024 byte block of memory, as mentioned, that
+\ has multiple stacks, buffers and variables in it.
+\
+\ It can be use to get the task ID (which is the same as the
+\ tasks address), or for the implementation, which knows that
+\ the "pad area" is located 960 bytes into the task area, which
+\ is used for the word "pad". The pad location is meant to be
+\ a programmers utility, not meant for serious use, that
+\ contains a *small* section of memory used as a temporary
+\ "pad".
+\
 :t this 0 up ;t
+:t pad this 3C0 lit + ;t
+
+\ More vocabulary words, "#vocs" contains the maximum number
+\ of possible vocabularies in the vocabulary list, whilst
+\ "context" gets a pointer to the area used to store the
+\ vocabulary array, the first cell will contain the first
+\ vocabulary in the word list (or the wordlist that will get
+\ searched for first).
+\
 :t #vocs 8 lit ;t
 :t context {context} lit ;t
+
 :t here h lit @ ;t
-:t pad this 3C0 lit + ;t
 :t base {base} up ;t
 :t dpl {dpl} up ;t
 :t hld {hld} up ;t
@@ -902,10 +1674,23 @@ there 2/ primitive t!
 :t bl 20 lit ;t
 :t hex  10 lit base ! ;t
 :t decimal A lit base ! ;t
-:s many #0 >in ! ;s
 :t cycles {cycles} lit ;t
+
 :t ] #-1 state ! ;t
 :t [ #0  state ! ;t immediate
+
+\ "many" is an interesting word, it is in the system vocabulary
+\ despite not being used, but I like the word so I have
+\ included it here, it allows a line of code to be executed
+\ an infinite number of times by postfixing it to the end of
+\ the command. That is less interesting compared to the way it
+\ does it, by manipulating the input line to make it so it is
+\ executed again, the line is then re-parsed and executed
+\ again, including "many", which triggers another re-parsing
+\ and so on. It is a neat little word.
+\
+:s many #0 >in ! ;s
+
 :t nip swap drop ;t
 :t tuck swap over ;t
 :t ?dup dup if dup then ;t
@@ -913,6 +1698,7 @@ there 2/ primitive t!
 :t -rot rot rot ;t
 :t 2drop drop drop ;t
 :t 2dup  over over ;t
+
 :t 0<= 0> 0= ;t
 :t 0<> 0= 0= ;t
 :t = - 0= ;t
@@ -920,6 +1706,7 @@ there 2/ primitive t!
 :t >= < 0= ;t
 :t <= > 0= ;t
 :t 0>= 0< 0= ;t
+
 :t negate 1- invert ;t
 :t s>d dup 0< ;t
 :t abs s>d if negate then ;t
@@ -1281,18 +2068,53 @@ there 2/ primitive t!
 :to ) ;t immediate
 :to \ tib @ >in ! ;t immediate
 :to immediate last nfa @ 40 lit or last nfa ! ;t
+
+\ Nearly every Forth comes with a built in decompiler, that
+\ can take a Forth word and produce and show how that Forth
+\ word is put together. They can be quite advanced or be very
+\ bare-bones, this is one of the more bare bones 
+\ implementations, it would not take that much to improve it,
+\ but we are short of space.
+\
+\ It is interesting to think that if the decompiler was made
+\ good enough then this source file could dispensed of.
+\
+\ The name of this decompiler is called "see", this one tries
+\ to dump the numeric contents of each cell within a word, it
+\ determines the end of a word when it either hits the value
+\ for the exit function, or until it reaches the end of the
+\ dictionary pointer.
+\
+\ A more advanced decompiler could look print out the word
+\ header, whether the word is "compile-only", "immediate", or
+\ even if it is hidden, analyze each cell to determine whether
+\ it is a call or a VM instruction (and print out the word name
+\ if it is a call), and decompile calls to "opJumpZ", "opUp",
+\ "opPush", "opNext", "opJump" and "opPush", all of which
+\ contain data and not instructions in the cell after them.
+\
+\ However, as we have the source here, not much is gained
+\ from this, it would just be an intellectual exercise.
+\
+\ The "base" variable can be used to modify the base which
+\ numbers are printed out in.
+\
+
 :to see bl word find ?found cr
   begin dup @ =unnest lit <>
   while dup @ . cell+ here over < if drop exit then
   repeat @ u. ;t
+
 :to dump aligned
   begin ?dup
   while swap dup @ . cell+ swap cell -
   repeat drop ;t
+
 :s cksum aligned dup C0DE lit - >r
   begin ?dup
   while swap dup @ r> + >r cell+ swap cell -
-  repeat drop r> ;s
+  repeat drop r> ;s 
+
 :t defined bl word find nip 0<> ;t
 :to [then] ;t immediate
 :to [else]
@@ -1301,13 +2123,67 @@ there 2/ primitive t!
    find drop cfa dup to' [else] lit = swap to' [then] lit = or
     if exit then repeat query again ;t immediate
 :to [if] if exit then postpone [else] ;t immediate
-:t bell 7 lit emit ;t
+
+\ TODO: Problems with "ms" and multithreading need describing
+
 :t ms for pause calibration @ for next next ;t
+
+\ The words "bell", "csi", "page" and "at-xy" make some
+\ assumptions which may not be valid on all output devices,
+\ it is assumed that if a user is typing commands into the
+\ program from a terminal, that the terminal supports basic
+\ ANSI terminal escape codes used to change things like
+\ cursor position, or character color. "bell" outputs the
+\ ASCII BEL character, which depending on your terminal, may 
+\ or may not do anything, it is meant to grab the users
+\ attention. 
+\
+\ "csi" is used to form CSI escape sequences, for example
+\ the following word can be defined to change the color of
+\ the terminal:
+\
+\	: color csi 0 u.r ." m" ; 
+\
+\ Note that "csi" is in the system vocabulary, so it will
+\ need to be loaded before this word can be defined.
+\
+\ The following words could then be defined:
+\
+\	decimal
+\	: red 31 color ;
+\	: green 32 color ;
+\	: blue 34 color ;
+\	: reset 0 color ;
+\
+\ This will most likely work under Unix systems, and quite
+\ likely fail if done under Windows CMD.EXE (although a program
+\ called ANSICON can remedy that), as windows terminal program
+\ does not support ANSI escape codes, or it depends on the
+\ version of windows and settings.
+\
+\ Standard Forths contain the words "at-xy" and "page" for
+\ controlling the cursor position and clearing the screen
+\ respectively, so these words are provided. Some interesting
+\ games can be made just these two, limited terminal games,
+\ but games nonetheless. If non-blocking input is implemented
+\ games then a Tetris or Snake clone can be made.
+\
+
+:t bell 7 lit emit ;t
 :s csi 1B lit emit 5B lit emit ;s
 :t page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;t
 :t at-xy base @ decimal
    >r csi #0 u.r ." ;" #0 u.r ." H" r>
    base ! ;t
+
+\ TODO: Describe Forth blocks, history, possible C
+\ implementation.
+\ TODO: describe why the block wordset has been implemented
+\ despite there being no mass storage (text editing, in case
+\ it is added, for a primitive file system).
+\ TODO: Describe possible Forth file system build on Forth
+\ blocks.
+
 :t b/buf 400 lit ;t
 \ NB. No mass storage exists, so this is just virtual!
 :t block #1 ?depth dup blk ! A lit lshift pause ;t
@@ -1319,6 +2195,7 @@ there 2/ primitive t!
    for
      F lit r@ - 3 lit u.r space 3F lit for count emit next cr
    next drop ;t
+
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
 :t set-input <ok> ! {id} up ! >in ! tup 2! ;t ( n1...n5 -- )
 :s ok state @ 0= if ."  ok" cr then ;s
@@ -1379,6 +2256,9 @@ there 2/ primitive t!
    ?dup if
      dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
+
+\ # Cooperative Multitasking
+
 \ Cooperative Multitasking Routines, For more information, see
 \ <https://www.bradrodriguez.com/papers/mtasking.html>
 :s task: ( create a named task )
@@ -1400,6 +2280,9 @@ there 2/ primitive t!
   begin pause {sender} up @ until
   {message} up @ {sender} up @
   #0 {sender} up ! ;s
+
+\ # Forth Text / Block Editor
+
 \ <http://tunes.org/wiki/block_20editor.html> or search for
 \ "FORTH BLOCK EDITOR"
 :t editor {editor} lit #1 set-order ;t ( Tiny BLOCK editor )
@@ -1421,6 +2304,11 @@ there 2/ primitive t!
 :t cold {cold} lit @ execute ;t
 
 \ # Image Generation
+\
+\ Everything is done! No more Forth to write! We just need to
+\ set up a few hooks, make sure the dictionary is in the right
+\ state, output the image, and exit the interpreter. That
+\ can be done in a few lines.
 
 t' quit half {cold} t!
 atlast {forth-wordlist} t!
