@@ -15,6 +15,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	- Other SUBLEQ projects and programs
 \	- Uses; learning, puzzles, games
 \	- Modifying and extending, different options
+\	- Explain the build process
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -188,7 +189,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ works, but it is a long journey to get anything useful built
 \ upon it.
 \
-\ # Meta-compilation (Cross compilation with Forth)
+\ ## Meta-compilation (Cross compilation with Forth)
 \
 \ To recap how this tool-chain works:
 \
@@ -377,7 +378,6 @@ variable tlocal 0 tlocal !
 \ ";m" is a no-op, as we never want to remove "meta.1" from
 \ the search order.
 \
-
 \ "tcell", "there", "tc!", "tallot", and the following words
 \ all share a similar theme, they are the same as the Forth
 \ words without the "t" prefix except they are used to
@@ -533,7 +533,25 @@ meta.1 +order definitions
 \ # The System Variables
 \
 \ There is not a lot in this section in terms logic, it nearly
-\ all allocation of variables.
+\ all allocation of variables. They will be described, however
+\ they are mostly registers, and memory locations that will
+\ not make sense until later, it might be best just to refer
+\ back to this chapter later on.
+\
+\ This section also contains the very first instruction to
+\ be executed, which is formed by three "t," statements.
+\
+\ Initially "0 t, 0 t, -1 t," is written into the target
+\ image. This might seem like the first instruction would
+\ halt the interpreter, and it would, were it not for the
+\ fact that the third value is overwritten later with the
+\ location of the Forth Virtual Machine entry point.
+\
+\ The first two memory locations must both be zero, the
+\ second memory location must be zero so it does not interfere
+\ with the first jump, the same for the first instruction,
+\ however the first location is also used as the "Z" location
+\ in SUBLEQ instructions.
 \
 
   0 t, 0 t,        \ both locations must be zero
@@ -561,6 +579,19 @@ label: entry       \ used to set entry point in next cell
   =stack-start half tvar {up} \ Current task addr. (Half size)
   F00 tvar {ms}    \ delay loop calibration variable
   0 tvar check     \ used for system checksum
+
+\ These variables will described at a later point, there is
+\ no point in going over them again, but they are the memory
+\ locations that are referred by words without the "{}" 
+\ brackets, so for example the word "cold", defined later on,
+\ is defined as:
+\
+\	:t cold {cold} lit @ execute ;t
+\
+\ It just refers to "{cold}", what "cold" does will be
+\ described later at a more appropriate juncture.
+\
+
   0 tvar {context} E tallot \ vocabulary context
   0 tvar {current}  \ vocabulary to add new definitions to
   0 tvar {forth-wordlist} \ forth word list (main vocabulary)
@@ -575,6 +606,27 @@ label: entry       \ used to set entry point in next cell
   2F tvar {blk}     \ current loaded block
   2F tvar {scr}     \ last viewed screen
   0 tvar padding    \ BUG: Getting during image generation
+
+\ Most of these are thread local variables, with the exception
+\ of "ip" and "tos", the stack variables "{rp}" and "{sp}" and
+\ the initial stack positions "{rp0}" and "{rp0}", which are 
+\ only stored in thread local storage on a task switch, all 
+\ words defined with "tuser" are locations of memory relative 
+\ to thread local storage.
+\
+\ The stacks pointers "{rp}" and "{sp}" themselves point into
+\ a stack location.
+\
+\ There are lots of interesting variables here, but they will
+\ be described later.
+\
+\ Part of the initial stack is also set up here, there is a
+\ word called "task-init", defined later, which initializes
+\ new tasks. It sets up where the locations of variable
+\ and return tasks as well as initial execution hooks with
+\ that task. However, for the first task the stacks and input
+\ buffers need to be set up manually.
+\
 
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
@@ -915,7 +967,7 @@ assembler.1 -order
 \ implemented as VM instructions as doing so otherwise would
 \ be too tricky or impossible.
 \
-\ We have 43 primitives, more than is ideal, but it is
+\ We have 42 primitives, more than is ideal, but it is
 \ necessary given the nature of this system. Many of them
 \ have to be implemented in terms of primitives otherwise the
 \ system would be far too slow. For example "lsb" is a 
@@ -1049,15 +1101,16 @@ assembler.1 -order
 \ stack manipulation functions, they implement the following
 \ Forth functions, as is to be expected:
 \
-\	opSwap  -> swap
-\	opDup   -> dup
-\	opOver  -> over
-\	opDrop  -> drop
-\	opToR   -> >r
-\	opFromR -> r>
+\	opSwap  -> swap ( x y -- y x )
+\	opDup   -> dup  ( x -- x x )
+\	opOver  -> over ( x y -- x y x )
+\	opDrop  -> drop ( x -- )
+\	opToR   -> >r   ( x --, R: -- x )
+\	opFromR -> r>   ( -- x, R: x -- )
 \
 \ There is nothing much to say about them, but see if you can
-\ understand how they work.
+\ understand how they work. The stack effect comments describe
+\ them in their entirety.
 \
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a
@@ -1066,25 +1119,95 @@ assembler.1 -order
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 
-:a opExit ip {rp} iLOAD --rp ;a
+\ "opExit", which is used to make "exit", deserves some
+\ explanation, it implements a "return", as part of the
+\ call/returns you find in most instruction sets. It restores
+\ execution to the cell after the call was made.
+\
 
-:a opMul w {sp} iLOAD t ZERO
-   begin w while tos t ADD w DEC repeat t tos MOV --sp ;a
+:a opExit ip {rp} iLOAD --rp ;a
 
 \ Subtraction and addition need no real explanation, just note
 \ that they are quite fast to execute.
 \
-\
-\
 :a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
 :a + w {sp} iLOAD w tos ADD --sp ;a
 
+\ These are various stack manipulation words that warrant a
+\ little more explanation than the implementations of 
+\ instructions like "swap", mainly due to what they are used
+\ for.
+\
+\ "r@" is especially useful, it is used often in "for...next"
+\ loops to fetch the loop counter (stored on the return stack),
+\ "r@" fetches the top most return stack value, pushing it to
+\ the return stack. It is a copy, so it does not modify the
+\ return stack.
+\
+\ "rdrop" just drops the topmost return stack variable.
+\
+\ It should be noted that the instructions that modify the
+\ return stack should be that, instructions, and not function
+\ calls, as if you called then the call location would be
+\ in the way of their operations.
+\
+\ "rp@" and "rp!" can get and set the return stack pointer
+\ directly, they are most useful for the throw/catch mechanism
+\ described later on.
+\
+
 :a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
 :a rdrop --rp ;a
-:a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a
-:a sp! tos {sp} MOV ;a
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
 :a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a
+
+\ "sp@" and "sp!" do for the variable stack what "rp@" and
+\ "rp!" do for the return stack, they can set them to arbitrary
+\ locations, a minor complication is that "sp@" must push
+\ the location of the stack before it is called, but that
+\ is not much of a problem.
+\
+\ "sp@" is more useful of the two, they are both used in
+\ throw/catch, but "sp@" is also used for words like "pick"
+\ and for checking the depth of the variable stack, useful
+\ for error checking and debugging purposes.
+\
+
+:a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a
+:a sp! tos {sp} MOV ;a
+
+\ "opNext" is the only other control structure instruction
+\ that is needed, apart from "opJump" and "opJumpZ". It should
+\ be noted that the exception mechanism of throw/catch does
+\ not need to be implemented as an instruction, but for the
+\ sake of efficiency, "opNext" is implemented as an 
+\ instruction. It is used as part of the primary definite
+\ looping mechanism available in eForth, which is the
+\ "for...next" construct, it is odd construct, but easy to
+\ implement and relatively fast. Much like "opJump" a
+\ jump destination follows the "opNext" instruction.
+\
+\ The "for...next" loop if given N will run for N+1 times,
+\ counting backwards from N until 0 is reached on the final
+\ loop.
+\
+\ "for" does very little, "next" does all of the work, it
+\ jumps back to after the "for".
+\
+\ As an example:
+\
+\	: example for r@ . next ;
+\
+\ Would compile to something like this:
+\
+\	0: opToR
+\	1: r@ instruction
+\	2: address of .
+\	3: opNext 1
+\
+\ And if run with 2, like "2 example", would produce the output
+\ "2 1 0".
+\
 
 :a opNext w {rp} iLOAD
    w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then
@@ -1112,6 +1235,42 @@ assembler.1 -order
     tos tos ADD tos tos ADD
     tos w MOV 0 tos MOV w if neg1 tos MOV then ;a
 
+\ "opJump" and "opJumpZ" implement unconditional and 
+\ conditional jumps respectively. The actual jump is performed
+\ by "ip ip iLOAD", as "ip" has been increment before the
+\ instruction has been called it points to the next cell,
+\ which is used to store the jump location, much like with
+\ "opPush". These instructions are used to implement the
+\ control structures "if", "begin", "again", "until", "repeat",
+\ along with a few other conditional statements and patching.
+\
+\ "opPushZ" does the same as "opJump" but it does it 
+\ conditionally, it pulls a value off of the variable stack
+\ and performs the jump if it zero.
+\
+\ As an example,
+\
+\	: example if 2 2 + . then 3 3 + . ;
+\
+\ Will be compiled to something that looks like this:
+\
+\	0: opJumpZ 5
+\	1: opPush 2
+\	2: opPush 2
+\	3: address of +
+\	4: address of .
+\	5: opPush 3
+\	6: opPush 3
+\	7: address of +
+\	8: address of .
+\
+\ Where the address along the side are cell addresses.
+\
+\ The way code is generated in Forth is slightly unique and
+\ interesting, and will be covered in the control statement
+\ chapter.
+\
+
 :a opJump ip ip iLOAD ;a
 :a opJumpZ
   tos w MOV 0 t MOV
@@ -1119,6 +1278,38 @@ assembler.1 -order
   tos {sp} iLOAD --sp
   t if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 
+\ The comparison operators are quite tricky to get right, 
+\ and are still not quite right, however they do a good
+\ enough job. The built in operators are all for signed
+\ comparison. Unsigned is synthesized in Forth code later
+\ on. They use some of the "if" statement constructs made
+\ in the assembler section to shunt the right constant in
+\ if the statement is true or false. Forth booleans are 
+\ different from booleans in language like C, in C true is
+\ non-zero but comparison operators yield 1 on true, on false
+\ zero is produced. In Forth zero is produced on false, whilst
+\ for true -1 is produced, this might seem odd, but -1 is
+\ "all bits set", and allows the boolean to be used with
+\ the bitwise logical operators as a mask.
+\
+\ "op0>" is used to make the Forth word "0>", and ">" the
+\ Forth word ">", and so on. They could also be defined in
+\ terms of each other, however for efficiencies sake they are
+\ not.
+\
+\ An example of this is the "mux" word, this can be used to
+\ select the bits from either "x1" or "x2" depending on a
+\ mask. It could be used like "2dup > mux" to perform the
+\ functionality of max, or "2dup < mux" to perform the 
+\ functionality of min, both of which are contingent on the
+\ comparison operators returning a Forth, and not a C, boolean.
+\
+\	: mux ( x1 x2 mask -- x ) 
+\		dup >r and swap r> invert and or ; 
+\
+\ "min" and "max" will not be defined like this later, as
+\ bitwise operators are expensive on the SUBLEQ machine.
+\
 \ NB. There are some bugs with the comparison operators "op<"
 \ and "op>" when they deal with extreme values like
 \ "$8000 1 <", "$8002 1 <" works fine.
@@ -1320,6 +1511,30 @@ assembler.1 -order
   repeat
   x tos MOV ;a
 
+\ "opDivMod" is purely here for efficiency reasons, it really
+\ improves the speed at which numbers can be printed, which
+\ would be very slows if "um/mod" was used. Printing numbers
+\ greatly increases the compilation speed as a large list of
+\ them has to be printed out at the end of the image 
+\ generation. This is not a concern when "gforth" is used to
+\ compile the image, but is when the eForth interpreter running
+\ under SUBLEQ is.
+\
+\ "opDivMod" is used by "(.)" later on. It computes both
+\ the quotient and the remainder of one number divided by
+\ the other, and pushes the results back to the stack. It
+\ does no error checking, so a division by 0 is not checked
+\ for. It is not designed to be used by the user, but only by
+\ the implementation.
+\
+\ The algorithm for division is a slow one, repeatedly
+\ subtracting until the variable used to store the number
+\ to be divided goes negative. It assumes its inputs are
+\ positive and will not work for negative numbers, much like
+\ restoring division. It then fixes up the result after the
+\ loop has finished and pushes the result.
+\
+
 :a opDivMod
   w {sp} iLOAD
   t ZERO
@@ -1418,9 +1633,13 @@ assembler.1 -order
     {sp} w iLOAD w INC \ we're all golden
   then ;a
 
+\ TODO: Talk about this line
+
 there 2/ primitive t!
 
 \ # More Meta-Compiler words
+
+\ TODO: mention compiler security
 
 :m ;t BABE <> if abort" unstructured" then
   talign opExit target.only.1 -order ;m
@@ -1445,6 +1664,7 @@ there 2/ primitive t!
 :m begin talign there ;m
 :m until talign opJumpZ 2/ t, ;m
 :m again talign opJump  2/ t, ;m
+
 :m if opJumpZ there 0 t, ;m
 :m mark opJump there 0 t, ;m
 :m then there 2/ swap t! ;m
@@ -1454,12 +1674,14 @@ there 2/ primitive t!
 :m aft drop mark begin swap ;m
 :m next talign opNext 2/ t, ;m
 :m for opToR begin ;m
+
 :m =push   [ t' opPush  half ] literal ;m
 :m =jump   [ t' opJump  half ] literal ;m
 :m =jumpz  [ t' opJumpZ half ] literal ;m
 :m =unnest [ t' opExit  half ] literal ;m
 :m =>r     [ t' opToR   half ] literal ;m
 :m =next   [ t' opNext  half ] literal ;m
+
 :m dup opDup ;m
 :m drop opDrop ;m
 :m over opOver ;m
@@ -1555,7 +1777,6 @@ there 2/ primitive t!
 :to or opOr ;t
 :to xor opXor ;t
 :to and opAnd ;t
-:to * opMul ;t
 :so pause pause ;s
 
 \ "nop" stands for 'no-operation', it is useful for some of
@@ -1691,53 +1912,58 @@ there 2/ primitive t!
 \
 :s many #0 >in ! ;s
 
-:t nip swap drop ;t
-:t tuck swap over ;t
-:t ?dup dup if dup then ;t
-:t rot >r swap r> swap ;t
-:t -rot rot rot ;t
-:t 2drop drop drop ;t
-:t 2dup  over over ;t
 
-:t 0<= 0> 0= ;t
-:t 0<> 0= 0= ;t
-:t = - 0= ;t
-:t <> = 0= ;t
-:t >= < 0= ;t
-:t <= > 0= ;t
-:t 0>= 0< 0= ;t
 
-:t negate 1- invert ;t
-:t s>d dup 0< ;t
-:t abs s>d if negate then ;t
-:t 2* op2* ;t
-:t cell 2 lit ;t
-:t cell+ cell + ;t
-:t cells op2* ;t
-:t u< 2dup 0< 0= swap 0< 0= <> >r < r> <>  ;t
-:t u> swap u< ;t
-:t u>= u< 0= ;t
-:t u<= u> 0= ;t
-:t execute 2/ >r ;t
+:t nip swap drop ;t ( x y -- y )
+:t tuck swap over ;t ( x y -- y x y )
+:t ?dup dup if dup then ;t ( x -- x x | 0 )
+:t rot >r swap r> swap ;t ( x y z -- y z x )
+:t -rot rot rot ;t ( x y z -- z x y )
+:t 2drop drop drop ;t ( x x -- )
+:t 2dup  over over ;t ( x y -- x y x y )
+
+:t 0<= 0> 0= ;t ( n -- f )
+:t 0<> 0= 0= ;t ( n -- f )
+:t = - 0= ;t ( u1 u2 -- f )
+:t <> = 0= ;t ( u1 u2 -- f )
+:t >= < 0= ;t ( u1 u2 -- f )
+:t <= > 0= ;t ( u1 u2 -- f )
+:t 0>= 0< 0= ;t ( u1 u2 -- f )
+
+:t negate 1- invert ;t ( n -- n )
+:t s>d dup 0< ;t ( n -- d )
+:t abs s>d if negate then ;t ( n -- u )
+:t 2* op2* ;t ( u -- u )
+:t cell 2 lit ;t ( -- u )
+:t cell+ cell + ;t ( a -- a )
+:t cells op2* ;t ( u -- u )
+:t u< 2dup 0< 0= swap 0< 0= <> >r < r> <> ;t ( u1 u2 -- f )
+:t u> swap u< ;t ( u1 u2 -- f )
+:t u>= u< 0= ;t ( u1 u2 -- f )
+:t u<= u> 0= ;t ( u1 u2 -- f )
+:t execute 2/ >r ;t ( xt -- )
 :t key? opKey s>d ( -- c 0 | -1 : get single byte of input )
    if
      {options} lit @ 8 lit and if bye then drop #0 exit
    then #-1 ;t
-:t key begin pause <key> @ execute until ;t
-:t emit pause <emit> @ execute ;t
-:t cr =cr lit emit =lf lit emit ;t
-:t get-current current @ ;t
-:t set-current current ! ;t
-:s last get-current @ ;s
-:t pick sp@ + [@] ;t
-:t +! 2/ tuck [@] + swap [!] ;t
-:t lshift begin ?dup while 1- swap 2* swap repeat ;t
+:t key begin pause <key> @ execute until ;t ( -- c )
+:t emit pause <emit> @ execute ;t ( c -- )
+:t cr =cr lit emit =lf lit emit ;t ( -- )
+:t get-current current @ ;t ( -- wid )
+:t set-current current ! ;t ( -- wid )
+:s last get-current @ ;s ( -- wid )
+:t pick sp@ + [@] ;t ( u -- u )
+:t +! 2/ tuck [@] + swap [!] ;t ( u a -- )
+:t lshift begin ?dup while 1- swap 2* swap repeat ;t 
+
 :t c@ dup @ swap lsb if 8 lit rshift else FF lit and then ;t
 :t c!  swap FF lit and dup 8 lit lshift or swap
    tuck dup @ swap lsb 0= FF lit xor
    >r over xor r> and xor swap ! ;t
+
 :t max 2dup < if nip else drop then ;t
 :t min 2dup > if nip else drop then ;t
+
 :t source-id {id} up @ ;t
 :t 2! tuck ! cell+ ! ;t
 :t 2@ dup cell+ @ swap @ ;t
@@ -1761,6 +1987,10 @@ there 2/ primitive t!
 :m ." .$ $literal ;m
 :m $" ($) $literal ;m
 :t space bl emit ;t
+
+\ # Exception Mechanism: Catch and Throw
+\
+
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
    sp@ >r                ( xt )   \ save data stack pointer
    {handler} up @ >r     ( xt )   \ and previous handler
@@ -1778,6 +2008,9 @@ there 2/ primitive t!
     then ;t
 :t abort #-1 throw ;t
 :s (abort) do$ swap if count type abort then drop ;s
+
+\ # Advanced Arithmetic 
+
 :t um+ 2dup + >r r@ #0 >= >r
    2dup and 0< r> or >r or 0< r> and invert 1+ r> swap ;t
 :t dnegate invert >r invert #1 um+ r> + ;t ( d -- d )
@@ -1788,6 +2021,7 @@ there 2/ primitive t!
     dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
   next rot drop ;t
+:t * um* drop ;t
 :t um/mod ( ud u -- ur uq : unsigned double cell div/mod )
   ?dup 0= if -A lit throw then
   2dup u<
@@ -1805,10 +2039,13 @@ there 2/ primitive t!
   then
   >r s>d if r@ + then r> um/mod r>
   if swap negate swap exit then ;t
-:t /mod  over 0< swap m/mod ;t
-:t mod  /mod drop ;t
-:t /    /mod nip ;t
+:t /mod over 0< swap m/mod ;t ( u1 u2 -- u1%u2 u1/u2 )
+:t mod  /mod drop ;t ( u1 u2 -- u1%u2 )
+:t /    /mod nip ;t ( u1 u2 -- u1/u2 )
 :s depth {sp0} lit @ sp@ - 1- ;s
+
+\ # Terminal Input and Word Parsing
+
 :s (emit) opEmit ;s
 :t echo <echo> @ execute ;t
 :s tap dup echo over c! 1+ ;s ( bot eot cur c -- bot eot cur )
@@ -1855,6 +2092,9 @@ there 2/ primitive t!
     r> - >r - r> 1+ ( b u c -- b u delta )
   >in +!
   r> bl = if -trailing then #0 max ;t
+
+\ # Numeric Input and Output
+
 :s banner ( +n c -- )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ;s
 :t hold ( c -- : save character in hold space )
@@ -1898,6 +2138,9 @@ there 2/ primitive t!
     1- dpl ! 1+ dpl @
   repeat
   2drop r> if dnegate then r> base ! #-1 ;t
+
+\ # Search Order Words
+
 :t compare ( a1 u1 a2 u2 -- n : string equality )
   rot
   over - ?dup if >r 2drop r> nip exit then
@@ -1945,6 +2188,9 @@ there 2/ primitive t!
    (search) rot drop ;t
 :t find ( a -- pwd 1 | pwd -1 | a 0 : find word in dictionary )
   (find) rot drop ;t
+
+\ # The Interpreter Loop
+
 :s (literal) state @ if =push lit , , then ;s
 :t literal <literal> @ execute ;t immediate ( u -- )
 :t compile, 2/ align , ;t  ( xt -- )
@@ -1976,6 +2222,9 @@ there 2/ primitive t!
   r> #0 ?found ;t
 :s .id ( pwd -- : print word )
   nfa count 1F lit and type space ;s
+
+\ # The Root Vocabulary
+
 :t get-order ( -- widn...wid1 n : get current search order )
   context
    \ next line finds first empty cell
@@ -2001,6 +2250,7 @@ there 2/ primitive t!
   repeat ( cr )
   1- repeat ;r
 :t definitions context @ set-current ;t
+
 :t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= if exit then space
@@ -2015,6 +2265,7 @@ there 2/ primitive t!
   last , bl word ?nul ?unique count + h lit ! align
   BABE lit postpone ] ;t
 :to :noname here BABE lit ] ;t
+
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
 :to again =jump  lit , 2/ , ;t immediate compile-only
@@ -2029,6 +2280,7 @@ there 2/ primitive t!
 :to aft drop =jump lit , here #0 , align here swap ;t
     immediate compile-only
 :to next =next lit , 2/ , ;t immediate compile-only
+
 :to ' bl word find ?found cfa literal ;t immediate
 :t compile r> dup [@] , 1+ >r ;t compile-only
 :t recurse {last} lit @ cfa compile, ;t immediate compile-only
@@ -2042,13 +2294,17 @@ there 2/ primitive t!
    get-current ! ;t
 :to variable create #0 , ;t
 :to constant create cell negate allot compile (const) , ;t
+
 :to marker last here create cell negate allot compile
     (marker) , , ;t
+
 :t >body cell+ ;t ( a -- a )
+
 :s (does) r> r> 2* swap >r ;s compile-only
 :s (comp) r> {last} lit @ cfa ! ;s compile-only
 :t does> compile (comp) compile (does) ;t
    immediate compile-only
+
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
 :to >r compile opToR ;t immediate compile-only
@@ -2056,12 +2312,14 @@ there 2/ primitive t!
 :to r@ compile r@ ;t immediate compile-only
 :to rdrop compile rdrop ;t immediate compile-only
 :to exit compile opExit ;t immediate compile-only
+
 :to ." compile .$
   [char] " word count + h lit ! align ;t immediate compile-only
 :to $" compile ($)
   [char] " word count + h lit ! align ;t immediate compile-only
 :to abort" compile (abort)
   [char] " word count + h lit ! align ;t immediate compile-only
+
 :to ( [char] ) parse 2drop ;t immediate
 :to .( [char] ) parse type ;t immediate
 :to postpone bl word find ?found cfa compile, ;t immediate
@@ -2069,6 +2327,8 @@ there 2/ primitive t!
 :to \ tib @ >in ! ;t immediate
 :to immediate last nfa @ 40 lit or last nfa ! ;t
 
+\ # Some Programmer Utilities
+\
 \ Nearly every Forth comes with a built in decompiler, that
 \ can take a Forth word and produce and show how that Forth
 \ word is put together. They can be quite advanced or be very
@@ -2096,26 +2356,140 @@ there 2/ primitive t!
 \ However, as we have the source here, not much is gained
 \ from this, it would just be an intellectual exercise.
 \
-\ The "base" variable can be used to modify the base which
-\ numbers are printed out in.
-\
 
 :to see bl word find ?found cr
   begin dup @ =unnest lit <>
   while dup @ . cell+ here over < if drop exit then
   repeat @ u. ;t
 
-:to dump aligned
+\ "dump" is another utility, it dumps out a section of memory
+\ cell by cell. Much like the output from "see" the 
+\ implementations differ greatly in the quality of the output
+\ they produce, some print a neat hex dump side by side with
+\ the characters as well. This implementation however is as
+\ simple as can be, it prints everything on a single row,
+\ and unlike most implementations of "dump" it is done in the
+\ current output radix, which means that the "base" variable
+\ can used to change what output is displayed.
+\
+\ In this case the simplicity is a virtue, it means this
+\ version of dump can be used for more purposes than most
+\ ones designed to directly produce human readable output
+\ in a neat, but limited, format. For example, it could be
+\ used as the inner loop of a more complex dump program, or
+\ for data exchange, for debugging sections of memory in
+\ different bases such as binary, and more!
+\ 
+\ A program loader could be designed with a similar structure
+\ to this word, one that accepted an address to write to and
+\ a length and allowed a user to input numbers. The output
+\ "." would have to be replaced with a word for getting a
+\ number from the input and writing it to a memory location.
+\
+
+:to dump aligned ( a u -- )
   begin ?dup
   while swap dup @ . cell+ swap cell -
   repeat drop ;t
 
-:s cksum aligned dup C0DE lit - >r
+\ "cksum" is used by the system to make sure the image has
+\ not been corrupted or tampered with. It does it in a limited
+\ way as self-modifying code means that it cannot make sure
+\ that the Forth virtual machine has not been tampered with.
+\ This is unfortunate, one way to get around this would be to
+\ write this in assembly and do the checking much earlier in
+\ the boot sequence. As this is not the case, only the Forth
+\ code is checked. To make the check-sum quick enough on the
+\ SUBLEQ machine no bitwise operations are used, just addition,
+\ this makes for a pretty poor check-sum but is better than
+\ nothing.
+\
+\ Another idea that could be combined with assembly version
+\ of "cksum" that would run before the Forth VM is to make
+\ the image decompress itself using an algorithm like
+\ LZSS <https://en.wikipedia.org/wiki/LZSS>, the image is
+\ highly compressible and LZSS is one of the simplest
+\ dictionary compression based routines available. It is
+\ doable and could save 30% or more on the image size, which
+\ preliminary testing confirms.
+\
+\ Huffman coding might be simpler to achieve with a similar
+\ result.
+\
+\ Image encryption or obfuscation could also be done, as an
+\ anti-tampering measure, which might be useful to do if the
+\ program was used as part of a game or a puzzle.
+\
+\ The meta-compiler calculates the checksum later on, and sets
+\ a known location during boot to the checksum value. It is
+\ checked as part of the initial Forth word "quit", which is
+\ not standard behavior but this Forth does it.
+\
+
+:s cksum aligned dup C0DE lit - >r ( a u -- u )
   begin ?dup
   while swap dup @ r> + >r cell+ swap cell -
   repeat drop r> ;s 
 
-:t defined bl word find nip 0<> ;t
+\ # Conditional Evaluation
+\
+\ The Forth input stream is malleable, we have seen with words
+\ like "see", or "create", and in the parsing section, that
+\ we can manipulate the program input at runtime, we can do
+\ this in arbitrary ways, adding comments is one example. It
+\ is technically possible to make a word that implements 
+\ another language, for example BASIC or C, that would still
+\ technically be part of the Forth language, however we have
+\ a far less ambitious goal - the creation of a word-set for
+\ conditional evaluation of code.
+\
+\ This is will be like the "#ifdef" facility provided by the
+\ C pre-processor, it will allow us to compile different code 
+\ for differing platforms, for example compiling one set of
+\ words for gforth, as opposed to eForth (which we have already
+\ seen in practice).
+\
+\ Another word will be defined which will help in the detection
+\ of which system we are compiling for, that word is called
+\ "defined". It parses the next word in the input stream and
+\ pushes a boolean value, true if the word is defined, and
+\ false if not. The word "eforth" is defined later, and is only
+\ defined on this eForth system by default (of course, you
+\ could define the word on a gforth or other Forth 
+\ implementation, but why would you?).
+\
+\ The words "\[if\]", "\[then\]" and "\[else\]" will be defined
+\ for conditional compilation. They are analogous to the
+\ "if...else...then" construct defined earlier.
+\
+\ Most of the work is done by "\[else\]", which "\[if\]" calls,
+\ it parses tokens from the input stream and discards them
+\ until "\[then\]", or another "\[else\]" is encountered.
+\
+\ They are all immediate words, so they can be used within
+\ word definitions. "\[if\]" pulls a value off the stack, it
+\ conditionally calls "\[else\]", if the value is false it
+\ will skip to the corresponding "\[else\]", otherwise it
+\ allow execution of its clause.
+\
+\ As "\[if\]...\[else\]...\[then\]" can span multiple lines
+\ then the implementation of "\[else\]" must be sure to refill
+\ the terminal input buffer once the end of the input line
+\ has been reached. We do not do the same with "(", although
+\ we could, for the sake of simplicity, it is also not 
+\ required.
+\
+\ To keep the implementation simple there is no compiler
+\ security to ensure the construct is used in its intended
+\ usage. For example:
+\
+\	[else] ( CODE ) [then]
+\
+\ Will not throw an error, the CODE section will not be
+\ executed however.
+\
+
+:t defined bl word find nip 0<> ;t ( -- f )
 :to [then] ;t immediate
 :to [else]
  begin
@@ -2124,7 +2498,58 @@ there 2/ primitive t!
     if exit then repeat query again ;t immediate
 :to [if] if exit then postpone [else] ;t immediate
 
-\ TODO: Problems with "ms" and multithreading need describing
+\ # Time and Hacks
+\
+\ The Forth word "ms" is a standard extension word for delaying
+\ for a specified number of milliseconds. The concept of 
+\ "sleep" is actually a complex one as it interacts with
+\ operating systems, the threading model, I/O blocking, and
+\ there are different optimizations that can be performed. The
+\ concept of real-time systems must be introduced and hard
+\ vs soft real-time systems. Saying "this function will sleep
+\ for X milliseconds" does not fully answer questions around
+\ sleep. There are also problems of jitter and drift, all
+\ in all "sleep" is a complex topic.
+\
+\ However, given that the underlying SUBLEQ machine does not
+\ have a method for determining the actual time (ie. A hardware
+\ timer), how is it that this implementation provides an "ms"
+\ implementation? The answer is by doing it poorly! There are
+\ a few ways this implementation could be improved even on this
+\ system, but there would still be trade-offs.
+\
+\ This implementation of "ms" uses busy waiting to approximate
+\ a timer. The idea is simple, given a certain clock rate
+\ which will assume is constant (it is not, unless you are
+\ running a SUBLEQ machine on an FPGA or custom CPU) then
+\ a busy loop will take a fixed amount of time to execute.
+\
+\ The time to execute depends on that clock rate, it will
+\ vary from machine to machine, it will also vary depending
+\ on how the busy loop is implemented, which we control. To
+\ account for differences between machines a "calibration"
+\ value is chosen that can be changed, on my machine a
+\ calibration value of "F00" (Hex) causes the implementation
+\ of "ms" when given 1000 (Decimal) to wait approximately one
+\ second, which is correct. On your machine it could be vastly
+\ different.
+\
+\ There is one other complication, this implementation of
+\ "ms" calls "pause", if we are running other threads then
+\ we will want them to proceed and do work whilst we are
+\ waiting in this thread (if we do not want that behavior 
+\ we can always drop into single task mode with the word
+\ "single".
+\
+\ This means our delay loop is actually going to count the
+\ time executed in the thread it is run, and not the actual 
+\ time elapsed. There are ways of improving this, but the
+\ easiest would be to implement a hardware time, to keep
+\ things simple we will not do this.
+\
+\ You should be aware of this if you plan on using "ms" for
+\ more serious timing needs.
+\
 
 :t ms for pause calibration @ for next next ;t
 
@@ -2168,6 +2593,8 @@ there 2/ primitive t!
 \ but games nonetheless. If non-blocking input is implemented
 \ games then a Tetris or Snake clone can be made.
 \
+\ The first column and row in "at-xy" is "1" and not "0".
+\
 
 :t bell 7 lit emit ;t
 :s csi 1B lit emit 5B lit emit ;s
@@ -2176,25 +2603,127 @@ there 2/ primitive t!
    >r csi #0 u.r ." ;" #0 u.r ." H" r>
    base ! ;t
 
-\ TODO: Describe Forth blocks, history, possible C
-\ implementation.
-\ TODO: describe why the block wordset has been implemented
-\ despite there being no mass storage (text editing, in case
-\ it is added, for a primitive file system).
-\ TODO: Describe possible Forth file system build on Forth
-\ blocks.
-
+\ # Forth Blocks
+\
+\ Forth blocks are a neat concept, they are a minimal way of 
+\ giving access to mass storage that any mass storage system
+\ can provide, no file system is required, just the ability
+\ to read and write blocks of data to non-volatile storage.
+\
+\ It is also a largely obsolete mechanism for interfacing with
+\ mass-storage, even most Forth systems now provide a similar
+\ interface to the C file words, "fopen", "fread", and the
+\ like.
+\ 
+\ Unfortunately the SUBLEQ machine in a quest for simplicity
+\ provides no mechanism for saving to non-volatile storage, it
+\ would be easy enough to add and interface with, but that
+\ will not happen, there is little need for it.
+\
+\ There are some Forth implementations that instead map the
+\ memory available to the implementation to blocks. This is
+\ what this implementation does, the idea behind the BLOCK
+\ word-set is that the user does not have to worry about the
+\ details of how it works, as far as the code is concerned, it
+\ could be writing to flash, to a hard-drive, or just to
+\ memory like this implementation does.
+\
+\ The block word-set has been added because it can be used as
+\ a basis for text editing (see the block editor described
+\ later) and if mass storage were to be added, this word-set
+\ could be used to access it, the code using it would not have
+\ to be modified, just the implementation of the word "block".
+\
+\ It would be interesting to build a simple file system on top
+\ of the Forth Block mechanism, and a set of DOS like utilities
+\ for accessing and executing files on it. But that is a 
+\ different story. It could also be used to simulate a simple
+\ DOS like operating system within this Forth system. The
+\ file system would also be quite portable, but limited.
+\
+\ Anyway, on to the block word-set. A Block consists of a
+\ 1024 byte chunk of memory stored in a buffer, for text
+\ editing purposes it is usually treated as 16 lines each of
+\ 64 bytes in length. The block can be transferred in and out
+\ of memory, all systems with block storage have at least one
+\ block buffer, most have two or more. Management of blocks
+\ is semi-automatic. If a block is selected it might kick out
+\ an existing buffer and reuse it, so all addresses to block
+\ storage might become invalidated on any use of a word like
+\ "block". If a block is marked as dirty and is to be evicted
+\ from the block buffers it is written back to mass storage
+\ before another block is loaded, otherwise the changes to
+\ that block are discarded. Note that because this
+\ implementation of the block word set just maps 1024 chunks
+\ of memory to each block the changes are always reflected
+\ and there are no block transfers.
+\
+\ That is the rough description of how things work in a normal
+\ Forth block system. The three main words are "block", 
+\ "update" and "flush". The latter two words do nothing on
+\ this system.
+\
+\ The word "block" is the core of the block system, given a
+\ block number, "k", it will return an address to a block
+\ buffer (or thrown an exception if there is an error), it
+\ will perform the task of checking if the current block is
+\ dirty, of potentially writing the changes back, of loading 
+\ the new block, of assigning the new block buffer. It does
+\ all of the work. It also sets the variable "blk" to the
+\ block buffer id given to "block", which contains the latest
+\ loaded block. If the block number is the same as the one
+\ loaded then it does nothing but return a pointer to the
+\ already loaded block. This version of "block" also checks
+\ that there is at least one value on the stack and it also
+\ causes "pause", described in the multi-threading chapter.
+\
+\ The word "update" marks the last loaded block as dirty,
+\ allowing the block system to determine what to write back,
+\ and "flush" writes back all dirty buffers back to mass
+\ storage and frees all buffers. As mentioned they do nothing
+\ (or very little) on this system. They should still be used
+\ within code that uses these block words for portability
+\ reasons.
+\
+\ A few other words are defined in this chapter, "list",
+\ "blank", "b/buf". It would also be a good time to describe
+\ how the block system interacts with "source-id", when we
+\ are executing code from a block (with "load", defined later)
+\ "source-id" is set to -1 (it is set to -1 when any string
+\ is being evaluated also), when reading from a terminal 
+\ "source-id" is set to zero.
+\ 
+\ "b/buf" is a constant which contains the number of bytes in
+\ a block, on most Forth system it is 1024 bytes, it does
+\ differ on some.
+\
+\ "list" takes a block number and displays that block. It
+\ prints out a block in the default text format, with
+\ 16 lines of text per block. This version of list also
+\ prints out the line numbers for each line. It is used by
+\ the block editor to display blocks.
+\
+\ "blank" is defined as a helper word, used to format blocks
+\ for editing, it blanks a section of memory by writing spaces
+\ (also known as "blanks") to that section of memory. It can
+\ be used to format a block with the following expression:
+\
+\	47 block b/buf blank
+\
+\ If we wanted to format block "47" for editing.
+\
 :t b/buf 400 lit ;t
-\ NB. No mass storage exists, so this is just virtual!
-:t block #1 ?depth dup blk ! A lit lshift pause ;t
-:t flush ( save-buffers empty-buffers ) ;t
-:t update #-1 {dirty} lit ! ;t
-:t blank bl fill ;t
-:t list page cr dup scr ! block
+:t block #1 ?depth dup blk ! A lit lshift pause ;t ( k -- u )
+:t flush ( save-buffers empty-buffers ) ;t ( -- )
+:t update #-1 {dirty} lit ! ;t ( -- )
+:t blank bl fill ;t ( a u -- )
+:t list page cr dup scr ! block ( k -- )
    F lit
    for
      F lit r@ - 3 lit u.r space 3F lit for count emit next cr
    next drop ;t
+
+\ # The Read-Eval-Loop
 
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
 :t set-input <ok> ! {id} up ! >in ! tup 2! ;t ( n1...n5 -- )
@@ -2213,7 +2742,7 @@ there 2/ primitive t!
 :s loadline line evaluate ;s
 :t load #0 F lit for
    2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
-:r eforth 0106 lit ;r ( -- version )
+:r eforth 0107 lit ;r ( -- version )
 :s info cr
   ." Project: eForth v1.7 " ( here . ) cr
   ." Author:  Richard James Howe" cr
@@ -2238,40 +2767,197 @@ there 2/ primitive t!
   this =tib lit + #0 tup 2! \ Set terminal input buffer loc.
   postpone [
   {up} lit ! ;s
-:s ini {up} lit @ task-init ;s ( -- )
-:s opts
+:s ini {up} lit @ task-init ;s
+:t quit ( -- : interpreter loop )
+  begin
+   query t' eval lit catch
+   ?dup if
+     dup space . [char] ? emit cr #-1 = if bye then ini then
+  again ;t
+:s (cold)
+  only forth definitions
+  ini
   {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
   {options} lit @ 2 lit and if
     primitive lit @ 2* dup here swap - cksum
     check lit @ <> if ." cksum fail" bye then
     {options} lit @ 2 lit xor {options} lit !
-  then ;s
-:t quit ( -- : interpreter loop, does more than most QUITs )
-  only forth definitions
-  ini
-  opts
-  begin
-   query t' eval lit catch
-   ?dup if
-     dup space . [char] ? emit cr #-1 = if bye then ini then
-  again ;t
+  then quit ;s
 
 \ # Cooperative Multitasking
-
-\ Cooperative Multitasking Routines, For more information, see
+\ 
+\ As mentioned before the best text on implementing 
+\ multitasking within Forth is available at:
+\
 \ <https://www.bradrodriguez.com/papers/mtasking.html>
+\
+\ Some of the concepts have already been talked about
+\ previously, namely USER variables, the task area, the "pause" 
+\ word and "task-init". This section brings everything together
+\ and makes those the multitasking usable. It adds words to
+\ create new named tasks, to add that task to the list of tasks
+\ to execute, to wait on a "signal" sent from another task,
+\ to send messages between tasks, and to turn multitasking
+\ on or off.
+\
+\ The I/O words "key", "emit", "block", and also "ms" all call
+\ the word "pause", which should be bore in mind when
+\ programming. "key?" does not call "pause" however, but its
+\ blocking or non-blocking behavior should be considered.
+\
+\ So, what is the point of multithreading, there has been a lot
+\ of talk about it within this document, allusions to it, but
+\ no rationale. It might seem like quite the complication to
+\ the implementation, and it certainly is if you never plan
+\ on using it. It was actually relatively easy to implement,
+\ especially compared to implementing the basic operators from
+\ scratch with no debugging facilities. If you never use
+\ another thread or never plan on using one, you can skip all
+\ this and you do not need to concern yourself with it.
+\
+\ The point of multithreading is to divide up the processor
+\ time so that multiple threads of execution can share the
+\ same processor and pretend they are executing one a single
+\ processor. Imagine if you have a computer that has multiple
+\ users on it, you do not want to have to wait for one user
+\ to log off the server before you can log into it, you both
+\ want to log into the same server at the same time.
+\
+\ Another example is a computer game, you often have multiple
+\ different input methods such as mouse, keyboard, the network,
+\ and multiple different output methods, sound, graphics, and
+\ again the network. You do not want the game to halt whilst
+\ you play a sound, nor do you want the graphics subsystem to
+\ stop when it is waiting for a keyboard press, you want
+\ everything to appear so it is being computed all at the same
+\ time, even on single CPU core systems (which are getting are
+\ getting rarer nowadays even in the embedded computer space).
+\
+\ Threading and different threading models "solve" this, and
+\ do so in different ways. The cooperative threading model is
+\ the simplest, the easiest to use and the easiest to get
+\ right. It does have a disadvantage in that a single thread
+\ of execution can hold up and block the entire system from
+\ running, and each thread must manually have "pause" functions
+\ inserted in it for this to work.
+\
+\ As we control the virtual machine, it would be possible to
+\ alleviate some of this by making it do the "pause"
+\ functionality every X instructions completed, but that would
+\ slow down normal execution.
+\
+\ An example program, that uses the tasks (make sure the system
+\ vocabulary is loaded prior to executing this):
+\
+\ 	task: rx
+\ 	task: tx1
+\ 	task: tx2
+\ 
+\ 	: .tx1 begin [char] X rx send 100 ms again ;
+\ 	: .tx2 begin [char] Y rx send 200 ms again ;
+\ 	: .rx begin 
+\ 	  multi receive single . space emit cr again ;
+\ 
+\ 	single
+\ 	' .tx1 tx1 activate
+\ 	' .tx2 tx2 activate
+\ 	' .rx rx activate
+\ 	: schedule begin pause again ; 
+\ 	multi schedule
+\ 
+\ This creates three new threads, two of which transmit a
+\ a single character to a third, "tx1" and "tx2" transmit 
+\ "X" and "Y" respectively to task "rx", which they do at
+\ different rates. Notice that all three threads are executing
+\ in an infinite loop, so without the threading mechanism
+\ "rx" receiving and printing the characters would be 
+\ impossible. Also note, "ms", "emit" all call "pause", 
+\ allowing the threads to switch between themselves.
+\ 
+\ "multi" and "single" are used in the "rx" thread to 
+\ to prevent other I/O operations from interfering with
+\ the output of the output of "rx". Note that ".", "space"
+\ and "cr" all call "emit", so also yield to other threads. 
+\ 
+\ The interpreter can run at the same time, and you can
+\ type things into it, although the program will need 
+\ modification ("schedule" should be removed), as will the
+\ "{options}" variable. It is also sensitive to the 
+\ environment, so it is best to leave the program as is.
+\ 
+\ To prevent activation of the threads immediately, single 
+\ mode is entered, and only when everything is setup do we
+\ enter multi mode again, "schedule" is used to keep the 
+\ interpreter task busy.
+\ 
+\ Now for a more detailed description of the words themselves.
+\ 
+\ "task:" is used to create a named task, it allocates memory 
+\ for the tasks buffers, stacks, and USER variables. It does
+\ little else however, and the task is not yet ready to run
+\ as it has nothing to execute. It can now be referred to
+\ however, allowing other tasks to send messages to it, or
+\ at least the code written to do so as it will not be able
+\ to receive them yet.
+\ 
+\ "activate" takes an execution token, initializes the task 
+\ memory, and assigns that execution token to the task, the
+\ task will start running if we are in "multi" mode, so use
+\ the word "single" prior to stop the task from immediately
+\ launching. 
+\ 
+
 :s task: ( create a named task )
   create here 400 lit allot 2/ task-init ;s
 :s activate ( xt task-address -- : start task executing xt )
   dup task-init
   dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
   r> this @ >r dup 2/ this ! r> swap ! ;s ( link in task )
+
+\ "wait" and "signal" belong as a pair, they do not require
+\ a tasks to work, and work on arbitrary memory locations,
+\ but are used to perform synchronization between tasks. One
+\ task can "wait" on a variable to become non-zero, repeatedly
+\ calling "pause" until it is (because another task or even
+\ a hardware register has set to be non-zero).
+\
+\ "signal" is used to set that memory location to a non-zero
+\ value, these two are wrapped up in functions because the
+\ implementation of these two functions might be more complex
+\ on multitasking systems that perform preemption, otherwise
+\ "signal" could largely be replaced with "!". "signal" by
+\ default sets the variable to be waited on to the current
+\ task address (all task addresses being non-zero).
+\
+
 :s wait ( addr -- : wait for signal )
   begin pause dup @ until #0 swap ! ;s
 :s signal this swap ! ;s ( addr -- : signal to wait )
+
+\ "single" and "multi" turn off and on multitasking. This
+\ can be used to prevent other tasks from interrupting the
+\ currently running task, useful for preventing I/O from 
+\ multiple threads from interfering with each other.
+\
+
 :s single #1 {single} lit ! ;s ( -- : disable other tasks )
 :s multi  #0 {single} lit ! ;s ( -- : enable multitasking )
+
+\ "send" and "receive" are a pair of words like "wait" and
+\ "signal", they are used to send a message from one thread
+\ to another. "send" takes a message, which is a single cell,
+\ it could be a pointer, a variable, an execution token, so
+\ long as it is a single cell, it also takes a task address
+\ to send to.
+\
+\ "receive" waits by repeatedly pausing until a task address
+\ is written into its task inbox, "{sender}". It then retrieves
+\ the value in "{sender}" and in "{message}".
+\
+\ This is a simple way to do inter-thread communication.
+\
+
 :s send ( msg task-addr -- : send message to task )
   this over {sender} lit +
   begin pause dup @ 0= until
@@ -2281,10 +2967,144 @@ there 2/ primitive t!
   {message} up @ {sender} up @
   #0 {sender} up ! ;s
 
-\ # Forth Text / Block Editor
+\ That completes the multitasking section, there are only a
+\ few words on top of the base that the Forth system provides,
+\ but they are enough for most tasks.
+\ 
+\ Possibly missing are words to put to sleep and wake up a
+\ task, if you need them, implement them yourself. 
+\
 
-\ <http://tunes.org/wiki/block_20editor.html> or search for
-\ "FORTH BLOCK EDITOR"
+\ # Forth Text / Block Editor
+\
+\ I love Forth blocks, they are simple to implement, understand
+\ and are very easy to implement. They are of course an 
+\ obsolete way of doing things, suitable for a bygone era only,
+\ or perhaps on some limited embedded systems. 
+\
+\ We can make a very small, and fairly usable, text editor
+\ based on our "persistent" storage mechanism. It packs a lot
+\ of functionality into a very short space, and it does this
+\ by reusing a lot of functionality built into Forth. The
+\ Forth Block mechanism takes care of storage, retrieval and
+\ swapping in and out dirty blocks, the Forth interpreter
+\ can handle command parsing and line based input. We just
+\ need to meld these concepts into an editor. We even have
+\ a word for executing Forth blocks.
+\
+\ For more information on Forth block editors the links:
+\
+\ - <http://tunes.org/wiki/block_20editor.html>
+\ - <https://wiki.c2.com/?ForthBlocks>
+\
+\ Are useful, alternatively search for "FORTH BLOCK EDITOR",
+\ in your favorite internet search engine.
+\
+\ To make sure that these newly defined commands do not
+\ interfere with the main vocabulary we will put them in
+\ a vocabulary called "editor". We will be defining short
+\ one letter commands that are easy to type, so it is important
+\ that we do this.
+\
+\ The editor we will be making will not be a normal text editor
+\ like you will be familiar with, it will be simpler but more
+\ wasteful.
+\
+\ We have been given a series of 1024 byte blocks to deal with,
+\ we will treat each block as 16 lines, each line being 64
+\ bytes long. The entire block when formatted for editing will
+\ contain white-space. This makes the job of the editor much,
+\ much easier. There are no variable length strings to make,
+\ manage or delete, and all string handling routines will be
+\ trivial.
+\
+\ The editor is only 16 lines long itself, so it will fit
+\ perfectly within a single block.
+\
+\ To use the editor type "editor", this will replace the
+\ current vocabulary so only the editor commands are visible,
+\ they are; "q", "?", "l", "e", "ia", "i", "w", "s", "n", "p",
+\ "r", "x", and finally "d". Some of the words are not
+\ strictly necessary in this editor, but they are not large
+\ and will be useful in other systems.
+\
+\ Here is a short description of each of the commands:
+\
+\ "editor", enter editor mode
+\ "q", quit editor
+\ "?", display current block number
+\ "l", list current forth block
+\ "e", execute current forth block
+\ "ia", insert line of text into line at position
+\ "i", insert line of text into line
+\ "w", list commands
+\ "s", save and flush
+\ "n", go to next block and list it
+\ "p", go to previous block and list it
+\ "r", list a specific block
+\ "x", erase the screen, replacing it with spaces
+\ "d", delete a line, it takes a number as an argument
+\
+\ Missing are words to perform searching, replacing, swapping
+\ lines. They are all easy to add, but are not necessary. The
+\ fact that execute, "e", calls "q" might cause problems when
+\ trying to put words into different vocabularies, but it is
+\ not an insurmountable problem. Also "e" might clash with
+\ the hexadecimal value for the number 14, in this Forth it is
+\ not a problem as hexadecimal numbers use uppercase only, and
+\ this Forth is case sensitive.
+\
+\ The editor can also be used to enter data with a series
+\ of commands into blocks to create databases if file
+\ redirection is used.
+\
+\ An example of its use:
+\
+\	editor
+\	x
+\	0 i ( HELLO WORLD PROGRAM VERSION 3.4 )
+\	1 i : ahoy cr ." HELLO, WORLD" ;
+\	2 i ahoy
+\	l
+\	e
+\
+\ This will make the block containing the following text:
+\
+\	( HELLO WORLD PROGRAM VERSION 3.4 )
+\	: ahoy cr ." HELLO, WORLD" ;
+\	ahoy
+\
+\ Which when run should print out:
+\
+\	HELLO, WORLD
+\
+\ It takes a little getting used to, but is not that difficult.
+\ Feel free to edit the commands into something more suitable
+\ to what you prefer, or add new ones.
+\
+\ The only complex word is "ia", which also forms the basis
+\ for "i", it inserts a line of text into a line at a location,
+\ after making sure there are at least two items on the stack,
+\ it does not range checking on those variable unfortunately,
+\ a common "feature" of Forth. It looks at the Terminal Input
+\ Buffer, with ">in" and "tib", copying the results into the
+\ location within the block specified, and then skips over
+\ the line so it is not executed. It also calls "update",
+\ which marks the current block as dirty (as it has just been
+\ modified), this means the block is automatically saved when
+\ moving to the next or previous block. Of course, as there
+\ is no mass storage in this SUBLEQ machine, so nothing is
+\ written to it, however it is a nice feature for portabilities
+\ sake.
+\
+\ Most of the other commands are simple, they manipulate the
+\ screen pointer by adding to it, or retrieving it.
+\
+\ A lot of the words call "l", to list the current screen,
+\ so after modification or changing of the screen variable
+\ "scr" the user does not have to type "l" themselves.
+\
+
 :t editor {editor} lit #1 set-order ;t ( Tiny BLOCK editor )
 :e q only forth ;e
 :e ? scr @ . ;e
@@ -2301,6 +3121,14 @@ there 2/ primitive t!
 :e x scr @ block b/buf blank l ;e
 :e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit
    blank l ;e
+
+\ # Last word defined
+\
+\ Finally "cold" is defined, the last word we will define,
+\ it deserves its own section. The word "cold" restarts the
+\ system by executing the execution token stored in "{cold}".
+\
+
 :t cold {cold} lit @ execute ;t
 
 \ # Image Generation
@@ -2309,16 +3137,36 @@ there 2/ primitive t!
 \ set up a few hooks, make sure the dictionary is in the right
 \ state, output the image, and exit the interpreter. That
 \ can be done in a few lines.
+\
+\ The word "save-target" is called, this spits the output onto
+\ the standard output stream as a series of space delimited
+\ 16-bit signed numbers.
+\ 
+\ ".end" puts the Forth interpreter back into a normal state,
+\ so we can then call "bye", that "bye" will be the one which
+\ exits the interpreter and not the new one we have just
+\ defined. That completes everything.
+\ 
+\ As the SUBLEQ machine has no way of writing files to anything
+\ and only one method of input or output, the build process
+\ for a new image looks like this (on a Unix system): 
+\ 
+\	./subleq old-image.dec < subleq.fth > new-image.dec 
+\ 
+\ "old-image.dec" contains an eForth interpreter, "subleq.fth"
+\ contains this file, and "new-image.dec" is the new eForth 
+\ image we have produced in this file.
+\ 
 
-t' quit half {cold} t!
-atlast {forth-wordlist} t!
-{forth-wordlist} {current} t!
-there h t!
+t' (cold) half {cold} t!      \ Set starting Forth word
+atlast {forth-wordlist} t!    \ Make wordlist work
+{forth-wordlist} {current} t! \ Set "current" dictionary
+there h t!                    \ Assign dictionary pointer
 primitive t@ double mkck check t! \ Set checksum over VM
-atlast {last} t!
-save-target
-.end
-bye
+atlast {last} t!              \ Set last defined word
+save-target                   \ Output target
+.end                          \ Get back to normal Forth
+bye                           \ Auf Wiedersehen
 
 \ # Notes
 \
@@ -2356,6 +3204,9 @@ bye
 \ available at <https://github.com/howerj/embed>, this file
 \ could be documented extensively and explain how to build up
 \ a Forth interpreter from scratch.
+\ - A C program containing an image could be generated, or
+\ be an option that could be commented out, it would not
+\ be that difficult to do.
 \
 \ # References:
 \
@@ -2373,3 +3224,288 @@ bye
 \   For the block word-set, which is partially implemented.
 \ - <https://github.com/howerj/subleq-js>
 \
+
+\ # Appendix 
+\
+\ ## Fully Portable SUBLEQ machine written in C
+\
+\ This section contains a fully portable version of SUBLEQ
+\ machine, written in C, it is not minified, or obfuscated, but
+\ designed to as portable as possible. It does not even rely
+\ on twos compliment, doing all arithmetic with unsigned 
+\ numbers instead. It should work on all platforms that have
+\ the fixed width typedefs.
+\
+\	#include <stdint.h>
+\	#include <stdio.h>
+\	#define SZ   (32768)
+\	#define L(X) ((X)%SZ)
+\	int main(int s, char **v) {
+\		static uint16_t m[SZ];
+\		uint16_t pc = 0;
+\		for (int i = 1, d = 0; i < s; i++) {
+\			FILE *f = fopen(v[i], "r");
+\			if (!f)
+\				return 1;
+\			while (fscanf(f, "%d", &d) > 0)
+\				m[L(pc++)] = d;
+\			if (fclose(f) < 0)
+\				return 2;
+\		}
+\		for (pc = 0; pc < SZ;) {
+\			uint16_t a = m[L(pc++)];
+\			uint16_t b = m[L(pc++)];
+\			uint16_t c = m[L(pc++)];
+\			if (a == 65535) {
+\				m[L(b)] = getchar();
+\			} else if (b == 65535) {
+\				if (putchar(m[L(a)]) < 0)
+\					return 3;
+\				if (fflush(stdout) < 0)
+\					return 4;
+\			} else {
+\				uint16_t r = m[L(b)] - m[L(a)];
+\				if (r & 32768 || r == 0)
+\					pc = c;
+\				m[L(b)] = r;
+\			}
+\		}
+\		return 0;
+\	}
+\
+\
+\ ## Non-blocking input SUBLEQ machine written in C
+\
+\ Unfortunately there is no way to do non-blocking Input and
+\ Output in pure C with the standard input and output streams,
+\ to remedy that a SUBLEQ machine that can run on most systems
+\ has been provided. It should work under most Unix systems,
+\ and under Windows. However, it has only been tested on Linux
+\ and Windows.
+\
+\ It is largely the same as the portable version but provides
+\ a function for enabling and performing a non-blocking read
+\ on the standard input channel, or on Windows a read from
+\ the terminal input. The character retrieval function now
+\ returns negative if there is no input, instead of on End
+\ Of File.
+\
+\ Consult the "{options}" variable for how this interacts with
+\ the eForth image, as the default image exits when negative
+\ is returned from the character input.
+\
+\ Non-blocking output is not done (it is assumed output happens
+\ instantly).
+\
+\ One other change is that hitting ESC causes the interpreter
+\ to exit, CTRL-D will no longer work nor can End-Of-File be
+\ detected any more.
+\
+\	#include <stdint.h>
+\	#include <stdio.h>
+\	#include <stdlib.h>
+\
+\	#define ESCAPE (27)
+\	#define DELETE (127)
+\	#define BACKSPACE (8)
+\
+\	#ifdef __unix__
+\	#include <unistd.h>
+\	#include <termios.h>
+\	static struct termios oldattr, newattr;
+\
+\	static void restore(void) {
+\		tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
+\	}
+\
+\	static int setup(void) {
+\		tcgetattr(STDIN_FILENO, &oldattr);
+\		newattr = oldattr;
+\		newattr.c_iflag &= ~(ICRNL);
+\		newattr.c_lflag &= ~(ICANON | ECHO);
+\		newattr.c_cc[VMIN]  = 0;
+\		newattr.c_cc[VTIME] = 0;
+\		tcsetattr(STDIN_FILENO, TCSANOW, &newattr);
+\		atexit(restore);
+\		return 0;
+\	}
+\
+\	static int getch(void) {
+\		static int init = 0;
+\		if (!init) {
+\			setup();
+\			init = 1;
+\		}
+\		unsigned char r = 0;
+\		if (read(STDIN_FILENO, &r, 1) != 1)
+\			return -1;
+\		return r;
+\	}
+\
+\	static int putch(int c) {
+\		int res = putchar(c);
+\		fflush(stdout);
+\		return res;
+\	}
+\
+\	static void sleep_ms(unsigned ms) {
+\		usleep((unsigned long)ms * 1000);
+\	}
+\	#else
+\	#ifdef _WIN32
+\
+\	extern int getch(void);
+\	extern int putch(int c);
+\	static void sleep_ms(unsigned ms) {
+\		usleep((unsigned long)ms * 1000);
+\	}
+\	#else
+\	static int getch(void) {
+\		return getchar();
+\	}
+\
+\	static int putch(const int c) {
+\		return putchar(c);
+\	}
+\
+\	static void sleep_ms(unsigned ms) {
+\		(void)ms;
+\	}
+\	#endif
+\	#endif /** __unix__ **/
+\
+\	static int wrap_getch(void) {
+\		const int ch = getch();
+\		if (ch == EOF) {
+\			sleep_ms(1);
+\		}
+\		if (ch == ESCAPE)
+\			exit(0);
+\		return ch == DELETE ? BACKSPACE : ch;
+\	}
+\
+\	#define SZ   (32768)
+\	#define L(X) ((X)%SZ)
+\	int main(int s, char **v)
+\	{
+\		static uint16_t m[SZ];
+\		uint16_t pc = 0;
+\		for (int i = 1, d = 0; i < s; i++) {
+\			FILE *f = fopen(v[i], "r");
+\			if (!f)
+\				return 1;
+\			while (fscanf(f, "%d", &d) > 0)
+\				m[L(pc++)] = d;
+\			if (fclose(f) < 0)
+\				return 2;
+\		}
+\		for (pc = 0; !(pc & 32768);) {
+\			uint16_t a = m[L(pc++)];
+\			uint16_t b = m[L(pc++)];
+\			uint16_t c = m[L(pc++)];
+\			if (a == 65535) {
+\				m[L(b)] = wrap_getch();
+\			} else if (b == 65535) {
+\				if (putch(m[L(a)]) < 0)
+\					return 3;
+\			} else {
+\				uint16_t r = m[L(b)] - m[L(a)];
+\				if (r & 32768 || r == 0)
+\					pc = c;
+\				m[L(b)] = r;
+\			}
+\		}
+\		return 0;
+\	}
+\
+\
+\ # Error Code list
+\ 
+\ This is a list of Error codes, not all of which are used by 
+\ the application.
+\ 
+\ 	| Hex  | Dec  | Message                               |
+\ 	| ---- | ---- | ------------------------------------- |
+\ 	| FFFF |  -1  | ABORT                                 |
+\ 	| FFFE |  -2  | ABORT"                                |
+\ 	| FFFD |  -3  | stack overflow                        |
+\ 	| FFFC |  -4  | stack underflow                       |
+\ 	| FFFB |  -5  | return stack overflow                 |
+\ 	| FFFA |  -6  | return stack underflow                |
+\ 	| FFF9 |  -7  | do-loops nested too deeply            |
+\ 	| FFF8 |  -8  | dictionary overflow                   |
+\ 	| FFF7 |  -9  | invalid memory address                |
+\ 	| FFF6 | -10  | division by zero                      |
+\ 	| FFF5 | -11  | result out of range                   |
+\ 	| FFF4 | -12  | argument type mismatch                |
+\ 	| FFF3 | -13  | undefined word                        |
+\ 	| FFF2 | -14  | interpreting a compile-only word      |
+\ 	| FFF1 | -15  | invalid FORGET                        |
+\ 	| FFF0 | -16  | attempt to use 0-len string as a name |
+\ 	| FFEF | -17  | pictured numeric output str. overflow |
+\ 	| FFEE | -18  | parsed string overflow                |
+\ 	| FFED | -19  | definition name too long              |
+\ 	| FFEC | -20  | write to a read-only location         |
+\ 	| FFEB | -21  | unsupported operation                 |
+\ 	| FFEA | -22  | control structure mismatch            |
+\ 	| FFE9 | -23  | address alignment exception           |
+\ 	| FFE8 | -24  | invalid numeric argument              |
+\ 	| FFE7 | -25  | return stack imbalance                |
+\ 	| FFE6 | -26  | loop parameters unavailable           |
+\ 	| FFE5 | -27  | invalid recursion                     |
+\ 	| FFE4 | -28  | user interrupt                        |
+\ 	| FFE3 | -29  | compiler nesting                      |
+\ 	| FFE2 | -30  | obsolescent feature                   |
+\ 	| FFE1 | -31  | >BODY used on non-CREATEd definition  |
+\ 	| FFE0 | -32  | invalid name argument (e.g., TO xxx)  |
+\ 	| FFDF | -33  | block read exception                  |
+\ 	| FFDE | -34  | block write exception                 |
+\ 	| FFDD | -35  | invalid block number                  |
+\ 	| FFDC | -36  | invalid file position                 |
+\ 	| FFDB | -37  | file I/O exception                    |
+\ 	| FFDA | -38  | non-existent file                     |
+\ 	| FFD9 | -39  | unexpected end of file                |
+\ 	| FFD8 | -40  | wrong BASE in floating point convert  |
+\ 	| FFD7 | -41  | loss of precision                     |
+\ 	| FFD6 | -42  | floating-point divide by zero         |
+\ 	| FFD5 | -43  | floating-point result out of range    |
+\ 	| FFD4 | -44  | floating-point stack overflow         |
+\ 	| FFD3 | -45  | floating-point stack underflow        |
+\ 	| FFD2 | -46  | floating-point invalid argument       |
+\ 	| FFD1 | -47  | compilation word list deleted         |
+\ 	| FFD0 | -48  | invalid POSTPONE                      |
+\ 	| FFCF | -49  | search-order overflow                 |
+\ 	| FFCE | -50  | search-order underflow                |
+\ 	| FFCD | -51  | compilation word list changed         |
+\ 	| FFCC | -52  | control-flow stack overflow           |
+\ 	| FFCB | -53  | exception stack overflow              |
+\ 	| FFCA | -54  | floating-point underflow              |
+\ 	| FFC9 | -55  | floating-point unidentified fault     |
+\ 	| FFC8 | -56  | QUIT                                  |
+\ 	| FFC7 | -57  | exception in tx or rx a character     |
+\ 	| FFC6 | -58  | [IF], [ELSE], or [THEN] exception     |
+\ 
+\ <http://www.forth200x.org/throw-iors.html>
+\ 
+\ 	| Hex  | Dec  | Message                               |
+\ 	| ---- | ---- | ------------------------------------- |
+\ 	| FFC5 | -59  | ALLOCATE                              |
+\ 	| FFC4 | -60  | FREE                                  |
+\ 	| FFC3 | -61  | RESIZE                                |
+\ 	| FFC2 | -62  | CLOSE-FILE                            |
+\ 	| FFC1 | -63  | CREATE-FILE                           |
+\ 	| FFC0 | -64  | DELETE-FILE                           |
+\ 	| FFBF | -65  | FILE-POSITION                         |
+\ 	| FFBE | -66  | FILE-SIZE                             |
+\ 	| FFBD | -67  | FILE-STATUS                           |
+\ 	| FFBC | -68  | FLUSH-FILE                            |
+\ 	| FFBB | -69  | OPEN-FILE                             |
+\ 	| FFBA | -70  | READ-FILE                             |
+\ 	| FFB9 | -71  | READ-LINE                             |
+\ 	| FFB8 | -72  | RENAME-FILE                           |
+\ 	| FFB7 | -73  | REPOSITION-FILE                       |
+\ 	| FFB6 | -74  | RESIZE-FILE                           |
+\ 	| FFB5 | -75  | WRITE-FILE                            |
+\ 	| FFB4 | -76  | WRITE-LINE                            |
+\ 
+\ 
