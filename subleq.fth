@@ -8,7 +8,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ * Repo:    <https://github.com/howerj/subleq>
 \
 \ TODO Section
-\	- Publish on Amazon
+\	- Publish on Amazon (also make front cover, via Fiverr)
 \	- Do all the TODOs
 \	- Separate Forth Tutorial
 \	- Separate SUBLEQ assembler Tutorial
@@ -16,6 +16,14 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	- Uses; learning, puzzles, games
 \	- Modifying and extending, different options
 \	- Explain the build process
+\	- Describe stack comments
+\	- CODE sections, Sokoban, floating point, file system,
+\	allocate/free, ...
+\	- About the Author, Other projects, etcetera.
+\	- Possible optimizations; merge exit with last word
+\	- Case insensitivity 
+\	- Configuring the option bit in the image
+\	- Coding standard
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -477,6 +485,7 @@ defined eforth [if]
   get-current >r target.1 set-current create
   r> set-current BABE talign there ,
   does> @ 2/ t, ;m
+\ TODO: Describe heard
 :m :t header :ht ;m ( "name" -- : forth routine )
 :m :to ( "name" -- : forth, target only routine )
   header
@@ -1633,13 +1642,93 @@ assembler.1 -order
     {sp} w iLOAD w INC \ we're all golden
   then ;a
 
-\ TODO: Talk about this line
+\ And to finish off this section, and the Forth Virtual 
+\ Machine, is this line, setting the "primitive" value to
+\ the current address in the image, allowing the VM to
+\ determine which addresses belong to Forth words that can
+\ be called, and which ones belong to the Virtual Machine
+\ instructions that we have just defined. Anything lower than
+\ the current address must be a VM instruction, anything higher
+\ a Forth word.
 
 there 2/ primitive t!
 
 \ # More Meta-Compiler words
-
-\ TODO: mention compiler security
+\
+\ Now we have defined our base system we will define some more
+\ meta-compiler words that will use that base to perform 
+\ actions like creating new words in the target dictionary,
+\ for compiling "if...else...then" and numbers into Forth
+\ words, and such.
+\
+\ The first set of words we will define are for creating new
+\ words in the target dictionary, but for multiple different
+\ vocabularies, for the default Forth vocabulary (which 
+\ contains the standard Forth words), for the root vocabulary
+\ (also contains standard Forth words, but the minimal set of
+\ words to get back to a "normal" system), for the System
+\ vocabulary (containing non-standard words and words used
+\ for building the internals), and for the block editor,
+\ described in a chapter on it.
+\
+\ Here are the words and their usage:
+\
+\ ":t"/";t" - Define a word in the target dictionary
+\ ":to"     - Define a word in the target dictionary, but
+\             do not make it available during meta-compilation,
+\             the word is instead put into the "target.only.1"
+\             dictionary of the meta-compiler.
+\ ":s"/";s" - Define a word in the system dictionary
+\ ":so"     - The same as ":to", except there is no 
+\             corresponding "system.only.1" dictionary and it
+\             works with the system dictionary.
+\ ":r"/";r" - Define a word in the root dictionary.
+\ ":e"/";e" - Define a word in the editor dictionary.
+\
+\ The words that define new words in the target dictionary
+\ may only be used with the corresponding target dictionary
+\ terminating word, that is ":t" and ":to" can only be used
+\ with ";t" and not with ";s". This is done with a Forth 
+\ concept called "compiler" security, which are primitive but
+\ largely effective run time checks to make sure control
+\ structures match up, or that there are enough items on the
+\ stack before executing an operation.
+\
+\ An example of this is ":s", it pushes the hexadecimal 
+\ constant "F00D" onto the stack, which ";s" checks for, if
+\ it is not present, it prints a message and calls abort.
+\
+\ ":t" does the same thing with a different constant, so a
+\ mismatch can be detected. This also detects situation where
+\ too many items on the stack have been consumed by words
+\ within meta-compiler definitions.
+\
+\ An example of this is "lit", which pulls a value off of the
+\ stack and compiles into a word definition. We can use this
+\ in an example:
+\
+\	:t example 2 lit 2 lit + . cr ;t
+\ 
+\ Which defines a word in the target which will print "4",
+\ if instead we defined:
+\ 
+\	:t example 2 2 lit + . cr ;t
+\
+\ Or:
+\
+\	:t example lit 2 lit + . cr ;t
+\
+\ The corresponding correct constant would be given to ";t"
+\ and an error would be detected. "lit" and how it works will
+\ be defined shortly, as well as its shortcomings and possible
+\ workarounds.
+\
+\ How does ":t" (defined much earlier) and the like do 
+\ their jobs? All of the defining words (words that create
+\ new words) all call ":t" to the header creation.
+\
+\ TODO: Continue description
+\
 
 :m ;t BABE <> if abort" unstructured" then
   talign opExit target.only.1 -order ;m
@@ -1661,10 +1750,27 @@ there 2/ primitive t!
 :m up          opUp   t, ;m
 :m [char] char opPush t, ;m
 :m char   char opPush t, ;m
+
+\ It is interesting to see just how simple and easy it is
+\ to define a set of words for creating control structures.
+\ Making a compiler is actually quite easy, making a good
+\ one however, an industrial grade one (which this incremental
+\ compiler certainly is not) is an open ended tasks taking
+\ hundreds of thousands of man-hours to complete.
+\
+\ The meta-compiler defined control structures here are
+\ similar to the ones defined in the assembler, and they will
+\ again be similar to the ones defined further along that
+\ will exist in the target dictionary. It is possible to make
+\ your own control structures, perhaps an "if" that only
+\ executes its clause when negative numbers are encountered,
+\ or one with an inverted test called "unless".
+\
+\ TODO: Describe how these work, again
+
 :m begin talign there ;m
 :m until talign opJumpZ 2/ t, ;m
 :m again talign opJump  2/ t, ;m
-
 :m if opJumpZ there 0 t, ;m
 :m mark opJump there 0 t, ;m
 :m then there 2/ swap t! ;m
@@ -1752,6 +1858,8 @@ there 2/ primitive t!
 \ There is not much else to say about these words. Some of them
 \ go into the system vocabulary, but should also not be
 \ referenced moving on.
+\
+
 :to 1+ 1+ ;t
 :to 1- 1- ;t
 :to + + ;t
@@ -1937,32 +2045,249 @@ there 2/ primitive t!
 :t cell 2 lit ;t ( -- u )
 :t cell+ cell + ;t ( a -- a )
 :t cells op2* ;t ( u -- u )
+
+\ The unsigned words are defined in terms of each other once
+\ of them has been defined, they are a bit awkward as they
+\ depend on the signed comparison words to do the work, which
+\ is not normal, but necessary given the constraints of the
+\ system. Unsigned comparison is used less than signed, so
+\ speed is not too much of a concern, they are largely here
+\ for completeness sake.
+\
+
 :t u< 2dup 0< 0= swap 0< 0= <> >r < r> <> ;t ( u1 u2 -- f )
 :t u> swap u< ;t ( u1 u2 -- f )
 :t u>= u< 0= ;t ( u1 u2 -- f )
 :t u<= u> 0= ;t ( u1 u2 -- f )
+
+\ "execute" takes an "execution token", which is just a fancy
+\ name for an address of a function, and then executes that
+\ function. It is used within the interpreter quite a lot,
+\ and is very useful for executing the contents of "hooks",
+\ that is, variables that contain an execution token that
+\ can be changed so the underlying functionality of a word
+\ can be changed. They are also known as execution vectors
+\ and changing them is "vectoring".
+\
+\ The implementation of "execute" is incredibly simple, as it
+\ is on many Forth implementations, it converts a Forth address 
+\ to a cell address then puts the value onto the return stack,
+\ when the word "execute" returns by calling exit (compiled
+\ into the definition by ";t", it will cause a jump to the
+\ execution vector.
+\
+
 :t execute 2/ >r ;t ( xt -- )
+
+\ "key?" is a word that interfaces with the input channel
+\ an attempts to get a single character, or byte, of input
+\ from it. It *attempts* to do so. Depending on the underlying
+\ implementation of the SUBLEQ machine it might block until
+\ a character is available (that is, it will wait until the
+\ user presses a key) and if there is no more input signal
+\ a negative value (all character values are between 0 and
+\ 255, so a negative value is treated as an error) known as
+\ End Of Input, or on a machine with a non-blocking character
+\ input a negative value will mean that it has not received
+\ a character just yet and calling the get-character function
+\ might succeed later.
+\
+\ As there is no way of determining which has occurred
+\ (perhaps they could return different error codes, but they
+\ do not), what the "key?" implementation does is instead
+\ configurable. By default it will assume there is a blocking
+\ character input, and when a negative value is encountered it
+\ will halt the machine by calling "bye".
+\
+\ If a non-blocking implementation is configured, it will
+\ instead return -1 on error. The word "key?" is a rare word
+\ that returns a differing number of arguments, words that
+\ accept or return a differing number of arguments depending
+\ on circumstance are discouraged, but this word seems to be
+\ the exception in many implementations.
+\
+\ "key?" will return the character retrieved and a zero
+\ on successful reception of a character in either 
+\ implementation.
+\
+\ "key?" does not call "pause" either.
+\
+
 :t key? opKey s>d ( -- c 0 | -1 : get single byte of input )
    if
      {options} lit @ 8 lit and if bye then drop #0 exit
    then #-1 ;t
+
+\ "key" pauses (allows other threads to run) and repeatedly
+\ calls "key?" until the operation succeeds. This is a version
+\ of "key?" that always blocks until a character is received.
+\
+\ Note that what is said is not quite correct, it does not
+\ call "key?", however the default execution token stored in
+\ "\<key\>" is "key?", you can change it to be whatever you
+\ want, so long as it has the same stack effects as "key?",
+\ allowing you to directly take input from another input
+\ source, say a string, or a new peripheral you have added
+\ to the SUBLEQ machine.
+\
+
 :t key begin pause <key> @ execute until ;t ( -- c )
+
+\ "emit" is the counter part to "key", it always blocks until
+\ it succeeds (and it is assumed that outputting a character
+\ is a fast operation that takes little time), it does call
+\ "pause" before it outputs a character.
+\
+\ "emit" does not get the character itself, it is expected
+\ that the execution vector stored in "\<emit\>" will do that.
+\ It is possible to make the output go to wherever you want,
+\ for example you could duplicate what is send to the
+\ programmer and write it to a section of memory as a temporary
+\ log, or search for strings within the output and process
+\ those.
+\
+
 :t emit pause <emit> @ execute ;t ( c -- )
+
+\ "cr" emits a newline, DOS style newlines are used instead
+\ of Unix style newlines, although that can be configured by
+\ removing the right constant and emit words.
+\
+\ * Unix systems use "lf"
+\ * DOS and Windows uses "cr" then "lf"
+\
+\ There are other systems that use other crazy characters,
+\ but no one cares about them.
+\
+
 :t cr =cr lit emit =lf lit emit ;t ( -- )
+
+\ There is nothing special about these three words, they are
+\ common, standard, convince words for fetching and storing
+\ variables in the system.
+\
+\ "get-current"/"set-current" get the dictionary or vocabulary
+\ that is currently being used to append new word definitions
+\ to, which does not have to be one in the search order. "last"
+\ gets the location of the last defined word in the dictionary.
+\
+\ See also "definitions".
+\
+
 :t get-current current @ ;t ( -- wid )
 :t set-current current ! ;t ( -- wid )
 :s last get-current @ ;s ( -- wid )
+
+\ "pick" is a word whose use is discouraged in Forth, if
+\ you find yourself using it your code is likely to be
+\ too complex and "un-forth-like". It is included because it
+\ is useful for implementing the word ".s". It might not
+\ be possible to implement this word on all Forth systems
+\ efficiently (such as those with hardware stacks that cannot
+\ be indexed like an array), however that is not a problem
+\ on this system.
+\
+\ The word "pick" fetches the n-th item on the stack, using
+\ zero indexing, so for example:
+\
+\ 	50 40 30 20 10 0 pick . ( prints 10 )
+\ 	50 40 30 20 10 1 pick . ( prints 20 )
+\ 	50 40 30 20 10 2 pick . ( prints 30 )
+\
+\ That is, the first element on the stack is at position 0,
+\ the second at position 1, and so on. Not the positions are
+\ calculated before you put the index onto the stack and not
+\ after.
+\
+
 :t pick sp@ + [@] ;t ( u -- u )
+
+\ "+!" is a useful utility word, often found with "1+!" and
+\ "1-!", neither of which are defined here as they are not
+\ used, "+!" is however. It is used to add a number to a
+\ value stored at an address, not replace, it stores the new
+\ number back to the address.
+\
+\ It is a common enough operation that it deserves its own
+\ word.
+\
+\ "1+!" and "1-!" are easy enough to define yourself:
+\
+\	: 1+!  1 swap +! ;
+\	: 1-! -1 swap +! ;
+\
+\ If you need them. Do not forget to change the ":" and ";"
+\ into ":t" and ";t", as well as changing "1" to "#1" and "-1"
+\ to "#-1" if you want to add them to this cross compiled
+\ program instead of typing them in at the command prompt.
+\
+
 :t +! 2/ tuck [@] + swap [!] ;t ( u a -- )
-:t lshift begin ?dup while 1- swap 2* swap repeat ;t 
+
+\ "lshift" is much faster to compute than "rshift" as it
+\ "2\*" is faster than "2/". That is why it is done in Forth
+\ as opposed to assembly.
+
+:t lshift begin ?dup while 1- swap 2* swap repeat ;t
+
+\ The SUBLEQ machine can only do cell aligned loads and stores,
+\ as such we need to it manually, for speed reasons this would
+\ be better done in assembly, but because of the complexity 
+\ these words have been left as pure Forth.
+\
+\ "c@" fetches a single character from an address, and "c!"
+\ stores a single character to an address.
+\
+\ As mentioned, the SUBLEQ machine can address 65536 cells
+\ (less one for the peripheral address), the Forth can only
+\ address 65536 bytes as it uses the lowest bit for the byte
+\ index, this sacrifice allows our Forth to behave like a
+\ normal Forth, and for us to easily be able to manipulate
+\ bytes and strings, however it means there are two types of
+\ address, cell address used by the SUBLEQ machine, and Forth
+\ addresses used by Forth interpreter. We must always be aware
+\ which address types we should use under what circumstances.
+\ If you see a multiplication or division by 2, it is most 
+\ likely because the address type needs converting for an
+\ operation.
+\
+\ "c@" is the simpler of the two operations, it performs a load
+\ and then just selects the high or low byte.
+\
+\ "c!" must shift the input byte into the right position,
+\ high or low, perform a load of an address, mask off the
+\ high or low byte, and then merge in the new byte, and then
+\ write the result back to the same address.
+\
+\ Both operations are more expensive to do than just doing
+\ a load with "@" and a store with "!". Even quicker is using
+\ "\[@\]" and "\[!\]", which do not have to perform the
+\ conversion from a Forth to a cell address, which requires
+\ a division by two.
+\
+\ These words are also partially responsible for the Endianess
+\ of the system, the Endianess of how the meta-compiler writes
+\ values also needs to be the same as the target.
+\
 
 :t c@ dup @ swap lsb if 8 lit rshift else FF lit and then ;t
 :t c!  swap FF lit and dup 8 lit lshift or swap
    tuck dup @ swap lsb 0= FF lit xor
    >r over xor r> and xor swap ! ;t
 
-:t max 2dup < if nip else drop then ;t
-:t min 2dup > if nip else drop then ;t
+\ "min" and "max" could have been written with "mux", as
+\ described, but on this Forth this is the fasted way of
+\ implementing them. "min" and "max" operate on *signed*
+\ values, given two numbers they leave the minimum or maximum
+\ number on the stack, dropping the other one. 
+\
+\ A non-destructive version that sorts the items on the stack
+\ by ascending or descending might be useful, but I cannot
+\ think of a purpose for them.
+\
+
+:t max 2dup < if nip else drop then ;t ( n1 n2 -- n )
+:t min 2dup > if nip else drop then ;t ( n1 n2 -- n )
 
 :t source-id {id} up @ ;t
 :t 2! tuck ! cell+ ! ;t
@@ -2191,11 +2516,17 @@ there 2/ primitive t!
 
 \ # The Interpreter Loop
 
+\ TODO: Explain how literal can be used to replace "lit"
+
 :s (literal) state @ if =push lit , , then ;s
 :t literal <literal> @ execute ;t immediate ( u -- )
 :t compile, 2/ align , ;t  ( xt -- )
 :s ?found if exit then
    space count type [char] ? emit cr -D lit throw ;s ( u f -- )
+
+\ TODO: Make fancy diagram describing evaluation, and describe
+\ how the interpreter could be extended with hooks.
+
 :t interpret ( b -- )
   find ?dup if
     state @
@@ -2641,6 +2972,13 @@ there 2/ primitive t!
 \ DOS like operating system within this Forth system. The
 \ file system would also be quite portable, but limited.
 \
+\
+\ It is possible to use the block system to map arbitrary bits
+\ of memory to different things, for example, we could map
+\ blocks 0-63 to our main memory, and 64-127 to EEPROM, if we
+\ had some available, and 128-144 to ROM, if we had that
+\ available. It is an abstraction that has many potential uses.
+\
 \ Anyway, on to the block word-set. A Block consists of a
 \ 1024 byte chunk of memory stored in a buffer, for text
 \ editing purposes it is usually treated as 16 lines each of
@@ -2724,24 +3062,111 @@ there 2/ primitive t!
    next drop ;t
 
 \ # The Read-Eval-Loop
+\
+\ While there a few more sections of optional material, this 
+\ one finally puts everything together and produces the Forth
+\ interpreter loop, were we read in a line, parse it, execute
+\ it can catch any errors. A few new support words will be
+\ defined, but the main ones are "evaluate", "load", 
+\ "task-init", "quit" and "(cold)". It has an odd name, but
+\ traditionally the main interpreter loop is called "quit"
+\ in Forth systems.
+\
+\ The goal of this section is to put the pieces together to
+\ make that word "quit". 
+\
+\ "get-input" and "set-input" are used in words that need
+\ to change the input stream (for example, changing the
+\ interpreter so it reads from the terminal, or so it can
+\ evaluate a string). It puts an implementation defined number
+\ of items on the stack, so do not rely on it putting the same
+\ number of items on the stack between different Forth
+\ implementations or even different versions of this Forth.
+\
 
 :t get-input source >in @ source-id <ok> @ ;t ( -- n1...n5 )
 :t set-input <ok> ! {id} up ! >in ! tup 2! ;t ( n1...n5 -- )
-:s ok state @ 0= if ."  ok" cr then ;s
+
+\ "ok" is responsible for printing out the Forth prompt after
+\ execution of each line, it will only print out if we are
+\ in command mode. The "ok" prompt can be too noisy sometimes,
+\ this Forth is careful not to print out a header, unless an
+\ option is set to do so, which allows the system to be used
+\ as a pipe in a Unix command line. The "ok" prompt can be
+\ turned off before it outputs a single "ok", with the first 
+\ line in this file.
+\
+\	defined eforth [if] ' nop <ok> ! [then]
+\
+\ "ok" is not called directly, but is stored as an execution
+\ token in "<ok>".
+\
+
+:s ok state @ 0= if ."  ok" cr then ;s ( -- )
+
+\ Now we are getting somewhere, "eval" goes through each word
+\ in a line until there are no more and executes "interpret"
+\ for each word, it is sure to check the stack depth after
+\ each call to "interpret" in an attempt to provide some kind
+\ of limited error detection.
+\
+\ It also prints out "ok", by execution the contents of
+\ "<ok>", as just mentioned.
+\
 :s eval
    begin bl word dup c@ while
      interpret #1 ?depth
    repeat drop <ok> @ execute ;s ( "word" -- )
+
+\ "evaluate" takes a string and evaluates that string, it
+\ is careful to preserve the input state prior to evaluation
+\ so that it can be restored after, it also catches any error
+\ that might occur before re-throwing them so it can make sure
+\ to always restore that input state. "source-id" will be set
+\ to -1 for the duration of the evaluation.
+\
+\ Now that we have "evaluate" we can use to extend the block
+\ words...
 :t evaluate ( a u -- )
   get-input 2>r 2>r >r
   #0 #-1 t' nop lit set-input
   t' eval lit catch
   r> 2r> 2r> set-input
   throw ;t
+
+\ "load" is one of the missing words needed by our block
+\ wordlist, it evaluates a forth block, treating each 64 bytes
+\ as a single line. That has the consequence that comments
+\ end at those line boundaries.
+\
+\ * "line" is used to get a line from a block.
+\ * "loadline" is a common factor of "load", used to evaluate
+\   a single line.
+\ * "load" evaluates an entire block.
+\
+\ The other two words missing from this version of forth, that
+\ could easily be added later, are "thru" and "-->", "thru"
+\ loads and executes a range of blocks inclusively, and "-->"
+\ when used within a block discards the rest of the block from
+\ being executed and continues execution from the next block,
+\ which can be chained together.
+\
 :s line 6 lit lshift swap block + 40 lit ;s
 :s loadline line evaluate ;s
 :t load #0 F lit for
    2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
+
+\ Two words that allow the user of the environment to get
+\ information about the system, "eforth", which has uses in
+\ conditional evaluation, pushes the version number of the
+\ forth interpreter. The version number has the format of
+\ MAJOR.MINOR version numbers, with the MAJOR number stored
+\ in the upper byte, and the MINOR in the lower.
+\
+\ "info" is optionally printed out at start up, a bit has
+\ to be enabled in the "{options}" variable for that to happen,
+\ it is not necessary, but it means that information about
+\ the project is stored with it.
 :r eforth 0107 lit ;r ( -- version )
 :s info cr
   ." Project: eForth v1.7 " ( here . ) cr
@@ -2749,16 +3174,64 @@ there 2/ primitive t!
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;s
+
+\ "task-init" is a poor Forth function, it really should be
+\ split up into words that deal with the different aspects of
+\ setting up a task.
+\
+\ The word must set up the user variables to point to the
+\ default execution tokens, or to their default values. It
+\ also sets the variables for the saved register locations,
+\ and an initial execution token of "bye", which should be
+\ replaced before the task is executed or the system will halt.
+\
+\ Note that this word also handles the "{options}" bit, the
+\ first bit, which turns off echoing of the user input if
+\ it is set, turning echoing on or off can be useful depending
+\ on your terminal settings. If your terminal echos back what
+\ you have written then you will want echoing off otherwise
+\ each character written will be doubled up, if it does not
+\ then you will want it on, otherwise your terminal will be
+\ eerily silent and you will not be able to see what you have
+\ typed in.
+\
+\ The original eForth system factored out setting up with
+\ input/output hooks with different words, some of which were
+\ used for file transfer or for normal input, which could be
+\ replicated, but will not be for now. It also had a word
+\ called "io!" for initializing the I/O channels, which might
+\ be needed on some systems, but not this one.
+\
+\ This word should be treated as a list of things to be
+\ initialized. That list includes:
+\
+\  1. Setting up the task linked list pointer.
+\  2. Setting the initial execution token.
+\  3. Setting up empty return and variable stacks.
+\  4. Making the saved top of the stack empty for the task.
+\  5. Setting the default input and output radix (to decimal).
+\  6. Setting up the I/O behavior.
+\  7. Making the input buffer position ">in" is zero.
+\  8. Putting default values in a few variables like "dpl".
+\  9. Making the terminal input buffer point to the right place
+\     within the tasks memory.
+\ 10. Putting the thread into the right "state", into command
+\     mode by default, it is not expected that multiple threads
+\     will be defining words (which will cause problems) or 
+\     executing commands (which may cause problems), but it is
+\     setup just in case.
+\
 :s task-init ( task-addr -- )
   {up} lit @ swap {up} lit !
   this 2/ {next-task} up !
-  t' nop lit 2/ {ip-save} up !
+  t' bye lit 2/ {ip-save} up ! ( Default execution token )
   this =stksz        lit + 2/ {rp-save} up !
   this =stksz double lit + 2/ {sp-save} up !
   #0 {tos-save} up !
   decimal
   t' key? lit <key> !
-  t' (emit) lit <echo> !
+  t' (emit) lit <echo> ! ( Default: Echoing of input on )
+  ( Turn off echoing if the 1st bit set )
   {options} lit @ lsb if to' drop lit <echo> ! then
   t' (emit) lit <emit> !
   t' ok lit <ok> !
@@ -2767,17 +3240,59 @@ there 2/ primitive t!
   this =tib lit + #0 tup 2! \ Set terminal input buffer loc.
   postpone [
   {up} lit ! ;s
-:s ini {up} lit @ task-init ;s
+
+\ "ini" initializes the current task, the system brings itself
+\ up at boot time, and where "ini" is executed is critical,
+\ before it is called none of the words that rely on the
+\ execution tokens being set can be executed without causes
+\ the system to reboot. It is called from "(cold)", the first
+\ forth word to run.
+\
+:s ini {up} lit @ task-init ;s ( -- : initialize current task )
+
+\ "quit" is the heart of the Forth system, it is responsible
+\ for fetching and evaluating each line of Forth code. It
+\ also contains the error handler of last resort, which catches
+\ all errors that have not been caught further up the call
+\ stack and resets the system with some sensible defaults.
+\ The only exception when it comes to exceptions is the ABORT
+\ signal, which causes the interpreter to halt.
+\
+\ The actual interpreter loop is quite simple, get a line with
+\ "query", execute the line with "eval" under "catch", and
+\ handle any errors, loop until satisfied.
+\
+
 :t quit ( -- : interpreter loop )
   begin
    query t' eval lit catch
    ?dup if
      dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;t
-:s (cold)
+
+\ "(cold)" is the first word that gets executed, it performs
+\ the task of continuing to setup the environment before
+\ normal running. It must:
+\
+\ 1. Setup which word lists are used ("only forth definitions")
+\ 2. Initialize the current task with "ini".
+\ 3. Check the boot options in the "{options}" variable
+\    a. The first bit is checked within "ini", the 4th within
+\       the word "key".
+\    b. Check 3rd bit and call "info" if set
+\    c. Check 2nd bit and perform a checksum over the
+\       Forth image, it then toggles the 2nd bit making
+\       it so the image is not checked again (as adding
+\       new definitions modifies the image, calling "(cold)"
+\       again would mean the checksum would fail. If the
+\       checksum fails it prints and error messages and halts.
+\ 4. Calls "quit" to enter into the Forth interpreter loop.
+\
+\ And that completes the Forth boot sequence.
+\
+:s (cold) ( -- : Forth boot sequence )
   only forth definitions
   ini
-  {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
   {options} lit @ 2 lit and if
     primitive lit @ 2* dup here swap - cksum
