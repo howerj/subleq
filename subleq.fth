@@ -1781,12 +1781,27 @@ there 2/ primitive t!
 :m next talign opNext 2/ t, ;m
 :m for opToR begin ;m
 
+\ The following words will be useful for defining control
+\ structures within the newly made Forth interpreter image,
+\ as they will need to compile in jump instructions into newly
+\ defined words. Note that they use the cell address.
+\
+
 :m =push   [ t' opPush  half ] literal ;m
 :m =jump   [ t' opJump  half ] literal ;m
 :m =jumpz  [ t' opJumpZ half ] literal ;m
 :m =unnest [ t' opExit  half ] literal ;m
 :m =>r     [ t' opToR   half ] literal ;m
 :m =next   [ t' opNext  half ] literal ;m
+
+\ To avoid conflicts with meta-compiled words and words
+\ compiled in the target dictionary some instructions have
+\ been given "op" as a prefix. We could have done this with
+\ dictionary manipulation, but this is easier. We no longer
+\ need the word "dup" to actually duplicate the top word on
+\ a stack, instead the new "dup" should compile a reference
+\ to "opDup" in newly defined words.
+\
 
 :m dup opDup ;m
 :m drop opDrop ;m
@@ -1804,6 +1819,13 @@ there 2/ primitive t!
 :m and opAnd ;m
 :m exit opExit ;m
 :m 2/ op2/ ;m
+
+\ This complete most of the meta-compiler words, a few new
+\ ones will be defined later, but that is most of it. The
+\ next section we will bring this all together to start to
+\ actually define new Forth words within the target Forth
+\ image.
+\
 
 \ # The Forth (section of the) Image
 \
@@ -1889,6 +1911,7 @@ there 2/ primitive t!
 
 \ "nop" stands for 'no-operation', it is useful for some of
 \ the hooks we have. It does nothing.
+\
 :t nop ;t
 
 \ Notice how "@" and "!" divide the address by two, which drops
@@ -1937,13 +1960,29 @@ there 2/ primitive t!
 \ provided by a word with a name like "(name)", the word that
 \ executes the hook will be called just "name".
 \
+\ NB. "{cold}" contains a cell address, not a Forth address!
 \
-:t <ok> {ok} up ;t
-:s <emit> {emit} up ;s
-:s <key>  {key} up ;s
-:s <echo> {echo} up ;s
-:s <literal> {literal} up ;s
-:s <cold> {cold} lit ;s
+\ That is,
+\
+\	' (cold) <cold> !
+\
+\ Will not work, this works for setting most execution vectors,
+\ but not this one, "{cold}" needs to be executed by the
+\ Forth Virtual Machine, it cannot divide a number by two
+\ efficiently, so it only operates on cell address. This is
+\ a minor quirk of this implementation and should not be the
+\ case on other systems.
+\
+\ The following should work:
+\
+\	' (cold) 2/ <cold> !
+\
+:t <ok> {ok} up ;t ( -- a )
+:s <emit> {emit} up ;s ( -- a )
+:s <key>  {key} up ;s ( -- a )
+:s <echo> {echo} up ;s ( -- a )
+:s <literal> {literal} up ;s ( -- a )
+:s <cold> {cold} lit ;s ( -- a )
 
 \ There are quite a lot of variables in this part of the code,
 \ much like at the beginning of the image, and they will all
@@ -1962,8 +2001,8 @@ there 2/ primitive t!
 \ is used by words like "definitions".
 \
 
-:t current {current} lit ;t
-:t root-voc {root-voc} lit ;t
+:t current {current} lit ;t ( -- a )
+:t root-voc {root-voc} lit ;t ( -- a )
 
 \ The word "this" allows us to access the USER task area,
 \ it pushes the pointer to that area onto the stack. The
@@ -1978,8 +2017,8 @@ there 2/ primitive t!
 \ contains a *small* section of memory used as a temporary
 \ "pad".
 \
-:t this 0 up ;t
-:t pad this 3C0 lit + ;t
+:t this 0 up ;t ( -- a : address of task thread memory )
+:t pad this 3C0 lit + ;t ( -- a : index into pad area )
 
 \ More vocabulary words, "#vocs" contains the maximum number
 \ of possible vocabularies in the vocabulary list, whilst
@@ -1988,22 +2027,164 @@ there 2/ primitive t!
 \ vocabulary in the word list (or the wordlist that will get
 \ searched for first).
 \
-:t #vocs 8 lit ;t
-:t context {context} lit ;t
+:t #vocs 8 lit ;t ( -- u : number of vocabularies )
+:t context {context} lit ;t ( -- a )
 
-:t here h lit @ ;t
-:t base {base} up ;t
-:t dpl {dpl} up ;t
-:t hld {hld} up ;t
-:t state {state} up ;t
-:s calibration {ms} lit ;s
-:t blk {blk} lit ;t
-:t scr {scr} lit ;t
-:t >in {in} up ;t
-:t bl 20 lit ;t
-:t hex  10 lit base ! ;t
-:t decimal A lit base ! ;t
-:t cycles {cycles} lit ;t
+\ These words just push variable locations, or their values,
+\ some of them will need an explanation, like "dpl", but that
+\ is best done in the appropriate section (for "dpl" it is in
+\ the section dealing with numeric input and output).
+\
+\ You should already be familiar with "here" and the "h"
+\ variable, the "h" variable contains the dictionary pointer,
+\ used to keep track of where newly compiled values will get
+\ compiled to in memory.
+\
+\ "blk" and "scr" are covered in the section on block storage,
+\ "state" is best dealt with when talking about the interpreter
+\ loop.
+\
+\ "hld" also belongs with numeric I/O with "dpl", ">in" with
+\ the parsing words.
+\
+\ "base" controls the input and output radix, if you want
+\ hexadecimal output or input, or binary output, or octal,
+\ or decimal, this is the variable you need to change. Be aware
+\ of which base you are in whilst setting the new base.
+\
+\ Valid bases range from 2 to 36, if a number higher than 10
+\ is used as a base the uppercase alphabet from A-Z will be
+\ used along with the numbers from 0-9.
+\
+\ There is no way to set the input base without setting the
+\ output base, however it is possible to change the base
+\ temporarily. "." is used to print signed numbers, if you
+\ wanted to make a word that always printed out signed numbers
+\ in hexadecimal, regardless of what base you are in, you could
+\ use the following word definition:
+\
+\	decimal
+\	: .hex base @ >r 16 base ! . r> base ! ;
+\
+\ It is common to see the expressions "base @ \>r" and
+\ "r\> base !" in Forth words definitions that deal with
+\ number printing.
+\
+
+:t here h lit @ ;t ( -- u : push the dictionary pointer )
+:t base {base} up ;t ( -- a : push the radix for numeric I/O )
+:t dpl {dpl} up ;t ( -- a : decimal point variable )
+:t hld {hld} up ;t ( -- a : index to hold space for num. I/O)
+:t state {state} up ;t ( -- f : interpreter state )
+:s calibration {ms} lit ;s ( -- a : "ms" calibration var )
+:t blk {blk} lit ;t ( -- a : latest loaded block )
+:t scr {scr} lit ;t ( -- a : last view block )
+:t >in {in} up ;t ( -- a : input buffer position var )
+:t bl 20 lit ;t ( -- 32 : push space character )
+:t cycles {cycles} lit ;t ( -- a : number of "cycles" ran for )
+
+\ To make switching bases easier the words "hex" and "decimal"
+\ are made available, which set the numeric input and output
+\ radix (also known as a base) to sixteen and ten respectively.
+\
+\ One problem with setting the base is knowing what base you
+\ are in at the time, if you want to print out a number in
+\ hexadecimal you could use the expression:
+\
+\	16 base !
+\
+\ However, this will not necessarily work when you are 
+\ interactively entering commands and you have lost track of
+\ what base you are in. The number "16" is sixteen when you
+\ are already in base ten, however it is twenty two if you
+\ are operating in a hexadecimal base. You could always
+\ attempt to view the value in "base", however the value in
+\ base will always be "10"! It is much easier just to type
+\ "hex" or "decimal" to make sure you are operating in the
+\ correct base when you are unsure.
+\
+\ Also commonly defined:
+\
+\	decimal
+\	: octal 8 base ! ;
+\	: binary 2 base ! ;
+\
+\ You could use higher bases as a data interchange format,
+\ allowing binary data to be transferred as text with a
+\ processing and storage overhead. Bases 32 and 36 have
+\ advantages, as does base 16. The lower the base the less
+\ dense the resulting string, which means more overhead.
+\
+\ Base-64 is the most common way of encoding binary strings
+\ as text, but base cannot be set that high as there is no
+\ real sensible encoding that follows from going higher than
+\ the ten digits plus the alphabet, there would be 
+\ ambiguities if we did. You could add it as a special case,
+\ if you so desired.
+\
+\ Base-32 has the advantage that it is a power two base, so
+\ a CODEC for it can be more efficiently implemented, Base-36
+\ has the advantage that is the most dense encoding, but
+\ slower to implement a fast CODEC.
+\
+\ Base-16 is less dense than Base-32 but is easier to process,
+\ as two sets of 4 bits fit into a byte, so there are no dead
+\ bits as well, but it is much less efficient overall.
+\
+\
+
+:t hex  10 lit base ! ;t ( -- ) 
+:t decimal A lit base ! ;t ( -- )
+
+\ "\]" and "\[" are two, very simple words, that require a
+\ lot more context to understand properly. Note one of them
+\ is immediate as well, that's important!
+\
+\ The words are often used within other word definitions to
+\ get back into command mode temporarily. For example:
+\
+\	: x 2 2 + . cr ;
+\	: y [ 2 2 + ] literal . cr ;
+\
+\ Both print the same result, however "y" is smaller and
+\ executes faster (not that it matters for such a short word).
+\
+\ That is because "y" computes the value it will print out
+\ at compile time, and "x" does it at run time. They will
+\ look like this:
+\
+\
+\	X:
+\		opPush 2
+\		opPush 2
+\		address of +
+\		address of .
+\		address of cr
+\		opExit
+\
+\	Y:
+\		opPush 4
+\		address of .
+\		address of cr
+\		opExit
+\
+\ This is why it is important "\[" is immediate, but "\]" does
+\ not need to be. It needs to immediately switch from compile
+\ mode to command in the middle of a word definition. It allows
+\ one to do arbitrary computation during the compilation of
+\ a Forth word.
+\
+\ The "state" variable is used to control whether the 
+\ interpreter is in command mode (state is zero) or compile
+\ mode (state is non-zero). Command mode immediately executes
+\ words, whilst compile mode compiles non-immediate words
+\ and numbers into the current word definition, but executes
+\ immediate ones.
+\
+\ This will be shown in more detail in the capture containing
+\ the word "interpret", where naturally we go into more
+\ detail about how the interpreter internals work.
+\
 
 :t ] #-1 state ! ;t
 :t [ #0  state ! ;t immediate
@@ -2020,7 +2201,26 @@ there 2/ primitive t!
 \
 :s many #0 >in ! ;s
 
-
+\ These words should be familiar to any Forth programmer,
+\ they are often defined in assembly for speed reasons, but
+\ most of the time they are not the choke-point in an 
+\ application.
+\
+\ "?dup" is one of the rare Forth words that leave a differing
+\ amount of items on the stack, it is useful for testing loop
+\ conditions in "begin...while...repeat" statements, and
+\ sometimes before an "if...then" clause. It only duplicates
+\ non-zero values.
+\
+\ "rot" and "-rot" are used, and provided, but should be
+\ avoided, if there are three or more items on the stack
+\ at anyone time it can get confusing. Consider refactoring
+\ if you use them.
+\
+\ For the other words, "nip", "tuck", "2drop" and "2dup",
+\ nothing really needs to be said about them. Their stack
+\ effect describes them perfectly.
+\
 
 :t nip swap drop ;t ( x y -- y )
 :t tuck swap over ;t ( x y -- y x y )
@@ -2030,6 +2230,32 @@ there 2/ primitive t!
 :t 2drop drop drop ;t ( x x -- )
 :t 2dup  over over ;t ( x y -- x y x y )
 
+\ The comparison or test words are defined in relation to
+\ to each other, which is no surprise. Given one comparison
+\ operator it is easy enough to produce the rest, ideally
+\ the underlying system would provide at least one signed
+\ and one unsigned method of comparison. This is usually done
+\ on most real architectures by performing a subtraction and
+\ checking what flags are set in the CPU, such as the borrow
+\ flag, negative, overflow, and the zero flag. Different
+\ combinations of these flags allow the language implementer
+\ to perform signed and unsigned comparisons of equal, not
+\ equal, less than, greater than, and less than and equal or
+\ greater than or equal, all in one or two instructions.
+\
+\ As we do not have those facilities we make use of the
+\ comparisons operators we made for the Forth Virtual Machine.
+\ Using the signed comparison operators to do unsigned
+\ comparison is a little more involved, and is doing the
+\ opposite, however if we stay within one class it is easy
+\ to construct all operators given a signed less than or
+\ a signed greater than using just swapping the arguments
+\ around, or inverting the boolean result.
+\
+\ "=" can be defined with "xor" instead of "-", but "-" is
+\ cheaper on SUBLEQ machines.
+\
+
 :t 0<= 0> 0= ;t ( n -- f )
 :t 0<> 0= 0= ;t ( n -- f )
 :t = - 0= ;t ( u1 u2 -- f )
@@ -2037,14 +2263,6 @@ there 2/ primitive t!
 :t >= < 0= ;t ( u1 u2 -- f )
 :t <= > 0= ;t ( u1 u2 -- f )
 :t 0>= 0< 0= ;t ( u1 u2 -- f )
-
-:t negate 1- invert ;t ( n -- n )
-:t s>d dup 0< ;t ( n -- d )
-:t abs s>d if negate then ;t ( n -- u )
-:t 2* op2* ;t ( u -- u )
-:t cell 2 lit ;t ( -- u )
-:t cell+ cell + ;t ( a -- a )
-:t cells op2* ;t ( u -- u )
 
 \ The unsigned words are defined in terms of each other once
 \ of them has been defined, they are a bit awkward as they
@@ -2059,6 +2277,56 @@ there 2/ primitive t!
 :t u> swap u< ;t ( u1 u2 -- f )
 :t u>= u< 0= ;t ( u1 u2 -- f )
 :t u<= u> 0= ;t ( u1 u2 -- f )
+
+\ A few miscellaneous arithmetic words need defining:
+\
+\ "negate", which is simple enough, it negates a value, most
+\ Forth standards take after the C standard and do not
+\ specify how signed numbers are encoded, they both came from
+\ a time when the hardware had not settled down on some basic
+\ features we now take for granted and everything was more
+\ experimental. However, twos compliment is the norm, and
+\ "negate" does a twos compliment negation.
+\
+\ "s\>d" turns a signed number and turns it into a double cell
+\ number, which we will encounter more later on when talking
+\ about the more complex arithmetic operators.
+\
+\ "abs" gets the absolute value of a number, note, like most
+\ "abs" functions on twos compliment machines getting the
+\ function is only properly defined within the range of
+\ Minimum Signed Value + 1 to Maximum Signed Value, if you
+\ entered the Minimum Signed Value ($8000 or -32768) you will
+\ get back the same number. This is common for many
+\ implementations of "abs" and is a consequence of twos
+\ compliment arithmetic having one more negative numbers than
+\ than positive non-zero numbers.
+\
+\ "2\*" just doubles a number, it should be familiar by now.
+\
+
+:t negate 1- invert ;t ( n -- n )
+:t s>d dup 0< ;t ( n -- d )
+:t abs s>d if negate then ;t ( n -- u )
+:t 2* op2* ;t ( u -- u )
+
+\ The cell word-set allows portable code to be written that
+\ does have to worry about how many bytes are in a cell on
+\ a given architecture. There are a few words within this
+\ implementation that assume a cell size of 2 for optimization
+\ reasons, which is frowned up, such as "aligned", but they
+\ are kept to a minimum.
+\
+\ - "cell" just pushes the size of a single cell in bytes.
+\ - "cell+" is used to increment an address to the next cell,
+\ without any care for cell alignment.
+\ - "cells" is used to convert a number of cells into the 
+\ number of bytes those cells take up.
+\
+
+:t cell 2 lit ;t ( -- u )
+:t cell+ cell + ;t ( a -- a )
+:t cells op2* ;t ( u -- u )
 
 \ "execute" takes an "execution token", which is just a fancy
 \ name for an address of a function, and then executes that
@@ -2199,6 +2467,19 @@ there 2/ primitive t!
 \ calculated before you put the index onto the stack and not
 \ after.
 \
+\ For systems that do not have a stack that can be indexed,
+\ the following version of "pick" that shifts values between
+\ the data and return stack can be defined:
+\
+\	: pick ?dup if swap >r 1- pick r> swap exit then dup ; 
+\
+\ Be warned though, this version of "pick" is slower but the
+\ main concern is its high stack usage, especially as systems
+\ with hardware stacks are likely to have small stacks of
+\ just a few, perhaps even as low as eight, values. This
+\ version of "pick" will quickly eat through that, overflow,
+\ and give incorrect results.
+\
 
 :t pick sp@ + [@] ;t ( u -- u )
 
@@ -2289,31 +2570,305 @@ there 2/ primitive t!
 :t max 2dup < if nip else drop then ;t ( n1 n2 -- n )
 :t min 2dup > if nip else drop then ;t ( n1 n2 -- n )
 
-:t source-id {id} up @ ;t
-:t 2! tuck ! cell+ ! ;t
-:t 2@ dup cell+ @ swap @ ;t
-:t tup {tib} up ;t
-:t source tup 2@ ;t
+\ "source-id" allows us to determine what the current input
+\ source is. If it is 0 we are reading input from the terminal,
+\ if it is non-zero then we are executing from a string or a
+\ block.
+\
+
+:t source-id {id} up @ ;t ( -- u : input type )
+
+\ If we want to set two, often related, cell values at once, 
+\ we can use "2!" and "2@", "2!" will store the top cell on the
+\ stack in the first memory cell given, increment the cell
+\ address, and store the second value in the second cell.
+\
+\ Within this interpreter the words are used for setting and
+\ getting the values of the Terminal Input Buffer, which
+\ consists of two contiguous cells that deal with the position
+\ and maximum size of that buffer.
+\
+\ They often find use in code for walking more complex data
+\ structures.
+\
+
+:t 2! tuck ! cell+ ! ;t ( u1 u2 a -- )
+:t 2@ dup cell+ @ swap @ ;t ( a -- u1 u2 )
+
+\ These two words are like "2!" and "2@", but for shunting
+\ two numbers between the return and data stacks. Note that
+\ the implementation of "2\>r" *cannot* just be:
+\
+\	: 2>r >r >r ;
+\
+\ As the return stack is used to store the position of
+\ where a function was called from, if we implement as above
+\ we will clobber that position and return not to whence we
+\ came but it will do a fandango on the core instead. The
+\ same goes for the word "2r\>".
+\
+\ Note that the flag "compile-only" is set at well, this word
+\ will not do anything sensible if run as a command, so we make
+\ it so the interpreter will throw an error if it encounters
+\ the word in command mode.
+\
+
 :t 2>r r> swap >r swap >r >r ;t compile-only
 :t 2r> r> r> swap r> swap >r ;t compile-only
-:t count dup 1+ swap c@ ;t
-:t aligned dup lsb 0<> #1 and + ;t
-:t align here aligned h lit ! ;t
-:t +string #1 over min rot over + rot rot - ;t
-:t type begin dup while swap count emit swap 1- repeat 2drop ;t
+
+\ "tup" gets the address of the Terminal Input Buffer 
+\ variables, which point to the Terminal Input Buffer itself,
+\ whilst "source" gets the contents of what is stored at
+\ "{tib}".
+\
+\ These words are using for parsing, which is done later on.
+\
+:t tup {tib} up ;t ( -- a )
+:t source tup 2@ ;t ( -- a u )
+
+\ "aligned" is one of those words that has been implemented
+\ in a non-portable way, so would have to change if the cell
+\ size did.
+\
+\ It takes an address and aligns that address to the next
+\ address on a two byte boundary (and on a 32-bit system it
+\ would align on a four byte boundary, on 64-bit, 8 bytes).
+\
+\ For some example mappings:
+\
+\	0 aligned -> 0
+\	1 aligned -> 2
+\	2 aligned -> 2
+\	3 aligned -> 4
+\	4 aligned -> 4
+\
+\ "align" does the same for "aligned", but operates on the
+\ dictionary pointer. It is common to want to align the
+\ dictionary pointer after writing a string into the 
+\ dictionary.
+\
+
+:t aligned dup lsb 0<> #1 and + ;t ( u -- u )
+:t align here aligned h lit ! ;t ( -- )
+
+\ "count" and "+string" are two words used for string 
+\ manipulation. "count" is named because it is often used with
+\ counted strings, a counted string consists of a single byte
+\ for the length of the string, followed by the rest of the
+\ string. That is the traditional mechanism Forth used for
+\ strings, but it limits those strings to only containing
+\ 256 bytes, not a problem on the memory constrained 16-bit
+\ bit microcomputers that Forth grew up on, and not a problem
+\ here either.
+\
+\ "count" can be used to extract the length of a string, but
+\ also for moving down that string, or any byte array. 
+\
+\ An example for doing a byte-wise memory dump using "count":
+\
+\	: cdump for aft count . then next ;
+\
+\ And a common idiom for printing out counted strings:
+\
+\	count type
+\
+\ Which uses "type", a word we will encounter next.
+\
+
+:t count dup 1+ swap c@ ;t ( b -- b c )
+:t +string #1 over min rot over + rot rot - ;t ( b u -- b u )
+
+\ "type" is used to print out a string. It is not complicated,
+\ it does not make an effort to not print out non-graphic
+\ ASCII characters, so if you print out binary data you will
+\ get garbage. It is easy enough to make a version of "type"
+\ that did this filter, which would be useful for displaying
+\ Forth Blocks with "list".
+\
+
+:t type ( a u -- : print out a string )
+  begin dup while swap count emit swap 1- repeat 2drop ;t
+
+\ "fill" is used to fill a section of memory with a byte,
+\  hence the name. More frequently "erase" is used, which does
+\ a fill but the byte being zero.
+\
+\ "cmove" is used to move blocks of memory to another section
+\ of memory.
+\
+\ Both functions operate on bytes, not cells. "cmove" is often
+\ used for strings however, and "fill" (in the form of "blank"
+\ which fills a section of memory with spaces) is used in the
+\ block text editor.
+\
+\ "fill" is equivalent to the C standard library function
+\ "memset", and "cmove" to "memcpy".
+\
+
 :t cmove ( b1 b2 u -- )
    for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;t
 :t fill ( b u c -- )
    swap for swap aft 2dup c! 1+ then next 2drop ;t
 :t erase #0 fill ;t ( NB. blank is bl fill )
-:s do$ r> r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a : )
+
+\ The following words, and two new meta-compiler words, allow
+\ us to define two types of counted strings, and use them
+\ in our meta-compiled program. The word "do$" does most of
+\ the work, it is a little complex as it has to do some
+\ return stack manipulation for the word that calls it, not
+\ just for itself.
+\
+\ * "do$" pushes the address of a string compiled into the
+\ dictionary, the string needs to be placed after the word
+\ that *calls* "do$".
+\ * "($)" is used to make counted strings that push the address
+\ of the string onto the stack so it can be used elsewhere.
+\ * ".$" is used to make counted strings that are always
+\ printed out.
+\
+\ The two meta-compiler words, use "($)" and ".$" then call
+\ "$literal" to grab the string from the input stream. Two
+\ words similar to the meta-compiler versions will be defined
+\ later, after the parsing words have been made.
+\
+\ How does "do$" work? Let us see a compiled string:
+\
+\	: x ." HELLO" cr ;
+\
+\ This will be compiled to something like this, with one 16-bit
+\ cell per line:
+\
+\	X:
+\		address of .$
+\		5,'H'
+\		'E','L'
+\		'L','O'
+\		address of exit
+\
+\ Note that the word '."' does not appear in the compiled
+\ program! It compiles ".$" and the string into the dictionary.
+\
+\ The word ".$" must somehow print out the string "HELLO" and
+\ then skip over the string in order to continue execution
+\ after the string, which happens to be an exit.
+\
+\ The word ".$" calls "do$" which does the finding of the
+\ string and the return address fixed up. However, before that
+\ we the first thing we call is ".$", when we call something
+\ we push the address of the next cell onto the return stack
+\ so when we return, we return to the address after the 
+\ function just called. In this case when we call ".$" it will
+\ contain the address of the string we want to print out,
+\ however, when we call "do$" from within ".$" it will have
+\ the address of "count" on the return stack (which we will
+\ want to execute) and the address of the string after that.
+\ "do$" needs to extract the string address from return stack,
+\ copy it as it is meant to leave a copy on the state stack,
+\ calculate the next address after the string, and then
+\ replace the string address on the return stack with the
+\ address of the place after the string (aligned up of course).
+\ It also needs to leave the address of "count" on the return
+\ stack so when we return from "do$" it will still call 
+\ "count", however after fixing up the return address of
+\ the string when ".$" returns, it returns to the place after
+\ the string.
+\
+\ It does all this in quite a short amount of code. It is not
+\ as complex as it sounds, it is more of a trick. "do$" also
+\ has to convert to and from cell address, with "2*" and "2/",
+\ not difficult.
+\
+\ "do$" is not a general purpose word, it should not be used
+\ in any "normal" code, nor is the technique it uses a general
+\ or good one. It does make for some nicely compact code
+\ however, and is one way of doing introspection.
+\
+\ Another example of messing around with the return stack
+\ to achieve greatness is:
+\
+\	: ?exit if rdrop then ; compile-only
+\
+\ Which will conditionally return from the *caller* of the
+\ function, an example usage:
+\
+\	: x ." Executed." cr ?exit ." Conditionally Exec." cr ;
+\	0 x
+\	1 x
+\
+
+:s do$ r> r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
 :s ($) do$ ;s           ( -- a : do string NB. )
 :s .$ do$ count type ;s ( -- : print string in next cells )
 :m ." .$ $literal ;m
 :m $" ($) $literal ;m
-:t space bl emit ;t
+
+\ "space" emits a space. This is all. I will not write an
+\ essay to describe this.
+\
+
+:t space bl emit ;t ( -- : emit a space )
 
 \ # Exception Mechanism: Catch and Throw
+\
+\ For exceptional circumstances Forth provides the words
+\ "catch" and "throw", usually I do not like exceptions in
+\ languages other than Forth (specifically C like languages,
+\ although the higher level the language is, the more 
+\ acceptable they are), I instead prefer other mechanisms,
+\ or even just returning error codes. 
+\
+\ As an aside about languages and error handling:
+\
+\ One of the only languages that gets error handling right, 
+\ from what I have seen, is Rust, however that language is 
+\ the opposite of what Forth is. That is not a bad thing, in 
+\ fact it is a far more usable programming language than Forth
+\ is, however no individual programmer could make a Rust
+\ implementation, it is an industrial project. It is possible
+\ for an individual programmer to make C compiler, or more
+\ easily a Pascal compiler, and use that to build a toy 
+\ operating system akin to the original Unix, an individual has
+\ very little possibility without dedicating a massive fraction
+\ of their lives to making a Rust, or a C++ compiler, that
+\ is compliant. A Forth system can built and understood, from
+\ machine to user interface, by a single person. It is a short
+\ and sweet language.
+\ 
+\ Java uses exceptions because it believes programmers are too
+\ lazy to check return codes, which is true, but just leads to
+\ programmers being lazy with exceptions (and catching too
+\ many of them). Adding exceptions to a language does not solve
+\ the lazy programmer problem, making it easier to check an
+\ error than to ignore it does, which is what Rust does.
+\ C++ is best left not talked about, which I find is true in
+\ general. 
+\ 
+\ Forth does use exceptions, but uses them sparingly, usually
+\ only when something has gone very wrong. It is also a pain
+\ to pass up error codes in Forth programs as everything is
+\ passed via the stack. For truly exceptional circumstances,
+\ where calling "abort" might be appropriate, an exception
+\ can be thrown instead. It does not encourage their use and
+\ one does not find themselves asking "what exceptions can this
+\ possibly throw?", and they are usually left uncaught except
+\ by the outer interpreter, which has an exception handler of
+\ last resort.
+\
+\ The appendix contains a list of error codes that are thrown
+\ by this interpreter. 
+\
+\ While it can be tricky to get catch/throw correct, their
+\ operation in Forth is quite simple due to the execution model
+\ of Forth. It is a dual stack system where the stacks are
+\ easily accessible.
+\
+\ The first word defined "catch" accepts an execution token,
+\ it will execute that token, and in doing so return an error
+\ code. It will return zero if nothing has been thrown, or
+\ a non-zero number if an exception has been thrown by "throw"
+\ in the token just executed.
+\
+\ TODO: Describe implementation details
 \
 
 :t catch        ( xt -- exception# | 0 \ return addr on stack )
@@ -2333,10 +2888,95 @@ there 2/ primitive t!
     then ;t
 :t abort #-1 throw ;t
 :s (abort) do$ swap if count type abort then drop ;s
+:s depth {sp0} lit @ sp@ - 1- ;s
+:s ?depth depth > if -4 lit throw then ;s
 
 \ # Advanced Arithmetic 
+\
+\ The Forth arithmetic word-set attempts to solve the most
+\ complex arithmetic problem, and in doing so make the simpler
+\ problems trivial. This is not usually a viable method to
+\ take, greater complexity just usually leads to greater
+\ complexity, however here it works well.
+\
+\ A note about Forth, when using the term "double" it does
+\ not refer to the floating point number, it refers to numbers
+\ which are twice the normal width of a number, so on a 16-bit
+\ system a 32-bit value stored as two integers on the stack
+\ would be a "double". It comes from "double width" or 
+\ "double precision". Many Forth implementations do not define
+\ the floating point word-set as Forth originated on quite
+\ limited systems, systems that might not have had floating
+\ point numbers and it would have been quite the slow down to
+\ implement them in software (and the routines would have taken
+\ up precious space). A lot of the decisions that went into
+\ Forth are a consequence of the limited hardware on
+\ microcomputers available in the 1980s. If starting from
+\ scratch software wise, but with modern hardware, you would
+\ not create a language like Forth. It is a product of its
+\ time, which in a way makes it magical.
+\
+\ As the author was not sentient in the 1980s, it makes me
+\ nostalgic for a time that I was not part of, a kind of
+\ false nostalgia. One with simpler problems, no internet,
+\ just man and the machine, a machine that could be understood
+\ by a single person and does not collect telemetry, spy on
+\ you, advertise to you, or reboot when it wants.
+\
+\ Anyway...
+\
+\ By implementing "um+", "um\*", "um/mod", and "m/mod", the 
+\ other arithmetic operators are much easier to implement.
+\ It is also much easier to implement "/", the Forth word
+\ for division, in terms of "um/mod", than it is to implement
+\ "um/mod" in terms of "/".
+\
+\ The numeric tower of words is all built upon "um+", this
+\ word performs an addition with carry effectively, which many
+\ systems have instructions specifically for. This one does
+\ not, so it has to compute the carry itself, we already have
+\ addition thankfully.
+\
+\ It takes two single cell numbers and adds them together, 
+\ the result of the addition and then the carry is pushed to
+\ the stack. Using this we can construct some double cell
+\ words, "um+" is a mixed word, it effectively produces a
+\ double cell word, the name of the word closely follows the
+\ naming convention for Forth words of these type, it says
+\ "unsigned mixed addition", in effect.
+\
+\ The double cell words all have "d" in them, for example
+\ "dnegate", or "d+", the double cell words are usually treated
+\ as signed words, with the highest 16-bits stored in the
+\ topmost cell on the stack.
+\
+\ "um*\", unsigned mixed multiply, takes two single cell 
+\ numbers and multiplies them together producing a double
+\ cell number.
+\
+\ Note the algorithm used for multiplication, one naive way
+\ to do multiplication of two numbers, say "m" and "n" is
+\ to repeatedly add "m" to a register "n" times, it works but
+\ is very slow. "um\*" only loops for 16 times however, on this
+\ 16-bit platform, one for each bit, and always loops for the
+\ same number of times, so it cannot logically be using that
+\ algorithm to perform multiplication. 
+\
+\ TODO: Describe multiplication algorithm.
+\
+\ Given "um\*", "\*" can be coded with:
+\
+\	: * um* drop ;
+\
+\ Rendering its implementation trivial. To really improve
+\ the speed of this implementation, and any eForth which does
+\ the same thing, "um+" should be made to be as fast as 
+\ possible.
+\
+\ TODO: More description
+\
 
-:t um+ 2dup + >r r@ #0 >= >r
+:t um+ 2dup + >r r@ #0 >= >r ( u u -- u carry )
    2dup and 0< r> or >r or 0< r> and invert 1+ r> swap ;t
 :t dnegate invert >r invert #1 um+ r> + ;t ( d -- d )
 :t d+ >r swap >r um+ r> + r> + ;t         ( d d -- d )
@@ -2367,12 +3007,123 @@ there 2/ primitive t!
 :t /mod over 0< swap m/mod ;t ( u1 u2 -- u1%u2 u1/u2 )
 :t mod  /mod drop ;t ( u1 u2 -- u1%u2 )
 :t /    /mod nip ;t ( u1 u2 -- u1/u2 )
-:s depth {sp0} lit @ sp@ - 1- ;s
+
+\ We can implement some of the signed double cell arithmetic
+\ words if we need them as well, with:
+\
+\	: 2swap >r -rot r> -rot ;        ( w x y z -- y z w x )
+\	: d< rot 2dup >                    ( d -- f )
+\	  if = nip nip if 0 exit then -1 exit then 
+\	  2drop u< ; 
+\	: d>  2swap d< ;                   ( d -- t )
+\	: du> 2swap du< ;                  ( d -- t )
+\	: d=  rot = -rot = and ;           ( d d -- t )
+\	: d- dnegate d+ ;                  ( d d -- d )
+\	: dabs  s>d if dnegate exit then ; ( d -- ud )
+\
+\ But by default they will not be included as they are easy
+\ enough to define if we need them and we want to keep the
+\ interpreter nice and slim.
+\
 
 \ # Terminal Input and Word Parsing
+\
+\ We have a pretty solid base, we will not move onto the next
+\ stage, getting a line of input, and parsing that into a
+\ stream of words.
+\
+\ The terminal line handling should work over a UART, and also
+\ interact correctly when typing in commands as a program
+\ running in a virtual terminal. Usually the operating system
+\ handles line discipline, however in case it does not these
+\ words handle it as well, there is no conflict between the
+\ two.
+\
+\ The line parsing routines culminate in the construction of
+\ "query", the word parsing words with "parse", both will
+\ require a few useful words which we will make on the way.
+\
+\ We need to construct another word, synonymous with "emit",
+\ but uses a different variable as an execution vector, we
+\ will sometimes want to silence the output from "echo", but
+\ not from "emit". We will also need to make the word that
+\ is the execution vector for both "emit" and "echo", which we
+\ have not done so far, that word will be called "(emit)".
+\
+\ All "(emit)" has to do is called "opEmit", if we want to
+\ replace the execution vector with something that does nothing
+\ then we cannot use "nop", as that would leave an item on the
+\ stack where one should not be, it will be replaced with a
+\ "drop" instead.
+\
+\ The default execution vectors are set later on during the
+\ "task-init" function and depend partially on the "{options}"
+\ flags to enable or disable echoing with "echo".
+\ 
+\
 
-:s (emit) opEmit ;s
-:t echo <echo> @ execute ;t
+:s (emit) opEmit ;s ( c -- )
+:t echo <echo> @ execute ;t ( c -- )
+
+\ "tap" and "ktap" are both used by "accept", they are both
+\ given four items on the stack, and return three, which is
+\ quite a lot. The arguments given are as follows:
+\
+\ 	bot - Bottom Of Text
+\ 	eot - End Of Text
+\ 	cur - Current Text Position
+\	c   - The character to process.
+\
+\ The input buffer and our position in it is represented by
+\ the first three arguments, "bot", "eot", and "cur". We are
+\ given a new character to process and decide on what to do
+\ with.
+\
+\ "accept" is the word that calls these two words and will
+\ finish processing when "cur" is equal to "eot", which would
+\ mean the input buffer is full. "ktap" takes advantage of that
+\ and uses that to force "accept" to exit when it encounters a
+\ newline.
+\
+\ "bot" is needed because when we delete characters we need to
+\ move the "cur" value backwards, however if we do it too much
+\ then we will end up before the buffer, so we must prevent
+\ "cur" going lower than this value.
+\
+\ "tap" echos a character given to it and then writes it to
+\ the buffer. It also advances the string given to it. "accept"
+\ calls "tap" for normal characters that do not need special
+\ processing, like "a", or space, or 0.
+\
+\ "ktap" processes control characters, the Delete character,
+\ the backspace and newlines. None of the characters given
+\ to "ktap" should be written to the buffer given to accept
+\ but should trigger different behaviors.
+\
+\ As mentioned, if "c" is a newline character "ktap" causes
+\ "cur" to equal "eot", causing accept to exit.
+\
+\ The backspace is treated the same as the delete character,
+\ some systems use one or the other. It deletes a single
+\ character from the input buffer by manipulating the "cur"
+\ position (it adds the result of a boolean to "cur", which is
+\ negative if we are processing a delete character and we are
+\ not at the bottom of the input buffer). It also emits the
+\ following sequence; a backspace, a space, and another 
+\ backspace, in an attempt to erase the previous character on
+\ the screen if the same conditions are met to remove the
+\ previous character.
+\
+\ The tests could be factored out, and the delete functionality
+\ "=bksp lit dup echo bl echo echo" are sometimes factored out.
+\
+\ If "ktap" does not know what to do with the control character
+\ then it replaces it with a space and calls "tap".
+\
+\ This is a complex word, quite optimized, to handle terminal
+\ input handling.
+\
+
 :s tap dup echo over c! 1+ ;s ( bot eot cur c -- bot eot cur )
 :s ktap ( bot eot cur c -- bot eot cur )
   dup dup =cr lit <> >r  =lf lit <> r> and if ( Not EOL? )
@@ -2386,18 +3137,91 @@ there 2/ primitive t!
     r> +
     exit
   then drop nip dup ;s
+
+\ "accept" is a useful word on its own, it gets a line of
+\ input and stores it a specified location, it returns the
+\ length and location of the accepted string.
+\
+\ An example usage:
+\
+\	pad 20 accept
+\	HELLO WORLD
+\	.s
+\	type
+\
+\ Which will accept a line of text, "HELLO WORLD", and store
+\ it into the pad area, then print what "accept" returns,
+\ and then regurgitates the input string.
+\
+\ We will not use "accept" directly, but use it to make
+\ "query", it does more work though, "query" just calls 
+\ "accept" on some internal buffers.
+\
+\ "accept" must make sure it does not overrun the input
+\ buffer, it also must handle control characters. Note that
+\ there is no part of the loop that says "terminate this
+\ function when a newline is occurred", it only stops the
+\ loop when the current cursor position 
+\
+\ "tib" is a convenience word accessing the Terminal Input
+\ buffer. It is immediately used by "query", note that query
+\ also defines what our maximum length of a line is, this
+\ itself could be made into a variable so it can be changed,
+\ but we gain little from that on such a limited system.
+\
+\ After query is completed it sets the index into the line
+\ being parsed to zero, so the parser starts from the 
+\ beginning, and also sets the length of the line just parsed.
+\
+\ After calling query we can split up the line.
+\
+
 :t accept ( b u -- b u : read in a line of user input )
   over + over begin
     2dup <>
   while
     key dup bl - 5F lit u< if tap else ktap then
   repeat drop over - ;t
-:t tib source drop ;t
-:t query tib =buf lit accept tup ! drop #0 >in ! ;t
-:s ?depth depth > if -4 lit throw then ;s
-:t -trailing for aft
+:t tib source drop ;t ( -- b )
+:t query tib =buf lit accept tup ! drop #0 >in ! ;t ( -- )
+
+\ "-trailing" removes the trailing white-space from an input
+\ string, it does this non-destructively leaving the original
+\ string intact, it just modifies the string length of an
+\ address-length pair. It is used to post process the line
+\ given to us by query, it is not appropriate to call it
+\ in query to make it as reusable as possible.
+\
+:t -trailing for aft ( b u -- b u : remove trailing spaces )
      bl over r@ + c@ < if r> 1+ exit then
    then next #0 ;t
+
+\ "look" is a moderately complex word, it takes a string,
+\ a character to parse until, and an execution token.
+\ The execution token is for a function that takes two
+\ characters and should return a boolean indicating when
+\ to stop looking within a word.
+\
+\ The character is stored in the topmost return stack position
+\ for easy access with "r@" and dropped before exit.
+\
+\ White-space is treated specially, it is always part of the
+\ tests, specifically the space character which control
+\ characters get converted to by "accept" is tested and then
+\ passed to the execution tokens, it could be integrated into
+\ them instead to make a more generic "look".
+\
+\ "parse" is way more complex than it looks, and it is
+\ incredibly fiddly. 
+\
+\ There are two execution tokens passed to two calls to "look",
+\ one to establish where the beginning of the matching 
+\ character starts and one to determine where it ends.
+\
+\ TODO: More description/rewrite
+\
+
+
 :s look ( b u c xt -- b u : skip until *xt* test succeeds )
   swap >r rot rot
   begin
@@ -2419,7 +3243,45 @@ there 2/ primitive t!
   r> bl = if -trailing then #0 max ;t
 
 \ # Numeric Input and Output
+\
+\ Numeric Input and Output deserves its own section, Forth
+\ provides a flexible way to format numeric output, less so
+\ for parsing numbers, but does provide some words. The way
+\ printing numbers is done is a little different from other
+\ implementations of eForth purely for speed purposes, the
+\ word "." needs to be as fast as possible so does not use
+\ "um/mod" to extract digits from numbers. Unsigned number
+\ printing does, so is slower, but that is less of a concern.
+\
+\ The core of the numeric output system are the words
+\ "\<#", "#" and "#\>", for numeric input the main word
+\ is "\>number", which does a lot, and then the secondary
+\ word "number?" which pre and post processes the results of
+\ "\>number".
+\
+\ All of the numbers are affected by the "base" variable,
+\ which controls which bases are allowed in when parsing, and
+\ what base they are printed out as.
+\
+\ The output triplet words, "\<#", "#" and "#\>" operated on
+\ what is known as "hold-space", an area available (one for
+\ each thread, much like the base variable) for formatting
+\ output strings. Both the hold space and the base variable
+\ make numeric I/O thread safe but not reentrant, a flaw, but
+\ not a big one given the nature of Forth.
+\
+\ TODO: More explanation
+\
 
+\ "banner" is a word I keep defining, but it is not a standard
+\ word so is kept in the system vocabulary, it prints a
+\ character "n" number of times, it accepts a signed number,
+\ and does not print out characters if "n" is negative.
+\
+\ It is included as it is a factor of "u.r". It was used
+\ for a more fancy version of "list", but the complexity of
+\ that word has been reduced.
+\
 :s banner ( +n c -- )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ;s
 :t hold ( c -- : save character in hold space )
@@ -2436,6 +3298,17 @@ there 2/ primitive t!
 :t u.     #0 <# #s #> space type ;t
 :s (.) abs base @ opDivMod ?dup if (.) then digit emit ;s
 :t . space dup 0< if [char] - emit then (.) ;t
+
+\ "\>number" is a large but not terribly complex word, it
+\ is however a bit unwieldy to use, it operates on double
+\ cell numbers instead of single cell ones. By solving the
+\ problem of parsing double cell numbers instead of single
+\ cell numbers a more generic word that can be used to solve
+\ both can be made. This is much like the arithmetic word-set,
+\ solving the more complex problem to allow for a more generic
+\ system.
+\
+
 :t >number ( ud b u -- ud b u : convert string to number )
   begin
     2dup >r >r drop c@ base @        ( get next character )
@@ -2450,6 +3323,7 @@ there 2/ primitive t!
     r> r>                            ( restore string )
     +string dup 0=                   ( advance, test for end )
   until ;t
+
 :t number? ( a u -- d -1 | a u 0 : easier to use than >number )
   #-1 dpl !
   base @ >r
@@ -2475,7 +3349,9 @@ there 2/ primitive t!
       if rdrop nip nip exit then
     then
   next 2drop #0 ;t
+
 :t .s depth for aft r@ pick . then next ;t
+
 :t nfa cell+ ;t ( pwd -- nfa : move word ptr to name field )
 :t cfa ( pwd -- cfa )
   nfa dup c@ 1F lit and + cell+ cell negate and ;t
@@ -2582,6 +3458,8 @@ there 2/ primitive t!
   1- repeat ;r
 :t definitions context @ set-current ;t
 
+\ # Defining new words
+
 :t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= if exit then space
@@ -2596,6 +3474,8 @@ there 2/ primitive t!
   last , bl word ?nul ?unique count + h lit ! align
   BABE lit postpone ] ;t
 :to :noname here BABE lit ] ;t
+
+\ # Control Structures
 
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
@@ -2612,6 +3492,8 @@ there 2/ primitive t!
     immediate compile-only
 :to next =next lit , 2/ , ;t immediate compile-only
 
+\ # Create, DOES>, and other special Forth words
+
 :to ' bl word find ?found cfa literal ;t immediate
 :t compile r> dup [@] , 1+ >r ;t compile-only
 :t recurse {last} lit @ cfa compile, ;t immediate compile-only
@@ -2626,15 +3508,46 @@ there 2/ primitive t!
 :to variable create #0 , ;t
 :to constant create cell negate allot compile (const) , ;t
 
-:to marker last here create cell negate allot compile
-    (marker) , , ;t
-
 :t >body cell+ ;t ( a -- a )
-
 :s (does) r> r> 2* swap >r ;s compile-only
 :s (comp) r> {last} lit @ cfa ! ;s compile-only
 :t does> compile (comp) compile (does) ;t
    immediate compile-only
+
+\ # Forgetting words
+\
+\ "marker" is a word with caveats aplenty, at least this
+\ implementation of it, however it is a very useful word
+\ when debugging new code interactively. It is a defining
+\ word, so it requires a name of a new word, it then creates
+\ a word that when called deletes every word in the dictionary
+\ defined after and the new word and then deletes itself, it
+\ reclaims the dictionary space.
+\
+\ This allows us to define a word, find problems with it,
+\ and redefine it, without creating multiple definitions of
+\ the same word.
+\
+\ An example usage might be:
+\
+\	marker xxx
+\	: ahoy cr ." BYE" ;
+\	words
+\	xxx
+\	words
+\	: ahoy cr ." HELLO" ;
+\
+\ Creating a marker called "xxx", so if we make a mistake
+\ making a new word, in this case making the string "ahoy"
+\ print out the wrong message, then we can go back and change
+\ it without cluttering up our environment.
+\
+\ Now for the caveats, the newly defined word should not be
+\ used whilst changing the vocabularies used.
+\
+
+:to marker last here create cell negate allot compile
+    (marker) , , ;t ( --, "name" )
 
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
@@ -2651,11 +3564,14 @@ there 2/ primitive t!
 :to abort" compile (abort)
   [char] " word count + h lit ! align ;t immediate compile-only
 
+
 :to ( [char] ) parse 2drop ;t immediate
 :to .( [char] ) parse type ;t immediate
-:to postpone bl word find ?found cfa compile, ;t immediate
 :to ) ;t immediate
 :to \ tib @ >in ! ;t immediate
+
+:to postpone bl word find ?found cfa compile, ;t immediate
+
 :to immediate last nfa @ 40 lit or last nfa ! ;t
 
 \ # Some Programmer Utilities
@@ -3221,6 +4137,8 @@ there 2/ primitive t!
 \     executing commands (which may cause problems), but it is
 \     setup just in case.
 \
+\ TODO: Talk about XIO, HAND, ...
+\
 :s task-init ( task-addr -- )
   {up} lit @ swap {up} lit !
   this 2/ {next-task} up !
@@ -3621,21 +4539,21 @@ there 2/ primitive t!
 \
 
 :t editor {editor} lit #1 set-order ;t ( Tiny BLOCK editor )
-:e q only forth ;e
-:e ? scr @ . ;e
-:e l scr @ list ;e
-:e e q scr @ load editor ;e
+:e q only forth ;e ( -- )
+:e ? scr @ . ;e ( -- )
+:e l scr @ list ;e ( -- )
+:e e q scr @ load editor ;e ( -- )
 :e ia 2 lit ?depth 6 lit lshift + scr @ block + tib >in @ +
    swap source nip >in @ - cmove tib @ >in ! update l ;e
-:e i #0 swap ia ;e
-:e w words ;e
-:e s update flush ;e
-:e n  #1 scr +! l ;e
-:e p #-1 scr +! l ;e
-:e r scr ! l ;e
+:e i #0 swap ia ;e ( line -- )
+:e w words ;e ( -- )
+:e s update flush ;e ( -- )
+:e n  #1 scr +! l ;e ( -- )
+:e p #-1 scr +! l ;e ( -- )
+:e r scr ! l ;e ( k -- )
 :e x scr @ block b/buf blank l ;e
 :e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit
-   blank l ;e
+   blank l ;e ( line -- )
 
 \ # Last word defined
 \
@@ -3643,8 +4561,12 @@ there 2/ primitive t!
 \ it deserves its own section. The word "cold" restarts the
 \ system by executing the execution token stored in "{cold}".
 \
+\ Note the "2\*"! Cold has to be executed by the Forth VM
+\ as well, so it contains a cell address, meaning it has to
+\ be multiplied by two before hand.
+\
 
-:t cold {cold} lit @ execute ;t
+:t cold {cold} lit 2* @ execute ;t
 
 \ # Image Generation
 \
@@ -3672,6 +4594,8 @@ there 2/ primitive t!
 \ contains this file, and "new-image.dec" is the new eForth 
 \ image we have produced in this file.
 \ 
+
+\ TODO: C code generation
 
 t' (cold) half {cold} t!      \ Set starting Forth word
 atlast {forth-wordlist} t!    \ Make wordlist work
