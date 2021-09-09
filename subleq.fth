@@ -23,7 +23,11 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	- Possible optimizations; merge exit with last word
 \	- Case insensitivity 
 \	- Configuring the option bit in the image
-\	- Coding standard
+\	- Coding standard, Glossary of Forth Terms
+\	- Describe the markdown text format used to format
+\	this document.
+\	- Make sure that words cannot be longer than 32
+\	characters in length.
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -397,17 +401,17 @@ variable tlocal 0 tlocal !
 \ worth of data.
 \
 
-:m tcell 2 ;m
-:m there tdp @ ;m
-:m tc! tflash + c! ;m
-:m tc@ tflash + c@ ;m
+:m tcell 2 ;m ( -- 2 : bytes in a target cell )
+:m there tdp @ ;m ( -- a : target dictionary pointer value )
+:m tc! tflash + c! ;m ( c a -- : target write char )
+:m tc@ tflash + c@ ;m ( a -- c : target get char )
 :m t! over FF and over tc! swap 8 rshift swap 1+ tc! ;m
-:m t@ dup tc@ swap 1+ tc@ 8 lshift or ;m
-:m taligned dup 1 and + ;m
-:m talign there 1 and tdp +! ;m
-:m tc, there tc! 1 tdp +! ;m
-:m t, there t! 2 tdp +! ;m
-:m tallot tdp +! ;m
+:m t@ dup tc@ swap 1+ tc@ 8 lshift or ;m ( a -- u : target @ )
+:m taligned dup 1 and + ;m ( u -- u : align target pointer )
+:m talign there 1 and tdp +! ;m ( -- : align target dic. ptr. )
+:m tc, there tc! 1 tdp +! ;m ( c -- : write char to targ. dic.)
+:m t, there t! 2 tdp +! ;m ( u -- : write cell to target dic. )
+:m tallot tdp +! ;m ( u -- : allocate bytes in target dic. )
 
 \ "tpack" is used to copy a string into the target image.
 \ Useful if we want to define strings in the target, which we
@@ -427,20 +431,45 @@ defined eforth [if]
   :m limit FFFF and ;m
 [then]
 
+\ "$literal" is defined now, but will not be of much use
+\ until much later, when we can compile strings into the
+\ target dictionary, until then it cannot be used. 
+\
+\ "$literal" parses input until a double quote is reached
+\ and then compiles that string into the dictionary. It also
+\ takes care of alignment, given its description in this
+\ paragraph, why can we not use it? Because there is no code
+\ yet written for the target to print out the strings that
+\ "$literal" can compile into the target dictionary, until
+\ that is made we will not be able to make the meta-compiler
+\ words that will utilize the target string printing words.
+\
+
 :m $literal talign [char] " word count tpack talign ;m
 
+\ Some more conditional compilation, this time it is because
+\ of the potential differences in arithmetic between the
+\ gforth implementation and the SUBLEQ eForth (which is always
+\ 16-bit). The image saving routine need to print out a 16-bit
+\ signed value, so for gforth implementations that are likely
+\ to be 32 or even 64 bit, the value to be printed out will
+\ need to be sign-extended from a 16-bit signed value to a
+\ 32/64 bit signed value, for the SUBLEQ eForth, that does
+\ not need to be done. Both versions of "#dec" print out
+\ 16-bit signed values is the important take away.
+\
+
 defined eforth [if]
-  :m #dec dup 0< if [char] - emit then (.) A emit ;m
+  :m #dec dup 0< if [char] - emit then (.) ;m
 [else]
   :m #dec dup 8000 u>= if negate limit -1 >r else 0 >r then
-     0 <# A hold #s r> sign #> type ;m
+     0 <# #s r> sign #> type ;m
 [then]
 
-:m #dat dup FF and emit 8 rshift FF and emit ;m
-0 [if] :m #out #dat ;m [else] :m #out #dec ;m [then]
+
 :m mdump taligned
   begin ?dup
-  while swap dup @ limit #out tcell + swap tcell -
+  while swap dup @ limit #dec A emit tcell + swap tcell -
   repeat drop ;m
 :m save-target decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
@@ -3459,23 +3488,214 @@ there 2/ primitive t!
 :t definitions context @ set-current ;t
 
 \ # Defining new words
+\
+\ Any programming language needs methods to create new 
+\ functions, and we now have the mechanisms to build a word
+\ set that can do that.
+\
+\ Obviously we know that ":" and ";" can be used to create
+\ new functions, you would not have been able to get very
+\ far in this book having not know that. When we call ":" it
+\ does several things, it parses the next word in the input
+\ stream, creates a header for that word, and then makes it
+\ so that everything we type in (baring "immediate" words) is
+\ compiled into the dictionary instead of being executed.
+\
+\ The word ":" does not do the work of compiling, the 
+\ interpreter does, ":" does however signal to the interpreter
+\ to go into compilation mode by setting the state variable
+\ to -1, ";", an immediate word, sets it back.
+\
+\ ":" must be careful when adding a word into the dictionary,
+\ more accurately, it is ";" that actually links the word into
+\ the dictionary after ":" has created a header for it and left
+\ the word address on the stack for ";" to pick up. The reason
+\ is that when creating a new word, if there is a previously
+\ defined word with the same name that is the one that must
+\ be compiled into the dictionary, not the address of the new
+\ word, so the new word definition cannot be visible to the
+\ Forth interpreter until the conclusion of the word 
+\ definition. This seems like it would prevent recursion, which
+\ is why the "recurse" word was made. ":" sets a variable
+\ called "{last}" as well, this will be used in "recurse" as
+\ it contains the location of the last defined word, well,
+\ really it points to the word that is *currently being 
+\ defined*, knowing this, "recurse" can compile a jump to the
+\ correct place.
+\
+\ A little compiler security is added, the constant $BABE is
+\ pushed to the stack by ":" and checked by ";", if it is not
+\ found then an error is thrown and the word is not linked into
+\ the dictionary.
+\
+\ ";" must also terminate a word definition, it compiles an
+\ exit instruction into the dictionary following the word
+\ body. Note that it is also a compile only word, in some other
+\ Forth implementations it has been given some command mode
+\ semantics as well, but not in this one.
+\
+\ "?unique" and "?nul" are two words that do some tests, 
+\ "?unique" is for a warning (the only one in this Forth 
+\ implementation) telling us if a word has been defined already
+\ in the word-list or vocabulary (this guide uses the terms
+\ interchangeably), "?nul" prevents zero length definition
+\ words from being made.
+\ 
+\ With that compiler security and those words, most problems
+\ can be found quite easily. They are not expensive to check
+\ for.
+\
+\ "word" is general purpose parsing word that takes a character
+\ to parse as an argument on the stack, and then parses out 
+\ that string from the input string. It then packs that string
+\ into a counted string at the current dictionary location and
+\ provides a pointer to it. This is useful for ":" and a few
+\ other words, but we should be careful using it, it writes
+\ to something that soon will be overwritten if we are not
+\ careful.
+\
+\ ":noname" can be used to create anonymous functions, 
+\ functions with no-name and can only be referred to by a
+\ execution token. ":noname" leaves an execution token on the
+\ stack and it must cooperate with ";" so ";" does not attempt
+\ to link something without a word header into the dictionary,
+\ it does that by making sure ":noname" is given a 0 instead
+\ of a word address which is treats specially and does not
+\ link that into the dictionary. It must also make sure to
+\ push the right constant to the stack as well. It is much
+\ simpler than ":" as it does not have to deal with adding
+\ new words into the dictionary.
+\
+\ Two new words which use "word" will also be defined, "char"
+\ and "\[char\]", they both do a similar thing in that they
+\ parse the next word in the input stream and extract the
+\ first character from it, the rest is discard. "char" pushes
+\ the value to the stack whilst "\[char\]" compiles a constant
+\ containing the character into the dictionary. "\[char\]" is
+\ immediate, and intended to be used from within a word
+\ definition.
+\ 
+\ This short word-set gives us the power to define new words,
+\ it took a fair amount to get us to this point, but this
+\ is another milestone in making a Forth interpreter.
+\
 
 :t word parse here dup >r 2dup ! 1+ swap cmove r> ;t ( c -- b )
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= if exit then space
- 2drop {last} lit @ .id ." redefined" cr ;s
-:s ?nul dup c@ if exit then -10 lit throw ;s
-:to char bl word ?nul count drop c@ ;t
+ 2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
+:s ?nul dup c@ if exit then -10 lit throw ;s ( b -- b )
+:to char bl word ?nul count drop c@ ;t ( "name", -- c )
 :to [char] postpone char =push lit , , ;t immediate
-:to ; BABE lit <> if -16 lit throw then =unnest lit ,
- postpone [ ?dup if
-   get-current ! exit then ;t immediate compile-only ( -- wid )
-:to : align here dup {last} lit ! ( "name", -- colon-sys )
-  last , bl word ?nul ?unique count + h lit ! align
-  BABE lit postpone ] ;t
-:to :noname here BABE lit ] ;t
+:to ; 
+  BABE lit <> if -16 lit throw then ( check compile safety )
+  =unnest lit ,                     ( compile exit )
+  postpone [                        ( back to command mode )
+  ?dup if                           ( link word in if non 0 )
+    get-current ! exit              ( this inks the word in )
+  then ;t immediate compile-only
+:to :   ( "name", -- colon-sys )
+  align                 ( must be aligned before hand )
+  here dup              ( push location for ";" )
+  {last} lit !          ( set last defined word )
+  last ,                ( point to previous word in header )
+  bl word ?nul ?unique  ( parse word and do basic checks )
+  count + h lit ! align ( skip over packed word and align )
+  BABE lit              ( push constant for compiler safety )
+  postpone ] ;t         ( turn compile mode on )
+:to :noname here #0 BABE lit ] ;t ( "name", -- xt )
 
 \ # Control Structures
+\
+\ No programming language is complete without control
+\ structures. Note that GOTO is missing, eForth also uses the
+\ odd, but simple to implement, mechanism for definite loops
+\ called "for...aft...then...next", which will need more
+\ explanation. The other control structures are standard Forth
+\ words. Also note that all the words defined here are
+\ "immediate" and "compile-only" words. They push variables
+\ to the variable stack during compilation, so the compiler
+\ security within ":" and ";" can also detect mismatched
+\ control structures.
+\
+\ Missing from this Forth are the looping mechanism "do...loop"
+\ and its variants. This is one of the main stumbling blocks
+\ for porting ANS Forth (one of the main Forth standards) code
+\ to eForth.
+\
+\ Forth does not have a fixed grammar, it starts off with a
+\ very simple one, but words can be added that do arbitrary
+\ parsing, it is possible to add words that implement
+\ arbitrary control structures as well, however the normal,
+\ less arbitrary ones will do first. It should be said that
+\ Forth is a very malleable language, however much less so
+\ than Lisp, which offers a far more structured approach.
+\ 
+\ The constructs we will make are:
+\
+\	begin...again
+\	begin...until
+\	begin...while...repeat
+\	if...then
+\	if...else...then
+\	for...next
+\	for...aft...then...next
+\
+\ "if...then" and "begin...until" are some of the simplest
+\ constructs, understanding these constructs really helps
+\ in understanding how more complex compilers work, at least
+\ for the code generation phase.
+\
+\ Both "if...then" and "begin...until" consist of a single
+\ jump. Let us start with an example of "if":
+\
+\	: example if 1 . cr then ;
+\
+\ Which will compile to something like this:
+\
+\	EXAMPLE:
+\		0: opJumpZ
+\		1: 6
+\		2: opPush
+\		3: 1
+\		4: address of "."
+\		5: address of "cr"
+\		6: opExit
+\
+\ The address written down the side are not realistic ones,
+\ just illustrative ones. The purpose of this function is to
+\ print out the number "1", followed by a new line, if, and 
+\ only if, the function is provided with a non-zero value.
+\
+\ The jump destination for "opJumpZ" is in the next cell,
+\ it jumps to the exit, as there is nothing after the "then".
+\ 
+\ The "if" word, an immediate word that executes even in a
+\ word definition, compiles the "opJumpZ" instruction into
+\ the dictionary, but how does it know the jump destination?
+\ We do not know where to jump to until the corresponding
+\ "then" statement is reached, so "if" cannot know, and it
+\ does not know. Instead it compiles a zero into the dictionary
+\ after the "opJumpZ" which will later be *patched* by "then".
+\ That means "then" needs to know the location that "if"
+\ wrote a zero into the dictionary, to facilitate that, "if"
+\ pushes the location to the stack, which "then" will consume.
+\ All "then" has to do is patch the location, no extra code
+\ is generated.
+\
+\ Thus, an "if" statement consists of one instruction, and
+\ two cells, an "opJumpZ" and a jump destination. "opJumpZ"
+\ is the exact instruction we need, it only jumps over the
+\ if clause if given a zero.
+\ 
+\ Note in the definition of "then" that jump destination is
+\ a cell address, not a byte address, in our example "6" is
+\ a cell address, the Forth address would be "12". Hence the
+\ division by 2.
+\
+\
+\ TODO: More!
+\
 
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
@@ -3549,6 +3769,42 @@ there 2/ primitive t!
 :to marker last here create cell negate allot compile
     (marker) , , ;t ( --, "name" )
 
+
+\ These target only words, defined with ":to", are both
+\ immediate and compile-only. They are defined here because
+\ the "compile" word needs defining first. They are all defined
+\ this way because they manipulate the call stack, it is
+\ possible to define a callable version of a word like "r>",
+\ but it will be less efficient as it has to deal with its
+\ own return value, there is also little value (negative even)
+\ of being able to call these words in command mode, if they
+\ are called in command mode the likely outcome is that the
+\ system will crash.
+\
+\ All of these words compile a jump to a machine instruction
+\ that does the appropriate action, which is the reason the
+\ word needs to be immediate.
+\
+\ Remember how Forth vocabularies behave and whether the target
+\ word is visible within its word definition. Recursion is not
+\ being done here, this has been mentioned multiple times,
+\ because it is important to understand and once it has, it
+\ just clicked, beforehand it looks like the code could not
+\ possibly work. I will be more explicit.
+\
+\	:to rp! compile rp! ;t immediate compile-only
+\           (1)         (2)
+\ 
+\	(1) : Newly defined header, not visible within the
+\	      body of the newly defined word.
+\	(2) : Points to the Forth Virtual Machine instruction,
+\	      which has the following definition;
+\	      ":a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a"
+\ 
+\ As we have discussed how each of these instructions work,
+\ we will not discuss what they do.
+\
+
 :to rp! compile rp! ;t immediate compile-only
 :to rp@ compile rp@ ;t immediate compile-only
 :to >r compile opToR ;t immediate compile-only
@@ -3564,14 +3820,154 @@ there 2/ primitive t!
 :to abort" compile (abort)
   [char] " word count + h lit ! align ;t immediate compile-only
 
+\ These words add comments to the Forth interpreter, and a
+\ word that prints out the contents of the comment. These are
+\ parsing words, they modifying the input stream in someway, 
+\ these just modify it to discard it. They do it in different
+\ ways. 
+\ 
+\ "(" and ".(" both look for a single ")" character in the
+\ input stream, which they use "parse" to do, feeding it a 
+\ ")" character to look for. "(" just drops the result of
+\ parse, and ".(" uses "type" to print it out. It will not
+\ work across lines, not in this Forth at least, in other
+\ Forth implementations it might do, making it work for
+\ multi-line comments would run its simplicity.
+\ 
+\ All of the comment words are immediate, so they can execute
+\ within a word, otherwise "(" and ".(" would get compiled in
+\ and the comment would as well (most likely it would cause
+\ an error instead). 
+\ 
+\ The word ")" does nothing, it is not even meant to be a
+\ "nop", or No-Operation, it is meant to be compiled out,
+\ this is because sometimes comments are used to comment out
+\ code that is added back in for quick testing, for example: 
+\ 
+\	: example ." HELLO " ( ." WORLD" ) ; 
+\ 
+\ If we want to enable "WORLD" to be printed out, we need
+\ to remove the "(":
+\ 
+\	: example ." HELLO " ." WORLD" ) ; 
+\ 
+\ It is annoying however to remove the ")", especially if we
+\ want to add the "(" back in after testing, but there is no
+\ need to remove the ")" even temporarily as it does nothing
+\ and is not compiled into the word "example". 
+\ 
+\ "\\" works differently, it is meant to discard all the
+\ input until the end of the line, and does this by 
+\ manipulating the "\>in" variable that the Forth interpreter
+\ uses to keep track of where it is parsing in the input line,
+\ by setting it to the end of the line, it means the rest of
+\ the line is skipped. One extra complication is comments in
+\ Forth blocks, a 1024 byte buffer broken into 16 lines of
+\ 64 bytes, this is solved by in the implementation of "load",
+\ which arranges for evaluation to occur on a line by line
+\ basis, meaning "\\" does not have to be aware of the block
+\ words.
+\ 
+\ A word not defined, but that you might find useful, is for
+\ conditional compilation similar to 
+\ "\[if\]...\[else\]...\[then\]" but much simpler to implement.
+\ That word is "?\\", it is a non-standard word, it can be
+\ defined as follows: 
+\ 
+\	: ?\ 0= if postpone \ then ; immediate 
+\ 
+\ Usage: 
+\ 
+\	0 ?\ .( ALPHA ) 
+\	1 ?\ .( BRAVO ) 
+\ 	( Only "BRAVO" is printed )
+\ 
+\  
 
 :to ( [char] ) parse 2drop ;t immediate
 :to .( [char] ) parse type ;t immediate
 :to ) ;t immediate
 :to \ tib @ >in ! ;t immediate
 
+\ "postpone" is a word that can be confusing, we have been
+\ introduced to the concept of command mode and compile mode,
+\ and know that in command mode numbers are pushed to the
+\ stack and words are executed, but in compile mode numbers
+\ and words are compiled into a word definitions body with
+\ the exception of immediate words, which are executed anyway.
+\
+\ However the word "postpone" seems to carve an exception to
+\ that exception, it takes the next work in the input stream
+\ and compiles that word into the dictionary regardless of
+\ whether it is an immediate or normal word. We have just
+\ seen an example of this, in the definition of a new form
+\ of conditional comment:
+\
+\	: ?\ 0= if postpone \ then ; immediate 
+\
+\ "postpone" is called and compiles and instance of an 
+\ immediate word, "\\", into the dictionary. The reason this
+\ can happen is two fold, only the Forth interpreter loop logic
+\ itself takes into account the "immediate" status of a word,
+\ which is done later on by the word "interpret", and
+\ secondly, "postpone" itself is an immediate word, it looks
+\ at the next word in the input stream, attempts to find that
+\ word, and if it finds it, compiles that word into the
+\ dictionary, it does not care about the immediate status of
+\ word because it never checks it.
+\
+\ "postpone" is used to compile words that are usually
+\ immediate into the dictionary, so that they can be executed
+\ within the word definition.
+\
+\ We can use "postpone" to create new control structures in
+\ a portable way across Forth implementations, for example.
+\ Our Forth version of "if" uses the instruction "opJumpZ",
+\ but other Forth implementations running on different 
+\ platforms might not have a similar instruction, so they could
+\ implement "if" differently. So we do not have to take that
+\ into account, if we want to use "if" we can call "postpone"
+\ on it. Now let us give a concrete example, lets imagine we
+\ want to make a control structure called "unless", it does
+\ the exact opposite of "if", it executes its clause only
+\ if given a zero. We can do this in the following way:
+\
+\ 	: unless compile 0= postpone if ; immediate
+\
+\ And it can be used with "then", just like "if":
+\
+\	: example unless ." HERE" then ;
+\	0 example
+\	( prints "HERE" )
+\	1 example
+\	( prints nothing )
+\
+\ In this example we do not need to know how "if" works on
+\ this platform, but we can reuse it to do what we want.
+\
+
 :to postpone bl word find ?found cfa compile, ;t immediate
 
+\ "immediate" is a word that makes the last defined word
+\ immediate, that is it will execute when in compile mode
+\ instead of being compiled, as we know. All it has to do is
+\ set a flag in the header for the last defined word to mark
+\ it as being immediate, that is why it "immediate" goes after
+\ the definition of a word, as it modifies the header of an
+\ already existing word.
+\
+\ "last" gets us a pointer to the last defined word, naturally,
+\ "nfa" moves us to the Name Field Address, which contains a
+\ counted string with a modification, the byte used to indicate
+\ the length of the Forth word is used for multiple purposes,
+\ as word names can only be 32 characters in length on this
+\ platform the upper bits of the count byte can be used for
+\ flags. Care must be taken to mask off the lower bits when
+\ word length is needed however. The 6th bit is used for
+\ the "immediate" bit. It is the word "interpret" that looks
+\ at this bit, "immediate" just needs to set it in the word
+\ to make "interpret" treat it at immediate.
+\
 :to immediate last nfa @ 40 lit or last nfa ! ;t
 
 \ # Some Programmer Utilities
@@ -3888,7 +4284,6 @@ there 2/ primitive t!
 \ DOS like operating system within this Forth system. The
 \ file system would also be quite portable, but limited.
 \
-\
 \ It is possible to use the block system to map arbitrary bits
 \ of memory to different things, for example, we could map
 \ blocks 0-63 to our main memory, and 64-127 to EEPROM, if we
@@ -3966,15 +4361,17 @@ there 2/ primitive t!
 \
 \ If we wanted to format block "47" for editing.
 \
-:t b/buf 400 lit ;t
+:t b/buf 400 lit ;t ( -- u )
 :t block #1 ?depth dup blk ! A lit lshift pause ;t ( k -- u )
 :t flush ( save-buffers empty-buffers ) ;t ( -- )
 :t update #-1 {dirty} lit ! ;t ( -- )
-:t blank bl fill ;t ( a u -- )
-:t list page cr dup scr ! block ( k -- )
-   F lit
-   for
-     F lit r@ - 3 lit u.r space 3F lit for count emit next cr
+:t blank bl fill ;t ( a u -- : blank an area of memory )
+:t list ( k -- : list a block )
+   page cr         ( clean the screen )
+   dup scr ! block ( update "scr" and load block )
+   F lit for       ( for each line in the block )
+     F lit r@ - 3 lit u.r space    ( print the line number )
+     3F lit for count emit next cr ( print line )
    next drop ;t
 
 \ # The Read-Eval-Loop
@@ -4539,21 +4936,21 @@ there 2/ primitive t!
 \
 
 :t editor {editor} lit #1 set-order ;t ( Tiny BLOCK editor )
-:e q only forth ;e ( -- )
-:e ? scr @ . ;e ( -- )
-:e l scr @ list ;e ( -- )
-:e e q scr @ load editor ;e ( -- )
+:e q only forth ;e ( -- : exit back to Forth interpreter )
+:e ? scr @ . ;e ( -- : print block number of current block )
+:e l scr @ list ;e ( -- : list current block )
+:e e q scr @ load editor ;e ( -- : evaluate current block )
 :e ia 2 lit ?depth 6 lit lshift + scr @ block + tib >in @ +
    swap source nip >in @ - cmove tib @ >in ! update l ;e
-:e i #0 swap ia ;e ( line -- )
-:e w words ;e ( -- )
-:e s update flush ;e ( -- )
-:e n  #1 scr +! l ;e ( -- )
-:e p #-1 scr +! l ;e ( -- )
-:e r scr ! l ;e ( k -- )
-:e x scr @ block b/buf blank l ;e
+:e i #0 swap ia ;e ( line --, "line" : insert line at )
+:e w words ;e ( -- : display block editor commands )
+:e s update flush ;e ( -- : save edited block )
+:e n  #1 scr +! l ;e ( -- : display next block )
+:e p #-1 scr +! l ;e ( -- : display previous block )
+:e r scr ! l ;e ( k -- : retrieve given block )
+:e x scr @ block b/buf blank l ;e ( -- : erase current block )
 :e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit
-   blank l ;e ( line -- )
+   blank l ;e ( line -- : delete line )
 
 \ # Last word defined
 \
@@ -4566,7 +4963,7 @@ there 2/ primitive t!
 \ be multiplied by two before hand.
 \
 
-:t cold {cold} lit 2* @ execute ;t
+:t cold {cold} lit 2* @ execute ;t ( -- )
 
 \ # Image Generation
 \
@@ -4595,7 +4992,8 @@ there 2/ primitive t!
 \ image we have produced in this file.
 \ 
 
-\ TODO: C code generation
+\ TODO: C code generation as an optional alternative
+\ TODO: Port fixes back to main version of image
 
 t' (cold) half {cold} t!      \ Set starting Forth word
 atlast {forth-wordlist} t!    \ Make wordlist work
