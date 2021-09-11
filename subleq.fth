@@ -14,8 +14,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	- Separate SUBLEQ assembler Tutorial
 \	- Other SUBLEQ projects and programs
 \	- Uses; learning, puzzles, games
-\	- Describe stack comments
-\	- CODE sections, Sokoban, floating point, file system,
+\	- CODE word-set; built in assembler
+\	- Sokoban, floating point, file system,
 \	allocate/free, ...
 \	- About the Author, Other projects, etcetera.
 \	- Possible optimizations; merge exit with last word
@@ -504,10 +504,10 @@ defined eforth [if]
 \ dictionary.
 \ 
 
-wordlist constant meta.1
-wordlist constant target.1
-wordlist constant assembler.1
-wordlist constant target.only.1
+wordlist constant meta.1        ( meta-compiler word set )
+wordlist constant target.1      ( target eForth word set )
+wordlist constant assembler.1   ( assembler word set )
+wordlist constant target.only.1 ( target only word set )
 
 \ New definitions will now go into the "meta.1" vocabulary.
 
@@ -664,8 +664,11 @@ defined eforth [if]
 :m save-target decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
 
-:m setlast tlast ! ;m
+\ "atlast" retrieves the last defined word, or a pointer to
+\ to it.
+
 :m atlast tlast @ ;m
+
 :m lallot >r tlocal @ r> + tlocal ! ;m
 :m tuser
   get-current >r meta.1 set-current create r>
@@ -679,8 +682,22 @@ defined eforth [if]
 :m tdown =cell negate and ;m
 :m tnfa =cell + ;m ( pwd -- nfa : move to name field address )
 :m tcfa tnfa dup c@ 1F and + =cell + tdown ;m ( pwd -- cfa )
+
+\ "compile-only" and "immediate" set flags in the last defined
+\ word, in a quest to make the meta-compiled Forth look like
+\ normal Forth code as much as possible, they may be part of
+\ the meta-compiler, however they do not need a different name
+\ from the versions that will be in the meta-compiled target
+\ image.
+\ 
+\ An effort is made to do with other parts of the 
+\ meta-compilation process like strings.
+\ 
+
 :m compile-only tlast @ tnfa t@ 20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ 40 or tlast @ tnfa t! ;m ( -- )
+
+
 :m half dup 1 and abort" unaligned" 2/ ;m
 :m double 2* ;m
 
