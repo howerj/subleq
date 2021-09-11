@@ -763,7 +763,7 @@ there 2/ primitive t!
   repeat drop over - ;t
 :t tib source drop ;t
 :t query tib =buf lit accept tup ! drop #0 >in ! ;t
-:s ?depth depth > if -4 lit throw then ;s
+:s ?depth depth >= if -4 lit throw then ;s
 :t -trailing for aft 
      bl over r@ + c@ < if r> 1+ exit then 
    then next #0 ;t
@@ -945,7 +945,7 @@ there 2/ primitive t!
 :to : align here dup {last} lit ! ( "name", -- colon-sys )
   last , bl word ?nul ?unique count + h lit ! align 
   BABE lit postpone ] ;t
-:to :noname here BABE lit ] ;t
+:to :noname here #0 BABE lit ] ;t
 :to begin align here ;t immediate compile-only
 :to until =jumpz lit , 2/ , ;t immediate compile-only
 :to again =jump  lit , 2/ , ;t immediate compile-only
@@ -1042,7 +1042,7 @@ there 2/ primitive t!
 :s ok state @ 0= if ."  ok" cr then ;s
 :s eval
    begin bl word dup c@ while
-     interpret #1 ?depth
+     interpret #0 ?depth
    repeat drop <ok> @ execute ;s ( "word" -- )
 :t evaluate ( a u -- )
   get-input 2>r 2>r >r
@@ -1054,9 +1054,9 @@ there 2/ primitive t!
 :s loadline line evaluate ;s
 :t load #0 F lit for 
    2dup 2>r loadline 2r> 1+ next 2drop ;t ( k -- )
-:r eforth 0106 lit ;r ( -- version )
+:r eforth 0108 lit ;r ( -- version )
 :s info cr
-  ." Project: eForth v1.7 " ( here . ) cr
+  ." Project: eForth v1.8 " ( here . ) cr
   ." Author:  Richard James Howe" cr
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
@@ -1080,23 +1080,22 @@ there 2/ primitive t!
   postpone [
   {up} lit ! ;s
 :s ini {up} lit @ task-init ;s ( -- )
-:s opts
+:t quit ( -- : interpreter loop )
+  ini
+  begin
+   query t' eval lit catch
+   ?dup if 
+     dup space . [char] ? emit cr #-1 = if bye then ini then
+  again ;t
+:s (cold)
+  only forth definitions
   {options} lit @ lsb if to' drop lit <echo> ! then
   {options} lit @ 4 lit and if info then
   {options} lit @ 2 lit and if
     primitive lit @ 2* dup here swap - cksum
     check lit @ <> if ." cksum fail" bye then
     {options} lit @ 2 lit xor {options} lit !
-  then ;s
-:t quit ( -- : interpreter loop, does more than most QUITs )
-  only forth definitions
-  ini
-  opts
-  begin
-   query t' eval lit catch
-   ?dup if 
-     dup space . [char] ? emit cr #-1 = if bye then ini then
-  again ;t
+  then quit ;s
 \ Cooperative Multitasking Routines, For more information, see
 \ <https://www.bradrodriguez.com/papers/mtasking.html>
 :s task: ( create a named task ) 
@@ -1136,11 +1135,11 @@ there 2/ primitive t!
 :e x scr @ block b/buf blank l ;e
 :e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit 
    blank l ;e
-:t cold {cold} lit @ execute ;t
+:t cold {cold} lit @ 2* execute ;t
 
 \ ------------------- Image Generation ------------------------
 
-t' quit half {cold} t!
+t' (cold) half {cold} t!
 atlast {forth-wordlist} t!
 {forth-wordlist} {current} t!
 there h t!
