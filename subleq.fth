@@ -8,9 +8,13 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ * Repo:    <https://github.com/howerj/subleq>
 \
 \ TODO Section
+\	- Add assembled version of image to appendix
 \	- Publish on Amazon (also make front cover, via Fiverr)
 \	- Do all the TODOs
 \	- Separate Forth Tutorial
+\	- History of eForth
+\	- Literate programming, Donald Knuths needs vs normal
+\	programming.
 \	- Separate SUBLEQ assembler Tutorial
 \	- Other SUBLEQ projects and programs
 \	- Uses; learning, puzzles, games
@@ -122,7 +126,10 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ The source code is meant to be written in a "literate
 \ programming" style, although semi-literate might be more
 \ appropriate as it does not fully implement everything from
-\ the paradigm.
+\ the paradigm. The literate programming paradigm, introduced
+\ and advocated for by Donald Knuth, is a great solution for
+\ programmers writing textbooks, such as myself, but is not
+\ a good general purpose idea. 
 \
 \ The "subleq.fth" file is formatted so it is at maximum 64
 \ characters wide, and uses fairly conventional and regular
@@ -693,13 +700,25 @@ defined eforth [if]
 \ An effort is made to do with other parts of the 
 \ meta-compilation process like strings.
 \ 
+\ The format of the header will be described shortly, we will
+\ have to make new headers for words ourselves in the new
+\ Forth interpreter, the format will then be re-described later 
+\ when making the words that create functions in the target
+\ image such as ":" and "create".
+\ 
 
 :m compile-only tlast @ tnfa t@ 20 or tlast @ tnfa t! ;m ( -- )
 :m immediate    tlast @ tnfa t@ 40 or tlast @ tnfa t! ;m ( -- )
 
+\ "half" and "double" are just synonyms for "2/" and "2\*", it
+\ is much easier to know you are calling the correct version of
+\ the words when they have different names. We will need to
+\ convert from Forth to VM addresses with these two when 
+\ setting various execution tokens.
+\
 
-:m half dup 1 and abort" unaligned" 2/ ;m
-:m double 2* ;m
+:m half dup 1 and abort" unaligned" 2/ ;m ( a -- a )
+:m double 2* ;m ( a -- a )
 
 defined eforth [if]
 :m (') bl word find ?found cfa ;m
@@ -717,15 +736,118 @@ defined eforth [if]
 :m mkck dup there swap - tcksum ;m
 :m postpone
    target.only.1 +order t' target.only.1 -order 2/ t, ;m
+
+
+\ The dictionary in Forth is a list of all of the "words", or
+\ functions, available to the system, the "words" each have a
+\ header, and the dictionary and headers looks like this:
+\
+\	+--------------------+
+\	| Vocabulary Pointer |
+\	+--------------------+
+\	    |
+\	   \|/
+\	    .
+\	+------+----+-----------+--------...
+\	| Prev | CB | Word Name | Code...
+\	+------+----+-----------+--------...
+\	    |
+\	   \|/
+\	    .
+\	+------+----+-----------+--------...
+\	| Prev | CB | Word Name | Code...
+\	+------+----+-----------+--------...
+\	    |
+\	   \|/
+\	    .
+\	+-------+
+\	| NULL  |
+\	+-------+
+\
+\	Prev: Pointer to previous word in linked list
+\	CB:   Part of the Name Field Address along with
+\	      the first byte of "Word Name", it contains
+\	      word header flags, as well as the length of
+\	      "Word Name", which is a variable length string.
+\	Word Name: The name of the Forth word, it is a variable
+\	      length string. The length of which is stored in
+\	      the lowest five bits of Cb.
+\	Code...: A variable length series cells that form the
+\	      code portion of the Forth word, usually ending
+\	      in an exit/return instruction.
+\	NULL: The end of the linked list.
+\	Vocabulary Pointer: The handle used to identify the
+\	      vocabulary, a pointer to the start of the linked
+\	      list of words.
+\
+\ The word "thead" makes a header for a word in the target, it
+\ writes a pointer to the previously defined word making a link
+\ in the dictionary linked list, parses the next word in the
+\ input stream, and copies that name into the target dictionary
+\ with "tpack", making sure to align things for code generation
+\ stage. "thead" is not called directly, but is called by
+\ "header", which saves and restores the "\>in" variable, this
+\ is done so that the name we just parsed from the input stream
+\ is parsed *again* as we want to be able to create a word in
+\ "target.1" that when referred to compiles a pointer to the
+\ word header we just made. That is, we want to create *two*
+\ words, one in the target image and one in the cross compilers
+\ dictionary that we can use for compilation. If this seems
+\ confusing, that is probably because it is.
+\
+\ The word ":ht" is used to create a word in the cross
+\ compiler that when called compiles a pointer to the Code
+\ Field Address (the code) of a word. It is reliant on "header"
+\ resetting the input stream as mentioned. It can also be used
+\ to create a word in the target with no header, if used by
+\ itself without calling "header", this is done to save space
+\ in the target.
+\
+\ ":t" is used to create a normal word definition in the 
+\ target, that is one with a header in the target image, it
+\ just calls "header" and then ":ht".
+\
+\ ";t", used to terminate a word definition, is defined much
+\ later, we will need to compile a "return" or an "exit" into
+\ the word, however that requires us making one, which will
+\ be done in the Forth Virtual Machine.
+\
+
 :m thead talign there tlast @ t, tlast !
-   parse-word talign tpack talign ;m
-:m header >in @ thead >in ! ;m
+   parse-word talign tpack talign ;m ( --, "name" )
+:m header >in @ thead >in ! ;m ( --, "name" )
 :m :ht ( "name" -- : forth routine, no header )
   get-current >r target.1 set-current create
   r> set-current BABE talign there ,
   does> @ 2/ t, ;m
-\ TODO: Describe heard
+
 :m :t header :ht ;m ( "name" -- : forth routine )
+
+\ ":to" is similar to ":t", it makes a header in the target,
+\ but instead of putting word definitions in the cross compiler
+\ into "target.1" it puts them into "target.only.1", so they
+\ can be accessed if needed, but only with special effort. This
+\ is used because sometimes, especially when making 
+\ meta-compiler words, we will need to do some computation or
+\ stack manipulation and we do not want to call the target
+\ version of, say "dup", or "2/", but the normal Forth version
+\ to actually perform a duplication or division *now* on an
+\ actual stack item.
+\
+\ ":a" is similar to ":to", except it puts things into the
+\ assembler vocabulary which we will be using first. ";a" is
+\ defined later on, but instead of compiling a return it will
+\ compile a jump to the Forth Virtual Machine we will be making
+\ in assembly.
+\
+\ Notice the compiler security, ":a", for example, pushes the
+\ hexadecimal value "D00D" and "(a);" (which ";a" will call)
+\ throws an exception if that value is not on the stack when
+\ it is called. This catches quite a few errors, using the
+\ wrong word definitions from the wrong vocabulary, not
+\ compiling literals correctly, etc.
+\
+
 :m :to ( "name" -- : forth, target only routine )
   header
   get-current >r
@@ -739,27 +861,175 @@ defined eforth [if]
 :m (a); D00D <>
    if abort" unstructured" then assembler.1 -order ;m
 
+\ We no longer need the system vocabulary, if we are running
+\ the cross-compiler on the eForth image (we never did if
+\ running on gforth), so to keep things clean we will remove
+\ it from the search order.
+
 defined eforth [if] system -order [then]
 
 \ # Forth Virtual Machine
+\
+\ This section contains the Forth Virtual Machine; a tiny
+\ VM that does the bare minimum surround by about forty or
+\ so instructions which when implemented can be used to make
+\ porting relatively trivial.
+\
+\ Implementing and debugging the Forth VM was the hardest task
+\ of porting this Forth to the SUBLEQ platform, usually it is
+\ not that that difficult, and a Forth can be ported quite
+\ rapidly by a skilled programmer familiar with the language,
+\ perhaps in a week or two, with a few more for bugs, given
+\ that they are familiar with the target. However with only
+\ a single instruction it is incredibly difficult to perform
+\ even the most basic tasks you expect from a CPU. Once the
+\ VM was finished (it was more of an iterative process between
+\ implementing the Forth VM and the Forth Code) porting the
+\ Forth interpreter itself was relatively trivial as this
+\ eForth is written mostly in Forth.
+\ 
+\ The memory layout of the Forth Virtual Machine is as follows: 
+\ 
+\	0: Zero Register.
+\ 	1: Zero Register.
+\ 	2: Jump to Forth Virtual Machine Start.
+\	3: Options variable.
+\       3 to W-1: System variables.
+\	...	
+\	W: label start; The Forth VM entry point.
+\	X: label vm; The Forth VM.
+\	Y: Forth VM instruction implementation.
+\	Z: Forth Code that uses Forth VM instructions.	
+\	
+\ Cells 0, 1, and 2 also form the first SUBLEQ instruction,
+\ and the first two cells must be zero, as mentioned 
+\ previously in the SUBLEQ introduction section, the first
+\ location forms the "Z" register.
+\
+\ The options variable is designed to be modified, by hand
+\ if needed, to create custom images. It contains behavior 
+\ related to things that might change in the hardware or the
+\ system it is running on, like for example whether it should
+\ echo terminal output or not. The defaults should be fine if
+\ the SUBLEQ machine is the example C program running under a
+\ normal operating system.
+\
+\ Now to define a few macros that will allow us to perform
+\ addition, loads, stores, indirect loads and stores, moves,
+\ some input and output, and a few other things.
+\
+\ The following words could also go into the target assembler,
+\ which is usually part of a vocabulary called "assembler",
+\ and can be activated to create words written in assembler
+\ with the words "CODE" and "END-CODE", those will not be
+\ defined in this eForth, there would also need to be a 
+\ mechanism to call Forth words written in assembler as well.
+\
+\ Onto the words themselves, they all write instructions into
+\ the target image with "t,".
+\
+\ "Z" is the first word defined. It writes a zero into a cell,
+\ it is meant to be used as a register location that starts
+\ off as zero, as mentioned, and should end backup as zero
+\ by the and of the instruction. It is not an instruction, but
+\ is used to build one. The same with "NADDR", which compiles
+\ the next memory location into the current cell.
+\
+\ "HALT" is our first instruction, "0 0 -1" will always halt
+\ the machine. This will be used to implement the Forth word
+\ "bye", but it is useful for debugging the lower levels when
+\ the Forth VM had to be built.
+\
+\ "JMP" accepts a Forth Address, converts it to a Cell Address,
+\ and when run, it will unconditionally jump to that location.
+\
+\ "ADD" is more complex than "SUB", they both have the same
+\ form:
+\
+\	source destination instruction
+\
+\ Where both "source" and "destination" are Forth byte 
+\ addresses (which should always be aligned), for "SUB" the
+\ "source" will subtracted from the "destination" and then
+\ stored in the "destination". For "ADD", it will be added.
+\
+\ "NOOP" is the "no-operation" instruction, because we need
+\ to write self-modifying code it is sometimes useful to write
+\ no-op that will get modified later, which can be seen in
+\ "iJMP".
+\
+\ "ZERO" zeros a memory location by subtracting that location
+\ from itself, it then jumps to the next memory location in
+\ case its test passes, if it fails, it will advance to the
+\ next location anyway.
+\
+\ "GET" and "PUT" are built into the SUBLEQ machine, and are
+\ simple to implement, just put the "-1" in the correct place.
+\ They both accept a memory location to get data from or write
+\ to.
+\
+\ "MOV" copies the location of a cell to another one, it
+\ requires for individual SUBLEQ instructions to implement.
+\ "a b MOV" would copy "a" to "b", first "b" is zeroed, then
+\ "a" is negated and stored in "Z", then "Z" which now contains
+\ the negated "a" is subtracted from "b", moving the contents
+\ stored a "a" to "b". Finally "Z" is returned to its original
+\ state by subtracting "Z" from itself, so it now contains
+\ zero as it should. Four instructions.
+\
+\ "iLOAD" does an indirect load, "a b iLOAD" would use "b"
+\ as an address to do an indirect load through and store the
+\ result in "a". It does this by using the "MOV" instruction
+\ to modify a second "MOV" instruction to point to a different
+\ location. Notice how the number of SUBLEQ multiplies quite
+\ quickly to achieve anything, two moves is eight instructions,
+\ "iSTORE" is even worse at four "MOV" instructions.
+\
+\ "iJMP" is simpler than "iLOAD", it just has to modify a
+\ "NOOP" instruction to point to a different location, changing
+\ the final cell in the "NOOP", turning it in effect into a
+\ unconditional jump.
+\
+\ "iSTORE" is the most complex of all of these single 
+\ instruction macros, as mentioned, it contains four "MOV"
+\ instructions, each containing four SUBLEQ instructions, 
+\ meaning twelve SUBLEQ instructions, or thirty six cells just
+\ to perform an indirect store. It requires three "MOV"
+\ instructions in order to modify a three instructions in a
+\ final "MOV", leaving the last instruction of the modified
+\ "MOV" the same, to zero out the "Z" register.
+\
+\ There is actually remarkably few instructions in the base.
+\
+\ TODO: More description, specifically of iSTORE and iLOAD
 
-:m Z 0 t, ;m \ Address 0 must contain 0
-:m NADDR there 2/ 1+ t, ;m
-:m HALT 0 t, 0 t, -1 t, ;m
-:m JMP 2/ Z Z t, ;m
+:m Z 0 t, ;m ( -- : Address 0 must contain 0 )
+:m NADDR there 2/ 1+ t, ;m ( --, jump to next cell )
+:m HALT 0 t, 0 t, -1 t, ;m ( --, Halt but do not catch fire )
+:m JMP 2/ Z Z t, ;m ( a --, Jump to location )
 :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
-:m SUB swap 2/ t, 2/ t, NADDR ;m
-:m NOOP Z Z NADDR ;m
-:m ZERO dup 2/ t, 2/ t, NADDR ;m
-:m PUT 2/ t, -1 t, NADDR ;m
-:m GET 2/ -1 t, t, NADDR ;m
+:m SUB swap 2/ t, 2/ t, NADDR ;m ( a a -- : subtract )
+:m NOOP Z Z NADDR ;m ( -- : No operation )
+:m ZERO dup 2/ t, 2/ t, NADDR ;m ( a -- : zero a location )
+:m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
+:m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
-:m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
-:m iJMP there 2/ E + 2* MOV NOOP ;m
-:m iSTORE ( addr w -- )
+:m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( a a -- )
+:m iJMP there 2/ E + 2* MOV NOOP ;m ( a -- )
+:m iSTORE ( a a -- )
    swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV
    r> 0 MOV ;m
+
+\ To simplify program flow the normal control structures
+\ will be defined, they work a little differently than the
+\ Forth ones, as they must be given an address instead of
+\ taking items off of the stack, however they make everything
+\ a lot easier to do and provide us with the basics from the
+\ structured programming paradigm.
+\
+\ TODO: More description
+\
 
 assembler.1 +order definitions
 : begin talign there ;
@@ -3650,6 +3920,8 @@ there 2/ primitive t!
 \ solving the more complex problem to allow for a more generic
 \ system.
 \
+\ TODO: More description
+\
 
 :t >number ( ud b u -- ud b u : convert string to number )
   begin
@@ -3666,6 +3938,7 @@ there 2/ primitive t!
     +string dup 0=                   ( advance, test for end )
   until ;t
 
+\ "number?" 
 :t number? ( a u -- d -1 | a u 0 : easier to use than >number )
   #-1 dpl !
   base @ >r
@@ -3847,19 +4120,164 @@ there 2/ primitive t!
 :t find ( a -- pwd 1 | pwd -1 | a 0 : find word in dictionary )
   (find) rot drop ;t
 
-\ # The Interpreter Loop
+\ # The Interpreter
 
-\ TODO: Explain how literal can be used to replace "lit"
-
+\ The main word defined in this section is called "interpret",
+\ when given a counted string it will attempt to execute that
+\ string, and throw an error if it cannot. It must deal with
+\ compile only words (not shown the diagram below), immediate
+\ words, numbers, and compile and command mode.
+\
+\ 
+\
+\	   .--------------------------.    .--------------.
+\	.->| Get Next Word From Input |<---| Error: Throw |
+\	|  .--------------------------.    .--------------.
+\	|    |                                           ^
+\	|   \|/                                          | (No)
+\	|    .                                           |
+\	^ .-----------------.(Not Found) .--------------------.
+\	| | Search For Word |----------->| Is token a number? |
+\	| .-----------------.            .--------------------.
+\	|    |                                       |
+\	^   \|/ (Found)                             \|/ (Yes)
+\	|    .                                       .
+\	|  .-------------------------.  .---------------------.
+\	|  | Are we in command mode? |  |  In command mode?   |
+\	^  .-------------------------.  .---------------------.
+\	|    |               |            |                 |
+\	|   \|/ (Yes)        | (No)      \|/ (Yes)     (No) |
+\	|    .               |            .                 |
+\	|  .--------------.  |   .------------------------. |
+\	.--| Execute Word |  |   | Push Number onto Stack | |
+\	|  .--------------.  |   .------------------------. |
+\	|    ^              \|/                |            |
+\	^    |               .                 |           \|/
+\	|    | (Yes)   .--------------------.  |            .
+\	|    ----------| Is word immediate? |  | .------------.
+\	|              .--------------------.  | | Compile num|
+\	^                        |             | | into next  |
+\	|                       \|/ (No)       | | location in|
+\	|                        .             | | dictionary |
+\	|  .--------------------------------.  | .------------.
+\	|  |    Compile Pointer to word     |  |            |
+\	.--| in next available location in  |  |            |
+\	|  |         the dictionary         | \|/          \|/
+\	|  .--------------------------------.  .            .
+\	|                                      |            |
+\	.----<-------<-------<-------<-------<------<------<.
+\
+\ Whilst the diagram shows the overall flow of "interpret", it
+\ leaves out a few things, the "compile-only" words is one as
+\ mentioned, another is double cell words which are a less
+\ known feature of Forth.
+\
+\ On to the words themselves.
+\
+\ "(literal)" is to determine whether we should compile a
+\ number or push it on to the stack given the state, we do not
+\ need to make a version of double cell numbers as we can just
+\ call it twice. It is the word that will go into the execution
+\ vector, in "literal", which is what "interpret" actually 
+\ uses. "literal" is an immediate word, as it is often used
+\ within word definitions to compile a number computed within
+\ that word definition, like this:
+\
+\	: example [ 2 2 + ] literal . cr ;
+\
+\ Which is equivalent to:
+\
+\	: example 2 2 + . cr ;
+\
+\ Except that the computation of adding two numbers together is 
+\ done in the first during compilation and not during runtime,
+\ making the first more efficient and smaller.
+\
+\ The reason that "literal" is vectored is so that when writing
+\ meta-compilers it is useful to be able to replace the systems
+\ version of "literal" with one that writes into the target
+\ image instead of one that pushes a number onto the stack or
+\ compiles in a non-meta-compiled word definition.
+\
+\ We can see that it is annoying in this meta-compiled program
+\ to always have to type "lit" to compile a number into a
+\ definition defined in the target eForth image. We could
+\ replace the systems version of "literal" in ":t" and restore
+\ it in ";t". However, gforth does not have a mechanism for 
+\ this, and to be portable between our SUBLEQ eForth and gforth
+\ we have to use the "lit" mechanism, which is unfortunate but
+\ not world ending.
+\
 :s (literal) state @ if =push lit , , then ;s
 :t literal <literal> @ execute ;t immediate ( u -- )
+
+\ "compile," is a version of "," which can turn an execution
+\ vector into something that will perform a call when compiled
+\ into the word. One some platforms execution vectors and calls
+\ might have the same numeric format, however on this one they
+\ do not, there is a relationship that can be computed (and
+\ reversed) but you cannot directly call an execution vector,
+\ it must be converted first before it can be compiled into the
+\ words body.
+\
 :t compile, 2/ align , ;t  ( xt -- )
-:s ?found if exit then
-   space count type [char] ? emit cr -D lit throw ;s ( u f -- )
 
-\ TODO: Make fancy diagram describing evaluation, and describe
-\ how the interpreter could be extended with hooks.
+\ "?found" is called at the end of "interpret" if a word has
+\ not be found in the dictionary or is not a number, it prints
+\ the string that could not be found in the dictionary and then
+\ throws an error. The function either returns the given string
+\ or it throws an error.
+\
 
+:s ?found if exit then ( b f -- b | ??? )
+   space count type [char] ? emit cr -D lit throw ;s 
+
+\ The "interpret" diagram above describes the word, mostly, it
+\ would be best to lay out the description in listed form as
+\ well.
+\
+\ 1. Interpret is called for a word, given as a found string.
+\ 2. Interpret attempt to find the string in the dictionary,
+\    if it is found it must be a word, "find" returns a pointer
+\    to the found word. We must then ask, what is the
+\    interpreter state? If we are in...
+\    a) Command Mode - We find out if the word is 
+\       "compile-only", if it is then we throw an error,
+\       otherwise we execute the word and then exit "interpret"
+\    b) Compile Mode - If the found word is an immediate word
+\       we execute it anyway, otherwise we compile a reference
+\       to it into the dictionary.
+\ 3. If we could not find the word, we attempt to parse it as
+\    a number, if it is a number and we are in...
+\    a) Command Mode - We push the number to the stack and
+\       exit interpret.
+\    b) Compile Mode - We compile the number into the 
+\       dictionary.
+\    For numbers there are two types, single or double cell
+\    numbers, we can tell if a double cell number has been
+\    parsed as "dpl" is set to a non-negative (inclusive of 
+\    zero) if a period, indicating a double cell number, is
+\    present in the input. We either compile or push either
+\    the double or single cell number depending on the 
+\    interpreter state as mentioned.
+\ 4. If it is not a number, or a word, then we throw an error.
+\
+\ The order of that search matters, as it means that we could
+\ define new words that are also numbers, but they would be
+\ treated as words and not numbers, for example:
+\
+\	: 1 2 ;
+\	1 ( pushes '2' )
+\
+\ Is valid, if useless and confusing, Forth code. If numbers
+\ were dealt with first then it would still push "1".
+\
+\ We could make it so that "interpret" executes an execution
+\ vector, or it executes one if neither a number or a word is
+\ found. Either vector would make the interpreter more 
+\ flexible, but neither is done, flexibility is not always a
+\ good thing.
+\
 :t interpret ( b -- )
   find ?dup if
     state @
@@ -3879,15 +4297,118 @@ there 2/ primitive t!
     else        \ <- dpl is not -1, it is a double cell number
        state @ if swap then
        postpone literal \ literal executed twice if # is double
-    then
+    then \ NB. "literal" is state aware
     postpone literal exit
   then
   \ NB. Could vector ?found here, to handle arbitrary words
   r> #0 ?found ;t
-:s .id ( pwd -- : print word )
-  nfa count 1F lit and type space ;s
 
 \ # The Root Vocabulary
+\
+\ The root vocabulary contains the minimal set of Forth words
+\ needed to get the dictionary back into a normal state. A
+\ Forth interpreter can contain hundreds of words, and have
+\ several vocabularies, the root vocabulary is not only a
+\ minimal one, but contains words for manipulating the
+\ vocabularies themselves. Most of the words placed in this
+\ section will be defined with ":r" to place them in the
+\ root vocabulary.
+\
+\ The minimal word-set is:
+\
+\ * "set-order"
+\ * "forth-wordlist"
+\ * "system"
+\ * "forth"
+\ * "only"
+\ * "words"
+\ * "eforth" (defined much later)
+\
+\ The other words are needed, but not in the root word-set:
+\
+\ * "get-order"
+\ * ".id"
+\ * "definitions"
+\
+\ So long as we keep the root word-set in the list of 
+\ vocabularies that are active at any one time, we can always
+\ type "only forth definitions" to get the word list into
+\ a good, known, order.
+\
+\ Forth implementations sometimes only have one vocabulary,
+\ especially the more amateur implementations. Vocabularies
+\ are useful (especially for meta-compilation) but are not
+\ necessary, so they are often viewed as unneeded.
+\
+\ When a Forth implementation does have vocabulary, it usually
+\ has the following ones:
+\
+\ * "root", for the minimal set of Forth words.
+\ * "forth", containing the standard Forth words.
+\ * "assembler", containing words for the systems assembler.
+\ * "editor", which has words for the block editor.
+\
+\ This eForth also has the "system" word-set, a lot of Forth
+\ implementations dump all of the words defined for internal
+\ use, which are non-standard, into the main Forth vocabulary,
+\ which clutters the system and means that word names might
+\ clash. One of the supposed advantages of the cluttered
+\ approach is the logic that if those words are useful for
+\ the implementation then they will most likely be useful for
+\ the user of the implementation, so they should not be hidden
+\ away.
+\
+\ The "assembler" word-set is one that is not implemented in
+\ this Forth, it contains a set of system specific words
+\ for making Forth definitions in assembly for that platform.
+\ We have had to create an assembler in the meta-compiler, but
+\ the assembler has not been made to be part of the base
+\ image. Making assemblers for new platforms is actually one
+\ of the areas Forth excels in, along with poking and playing
+\ around with the underlying hardware.
+\
+\ If we wanted to, we could make an assembler with target
+\ definitions of assembler words like "iJMP", "HALT", "LOAD",
+\ and the like, along with the assembler versions of the
+\ control structures.
+\
+\ We do implement an editor, for editing Forth blocks, in a
+\ section towards the end of this book.
+\
+\ Now for the words themselves.
+\
+\ "get-order" and "set-order" do as their names suggests,
+\ they retrieve and set the search order, or the vocabularies.
+\ As the search order is an array containing up to eight items
+\ (and could be higher on other Forth systems) the words
+\ retrieve and accept a variable number of items on the stack,
+\ along with a count of those items. Cells in the search order
+\ with a zero value are treated as unused, so will not be 
+\ pushed onto the stack. "set-order" accepts a special value
+\ for the number of items on the stack, if it is -1 then
+\ "set-order" becomes the equivalent of the Forth word
+\ "only", in that only the root vocabulary will be set.
+\
+\ Some example uses of "set-order":
+\
+\	-1 set-order
+\	root-voc forth-wordlist 2 set-order
+\
+\ Note that "set-order" will not check whether or not you
+\ have specified multiple vocabularies that happen to be
+\ the same, so:
+\
+\	root-voc root-voc 2 set-order
+\
+\ Will add two copies of the root vocabulary into the search
+\ order, which has negative utility. "words" will show two
+\ copies of each word. There is no reason to do this, but
+\ the situation is not checked for, which is why "+order"
+\ and "-order" tend to be more useful, these are only defined
+\ as part of the meta-compiler as they are non-standard words,
+\ and putting them in the "system" vocabulary would defeat the
+\ point, as you could not use them to access them.
+\
 
 :t get-order ( -- widn...wid1 n : get current search order )
   context
@@ -3903,16 +4424,80 @@ there 2/ primitive t!
   dup #-1 = if drop root-voc #1 set-order exit then
   dup #vocs > if -49 lit throw then
   context swap for aft tuck ! cell+ then next #0 swap ! ;r
+
+\ "forth-wordlist" contains the standard Forth words,
+\ excluding the root Forth words, as mentioned, and "system"
+\ contains non-standard Forth words used in the implementation.
+\
+
 :r forth-wordlist {forth-wordlist} lit ;r ( -- wid )
 :r system {system} lit ;r ( -- wid )
+
+\ "forth" sets the search order to only include the root
+\ and Forth vocabularies.
+\
+
 :r forth root-voc forth-wordlist 2 lit set-order ;r ( -- )
-:r only #-1 set-order ;r                            ( -- )
+
+\ This version of "only" is implemented as "-1 set-order",
+\ but it could be implemented other ways, such as
+\ "root-voc 1 set-order", or by directly modifying the
+\ search order array.
+\
+\ Typical usage as is mentioned:
+\
+\	only forth definitions
+\
+\ It is possible to call just "forth", instead of "only".
+\
+
+:r only #-1 set-order ;r ( -- : set minimal search order )
+
+\ ".id", an internal word, is used to print out the word header
+\ in a word definition. We cannot just use "count type" as we
+\ need to mask off special word behavior bits stored in the
+\ length byte. We usually only want to search for words, and
+\ thus have the string we want with no need to print it out,
+\ but for error handling and implementing the word "words", we
+\ will need to print out this field.
+\
+
+:s .id ( pwd -- : print word )
+  nfa count 1F lit and type space ;s
+
+\ "words" loops through all of the vocabularies in the search
+\ order, and then goes down the linked list in each of those
+\ vocabularies, and prints out the words in those vocabularies.
+\
+\ The topmost bit in the length field is used as a "hidden"
+\ flag, so if set we do not show the word.
+\
+\ The word is just one loop within the other, it uses
+\ "get-order" to retrieve each of the vocabularies and the
+\ number of them instead of examining the "context" array
+\ itself.
+\
+
 :r words
   cr get-order begin ?dup while swap ( dup u. ." : " ) @
   begin ?dup
   while dup nfa c@ 80 lit and 0= if dup .id then @
   repeat ( cr )
   1- repeat ;r
+
+\ "definitions" make the first vocabulary in the search order
+\ the one in which we add newly defined words to. It is 
+\ possible to add definitions into a vocabulary that is not
+\ even on the search order by using "definitions" then removing
+\ that vocabulary from the search order.
+\
+\ We might want to modify the search order without changing
+\ which vocabulary we add definitions to, which is why this
+\ word and mechanism is provided.
+\
+\ This also explains the usage of "definitions" in the phrase
+\ "only forth definitions".
+\
 :t definitions context @ set-current ;t
 
 \ # Defining new words
@@ -4121,8 +4706,28 @@ there 2/ primitive t!
 \ a cell address, the Forth address would be "12". Hence the
 \ division by 2.
 \
+\ Given the information about how "if...then" work, you can
+\ then work out how the other, simple, constructs work, such
+\ as "begin...until", and "begin...again", both of which have
+\ an easier job than "if...then" as no patching of placeholders
+\ is needed.
 \
-\ TODO: More!
+\ What is interesting is how "postpone" is used, and how new
+\ words like "while" and "repeat" interact with the previously
+\ defined words. "for...aft...then...next" will also need
+\ explanation as it uses "opNext", which needs describing.
+\
+\ One common way in Forth to create new control structures,
+\ which are all immediate words, is to call "postpone" on the
+\ ones that already exist, these are often mixed with other
+\ words that manipulate the locations those words push onto the
+\ variable stack, or compile other words into their target. 
+\ This is a semi-portable method of doing this, as the Forth
+\ implementations do not have to leave the same number of items
+\ on the stack, nor do they have to have exactly the same
+\ meaning.
+\
+\ TODO: More explanation
 \
 
 :to begin align here ;t immediate compile-only
@@ -4433,63 +5038,6 @@ there 2/ primitive t!
   begin dup @ =unnest lit <>
   while dup @ . cell+ here over < if drop exit then
   repeat @ u. ;t
-
-\ === Experimental version of "see" ===
-\
-\    :s ndrop for aft drop then next ;s
-\    :t within over - >r - r> u< ;t ( u lo hi -- t )
-\    :s validate ( pwd cfa -- nfa | 0 )
-\       over cfa <> if drop #0 exit then nfa ;s 
-\    
-\    :s cfa? ( wid cfa -- nfa | 0 : search for CFA in a word list )
-\      cells >r
-\      begin
-\        dup
-\      while
-\        dup @ over r@ -rot within
-\        if dup @ r@ validate ?dup if rdrop nip exit then then
-\        @
-\      repeat rdrop ;s
-\    
-\    :s name ( cwf -- a | 0 : search for CFA in dictionary )
-\      >r
-\      get-order
-\      begin
-\        dup
-\      while
-\        swap r@ cfa? ?dup if 
-\          >r 1- ndrop r> rdrop exit then
-\      1- repeat rdrop ;s
-\    
-\    :s decompile ( a u -- a )
-\      dup =jumpz lit = if drop ."  jumpz " cell+ dup @ . exit then
-\      dup =jump  lit = if drop ."  jump  " cell+ dup @ . exit then
-\      dup =push  lit = if drop ."  push  " cell+ dup @ . exit then
-\      dup =next  lit = if drop ."  next  " cell+ dup @ . exit then
-\      dup =up    lit = if drop ."  up    " cell+ dup @ . exit then
-\      dup to' .$ half lit = if drop ."  ." [char] " emit space
-\        cell+ count 2dup type [char] " emit + aligned
-\      exit then
-\      dup to' ($) half lit = if drop ."  $" [char] " emit space
-\        cell+ count 2dup type [char] " emit + aligned
-\      exit then
-\      primitive lit @ over > if ."  VM    " else 
-\        dup name ?dup if space count 1F lit and type drop exit then
-\      then
-\      . ;s
-\    
-\    \ TODO: immediate/compile-only flags, better stop conditions
-\    \ with (find).
-\    
-\    :s compile-only? nfa 20 lit swap @ and 0<> ;s
-\    :s immediate? nfa 40 lit swap @ and 0<> ;s
-\    
-\    :to see bl word dup ." : " count type cr find ?found dup >r cfa
-\      begin dup @ =unnest lit <>
-\      while dup @ decompile cr cell+ here over < if drop exit then
-\      repeat drop ."  ;" 
-\      r> dup immediate? if ."  immediate" then
-\      compile-only? if ."  compile-only" then cr ;t
 
 
 \ "dump" is another utility, it dumps out a section of memory
@@ -5480,7 +6028,6 @@ there 2/ primitive t!
 \ 
 
 \ TODO: C code generation as an optional alternative
-\ TODO: Port fixes back to main version of image
 
 t' (cold) half {cold} t!      \ Set starting Forth word
 atlast {forth-wordlist} t!    \ Make wordlist work
@@ -5492,10 +6039,12 @@ save-target                   \ Output target
 .end                          \ Get back to normal Forth
 bye                           \ Auf Wiedersehen
 
+As we have called "bye", we can write what we want here without
+it being run.
+
+
 \ # Notes
 \
-\ - If "see", the decompiler, was advanced enough we could
-\ dispense with the source code, an interesting concept.
 \ - The eForth image could determine the SUBLEQ machine size,
 \ and adjust itself accordingly, it would not even require a
 \ power-of-two integer width. Another interesting concept would
@@ -5503,10 +6052,6 @@ bye                           \ Auf Wiedersehen
 \ for each cell, this would require re-engineering functions
 \ like bitwise AND/OR/XOR as they require a fixed cell width to
 \ work efficiently.
-\ - The eForth image could be compressed with LZSS to save on
-\ space. If the de-compressor was written in pure SUBLEQ it
-\ would compression of most of the image instead of just the
-\ eForth section of it.
 \ - A website with an interactive simulator is available at:
 \   <https://github.com/howerj/subleq-js>
 \ - It would be nice to make a 7400 Integrated Circuit board
@@ -5516,21 +6061,6 @@ bye                           \ Auf Wiedersehen
 \ magic
 \ - Half of the memory used is just for the virtual machine
 \ that allows Forth to be written.
-\ - The BLOCK word-set does not use mass storage, but maps
-\ blocks to memory, if a mass storage peripheral were to be
-\ added these functions would have to be modified. It might be
-\ nice to make a Forth File System based on blocks as well,
-\ then this system could act like a primitive DOS.
-\ - Reformatting the text for a 64 byte line width would allow
-\ storage in Forth blocks. This file could then perhaps we
-\ stored within the image.
-\ - Much like my Embed VM project and Forth interpreter,
-\ available at <https://github.com/howerj/embed>, this file
-\ could be documented extensively and explain how to build up
-\ a Forth interpreter from scratch.
-\ - A C program containing an image could be generated, or
-\ be an option that could be commented out, it would not
-\ be that difficult to do.
 \
 \ # References:
 \
@@ -5743,7 +6273,7 @@ bye                           \ Auf Wiedersehen
 \	}
 \
 \
-\ # Error Code list
+\ ## Error Code list
 \ 
 \ This is a list of Error codes, not all of which are used by 
 \ the application.
@@ -5832,4 +6362,123 @@ bye                           \ Auf Wiedersehen
 \ 	| FFB5 | -75  | WRITE-FILE                            |
 \ 	| FFB4 | -76  | WRITE-LINE                            |
 \ 
+\
+\ ## Advanced version of "see"
 \ 
+\ This is a more advanced version of "see", it is a much better
+\ decompiler, but much more complex. It could still use more
+\ work, but then again any decompiler that cannot reproduce the
+\ source code it is decompiling could use more work.
+\
+\ We start by defining "ndrop" and "within", "ndrop" is a non
+\ standard but common word for removing a variable number of
+\ items from the variable stack. "within" is a standard word
+\ for determining whether a variable is within a certain range.
+\
+:s ndrop for aft drop then next ;s ( x0...xn n -- )
+:t within over - >r - r> u< ;t ( u lo hi -- f )
+
+\ "validate" takes a pointer to a prospective match, the "pwd"
+\ *could* be a pointer to the word that CFA belongs to, if
+\ we can move from the "pwd" to the "cfa" and the two addresses
+\ are equal, then we have a match, that CFA belongs to that
+\ PWD. If it does, then we move to the name field prior, 
+\ otherwise zero is returned.
+\
+:s validate ( pwd cfa -- nfa | 0 )
+   over cfa <> if drop #0 exit then nfa ;s
+
+\ "cfa?" goes through the linked list of words in a vocabulary
+\ and attempts to find a pair of pointers for which the Code
+\ Field Address (CFA) it is given that lies between those two
+\ pointers. As there might be other words defined with other
+\ vocabularies within that pointer range, it must then validate
+\ the match by calling "validate. If found, it returns the
+\ Name Field Address (NFA) of the word which matches the given
+\ CFA, otherwise it returns zero.
+\
+:s cfa? ( wid cfa -- nfa | 0 : search for CFA in a wordlist )
+  cells >r
+  begin
+    dup
+  while
+    dup @ over r@ -rot within
+    if dup @ r@ validate ?dup if rdrop nip exit then then
+    @
+  repeat rdrop ;s
+
+\ "name" attempts to find a Code Field Address within the
+\ dictionary, it is just a loop over all of the vocabularies
+\ in the dictionary for which it calls "cfa?". It uses "ndrop"
+\ to get rid of the remaining items vocabularies returned by
+\ "get-order" if the CFA has been found.
+:s name ( cwf -- a | 0 : search for CFA in the dictionary )
+  >r
+  get-order
+  begin
+    dup
+  while
+    swap r@ cfa? ?dup if 
+      >r 1- ndrop r> rdrop exit then
+  1- repeat rdrop ;s
+
+\ "decompile" takes an instruction "u" and an address of where
+\ the decompilation is currently taking place, "a". It decides
+\ what to do based on the current instruction, and it might
+\ modify the address give, for example by moving over an
+\ operand of the given instruction. The default behavior is
+\ to print the instruction out as a number and do nothing with
+\ the address (the address given should already point to the
+\ cell after "u").
+\
+\ The word is just a table actions to take if specific 
+\ instructions are found. For example if "=push", for "opPush",
+\ is found, it must print out a string containing "push" and
+\ then the contents of the next cell. Strings are only a little
+\ more complex, it must print out the string and skip over that
+\ string. If none of those actions match, then it attempt to
+\ look up what the possible word definition is with "name", and
+\ as mentioned if that fails, it just prints out "u".
+\
+:s decompile ( a u -- a )
+  dup =jumpz lit = if drop ."  jumpz " cell+ dup @ . exit then
+  dup =jump  lit = if drop ."  jump  " cell+ dup @ . exit then
+  dup =push  lit = if drop ."  push  " cell+ dup @ . exit then
+  dup =next  lit = if drop ."  next  " cell+ dup @ . exit then
+  dup =up    lit = if drop ."  up    " cell+ dup @ . exit then
+  dup to' .$ half lit = if drop ."  ." [char] " emit space
+    cell+ count 2dup type [char] " emit + aligned
+  exit then
+  dup to' ($) half lit = if drop ."  $" [char] " 
+  emit space
+    cell+ count 2dup type [char] " emit + aligned
+  exit then
+  primitive lit @ over > if ."  VM    " else 
+    dup name ?dup if space count 1F lit and type drop exit then
+  then
+  . ;s
+
+\ These two words, "compile-only?" and "immediate?" tell us
+\ whether a word is compile-only or immediate respectively,
+\ all they do is analyze a specific bit a pointer to a given
+\ word header. Nothing complex.
+\
+:s compile-only? nfa 20 lit swap @ and 0<> ;s ( pwd -- f )
+:s immediate? nfa 40 lit swap @ and 0<> ;s ( pwd -- f )
+
+\ This is the more complex version of "see", it will attempt
+\ to print the code in a form that resembles the source as
+\ much as possible, but it falls short of that quite a bit.
+\
+\ We could improve the stop conditions by using "(find)"
+\ as it gives us a better range for the likely positions of
+\ when a word starts and ends.
+:to see bl word dup ." : " count type cr find ?found 
+  dup >r cfa
+  begin dup @ =unnest lit <>
+  while dup @ decompile cr cell+ here over < if drop exit then
+  repeat drop ."  ;" 
+  r> dup immediate? if ."  immediate" then
+  compile-only? if ."  compile-only" then cr ;t
+
+
