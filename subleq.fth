@@ -18,7 +18,6 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	- Separate SUBLEQ assembler Tutorial
 \	- Other SUBLEQ projects and programs
 \	- Uses; learning, puzzles, games
-\	- CODE word-set; built in assembler
 \	- Sokoban, floating point, file system,
 \	allocate/free, ...
 \	- About the Author, Other projects, etcetera.
@@ -26,6 +25,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	- Configuring the option bit in the image
 \	- Make sure that words cannot be longer than 32
 \	characters in length.
+\	- Talk about variable bit width and how that could
+\	be implemented, for a 32 or 64, or even N-bit version.
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -672,21 +673,55 @@ defined eforth [if]
 :m .end only forth definitions decimal ;m
 
 \ "atlast" retrieves the last defined word, or a pointer to
-\ to it.
+\ to it. It will be used to set the variable which will
+\ contain the Forth vocabulary, and the "{last}" variable,
+\ which contains the last defined word when running the target
+\ eForth.
 
 :m atlast tlast @ ;m
 
+\ "lallot" allocates space for a USER variable, which is just
+\ an offset into the task thread, each thread has a 1024 byte
+\ block used to store the tasks variable and return stacks,
+\ buffers, and also USER variables - task specific or thread
+\ local storage. "lallot" keeps track of an offset into thread
+\ local storage ("tlocal"). "tuser" can be used to allocate
+\ a cell in local storage space, and assign a name for that
+\ space in the meta-compiler, which when run will compile that
+\ offset into the target image. There is quite a limited amount
+\ of space within the thread, so many variables should not be
+\ allocated.
+\
+\ "tvar" is a more conventional variable, however, much like
+\ "tuser" the name is not copied into the target dictionary.
+\ It creates a global variable instead of a thread local one.
+\
+\ "label:" will create a label, which is just used within the
+\ assembler. The label will push the location of where it was
+\ made onto the variable stack during meta-compilation.
+\
+\ "tdown" aligns a cell downwards, ignoring the byte bit.
+\
+\ "tnfa" and "tcfa" move to the Name Field Address and the
+\ Code Field Address in the given target word. They are much
+\ like "nfa" and "cfa", except they are meant to run during
+\ cross-compilation and not in the target.
+\
+\ This is an odd collection of words, but they will all be
+\ used during meta-compilation.
+\
+
 :m lallot >r tlocal @ r> + tlocal ! ;m
-:m tuser
+:m tuser ( --, "name", Created-Word: -- u )
   get-current >r meta.1 set-current create r>
   set-current tlocal @ =cell lallot , does> @ ;m
-:m tvar get-current >r
+:m tvar get-current >r ( --, "name", Created-Word: -- a )
      meta.1 set-current create
    r> set-current there , t, does> @ ;m
-:m label: get-current >r
+:m label: get-current >r ( --, "name", Created-Word: -- a )
      meta.1 set-current create
    r> set-current there ,    does> @ ;m
-:m tdown =cell negate and ;m
+:m tdown =cell negate and ;m ( a -- a : align down )
 :m tnfa =cell + ;m ( pwd -- nfa : move to name field address )
 :m tcfa tnfa dup c@ 1F and + =cell + tdown ;m ( pwd -- cfa )
 
@@ -719,6 +754,10 @@ defined eforth [if]
 
 :m half dup 1 and abort" unaligned" 2/ ;m ( a -- a )
 :m double 2* ;m ( a -- a )
+
+\ Some more conditional code due to the differences between the
+\ implementations of the single quote, "'", on the two 
+\ different Forth implementations used to compile this program.
 
 defined eforth [if]
 :m (') bl word find ?found cfa ;m
@@ -4547,12 +4586,16 @@ there 2/ primitive t!
 \ Forth implementations it has been given some command mode
 \ semantics as well, but not in this one.
 \
-\ "?unique" and "?nul" are two words that do some tests, 
+\ "?unique", "?nul", "?len" are three words that do some tests, 
 \ "?unique" is for a warning (the only one in this Forth 
 \ implementation) telling us if a word has been defined already
 \ in the word-list or vocabulary (this guide uses the terms
 \ interchangeably), "?nul" prevents zero length definition
-\ words from being made.
+\ words from being made. "?len" checks the length of a word to
+\ make sure it is not too long, the length of a Forth word is
+\ stored in the lower five bits of the first byte in the Name
+\ Field, the other three being used for flags, if it is too
+\ long, an exception is thrown.
 \ 
 \ With that compiler security and those words, most problems
 \ can be found quite easily. They are not expensive to check
@@ -4598,6 +4641,7 @@ there 2/ primitive t!
  dup get-current (search) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
 :s ?nul dup c@ if exit then -10 lit throw ;s ( b -- b )
+:s ?len dup c@ 1F lit > if -13 lit throw then ;s
 :to char bl word ?nul count drop c@ ;t ( "name", -- c )
 :to [char] postpone char =push lit , , ;t immediate
 :to ; 
@@ -4612,7 +4656,7 @@ there 2/ primitive t!
   here dup              ( push location for ";" )
   {last} lit !          ( set last defined word )
   last ,                ( point to previous word in header )
-  bl word ?nul ?unique  ( parse word and do basic checks )
+  bl word ?nul ?len ?unique ( parse word and do basic checks )
   count + h lit ! align ( skip over packed word and align )
   BABE lit              ( push constant for compiler safety )
   postpone ] ;t         ( turn compile mode on )
