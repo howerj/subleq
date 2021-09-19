@@ -29,6 +29,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	be implemented, for a 32 or 64, or even N-bit version.
 \	- Make the target Forth more Forth like, "'" vs "t'",
 \	":" vs ":t"
+\	- References
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -666,10 +667,11 @@ defined eforth [if]
 \ "definitions" and "hex" we will define a word called ".end"
 \ that will restore the interpreter to the correct state.
 \
-
+0 constant genc
+genc [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 :m mdump taligned
   begin ?dup
-  while swap dup @ limit #dec A emit tcell + swap tcell -
+  while swap dup @ limit #dec msep tcell + swap tcell -
   repeat drop ;m
 :m save-target decimal tflash there mdump ;m
 :m .end only forth definitions decimal ;m
@@ -760,22 +762,60 @@ defined eforth [if]
 \ Some more conditional code due to the differences between the
 \ implementations of the single quote, "'", on the two 
 \ different Forth implementations used to compile this program.
+\
+\ "\>body" works (correctly) only on words defined with 
+\ "create". It moves an execution token pointer to point to the
+\ body of (hence the name) a created Forth word, which will
+\ contain the data contained within that word. In our case,
+\ a pointer which is usually compiled into the target with
+\ the "does\>" section of the Forth word. 
+\
+\ "t'" and "to'" search "target.1" and "target.only.1" 
+\ vocabularies for a word which should have been defined with
+\ the meta-compiler version of ":". It then uses "\>body" as
+\ mentioned above. These two are usually used when we want to
+\ compile a literal containing the address, instead of a call, 
+\ to an address, so at run time the address of a function is
+\ pushed to the stack instead of being run.
+\
 
 defined eforth [if]
 :m (') bl word find ?found cfa ;m
-:m t' (') >body @ ;m
+:m t' (') >body @ ;m ( --, "name" )
 :m to' target.only.1 +order (') >body @ target.only.1 -order ;m
 [else]
-:m t' ' >body @ ;m
+:m t' ' >body @ ;m ( --, "name" )
 :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 [then]
 
+\ "tcksum" is used to calculate the checksum over the part of
+\ the image that is checked. At the end of the meta-compilation
+\ process this value is calculated and poked into the target
+\ image. The corresponding word in the target is called 
+\ "cksum". The algorithm only uses addition, which makes for a
+\ very weak form of checksum, but it is easy to compute.
+\
 :m tcksum taligned dup C0DE - FFFF and >r
    begin ?dup
    while swap dup t@ r> + FFFF and >r =cell + swap =cell -
    repeat drop r> ;m
 :m mkck dup there swap - tcksum ;m
-:m postpone
+
+
+\ "postpone" is used much like the normal Forth version of 
+\ "postpone", but within the context of the cross-compilation
+\ process it compiles a reference to a word from the target
+\ instead of executing a meta-compiler word. The words that
+\ are in "target.only.1" are usually the ones we want to
+\ "postpone". It is not always needed to use "postpone" on
+\ some of the words it is called on, however to make the cross
+\ compiled code more similar to actual Forth code it is
+\ executed on "immediate" words being compiled in the target,
+\ even though their immediateness only applies to it when the
+\ target is running, which it is not.
+\
+
+:m postpone ( --, "name" )
    target.only.1 +order t' target.only.1 -order 2/ t, ;m
 
 
@@ -1280,11 +1320,11 @@ label: entry       \ used to set entry point in next cell
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
 :m INV ( b -- : invert NB. b - a = b + ~a + 1 )
   INVREG ZERO dup INVREG SUB dup INVREG swap MOV DEC ;m
-:m ++sp {sp} DEC ;m
-:m --sp {sp} INC ;m
-:m --rp {rp} DEC ;m
-:m ++rp {rp} INC ;m
-:m a-optim >r there =cell - r> 2/ t! ;m
+:m ++sp {sp} DEC ;m ( -- : grow variable stack )
+:m --sp {sp} INC ;m ( -- : shrink variable stack )
+:m --rp {rp} DEC ;m ( -- : shrink return stack )
+:m ++rp {rp} INC ;m ( -- : grow return stack )
+:m a-optim >r there =cell - r> 2/ t! ;m ( a -- )
 
 \ # The Core Forth Virtual Machine
 \ 
@@ -2293,17 +2333,41 @@ there 2/ primitive t!
 :m ;e drop BABE ;t DEAD <> if abort" unstructured" then
   tlast @ {editor} t! tlast ! ;m
 
-:m : :t ;m
-:m ; ;t ;m
+
+\ As ":t" and ";t" are the default actions we want when we
+\ are defining new words in the target dictionary, we can make
+\ it so that the normal Forth words for defining new functions
+\ are what we use instead of ":t" and ";t". Note that ";" is
+\ not defined as immediate, this is because we are not doing
+\ normal Forth compilation, but are just running exclusively
+\ in command mode, except when defining new meta-compilation
+\ words with ":m" and ";m". That is ":t" does not change the
+\ state variable. We want to make the Forth code we are
+\ compiling for the target look like normal Forth code, but
+\ the process is not quite the same.
+\
+
+:m : :t ;m ( -- ???, "name" : start cross-compilation )
+:m ; ;t ;m ( ??? -- : end cross-compilation of a target word )
 
 
-\ TODO: Describe "lit" and why it has to be used as opposed
-\ to a hook, because of gforth.
+\ "lit" is used to compile a literal into the dictionary, which
+\ will be pushed when run. Note, we are not in command mode
+\ when in between ":t" and ";t", and even if we were, it would
+\ not do the correct action, the Forth we are running this
+\ meta-compiler under would attempt to compile a number given
+\ to it into the dictionary, but into its dictionary, and in
+\ a way that would not work in the target. We cannot modify
+\ the internals of the Forth used to compile this program,
+\ well, not the gforth interpreter and not in a portable way,
+\ so we are left with having to call "lit" after each number
+\ we want to compile into a target word.
+\
 
-:m lit         opPush t, ;m
-:m up          opUp   t, ;m
-:m [char] char opPush t, ;m
-:m char   char opPush t, ;m
+:m lit         opPush t, ;m ( n -- )
+:m up          opUp   t, ;m ( n -- )
+:m [char] char opPush t, ;m ( --, "name" )
+:m char   char opPush t, ;m ( --, "name" )
 
 \ It is interesting to see just how simple and easy it is
 \ to define a set of words for creating control structures.
@@ -2321,6 +2385,7 @@ there 2/ primitive t!
 \ or one with an inverted test called "unless".
 \
 \ TODO: Describe how these work, again
+\ TODO: Note, no immediate mode needed
 
 :m begin talign there ;m
 :m until talign opJumpZ 2/ t, ;m
@@ -2341,13 +2406,13 @@ there 2/ primitive t!
 \ defined words. Note that they use the cell address.
 \
 
-:m =push   [ t' opPush  half ] literal ;m
-:m =jump   [ t' opJump  half ] literal ;m
-:m =jumpz  [ t' opJumpZ half ] literal ;m
-:m =unnest [ t' opExit  half ] literal ;m
-:m =>r     [ t' opToR   half ] literal ;m
-:m =next   [ t' opNext  half ] literal ;m
-:m =up     [ t' opUp    half ] literal ;m
+:m =push   [ t' opPush  half ] literal ;m ( -- a )
+:m =jump   [ t' opJump  half ] literal ;m ( -- a ) 
+:m =jumpz  [ t' opJumpZ half ] literal ;m ( -- a )
+:m =unnest [ t' opExit  half ] literal ;m ( -- a )
+:m =>r     [ t' opToR   half ] literal ;m ( -- a )
+:m =next   [ t' opNext  half ] literal ;m ( -- a )
+:m =up     [ t' opUp    half ] literal ;m ( -- a )
 
 \ To avoid conflicts with meta-compiled words and words
 \ compiled in the target dictionary some instructions have
@@ -2358,22 +2423,22 @@ there 2/ primitive t!
 \ to "opDup" in newly defined words.
 \
 
-:m dup opDup ;m
-:m drop opDrop ;m
-:m over opOver ;m
-:m swap opSwap ;m
-:m >r opToR ;m
-:m r> opFromR ;m
-:m 0> op0> ;m
-:m 0= op0= ;m
-:m 0< op0< ;m
-:m < op< ;m
-:m > op> ;m
-:m or opOr ;m
-:m xor opXor ;m
-:m and opAnd ;m
-:m exit opExit ;m
-:m 2/ op2/ ;m
+:m dup opDup ;m ( -- : compile opDup into the dictionary )
+:m drop opDrop ;m ( -- : compile opDrop into the dictionary )
+:m over opOver ;m ( -- : compile opOver into the dictionary )
+:m swap opSwap ;m ( -- : compile opSwap into the dictionary )
+:m >r opToR ;m ( -- : compile opTorR into the dictionary )
+:m r> opFromR ;m ( -- : compile opFromR into the dictionary )
+:m 0> op0> ;m ( -- : compile op0> into the dictionary )
+:m 0= op0= ;m ( -- : compile op0= into the dictionary )
+:m 0< op0< ;m ( -- : compile op0< into the dictionary )
+:m < op< ;m ( -- : compile op< into the dictionary )
+:m > op> ;m ( -- : compile op> into the dictionary )
+:m or opOr ;m ( -- : compile opOr into the dictionary )
+:m xor opXor ;m ( -- : compile opXor into the dictionary )
+:m and opAnd ;m ( -- : compile opAnd into the dictionary )
+:m exit opExit ;m ( -- : compile opExit into the dictionary )
+:m 2/ op2/ ;m ( -- : compile op2/ into the dictionary )
 
 \ This complete most of the meta-compiler words, a few new
 \ ones will be defined later, but that is most of it. The
@@ -2404,9 +2469,9 @@ there 2/ primitive t!
 \ The trade off is that it takes longer to execute and space
 \ must be reserved for the words that push those constants.
 \
-:s #0 0 lit ;s
-:s #1 1 lit ;s
-:s #-1 FFFF lit ;s
+:s #0 0 lit ;s ( -- 0 : push the number zero onto the stack )
+:s #1 1 lit ;s ( -- 1 : push one onto the stack )
+:s #-1 -1 lit ;s ( -- -1 : push negative one onto the stack )
 \ The next section adds all the words that are implemented in
 \ a single virtual machine instruction.
 \
@@ -2437,37 +2502,37 @@ there 2/ primitive t!
 \ referenced moving on.
 \
 
-:to 1+ 1+ ;
-:to 1- 1- ;
-:to + + ;
-:to - - ;
-:to invert invert ;
-:to bye bye ;
-:to dup dup ;
-:to drop opDrop ;
-:to over opOver ;
-:to swap opSwap ;
-:to rshift rshift  ;
-:so [@] [@] ;s
-:so [!] [!] ;s
-:so lsb lsb ;s
-:to sp@ sp@ ;
-:to sp! sp! ;
-:to 0> op0> ;
-:to 0= op0= ;
-:to 0< op0< ;
-:to < op< ;
-:to > op> ;
-:to 2/ op2/ ;
-:to or opOr ;
-:to xor opXor ;
-:to and opAnd ;
-:so pause pause ;s
+:to 1+ 1+ ; ( n -- n : increment a number by one )
+:to 1- 1- ; ( n -- n : decrement a number by one )
+:to + + ; ( n n -- n : addition )
+:to - - ; ( n1 n2 -- n : subtract n2 from n1 )
+:to invert invert ; ( u -- u : bitwise logical negate )
+:to bye bye ; ( -- : halt the system )
+:to dup dup ; ( n -- n n : duplicate top of variable stack )
+:to drop opDrop ; ( n -- : drop top of variable stack )
+:to over opOver ; ( x y -- x y x : get over it! )
+:to swap opSwap ; ( x y -- y x : swap two variables on stack )
+:to rshift rshift ; ( u n -- u : logical right shift by "n" )
+:so [@] [@] ;s ( vma -- : fetch -VM Address- )
+:so [!] [!] ;s ( u vma -- : store to -VM Address- )
+:so lsb lsb ;s ( u -- f : get least significant bit )
+:to sp@ sp@ ; ( -- a : get the variable stack location )
+:to sp! sp! ; ( a -- ??? : set the variable stack location )
+:to 0> op0> ; ( n -- f : signed greater than zero )
+:to 0= op0= ; ( n -- f : equal to zero )
+:to 0< op0< ; ( n -- f : signed less than zero )
+:to < op< ; ( n1 n2 -- f : signed less than )
+:to > op> ; ( n1 n2 -- f : signed greater than )
+:to 2/ op2/ ; ( u -- u : div by two, equivalent to 1 rshift )
+:to or opOr ; ( u u -- u : bitwise or )
+:to xor opXor ; ( u u -- u : bitwise xor )
+:to and opAnd ; ( u u -- u : bitwise and )
+:so pause pause ;s ( -- : pause current task, task switch )
 
 \ "nop" stands for 'no-operation', it is useful for some of
 \ the hooks we have. It does nothing.
 \
-: nop ;
+: nop ; ( -- : do nothing! )
 
 \ Notice how "@" and "!" divide the address by two, which drops
 \ the very lowest bit that is used to select the upper or lower
@@ -2477,8 +2542,8 @@ there 2/ primitive t!
 \ However, from the point of view of the developer, using
 \ "@" and "!" is easier.
 \
-: @ 2/ [@] ;
-: ! 2/ [!] ;
+: @ 2/ [@] ; ( a -- u : fetch a cell to a memory location )
+: ! 2/ [!] ; ( u a -- : write a cell to a memory location )
 
 \ These words are just used to push the address of a variable
 \ onto the stack. Some of them are local variables (using "up")
@@ -2741,8 +2806,8 @@ there 2/ primitive t!
 \ detail about how the interpreter internals work.
 \
 
-: ] #-1 state ! ;
-: [ #0  state ! ; immediate
+: ] #-1 state ! ; ( -- : return to compile mode )
+: [ #0  state ! ; immediate ( -- : initiate command mode )
 
 \ "many" is an interesting word, it is in the system vocabulary
 \ despite not being used, but I like the word so I have
@@ -2754,7 +2819,7 @@ there 2/ primitive t!
 \ again, including "many", which triggers another re-parsing
 \ and so on. It is a neat little word.
 \
-:s many #0 >in ! ;s
+:s many #0 >in ! ;s ( -- : repeat current line )
 
 \ These words should be familiar to any Forth programmer,
 \ they are often defined in assembly for speed reasons, but
@@ -3408,8 +3473,8 @@ there 2/ primitive t!
 :s do$ r> r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
 :s ($) do$ ;s           ( -- a : do string NB. )
 :s .$ do$ count type ;s ( -- : print string in next cells )
-:m ." .$ $literal ;m
-:m $" ($) $literal ;m
+:m ." .$ $literal ;m ( --, ccc" : compile string )
+:m $" ($) $literal ;m ( --, ccc" : compile string )
 
 \ "space" emits a space. This is all. I will not write an
 \ essay to describe this.
@@ -3698,8 +3763,8 @@ there 2/ primitive t!
 \ 
 \
 
-:s (emit) opEmit ;s ( c -- )
-: echo <echo> @ execute ; ( c -- )
+:s (emit) opEmit ;s ( c -- : output byte to terminal )
+: echo <echo> @ execute ; ( c -- : emit a single character )
 
 \ "tap" and "ktap" are both used by "accept", they are both
 \ given four items on the stack, and return three, which is
@@ -3983,7 +4048,62 @@ there 2/ primitive t!
     +string dup 0=                   ( advance, test for end )
   until ;
 
-\ "number?" 
+\ "number?" is much easier to use than "\>number" and handles
+\ several extensions to the numeric input handling in Forth,
+\ which are; handling negative and hexadecimal numbers, as well
+\ as double cell numbers which have a fixed point.
+\
+\ This Forth uses the prefix "$" to indicate that the number is 
+\ hexadecimal, regardless of what base we are currently in,
+\ the equivalent in C being the prefix "0x". In some Forth
+\ interpreters, albeit not this one, "#" is used to indicate
+\ the number is always decimal. These prefixes seem natural to
+\ use for these purposes that is hard to quantify, much like
+\ using is sometimes used "$" to indicate something is a 
+\ string, or "/" should be used as a path separator. Perhaps
+\ it just part of the culture of computers and programming, but
+\ it seems using something like "@" to indicate something is
+\ hexadecimal just seems *wrong*.
+\
+\ For fixed numbers "dpl" is used, some explanation of it is
+\ required. When processing a numeric string like "123" it
+\ will be converted to a single 16-bit number, it can be 
+\ signed, such as "-123", and it is processed in the current
+\ base. However, 16-bit numbers are often not enough, we might
+\ need the range 32-bit numbers give us, but we will need a
+\ syntax in order to enter them. This is done by entering the
+\ number with a period, for example:
+\
+\	123.
+\	1.23
+\	.123
+\
+\ Are all valid Forth numbers, but when view with ".s" on the
+\ stack they all produce the same result when entered at the
+\ Forth prompt, "123 0". There is a difference between the two
+\ however, the "dpl" variable will be set with different
+\ values.
+\
+\	123    -> dpl is -1 (single cell number was entered)
+\	123.   -> dpl is 0
+\	1.23   -> dpl is 2
+\	.123   -> dpl is 3
+\	0.123  -> dpl is 3
+\	0.0123 -> dpl is 4
+\
+\ Note that this is used for fixed point, although with the
+\ right floating point words some Forth implementations have
+\ used it for input of floats.
+\
+\ By examining the "dpl" variable after we can determine 
+\ whether the number inputted is a single or double cell
+\ number, and if it is a double cell number, where the decimal
+\ point lies.
+\
+\ A peculiarity of the implementation is that "1.2.3" is a 
+\ valid number, with only the last ".3" having an effect on
+\ the "dpl" value.
+\
 : number? ( a u -- d -1 | a u 0 : easier to use than >number )
   #-1 dpl !
   base @ >r
@@ -3998,7 +4118,23 @@ there 2/ primitive t!
   repeat
   2drop r> if dnegate then r> base ! #-1 ;
 
-: .s depth for aft r@ pick . then next ;
+\ ".s" is a useful debugging word that requires that "." is
+\ implemented. It displays the contents of the variable stack 
+\ without modifying or dropping numbers from it.
+\
+\ It would have been quite useful to have ".s" and "." when
+\ debugging the bringing up of the Forth virtual machine, 
+\ however as we have seen these words both require the Forth
+\ VM to be operation, and a lot of other Forth words to be
+\ written before they can be implemented. Having a way to print
+\ out numbers is useful, and in fact basic, necessity in
+\ debugging a platform. One way this was achieved before ".s"
+\ and "." could be supported is by implementing more primitive
+\ versions of the numeric output words, it is quite easy to
+\ print numbers in hexadecimal with only shift rights,
+\ bitwise "AND" and addition.
+\
+: .s depth for aft r@ pick . then next ; ( -- : show stack )
 
 \ # Search Order Words
 \
