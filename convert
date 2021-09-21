@@ -1,0 +1,39 @@
+#!/usr/bin/perl -w
+# Might be better to make a Forth program that does this.
+# NB. Could include some CSS printed at the top
+
+use warnings;
+use strict;
+
+my $lc = 0;
+my $st = 0;
+my $prev = 0;
+
+print <<CSS
+<style type="text/css">
+	body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}
+	h1,h2,h3{line-height:1.2}
+</style>
+CSS
+;
+
+while (<>) {
+	my $line = $_;
+	$prev = $st;
+	$_ = $line;
+	if (m/^\\ ?(.*)$/) {
+		if ($prev == 1) {
+			print "\n";
+		}
+		$st = 0;
+		print "\n" if ($prev != $st);
+		printf "%s\n", $1
+	} else {
+		$st = 1;
+		print "\n" if ($prev != $st);
+		printf "\t%04d\t%s", $lc, $line;
+		$lc++;
+	}
+}
+
+

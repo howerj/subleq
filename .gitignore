@@ -1,5 +1,8 @@
 *.hex
 *.txt
 *.dec
+*.md
+*.htm
+*.pdf
 subleq
 full

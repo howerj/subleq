@@ -8,6 +8,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ * Repo:    <https://github.com/howerj/subleq>
 \
 \ TODO Section
+\
 \	- Add assembled version of image to appendix
 \	- Publish on Amazon (also make front cover, via Fiverr)
 \	- Do all the TODOs
@@ -27,8 +28,6 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	characters in length.
 \	- Talk about variable bit width and how that could
 \	be implemented, for a 32 or 64, or even N-bit version.
-\	- Make the target Forth more Forth like, "'" vs "t'",
-\	":" vs ":t"
 \	- References
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
@@ -3238,8 +3237,8 @@ there 2/ primitive t!
 \ the word in command mode.
 \
 
-: 2>r r> swap >r swap >r >r ; compile-only
-: 2r> r> r> swap r> swap >r ; compile-only
+: 2>r r> swap >r swap >r >r ; compile-only ( n n --,R: -- n n )
+: 2r> r> r> swap r> swap >r ; compile-only ( -- n n,R: n n -- )
 
 \ "tup" gets the address of the Terminal Input Buffer 
 \ variables, which point to the Terminal Input Buffer itself,
@@ -3249,7 +3248,7 @@ there 2/ primitive t!
 \ These words are using for parsing, which is done later on.
 \
 : tup {tib} up ; ( -- a )
-: source tup 2@ ; ( -- a u )
+: source tup 2@ ; ( -- a u : get terminal input source )
 
 \ "aligned" is one of those words that has been implemented
 \ in a non-portable way, so would have to change if the cell
@@ -4659,7 +4658,7 @@ there 2/ primitive t!
 \ itself.
 \
 
-:r words
+:r words ( -- )
   cr get-order begin ?dup while swap ( dup u. ." : " ) @
   begin ?dup
   while dup nfa c@ 80 lit and 0= if dup .id then @
@@ -4679,7 +4678,7 @@ there 2/ primitive t!
 \ This also explains the usage of "definitions" in the phrase
 \ "only forth definitions".
 \
-: definitions context @ set-current ;
+: definitions context @ set-current ; ( -- )
 
 \ # Defining new words
 \
@@ -4783,7 +4782,7 @@ there 2/ primitive t!
  dup get-current (search) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
 :s ?nul dup c@ if exit then -10 lit throw ;s ( b -- b )
-:s ?len dup c@ 1F lit > if -13 lit throw then ;s
+:s ?len dup c@ 1F lit > if -13 lit throw then ;s ( b -- b )
 :to char bl word ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
 :to ; 
@@ -4934,9 +4933,9 @@ there 2/ primitive t!
 \ # Create, DOES>, and other special Forth words
 
 :to ' bl word find ?found cfa literal ; immediate
-: compile r> dup [@] , 1+ >r ; compile-only
+: compile r> dup [@] , 1+ >r ; compile-only ( -- )
 : recurse {last} lit @ cfa compile, ; immediate compile-only
-:s toggle tuck @ xor swap ! ;s
+:s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
 :s hide bl word find ?found nfa 80 lit swap toggle ;s
 :s (var) r> 2* ;s compile-only
 :s (const) r> [@] ;s compile-only
@@ -5220,10 +5219,10 @@ there 2/ primitive t!
 \
 
 
-:to see bl word find ?found cr
+:to see bl word find ?found cr ( --, "name" : decompile  word )
   begin dup @ =unnest lit <>
   while dup @ . cell+ here over < if drop exit then
-  repeat @ u. ;
+  repeat @ u. ; 
 
 
 \ "dump" is another utility, it dumps out a section of memory
@@ -5415,7 +5414,7 @@ there 2/ primitive t!
 \ more serious timing needs.
 \
 
-: ms for pause calibration @ for next next ;
+: ms for pause calibration @ for next next ; ( ms -- )
 
 \ The words "bell", "csi", "page" and "at-xy" make some
 \ assumptions which may not be valid on all output devices,
@@ -5460,10 +5459,10 @@ there 2/ primitive t!
 \ The first column and row in "at-xy" is "1" and not "0".
 \
 
-: bell 7 lit emit ;
-:s csi 1B lit emit 5B lit emit ;s
+: bell 7 lit emit ; ( -- : emit ASCII BEL character )
+:s csi 1B lit emit 5B lit emit ;s ( -- : ANSI Term. Esc. Seq. )
 : page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;
-: at-xy base @ decimal
+: at-xy base @ decimal ( x y -- : set cursor position )
    >r csi #0 u.r ." ;" #0 u.r ." H" r>
    base ! ;
 

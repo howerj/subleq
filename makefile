@@ -22,6 +22,12 @@ gforth.dec: subleq.fth
 gforth: subleq gforth.dec
 	./subleq gforth.dec
 
+subleq.md: convert subleq.fth
+	./convert < subleq.fth > $@
+
+subleq.htm: subleq.md
+	markdown $< > $@
+
 clean:
 	git clean -dffx
 
