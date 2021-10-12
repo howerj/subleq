@@ -29,6 +29,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	- Talk about variable bit width and how that could
 \	be implemented, for a 32 or 64, or even N-bit version.
 \	- References
+\	- Note that "0 here dump" can be used to save a
+\	running image.
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -666,8 +668,8 @@ defined eforth [if]
 \ "definitions" and "hex" we will define a word called ".end"
 \ that will restore the interpreter to the correct state.
 \
-0 constant genc
-genc [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
+0 constant cgen
+cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 :m mdump taligned
   begin ?dup
   while swap dup @ limit #dec msep tcell + swap tcell -
@@ -797,8 +799,8 @@ defined eforth [if]
 :m tcksum taligned dup C0DE - FFFF and >r
    begin ?dup
    while swap dup t@ r> + FFFF and >r =cell + swap =cell -
-   repeat drop r> ;m
-:m mkck dup there swap - tcksum ;m
+   repeat drop r> ;m ( a u -- u : compute a checksum )
+:m mkck dup there swap - tcksum ;m ( -- u : checksum of image )
 
 
 \ "postpone" is used much like the normal Forth version of 
@@ -1079,7 +1081,7 @@ defined eforth [if] system -order [then]
 \ final "MOV", leaving the last instruction of the modified
 \ "MOV" the same, to zero out the "Z" register.
 \
-\ There is actually remarkably few instructions in the base.
+\ There are remarkably few instructions in the base.
 \
 \ TODO: More description, specifically of iSTORE and iLOAD
 
@@ -1106,7 +1108,21 @@ defined eforth [if] system -order [then]
 \ Forth ones, as they must be given an address instead of
 \ taking items off of the stack, however they make everything
 \ a lot easier to do and provide us with the basics from the
-\ structured programming paradigm.
+\ structured programming paradigm. Programming in straight
+\ assembler sucks.
+\
+\ The assembler versions of the control structures will work
+\ a little differently from the way they do in Forth. In Forth
+\ "if" pulls an item off of the variable stack to test again,
+\ however the assembler version of "if" instead reads (and does
+\ not modify) a memory location, so it must be used like so:
+\
+\	<location> if ... then
+\
+\ The same goes for "until", and "while", "+if", and "-if".
+\ "+if" and "-if" are also new, they will execute if the
+\ memory location provided contains a positive or a negative
+\ value respectively, which is easy to compute in SUBLEQ.
 \
 \ TODO: More description
 \
@@ -3541,6 +3557,34 @@ there 2/ primitive t!
 \ a non-zero number if an exception has been thrown by "throw"
 \ in the token just executed.
 \
+\ A common idiom not used in this Forth, because the bitwise
+\ operators are expensive and branching is cheap, is to use
+\ the following construct to conditionally throw:
+\
+\	0= -1 and throw
+\
+\ Or more generally:
+\
+\	<conditional> <error-code> and throw
+\
+\ Which will throw an error if a condition is true, which
+\ replaces:
+\
+\	<conditional> if <error-code> throw then
+\
+\ "if...then" generates slightly larger code on most Forth
+\ implementations, and branches, than using "and". The source
+\ code is slightly larger, although immediately easier to read.
+\
+\ Using "and" works in Forth as conditionals return Forth
+\ booleans where true is all bits set, and zero, or all bits
+\ clear when false. Using this in conjunction with "and" on
+\ the error code means that the code will be preserved on 
+\ failure (conditional is true) and replaced with zero on
+\ success (conditional is false). "throw" only throws an 
+\ exception when given a non-zero error code. There is synergy
+\ between the words.
+\
 \ TODO: Describe implementation details
 \
 
@@ -4777,7 +4821,7 @@ there 2/ primitive t!
 \ is another milestone in making a Forth interpreter.
 \
 
-: word parse here dup >r 2dup ! 1+ swap cmove r> ; ( c -- b )
+: word #1 ?depth parse here dup >r 2dup ! 1+ swap cmove r> ;
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
@@ -4802,6 +4846,105 @@ there 2/ primitive t!
   BABE lit              ( push constant for compiler safety )
   postpone ] ;         ( turn compile mode on )
 :to :noname here #0 BABE lit ] ; ( "name", -- xt )
+
+\ A few more words, "'" is an immediate word that attempts to
+\ find a word in the dictionary (and throws an error if one
+\ is not found), it then calls "literal" on the execution token
+\ to resolve the compile/command behavior of the word. "'"
+\ either pushes the execution token of a word when in command
+\ mode, or compiles it into the dictionary in compile mode.
+\
+\ When in command mode, "2 2 ' + execute" is the same as
+\ "2 2 +".
+\
+\ "compile" is a word that skips over the next compiled word
+\ in the instruction stream and instead compiles that word into
+\ the dictionary. It has some restrictions on what it can be
+\ used on, for example it will not work on immediate words as
+\ instead they will have already been executed, and it will not
+\ work on literals, as they are not words (and they take up
+\ two cells). "compile" does its job by looking at the return
+\ stack value, copying it, and manipulating it.
+\
+\ A contrived example usage is:
+\
+\	: x compile + ; immediate
+\	: y 2 2 + ;
+\	: z 2 2 x ;
+\
+\ In this case "y" and "z" are equivalent words, they both
+\ compute "4" at runtime. A simpler way of explaining "compile"
+\ is "compile compiles the next word into another word via
+\ return stack manipulation".
+\
+\ Some Forth implementations return a zero value when a word
+\ is not found, which makes the word "defined" redundant,
+\ however this behavior is not standard between all Forth
+\ programs and should not be relied upon.
+\
+\ "recurse" is used to perform recursion. It does this by
+\ looking at the last defined word and then compiling a 
+\ reference to it in the dictionary, which is why it needs
+\ to be "immediate". Notice that it used "compile," and not
+\ ",". The word "recurse" is needed because the definition
+\ of a new word is not available until the definition of that
+\ word is completed with a ";", meaning that word is 
+\ unavailable from within itself, unless by another mechanism.
+\ We have already encountered that behavior, it allows the
+\ redefinition of words, for example we could instead a
+\ temporary debug version of "+" into source code with
+\ ": + .s + ;" and the previous definition of "+" would be
+\ used within the new definition.
+\
+\ "colorForth", a weird variation of Forth by the creator of
+\ the language, Chuck Moore, uses recursion far more often. In
+\ this Forth it is used sparingly, and during meta-compilation
+\ the word is not needed at all (as the new definition of a
+\ word is immediately available from within that word).
+\
+\ A word called "tail" is sometimes defined, which instead of
+\ performing a call to word in which it is defined, does a
+\ jump instead, named after a common optimization called
+\ "tail call optimization". Some Forth implementations do
+\ this automatically and in a more generic way, replacing
+\ calls with jumps where possible, this means less stack is 
+\ used and jumps are often quicker than calls. One way Forth
+\ implementations do this is by making a more intelligent
+\ version of ";", which examines the previously compiled word
+\ in the dictionary (and must be away of special case caused
+\ by control structures and literals) and replaces a call to
+\ a word with a jump to it.
+\
+\ "toggle" is a useful utility word, it toggles the bits at
+\ an address given a bit mask. The word is defined only for
+\ the next word, "hide". "hide" does what it says on the tin,
+\ it hides a word given its name. A hidden word cannot be
+\ currently unhidden, for that to be the case a reference 
+\ to the hidden word would need to be returned. "hide" can be
+\ used to clean up the dictionary, it does not deleted a word
+\ definition, so uses of that word will still work, but it
+\ does render it invisible to the search routines. The topmost
+\ bit of the NFA byte is reserved for the "hidden" bit, which
+\ the search order words will take into account.
+\
+\ Some older Forth words had a word called "smudge", which
+\ operated in a similar fashion, toggling a bit in the Name
+\ Field Address, but operated on the previously defined word
+\ like "recurse". This could be defined with:
+\
+\	:s smudge {last} lit @ nfa 80 lit swap toggle ;s
+\
+\ This was used to hide and unhide a word definition during
+\ its creation to implement the word hiding feature described
+\ with "recurse", this Forth implementation does it slightly
+\ differently.
+\
+
+:to ' bl word find ?found cfa literal ; immediate
+: compile r> dup [@] , 1+ >r ; compile-only ( -- )
+:to recurse {last} lit @ cfa compile, ; immediate compile-only
+:s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
+:s hide bl word find ?found nfa 80 lit swap toggle ;s
 
 \ # Control Structures
 \
@@ -4931,12 +5074,22 @@ there 2/ primitive t!
 :to next =next lit , 2/ , ; immediate compile-only
 
 \ # Create, DOES>, and other special Forth words
+\
+\ "create" and "does>" are sometimes called the jewels of 
+\ Forth, they allow the creation of words which can in turn
+\ create new words. They are often used to make data-structure
+\ related words, for example a word set for making and 
+\ manipulating arrays, which are not a native Forth construct.
+\
+\ "create"/"does>" words are separated into an action performed
+\ during the creation of the new word, and the behavior of the
+\ new word at runtime. The word pair is used heavily during
+\ meta-compilation to make new words that do something with
+\ the target image.
+\
+\ TODO: Explain
+\
 
-:to ' bl word find ?found cfa literal ; immediate
-: compile r> dup [@] , 1+ >r ; compile-only ( -- )
-: recurse {last} lit @ cfa compile, ; immediate compile-only
-:s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
-:s hide bl word find ?found nfa 80 lit swap toggle ;s
 :s (var) r> 2* ;s compile-only
 :s (const) r> [@] ;s compile-only
 :s (marker) r> 2* dup @ h lit ! cell+ @ get-current ! ;s
@@ -5218,12 +5371,10 @@ there 2/ primitive t!
 \ from this, it would just be an intellectual exercise.
 \
 
-
 :to see bl word find ?found cr ( --, "name" : decompile  word )
   begin dup @ =unnest lit <>
   while dup @ . cell+ here over < if drop exit then
   repeat @ u. ; 
-
 
 \ "dump" is another utility, it dumps out a section of memory
 \ cell by cell. Much like the output from "see" the 
@@ -5250,7 +5401,7 @@ there 2/ primitive t!
 \ number from the input and writing it to a memory location.
 \
 
-:to dump aligned ( a u -- )
+:to dump aligned ( a u -- : display section of memory )
   begin ?dup
   while swap dup @ . cell+ swap cell -
   repeat drop ;
@@ -6234,7 +6385,17 @@ atlast {forth-wordlist} t!    \ Make wordlist work
 there h t!                    \ Assign dictionary pointer
 primitive t@ double mkck check t! \ Set checksum over VM
 atlast {last} t!              \ Set last defined word
+
+\ .\ #include <stdio.h> /* eForth for 16-bit SUBLEQ */
+\ .\ int main(void){short p=0,m[65536] = {
+
 save-target                   \ Output target
+
+\ .\ }; while(p>=0){int
+\ .\ a=m[p++],b=m[p++],c=m[p++];
+\ .\ a<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])
+\ .\ <=0?p=c:0;}}
+
 .end                          \ Get back to normal Forth
 bye                           \ Auf Wiedersehen
 
