@@ -1,8 +1,9 @@
-*.hex
-*.txt
 *.dec
-*.md
+*.epub
+*.hex
 *.htm
+*.md
 *.pdf
-subleq
+*.txt
 full
+subleq

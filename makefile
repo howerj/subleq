@@ -28,6 +28,18 @@ subleq.md: convert subleq.fth
 subleq.htm: subleq.md
 	markdown $< > $@
 
+subleq.pdf: subleq.md
+	pandoc -V cover-image=img/subleq-ebook.png --toc $< -o $@
+
+subleq.epub: subleq.md
+	pandoc \
+		--epub-cover-image=img/subleq-ebook.png \
+		--metadata=title:"SUBLEQ eForth" \
+		--metadata=author:"Richard James Howe" \
+		--metadata=lang:"en-US" \
+		--toc \
+		$< -o $@
+
 clean:
 	git clean -dffx
 
