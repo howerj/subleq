@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 # Might be better to make a Forth program that does this.
-# NB. Could include some CSS printed at the top
+# NB. Could also make a script to convert a image file into a
+# C program.
 
 use warnings;
 use strict;

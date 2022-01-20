@@ -40,6 +40,15 @@ subleq.epub: subleq.md
 		--toc \
 		$< -o $@
 
+eforth.c: 1.dec
+	rm -f $@
+	echo "#include <stdio.h> /* eForth for 16-bit SUBLEQ */" >> $@
+	echo "int main(void){short p=0,m[65536] = {" >> $@
+	sed 's/$$/,/' $^ | fmt -w 80 | sed 's/ //g' >> $@
+	echo "}; while(p>=0){int a=m[p++],b=m[p++],c=m[p++];" >> $@
+	echo "a<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])" >> $@
+	echo "<=0?p=c:0;}}" >> $@
+
 clean:
 	git clean -dffx
 

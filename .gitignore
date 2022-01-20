@@ -4,6 +4,9 @@
 *.htm
 *.md
 *.pdf
+*.exe
 *.txt
+eforth.c
+eforth
 full
 subleq

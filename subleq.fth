@@ -11,7 +11,6 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \	- Add assembled version of image to appendix
 \	- Publish on Amazon
-\	- Do all the TODOs
 \	- Separate SUBLEQ assembler Tutorial
 \	- Other SUBLEQ projects and programs
 \	- Uses; learning, puzzles, games
@@ -24,9 +23,35 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \	characters in length.
 \	- Talk about variable bit width and how that could
 \	be implemented, for a 32 or 64, or even N-bit version.
-\	- References
 \	- Note that "0 here dump" can be used to save a
 \	running image.
+\	- Make diagrams in a proper image editor instead
+\	of having ASCII diagrams (copies of the diagram could
+\	go in the appendix).
+\ 
+\ ## NOTES (Write about them in the book)
+\
+\ - The eForth image could determine the SUBLEQ machine size,
+\ and adjust itself accordingly, it would not even require a
+\ power-of-two integer width. Another interesting concept would
+\ be to adapt this eForth to a SUBLEQ machine that used bignums
+\ for each cell, this would require re-engineering functions
+\ like bitwise AND/OR/XOR as they require a fixed cell width to
+\ work efficiently.
+\ - A website with an interactive simulator is available at:
+\   <https://github.com/howerj/subleq-js>
+\ - It would be nice to make a 7400 Integrated Circuit board
+\ that could run and execute this code, or a project in VHDL
+\ for an FPGA that could do it.
+\ - The virtual machine could be sped up with optimization
+\ magic
+\ - Half of the memory used is just for the virtual machine
+\ that allows Forth to be written.
+\ - Testing, why is there no test bench -> recompilation is
+\ the test bench
+
+\	-----------------------------------------------
+
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -696,7 +721,7 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ which contains the last defined word when running the target
 \ eForth.
 
-:m atlast tlast @ ;m
+:m atlast tlast @ ;m ( -- a )
 
 \ "lallot" allocates space for a USER variable, which is just
 \ an offset into the task thread, each thread has a 1024 byte
@@ -744,14 +769,12 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 :m tcfa tnfa dup c@ 1F and + =cell + tdown ;m ( pwd -- cfa )
 
 \ "compile-only" and "immediate" set flags in the last defined
-\ word, in a quest to make the meta-compiled Forth look like
-\ normal Forth code as much as possible, they may be part of
-\ the meta-compiler, however they do not need a different name
-\ from the versions that will be in the meta-compiled target
-\ image.
-\
-\ An effort is made to do with other parts of the
-\ meta-compilation process like strings.
+\ word. In a quest to make the meta-compiled Forth look like
+\ normal Forth code as much as possible they have not been
+\ given new names, like "mimmediate", to indicate they are part
+\ of the meta-compiler. A similar effort is made with other
+\ parts of the meta-compiler, such as strings, to make the
+\ code as Forth like as possible.
 \
 \ The format of the header will be described shortly, we will
 \ have to make new headers for words ourselves in the new
@@ -1061,7 +1084,8 @@ defined eforth [if] system -order [then]
 \ "GET" and "PUT" are built into the SUBLEQ machine, and are
 \ simple to implement, just put the "-1" in the correct place.
 \ They both accept a memory location to get data from or write
-\ to.
+\ to. They are used to get and put a single byte of input or
+\ output.
 \
 \ "MOV" copies the location of a cell to another one, it
 \ requires for individual SUBLEQ instructions to implement.
@@ -1090,13 +1114,14 @@ defined eforth [if] system -order [then]
 \ instructions, each containing four SUBLEQ instructions,
 \ meaning twelve SUBLEQ instructions, or thirty six cells just
 \ to perform an indirect store. It requires three "MOV"
-\ instructions in order to modify a three instructions in a
+\ instructions in order to modify three locations in a
 \ final "MOV", leaving the last instruction of the modified
 \ "MOV" the same, to zero out the "Z" register.
 \
-\ There are remarkably few instructions in the base.
-\
-\ TODO: More description, specifically of iSTORE and iLOAD
+\ There are remarkably few macro instructions in the base;
+\ I/O, Loads/Stores, and arithmetic. The conditional 
+\ instruction macros will be defined in the next section. 
+\ 
 
 :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
 :m NADDR there 2/ 1+ t, ;m ( --, jump to next cell )
@@ -2341,11 +2366,17 @@ there 2/ primitive t!
 \ be defined shortly, as well as its shortcomings and possible
 \ workarounds.
 \
-\ How does ":t" (defined much earlier) and the like do
-\ their jobs? All of the defining words (words that create
-\ new words) all call ":t" to the header creation.
+\ The newly defined defining words all call ":t" (defined much
+\ earlier) to do their job. (or ":to" if they do not want to
+\ put the word name into the meta-compilers dictionary).
+\ Likewise the words to terminated a word definition all call
+\ ";t". The defining words need to modify the meta-compilers
+\ view of the target dictionaries so the word is put into the
+\ right location.
 \
-\ TODO: Continue description
+\ ":t" creates the word header.
+\
+\ ";t" compiles "opExit" at the end of a word definition.
 \
 
 :m ;t BABE <> if abort" unstructured" then
@@ -2654,8 +2685,8 @@ there 2/ primitive t!
 \ is used by words like "definitions".
 \
 
-: current {current} lit ; ( -- a )
-: root-voc {root-voc} lit ; ( -- a )
+: current {current} lit ; ( -- a : get current vocabulary )
+: root-voc {root-voc} lit ; ( -- a : get root vocabulary )
 
 \ The word "this" allows us to access the USER task area,
 \ it pushes the pointer to that area onto the stack. The
@@ -2786,8 +2817,8 @@ there 2/ primitive t!
 \
 \
 
-: hex  10 lit base ! ; ( -- )
-: decimal A lit base ! ; ( -- )
+: hex  10 lit base ! ; ( -- : change to hexadecimal base )
+: decimal A lit base ! ; ( -- : change to decimal base )
 
 \ "\]" and "\[" are two, very simple words, that require a
 \ lot more context to understand properly. Note one of them
@@ -2875,12 +2906,12 @@ there 2/ primitive t!
 \ effect describes them perfectly.
 \
 
-: nip swap drop ; ( x y -- y )
-: tuck swap over ; ( x y -- y x y )
-: ?dup dup if dup then ; ( x -- x x | 0 )
-: rot >r swap r> swap ; ( x y z -- y z x )
-: -rot rot rot ; ( x y z -- z x y )
-: 2drop drop drop ; ( x x -- )
+: nip swap drop ; ( x y -- y : remove second item on stack )
+: tuck swap over ; ( x y -- y x y : save item for rainy day )
+: ?dup dup if dup then ; ( x -- x x | 0 : conditional dup )
+: rot >r swap r> swap ; ( x y z -- y z x : "rotate" stack )
+: -rot rot rot ; ( x y z -- z x y : "rotate" stack backwards )
+: 2drop drop drop ; ( x x -- : drop it like it is hot )
 : 2dup  over over ; ( x y -- x y x y )
 
 \ The comparison or test words are defined in relation to
@@ -2910,11 +2941,11 @@ there 2/ primitive t!
 \
 
 : 0<= 0> 0= ; ( n -- f )
-: 0<> 0= 0= ; ( n -- f )
-: = - 0= ; ( u1 u2 -- f )
-: <> = 0= ; ( u1 u2 -- f )
-: >= < 0= ; ( u1 u2 -- f )
-: <= > 0= ; ( u1 u2 -- f )
+: 0<> 0= 0= ; ( n -- f : not equal to zero )
+: = - 0= ; ( u1 u2 -- f : equality )
+: <> = 0= ; ( u1 u2 -- f : inequality )
+: >= < 0= ; ( u1 u2 -- f : greater than or equal to )
+: <= > 0= ; ( u1 u2 -- f : less than or equal to )
 : 0>= 0< 0= ; ( u1 u2 -- f )
 
 \ The unsigned words are defined in terms of each other once
@@ -3090,7 +3121,7 @@ there 2/ primitive t!
 \ those.
 \
 
-: emit pause <emit> @ execute ; ( c -- )
+: emit pause <emit> @ execute ; ( c -- : output byte )
 
 \ "cr" emits a newline, DOS style newlines are used instead
 \ of Unix style newlines, although that can be configured by
@@ -3103,7 +3134,7 @@ there 2/ primitive t!
 \ but no one cares about them.
 \
 
-: cr =cr lit emit =lf lit emit ; ( -- )
+: cr =cr lit emit =lf lit emit ; ( -- : emit new line )
 
 \ There is nothing special about these three words, they are
 \ common, standard, convince words for fetching and storing
@@ -3156,7 +3187,7 @@ there 2/ primitive t!
 \ and give incorrect results.
 \
 
-: pick sp@ + [@] ; ( u -- u )
+: pick sp@ + [@] ; ( nu...n0 u -- nu )
 
 \ "+!" is a useful utility word, often found with "1+!" and
 \ "1-!", neither of which are defined here as they are not
@@ -3184,7 +3215,7 @@ there 2/ primitive t!
 \ "2\*" is faster than "2/". That is why it is done in Forth
 \ as opposed to assembly.
 
-: lshift begin ?dup while 1- swap 2* swap repeat ;
+: lshift begin ?dup while 1- swap 2* swap repeat ; ( n u -- n )
 
 \ The SUBLEQ machine can only do cell aligned loads and stores,
 \ as such we need to it manually, for speed reasons this would
@@ -3227,7 +3258,7 @@ there 2/ primitive t!
 \
 
 : c@ dup @ swap lsb if 8 lit rshift else FF lit and then ;
-: c!  swap FF lit and dup 8 lit lshift or swap
+: c!  swap FF lit and dup 8 lit lshift or swap ( c a -- )
    tuck dup @ swap lsb 0= FF lit xor
    >r over xor r> and xor swap ! ;
 
@@ -3328,8 +3359,8 @@ there 2/ primitive t!
 \ dictionary.
 \
 
-: aligned dup lsb 0<> #1 and + ; ( u -- u )
-: align here aligned h lit ! ; ( -- )
+: aligned dup lsb 0<> #1 and + ; ( u -- u : align up ptr. )
+: align here aligned h lit ! ; ( -- : align up dict. ptr. )
 
 \ "allot" allocates memory in the dictionary, it accepts a
 \ signed number of bytes to allocate, so it is possible to
@@ -5223,13 +5254,34 @@ there 2/ primitive t!
 \ related words, for example a word set for making and
 \ manipulating arrays, which are not a native Forth construct.
 \
-\ "create"/"does>" words are separated into an action performed
-\ during the creation of the new word, and the behavior of the
-\ new word at runtime. The word pair is used heavily during
-\ meta-compilation to make new words that do something with
-\ the target image.
+\ "create"/"does\>" words are separated into an action 
+\ performed during the creation of the new word, and the 
+\ behavior of the new word at runtime. The word pair is used 
+\ heavily during meta-compilation to make new words that do 
+\ something with the target image. They are also some of the 
+\ most difficult words to explain, as in this situation we are 
+\ creating a set of words the will be used to create another 
+\ set of words.
 \
-\ TODO: Explain
+\ Included in this section is a word for manipulating words
+\ defined with "create"/"does\>", called "\>body", and words
+\ which use "create"/"does\>", such as "variable" and 
+\ "constant".
+\
+\ When "create" is run it expects the name of a word to follow
+\ in the input stream, it then creates a new word in the target
+\ dictionary which when that newly created word is run pushes
+\ a variable onto the stack which is the address of the 
+\ location after the newly defined word, allowing you to
+\ allocate memory after the word (for example, for an array)
+\ after the newly defined word. The interesting thing about
+\ words that have been created is that the default action to
+\ push an address can be changed to something else with the
+\ "does\>" word. There are a number of internal words which
+\ are not very useful to anyone other than the person defining
+\ the words here, such as "(var)" and "(const)".
+\
+\ 
 \
 
 :s (var) r> 2* ;s compile-only
@@ -5241,7 +5293,7 @@ there 2/ primitive t!
 :to variable create #0 , ;
 :to constant create cell negate allot compile (const) , ;
 
-: >body cell+ ; ( a -- a )
+: >body cell+ ; ( a -- a : move to a create words body )
 :s (does) r> r> 2* swap >r ;s compile-only
 :s (comp) r> {last} lit @ cfa ! ;s compile-only
 : does> compile (comp) compile (does) ;
@@ -5326,6 +5378,8 @@ there 2/ primitive t!
 :to rdrop compile rdrop ; immediate compile-only
 :to exit compile opExit ; immediate compile-only
 
+\ TODO: Describe string words
+
 :to ." compile .$
   [char] " word count + h lit ! align ; immediate compile-only
 :to $" compile ($)
@@ -5397,10 +5451,10 @@ there 2/ primitive t!
 \
 \
 
-:to ( [char] ) parse 2drop ; immediate
-:to .( [char] ) parse type ; immediate
-:to ) ; immediate
-:to \ tib @ >in ! ; immediate
+:to ( [char] ) parse 2drop ; immediate ( c"xxx" -- )
+:to .( [char] ) parse type ; immediate ( c"xxx" -- )
+:to ) ; immediate ( -- )
+:to \ tib @ >in ! ; immediate ( c"xxx" -- )
 
 \ "postpone" is a word that can be confusing, we have been
 \ introduced to the concept of command mode and compile mode,
@@ -6133,14 +6187,14 @@ there 2/ primitive t!
 \ And that completes the Forth boot sequence.
 \
 :s (cold) ( -- : Forth boot sequence )
-  only forth definitions
+  only forth definitions ( un-mess-up dictionary / set it )
   ini
-  {options} lit @ 4 lit and if info then
-  {options} lit @ 2 lit and if
-    primitive lit @ 2* dup here swap - cksum
-    check lit @ <> if ." cksum fail" bye then
-    {options} lit @ 2 lit xor {options} lit !
-  then quit ;s
+  {options} lit @ 4 lit and if info then ( display info? )
+  {options} lit @ 2 lit and if ( checksum on? )
+    primitive lit @ 2* dup here swap - cksum  ( calc. cksum )
+    check lit @ <> if ." cksum fail" bye then ( oops... )
+    {options} lit @ 2 lit xor {options} lit ! ( disable cksum )
+  then quit ;s ( call the interpreter loop AKA "quit" )
 
 \ # Cooperative Multitasking
 \
@@ -6551,25 +6605,6 @@ bye                           \ Auf Wiedersehen
 As we have called "bye", we can write what we want here without
 it being run.
 
-
-\ # Notes
-\
-\ - The eForth image could determine the SUBLEQ machine size,
-\ and adjust itself accordingly, it would not even require a
-\ power-of-two integer width. Another interesting concept would
-\ be to adapt this eForth to a SUBLEQ machine that used bignums
-\ for each cell, this would require re-engineering functions
-\ like bitwise AND/OR/XOR as they require a fixed cell width to
-\ work efficiently.
-\ - A website with an interactive simulator is available at:
-\   <https://github.com/howerj/subleq-js>
-\ - It would be nice to make a 7400 Integrated Circuit board
-\ that could run and execute this code, or a project in VHDL
-\ for an FPGA that could do it.
-\ - The virtual machine could be sped up with optimization
-\ magic
-\ - Half of the memory used is just for the virtual machine
-\ that allows Forth to be written.
 \
 \ # References:
 \
@@ -6589,6 +6624,35 @@ it being run.
 \
 
 \ # Appendix
+\
+\ ## About the author
+\ 
+\ Hello! Instead of writing about myself awkwardly in the
+\ third person with words such as "The author has..." I
+\ have decided to down a more informal route. I, Richard
+\ James Howe, have been an embedded software engineer in the
+\ automotive sector writing safety critical code in C and
+\ tooling in Perl/C#, I currently work in the smart energy
+\ sector. I have a degree in electronic engineering and have
+\ had a few internships related to that. I also studied in
+\ Germany for a year as part of the Erasmus program.
+\ 
+\ I have interests in programming languages, operating
+\ systems, starting businesses, travelling, going to galleries
+\ and pretending I know about art, reading and would like to
+\ branch out into other hobbies such as wood-working and
+\ web-development (unrelated).
+\ 
+\ I have never programmed Forth (or VHDL) professionally,
+\ only having done so fun.
+\ 
+\ I currently reside in the UK.
+\
+\ The book was written for fun, it has next to no real 
+\ technical value whatsoever but the entire SUBLEQ eForth
+\ system was a lovely puzzle to crack. My next big project will
+\ probably be my own Unix operating system in a Pascal like
+\ language of my own design.
 \
 \ ## Fully Portable SUBLEQ machine written in C
 \
