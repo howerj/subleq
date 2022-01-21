@@ -6,6 +6,7 @@
 *.pdf
 *.exe
 *.txt
+*.png
 eforth.c
 eforth
 full

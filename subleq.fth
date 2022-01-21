@@ -1,6 +1,7 @@
 defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ # Introduction
 \
+\ * Edition: 1.0.0
 \ * Project: Cross Compiler / eForth for a SUBLEQ CPU
 \ * License: The Unlicense
 \ * Author:  Richard James Howe
@@ -9,25 +10,21 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ TODO Section
 \
-\	- Add assembled version of image to appendix
-\	- Publish on Amazon
-\	- Separate SUBLEQ assembler Tutorial
-\	- Other SUBLEQ projects and programs
-\	- Uses; learning, puzzles, games
-\	- Sokoban, floating point, file system,
-\	allocate/free, ...
-\	- About the Author, Other projects, etcetera.
-\	- Possible optimizations; merge exit with last word
-\	- Configuring the option bit in the image
-\	- Make sure that words cannot be longer than 32
-\	characters in length.
-\	- Talk about variable bit width and how that could
-\	be implemented, for a 32 or 64, or even N-bit version.
-\	- Note that "0 here dump" can be used to save a
-\	running image.
-\	- Make diagrams in a proper image editor instead
-\	of having ASCII diagrams (copies of the diagram could
-\	go in the appendix).
+\        - Minimal word-set necessary to support a Forth?
+\        - Add assembled version of image to appendix
+\        - Publish on Amazon
+\        - More headings for different sections, for groups
+\        of words perhaps.
+\        - Separate SUBLEQ assembler Tutorial
+\        - Other SUBLEQ projects and programs
+\        - Uses; learning, puzzles, games
+\        - Sokoban, floating point, file system,
+\        allocate/free, ...
+\        - Configuring the option bit in the image
+\        - Make sure that words cannot be longer than 32
+\        characters in length.
+\        - Talk about variable bit width and how that could
+\        be implemented, for a 32 or 64, or even N-bit version.
 \ 
 \ ## NOTES (Write about them in the book)
 \
@@ -38,8 +35,6 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ for each cell, this would require re-engineering functions
 \ like bitwise AND/OR/XOR as they require a fixed cell width to
 \ work efficiently.
-\ - A website with an interactive simulator is available at:
-\   <https://github.com/howerj/subleq-js>
 \ - It would be nice to make a 7400 Integrated Circuit board
 \ that could run and execute this code, or a project in VHDL
 \ for an FPGA that could do it.
@@ -47,10 +42,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ magic
 \ - Half of the memory used is just for the virtual machine
 \ that allows Forth to be written.
-\ - Testing, why is there no test bench -> recompilation is
-\ the test bench
 
-\	-----------------------------------------------
+\        -----------------------------------------------
 
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
@@ -80,6 +73,15 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ it would very much help if you had some understanding of
 \ Forth and Assembly before hand.
 \
+\ This tutorial will use a 16-bit SUBLEQ VM written in C,
+\ to interact with just the eForth interpreter running itself
+\ no installation is required as there is a web-based version
+\ written in JavaScript available here:
+\
+\ * <https://howerj.github.io/subleq.htm>
+\ * <https://github.com/howerj/subleq>
+\
+\
 \ ## Building This Image
 \
 \ To build the image you will need either gforth, or perhaps
@@ -90,21 +92,21 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ Anyway, to build, on a Unix system:
 \
-\	gcc subleq.c -o subleq
-\	./subleq subleq.dec < subleq.fth > new-image.dec
+\        gcc subleq.c -o subleq
+\        ./subleq subleq.dec < subleq.fth > new-image.dec
 \
 \ And on Windows:
 \
-\	gcc subleq.c -o subleq.exe
-\	subleq.exe subleq.dec < subleq.fth > new-image.dec
+\        gcc subleq.c -o subleq.exe
+\        subleq.exe subleq.dec < subleq.fth > new-image.dec
 \
 \ And with gforth on Unix and Windows:
 \
-\	gforth subleq.fth > new-image.dec
+\        gforth subleq.fth > new-image.dec
 \
 \ And to run the new image:
 \
-\	./subleq new-image.dec
+\        ./subleq new-image.dec
 \
 \ The command shells redirection facilities are used to make
 \ up for a lack of input/output mechanisms within the SUBLEQ
@@ -120,9 +122,9 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ This is done with the following commands on a Unix system:
 \
-\	./subleq subleq.dec < subleq.fth > 1.dec
-\	./subleq 1.dec < subleq.fth > 2.dec
-\	diff -w 1.dec 2.dec
+\        ./subleq subleq.dec < subleq.fth > 1.dec
+\        ./subleq 1.dec < subleq.fth > 2.dec
+\        diff -w 1.dec 2.dec
 \
 \ You may wonder how the original "subleq.dec" image was
 \ created, it was done using gforth to make the first viable
@@ -172,12 +174,12 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ An example of a stack effect comment, on a Forth definition:
 \
-\	: square dup * ; ( n -- n : square a number )
+\        : square dup * ; ( n -- n : square a number )
 \
 \ The stack effect comment is between "(" and ")", it has
 \ the general form of:
 \
-\	( stack input -- stack output : description )
+\        ( stack input -- stack output : description )
 \
 \ The stack refers to the variable stack, and to the number of
 \ items the word consumes or produces. The description is
@@ -188,24 +190,24 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ There is a common naming system for the arguments:
 \
-\	n - A signed number, takes up a single cell on the
-\	    stack.
-\	u - Unsigned single cell number.
-\	c - A single character or byte which will take up a
-\	    a single cell on the stack.
-\	xt - an execution token, this points to a function
-\	    which can be executed later.
-\	a - A cell address, it should be aligned to a 2 byte
-\	   boundary on this system.
-\	b - An address that points to bytes, it will not
-\	   be aligned.
-\	f - a Forth flag, 0 = false, -1 = true.
-\	x y z - Used when the position of the before and
-\	   after picture for the cells matters more than the
-\	   interpretation of the cells themselves.
-\	d - A signed double cell (32-bit) value.
-\	ud - An unsigned double cell value.
-\	wid - An address of a vocabulary or word-list.
+\        n - A signed number, takes up a single cell on the
+\            stack.
+\        u - Unsigned single cell number.
+\        c - A single character or byte which will take up a
+\            a single cell on the stack.
+\        xt - an execution token, this points to a function
+\            which can be executed later.
+\        a - A cell address, it should be aligned to a 2 byte
+\           boundary on this system.
+\        b - An address that points to bytes, it will not
+\           be aligned.
+\        f - a Forth flag, 0 = false, -1 = true.
+\        x y z - Used when the position of the before and
+\           after picture for the cells matters more than the
+\           interpretation of the cells themselves.
+\        d - A signed double cell (32-bit) value.
+\        ud - An unsigned double cell value.
+\        wid - An address of a vocabulary or word-list.
 \
 \ There are a few other conventions surrounding stack effect
 \ comments.
@@ -214,18 +216,18 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ effect comment shows the movement of a single cell from the
 \ variable to the return stack with "R:".
 \
-\	( n --, R: -- n )
+\        ( n --, R: -- n )
 \
 \ Parsing words use "name" to indicate they accept a word of
 \ from the input stream to use, like ":" or "variable":
 \
-\	( --, "name" )
+\        ( --, "name" )
 \
 \ Some words return a variable number (or even more rarely
 \ accept a variable number) of cells, this can be indicated
 \ with "|", for example "key?":
 \
-\	( -- c 0 | -1 )
+\        ( -- c 0 | -1 )
 \
 \ Returns either a single character and a zero *or* negative
 \ one.
@@ -311,19 +313,19 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ Assuming a twos compliment machine and 16-bit shorts, then
 \ this tiny C program will execute the image we will make:
 \
-\	#include <stdio.h>
-\	int main(int x, char **v)
-\	{
-\		FILE *f=fopen(v[1], "r");
-\		short p=0, m[1<<16], *i=m;
-\		while (fscanf(f, "%hd", i++) > 0) ;
-\		for (; p>=0;) {
-\			int a=m[p++],b=m[p++],c=m[p++];
-\			a<0 ? m[b]=getchar() :
-\			b<0 ? putchar(m[a]) :
-\			(m[b]-=m[a]) <= 0 ? p=c :
-\			0;
-\	}}
+\        #include <stdio.h>
+\        int main(int x, char **v)
+\        {
+\                FILE *f=fopen(v[1], "r");
+\                short p=0, m[1<<16], *i=m;
+\                while (fscanf(f, "%hd", i++) > 0) ;
+\                for (; p>=0;) {
+\                        int a=m[p++],b=m[p++],c=m[p++];
+\                        a<0 ? m[b]=getchar() :
+\                        b<0 ? putchar(m[a]) :
+\                        (m[b]-=m[a]) <= 0 ? p=c :
+\                        0;
+\        }}
 \
 \ Or, alternatively you can test out the system online here:
 \
@@ -343,7 +345,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ contains a full Forth interpreter, however here is an example
 \ program that prints out "Hi" and then exits:
 \
-\	9 -1 3 10 -1 6 0 0 -1 72 105 0
+\        9 -1 3 10 -1 6 0 0 -1 72 105 0
 \
 \ You can see that this CPU architecture is barren, spartan, it
 \ does not offer what we usually expect from a processor. It
@@ -362,8 +364,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ instruction, or "JMP", can be made in the following fashion,
 \ using "A", "B", and "C" for the operands as we did before:
 \
-\ 	JMP c
-\		subleq Z, Z, c
+\         JMP c
+\                subleq Z, Z, c
 \
 \ A jump can be implemented in a single instruction, the "Z"
 \ in this instruction is the location of a cell which should
@@ -377,8 +379,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ "NOP" can be coded as:
 \
-\	NOP
-\		subleq Z, Z
+\        NOP
+\                subleq Z, Z
 \
 \ Note that the third operand is omitted, we take this to
 \ mean that the jump location should be the location of the
@@ -386,11 +388,11 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ A non-trivial instruction is "ADD":
 \
-\	ADD a, b
+\        ADD a, b
 \
-\		subleq a, Z
-\ 		subleq Z, b
-\		subleq Z, Z
+\                subleq a, Z
+\                 subleq Z, b
+\                subleq Z, Z
 \
 \ "ADD" stores a temporary result in "Z", but it should
 \ start off as zero as always, it effectively negates what is
@@ -520,11 +522,11 @@ only forth definitions hex
 \ and some for the eForth interpreter running on the SUBLEQ
 \ machine. The structure:
 \
-\ 	defined eforth [if]
-\		( CODE EXECUTED IN EFORTH )
-\	[else]
-\		( CODE EXECUTED IN GFORTH )
-\	[then]
+\         defined eforth [if]
+\                ( CODE EXECUTED IN EFORTH )
+\        [else]
+\                ( CODE EXECUTED IN GFORTH )
+\        [then]
 \
 \ Is used, seldomly. Here it is used because "wordlist" is not
 \ defined in the base eForth image, but is in gforth. To bring
@@ -533,7 +535,7 @@ only forth definitions hex
 \
 
 defined eforth [if]
-  : wordlist here cell allot 0 over ! ;
+  : wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
 [then]
 
 \ We then define the following wordlists, "meta.1" is used for
@@ -648,10 +650,10 @@ variable tlocal 0 tlocal !
 defined eforth [if]
   :m tpack dup tc, for aft count tc, then next drop ;m
   :m parse-word bl word ?nul count ;m
-  :m limit ;m
+  :m limit ;m ( u -- u16 : not needed on 16-bit systems )
 [else]
   :m tpack talign dup tc, 0 ?do count tc, loop drop ;m
-  :m limit FFFF and ;m
+  :m limit FFFF and ;m ( u -- u16 : limit variable to 16 bits )
 [then]
 
 \ "\$literal" is defined now, but will not be of much use
@@ -860,44 +862,11 @@ defined eforth [if]
 \ functions, available to the system, the "words" each have a
 \ header, and the dictionary and headers looks like this:
 \
-\	+--------------------+
-\	| Vocabulary Pointer |
-\	+--------------------+
-\	    |
-\	   \|/
-\	    .
-\	+------+----+-----------+--------...
-\	| Prev | CB | Word Name | Code...
-\	+------+----+-----------+--------...
-\	    |
-\	   \|/
-\	    .
-\	+------+----+-----------+--------...
-\	| Prev | CB | Word Name | Code...
-\	+------+----+-----------+--------...
-\	    |
-\	   \|/
-\	    .
-\	+-------+
-\	| NULL  |
-\	+-------+
+\ ![Dictionary Format](img/dictionary.png)
 \
-\	Prev: Pointer to previous word in linked list
-\	CB:   Part of the Name Field Address along with
-\	      the first byte of "Word Name", it contains
-\	      word header flags, as well as the length of
-\	      "Word Name", which is a variable length string.
-\	Word Name: The name of the Forth word, it is a variable
-\	      length string. The length of which is stored in
-\	      the lowest five bits of Cb.
-\	Code...: A variable length series cells that form the
-\	      code portion of the Forth word, usually ending
-\	      in an exit/return instruction.
-\	NULL: The end of the linked list.
-\	Vocabulary Pointer: The handle used to identify the
-\	      vocabulary, a pointer to the start of the linked
-\	      list of words.
+\ (See the appendix for the ASCII ART version of this diagram)
 \
+
 \ The word "thead" makes a header for a word in the target, it
 \ writes a pointer to the previously defined word making a link
 \ in the dictionary linked list, parses the next word in the
@@ -1008,16 +977,20 @@ defined eforth [if] system -order [then]
 \
 \ The memory layout of the Forth Virtual Machine is as follows:
 \
-\	0: Zero Register.
-\ 	1: Zero Register.
-\ 	2: Jump to Forth Virtual Machine Start.
-\	3: Options variable.
-\       3 to W-1: System variables.
-\	...
-\	W: label start; The Forth VM entry point.
-\	X: label vm; The Forth VM.
-\	Y: Forth VM instruction implementation.
-\	Z: Forth Code that uses Forth VM instructions.
+\ TODO: Turn into image, add in thread/word layout
+\
+\        0: Zero Register.
+\         1: Zero Register.
+\         2: Jump to Forth Virtual Machine Start.
+\        3: Options variable.
+\
+\        3 to W-1: System variables.
+\        ...
+\
+\        W: label start; The Forth VM entry point.
+\        X: label vm; The Forth VM.
+\        Y: Forth VM instruction implementation.
+\        Z: Forth Code that uses Forth VM instructions.
 \
 \ Cells 0, 1, and 2 also form the first SUBLEQ instruction,
 \ and the first two cells must be zero, as mentioned
@@ -1064,7 +1037,7 @@ defined eforth [if] system -order [then]
 \ "ADD" is more complex than "SUB", they both have the same
 \ form:
 \
-\	source destination instruction
+\        source destination instruction
 \
 \ Where both "source" and "destination" are Forth byte
 \ addresses (which should always be aligned), for "SUB" the
@@ -1155,7 +1128,7 @@ defined eforth [if] system -order [then]
 \ however the assembler version of "if" instead reads (and does
 \ not modify) a memory location, so it must be used like so:
 \
-\	<location> if ... then
+\        <location> if ... then
 \
 \ The same goes for "until", and "while", "+if", and "-if".
 \ "+if" and "-if" are also new, they will execute if the
@@ -1238,7 +1211,7 @@ label: entry       \ used to set entry point in next cell
 \ brackets, so for example the word "cold", defined later on,
 \ is defined as:
 \
-\	:t cold {cold} lit @ execute ;t
+\        :t cold {cold} lit @ execute ;t
 \
 \ It just refers to "{cold}", what "cold" does will be
 \ described later at a more appropriate juncture.
@@ -1337,15 +1310,15 @@ label: entry       \ used to set entry point in next cell
 \ to be the same as the unconditional jump, potentially saving
 \ a single cycles execution. It may help to illustrate this:
 \
-\	subleq ?, ?
-\	subleq Z, Z, c
+\        subleq ?, ?
+\        subleq Z, Z, c
 \
 \ The first "subleq" instruction always branches to next one,
 \ the second one always branches to "c". We can replace this
 \ with the equivalent:
 \
-\	subleq ?, ?, c
-\	subleq Z, Z, c
+\        subleq ?, ?, c
+\        subleq Z, Z, c
 \
 \ The first instruction *may* branch to "c", the second one
 \ always will. It is a minor optimization that is easy to
@@ -1356,7 +1329,7 @@ label: entry       \ used to set entry point in next cell
 \ a subtraction using twos-compliment arithmetic is equivalent
 \ to the following:
 \
-\	b - a = b + ~a + 1
+\        b - a = b + ~a + 1
 \
 \ If we would like to invert "a", we must get rid of "b" and
 \ the +1 terms. We perform the subtraction, zeroing "b" first
@@ -1429,8 +1402,8 @@ label: entry       \ used to set entry point in next cell
 \ already defined "isqrt" for computing the integer square
 \ root.
 \
-\	: square dup * ;
-\ 	: pythagoras square swap square + isqrt ;
+\        : square dup * ;
+\         : pythagoras square swap square + isqrt ;
 \
 \ In the above example, and in this interpreter, "dup", "*",
 \ and "swap" are primitives, "square", "pythagoras" and "isqrt"
@@ -1441,29 +1414,29 @@ label: entry       \ used to set entry point in next cell
 \ One way would be something like this:
 \
 \
-\	+:
-\		Assembly instructions...
-\		exit
-\	*:
-\		Assembly instructions...
-\		exit
-\	DUP:
-\		Assembly instructions...
-\		exit
-\	SWAP:
-\		Assembly instructions...
-\		exit
-\ 	SQUARE:
-\		call dup
-\		call *
-\		exit
-\	PYTHAGORAS:
-\		call square
-\		call swap
-\		call square
-\		call +
-\		call isqrt
-\		exit
+\        +:
+\                Assembly instructions...
+\                exit
+\        *:
+\                Assembly instructions...
+\                exit
+\        DUP:
+\                Assembly instructions...
+\                exit
+\        SWAP:
+\                Assembly instructions...
+\                exit
+\         SQUARE:
+\                call dup
+\                call *
+\                exit
+\        PYTHAGORAS:
+\                call square
+\                call swap
+\                call square
+\                call +
+\                call isqrt
+\                exit
 \
 \ Where "call", "exit", and the assembly instructions are
 \ native instructions in the machine. This is known as
@@ -1471,33 +1444,33 @@ label: entry       \ used to set entry point in next cell
 \ not have those instructions built in. If we want to perform
 \ a call or return then we must implement that in our VM.
 \
-\	+:
-\		Assembly instructions...
-\		Jump to VM
-\	*:
-\		Assembly instructions...
-\		Jump to VM
-\	DUP:
-\		Assembly instructions...
-\		Jump to VM
-\	SWAP:
-\		Assembly instructions...
-\		Jump to VM
-\	EXIT:
-\		Assembly instructions...
-\ 		Jump to VM
-\	\ ----- END OF VM INSTRUCTIONS -----
-\ 	SQUARE:
-\		Address of dup
-\		Address of *
-\		Address of exit
-\	PYTHAGORAS:
-\		Address of square
-\		Address of swap
-\		Address of square
-\		Address of +
-\		Address of isqrt
-\		Address of exit
+\        +:
+\                Assembly instructions...
+\                Jump to VM
+\        *:
+\                Assembly instructions...
+\                Jump to VM
+\        DUP:
+\                Assembly instructions...
+\                Jump to VM
+\        SWAP:
+\                Assembly instructions...
+\                Jump to VM
+\        EXIT:
+\                Assembly instructions...
+\                 Jump to VM
+\        \ ----- END OF VM INSTRUCTIONS -----
+\         SQUARE:
+\                Address of dup
+\                Address of *
+\                Address of exit
+\        PYTHAGORAS:
+\                Address of square
+\                Address of swap
+\                Address of square
+\                Address of +
+\                Address of isqrt
+\                Address of exit
 \
 \ In this version, our compiled words consist of addresses of
 \ functions and VM instructions, instead of raw calls to
@@ -1710,16 +1683,16 @@ assembler.1 -order
 \ As an example, the following word "x", pushes "2", then "3"
 \ onto the variable stack:
 \
-\	: x 2 3 ;
+\        : x 2 3 ;
 \
 \ This gets compiled to:
 \
-\	PUSH:
-\		opPush
-\		2
-\		opPush
-\		3
-\		exit
+\        PUSH:
+\                opPush
+\                2
+\                opPush
+\                3
+\                exit
 \
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
 
@@ -1738,7 +1711,7 @@ assembler.1 -order
 \ task address stored in "{up}", and pushes that onto the
 \ stack. The address should be cell and not byte address, so
 \
-\	opUp 0
+\        opUp 0
 \
 \ Would refer to the first thread local cell and push the
 \ address of it onto the stack.
@@ -1753,12 +1726,12 @@ assembler.1 -order
 \ stack manipulation functions, they implement the following
 \ Forth functions, as is to be expected:
 \
-\	opSwap  -> swap ( x y -- y x )
-\	opDup   -> dup  ( x -- x x )
-\	opOver  -> over ( x y -- x y x )
-\	opDrop  -> drop ( x -- )
-\	opToR   -> >r   ( x --, R: -- x )
-\	opFromR -> r>   ( -- x, R: x -- )
+\        opSwap  -> swap ( x y -- y x )
+\        opDup   -> dup  ( x -- x x )
+\        opOver  -> over ( x y -- x y x )
+\        opDrop  -> drop ( x -- )
+\        opToR   -> >r   ( x --, R: -- x )
+\        opFromR -> r>   ( -- x, R: x -- )
 \
 \ There is nothing much to say about them, but see if you can
 \ understand how they work. The stack effect comments describe
@@ -1774,7 +1747,43 @@ assembler.1 -order
 \ "opExit", which is used to make "exit", deserves some
 \ explanation, it implements a "return", as part of the
 \ call/returns you find in most instruction sets. It restores
-\ execution to the cell after the call was made.
+\ execution to the cell after the call was made by moving
+\ what "{rp}" points to into "ip" and then decrementing the
+\ return stack pointer for the next return or call.
+\
+\ Some aliases for this word include "unnest", "exit", 
+\ "return".
+\
+\ Some Forth implementations also do some optimizations when
+\ compiling an exit into the dictionary (this one does not).
+\ The H2 CPU from <https://github.com/howerj/forth-cpu> Forth
+\ implementation does this more advanced optimizations on exit
+\ allowed by the instruction set, however most Forth 
+\ implementations can at least perform a tail-call 
+\ optimization (again, this version does not do this for
+\ simplicities sake). The optimization is simple, when
+\ you have a Forth word like:
+\
+\        : x a b c ;
+\
+\ The words "a", "b" and "c" are all function calls, however
+\ the last call to "c" could instead be made to be a simple
+\ jump assuming that "c" is itself a normal Forth function,
+\ it will instead call "opExit". This is sometimes fast 
+\ (a direct jump sometimes being faster than a function call)
+\ but it always saves on return stack space as the return
+\ site does not have to be pushed to the return stack.
+\
+\ The way this would be implemented is the word that will
+\ compile "opExit" would need to look at the previously 
+\ compiled (and perhaps some meta-information) and check if it
+\ is a function call, if so, it can change it to a jump. We
+\ will not do this optimization in this Forth. The optimizer
+\ has to either be aware of cells that might look like calls
+\ but are not (think compiled numbers) and be aware not to 
+\ cross control structure boundaries or the programmer has
+\ to selectively apply the optimization themselves which is
+\ error prone.
 \
 
 :a opExit ip {rp} iLOAD --rp ;a
@@ -1848,14 +1857,14 @@ assembler.1 -order
 \
 \ As an example:
 \
-\	: example for r@ . next ;
+\        : example for r@ . next ;
 \
 \ Would compile to something like this:
 \
-\	0: opToR
-\	1: r@ instruction
-\	2: address of .
-\	3: opNext 1
+\        0: opToR
+\        1: r@ instruction
+\        2: address of .
+\        3: opNext 1
 \
 \ And if run with 2, like "2 example", would produce the output
 \ "2 1 0".
@@ -1902,19 +1911,19 @@ assembler.1 -order
 \
 \ As an example,
 \
-\	: example if 2 2 + . then 3 3 + . ;
+\        : example if 2 2 + . then 3 3 + . ;
 \
 \ Will be compiled to something that looks like this:
 \
-\	0: opJumpZ 5
-\	1: opPush 2
-\	2: opPush 2
-\	3: address of +
-\	4: address of .
-\	5: opPush 3
-\	6: opPush 3
-\	7: address of +
-\	8: address of .
+\        0: opJumpZ 5
+\        1: opPush 2
+\        2: opPush 2
+\        3: address of +
+\        4: address of .
+\        5: opPush 3
+\        6: opPush 3
+\        7: address of +
+\        8: address of .
 \
 \ Where the address along the side are cell addresses.
 \
@@ -1944,8 +1953,8 @@ assembler.1 -order
 \ "all bits set", and allows the boolean to be used with
 \ the bitwise logical operators as a mask.
 \
-\ "op0>" is used to make the Forth word "0>", and ">" the
-\ Forth word ">", and so on. They could also be defined in
+\ "op0\>" is used to make the Forth word "0\>", and "\>" the
+\ Forth word "\>", and so on. They could also be defined in
 \ terms of each other, however for efficiencies sake they are
 \ not.
 \
@@ -1956,15 +1965,15 @@ assembler.1 -order
 \ functionality of min, both of which are contingent on the
 \ comparison operators returning a Forth, and not a C, boolean.
 \
-\	: mux ( x1 x2 mask -- x )
-\		dup >r and swap r> invert and or ;
+\        : mux ( x1 x2 mask -- x )
+\                dup >r and swap r> invert and or ;
 \
 \ "min" and "max" will not be defined like this later, as
 \ bitwise operators are expensive on the SUBLEQ machine.
 \
-\ NB. There are some bugs with the comparison operators "op<"
-\ and "op>" when they deal with extreme values like
-\ "\$8000 1 <", "\$8002 1 <" works fine.
+\ NB. There are some bugs with the comparison operators "op\<"
+\ and "op\>" when they deal with extreme values like
+\ "\$8000 1 \<", "\$8002 1 \<" works fine.
 :a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
 :a op0=
    tos w MOV neg1 tos MOV
@@ -2017,11 +2026,11 @@ assembler.1 -order
 \ machine we will only need to loop three times. After each
 \ iteration the "x" will be as shown, given the "tos":
 \
-\	tos      x
-\	         0000 ( x starts as 0 )
-\	1010     0001
-\	0100     0010
-\	1000     0101
+\        tos      x
+\                 0000 ( x starts as 0 )
+\        1010     0001
+\        0100     0010
+\        1000     0101
 \
 \ In each cycle, "x" is first doubled, but as it starts as
 \ zero, this is has no effect, if the top most bit of "tos"
@@ -2087,7 +2096,7 @@ assembler.1 -order
 \ bits together we can then use the comparison operators to
 \ determine what the new bit should be in the output.
 \
-\	0 + 0 = 0
+\       0 + 0 = 0
 \       0 + 1 = 1
 \       1 + 0 = 1
 \       1 + 1 = 2
@@ -2184,7 +2193,9 @@ assembler.1 -order
 \ to be divided goes negative. It assumes its inputs are
 \ positive and will not work for negative numbers, much like
 \ restoring division. It then fixes up the result after the
-\ loop has finished and pushes the result.
+\ loop has finished and pushes the result. Although the
+\ algorithm itself is slow, the assembly version is much
+\ faster than "um/mod".
 \
 
 :a opDivMod
@@ -2350,16 +2361,16 @@ there 2/ primitive t!
 \ stack and compiles into a word definition. We can use this
 \ in an example:
 \
-\	:t example 2 lit 2 lit + . cr ;t
+\        :t example 2 lit 2 lit + . cr ;t
 \
 \ Which defines a word in the target which will print "4",
 \ if instead we defined:
 \
-\	:t example 2 2 lit + . cr ;t
+\        :t example 2 2 lit + . cr ;t
 \
 \ Or:
 \
-\	:t example lit 2 lit + . cr ;t
+\        :t example lit 2 lit + . cr ;t
 \
 \ The corresponding correct constant would be given to ";t"
 \ and an error would be detected. "lit" and how it works will
@@ -2422,11 +2433,29 @@ there 2/ primitive t!
 \ so we are left with having to call "lit" after each number
 \ we want to compile into a target word.
 \
+\ "up" takes a number representing an index into the thread
+\ local storage and compiles an instruction into the dictionary
+\ that will push a number on to the stack at run time that
+\ represents the address of that thread local variable.
+\
+\ "\[char\]" and "char" have different uses in a running Forth,
+\ when meta-compiling there is no command vs compile mode,
+\ we use meta-compiler commands to compile into the target
+\ always, so for the meta-compiler the words both do the same
+\ thing, which is to get a single character from the input
+\ stream and compile into the dictionary instructions which 
+\ push the number representing that character on to the 
+\ variable stack.
+\
+\ All of these operations take up two cells in the dictionary
+\ as they are not just a simple call, but a VM instruction and
+\ then the compiled number.
+\
 
-:m lit         opPush t, ;m ( n -- )
-:m up          opUp   t, ;m ( n -- )
-:m [char] char opPush t, ;m ( --, "name" )
-:m char   char opPush t, ;m ( --, "name" )
+:m lit         opPush t, ;m ( n -- : compile literal )
+:m up          opUp   t, ;m ( n -- : compile user variable )
+:m [char] char opPush t, ;m ( --, "name" : compile char )
+:m char   char opPush t, ;m ( --, "name" : compile char )
 
 \ It is interesting to see just how simple and easy it is
 \ to define a set of words for creating control structures.
@@ -2449,20 +2478,27 @@ there 2/ primitive t!
 \ will be defined within the target dictionary will require
 \ their immediate flag to be set in their word headers.
 \
-\ TODO: Describe how these work, again
+\ The stack effects for these words describe the meta-compiler
+\ behavior and not their runtime one, the runtime behavior
+\ should be the same as the usual Forth control structures of
+\ the same name. The items pushed on to the stack are either
+\ addresses to jump to or holes in the dictionary that need to
+\ be patched with the correct addresses.
+\
+\ TODO: More description.
 
-:m begin talign there ;m
-:m until talign opJumpZ 2/ t, ;m
-:m again talign opJump  2/ t, ;m
-:m if opJumpZ there 0 t, ;m
-:m mark opJump there 0 t, ;m
-:m then there 2/ swap t! ;m
-:m else mark swap then ;m
-:m while if ;m
+:m begin talign there ;m ( -- a )
+:m until talign opJumpZ 2/ t, ;m  ( a -- )
+:m again talign opJump  2/ t, ;m ( a -- )
+:m if opJumpZ there 0 t, ;m ( -- a )
+:m mark opJump there 0 t, ;m ( -- a )
+:m then there 2/ swap t! ;m ( a -- )
+:m else mark swap then ;m ( a -- a )
+:m while if ;m ( -- a )
 :m repeat swap again then ;m
-:m aft drop mark begin swap ;m
-:m next talign opNext 2/ t, ;m
-:m for opToR begin ;m
+:m aft drop mark begin swap ;m ( a -- a a )
+:m next talign opNext 2/ t, ;m ( a -- )
+:m for opToR begin ;m ( -- a )
 
 \ The following words will be useful for defining control
 \ structures within the newly made Forth interpreter image,
@@ -2547,7 +2583,7 @@ there 2/ primitive t!
 \
 \ The definitions looks odd, for example:
 \
-\	:to 1+ 1+ ;
+\        :to 1+ 1+ ;
 \
 \ Looks like it would be a recursive function that never
 \ terminates, however due to the way ":to" defines words the
@@ -2594,7 +2630,9 @@ there 2/ primitive t!
 :so pause pause ;s ( -- : pause current task, task switch )
 
 \ "nop" stands for 'no-operation', it is useful for some of
-\ the hooks we have. It does nothing.
+\ the hooks we have. It does nothing. We could have used
+\ ")" for this, another Forth word that does nothing, but
+\ sometimes it is better to be a little more explicit.
 \
 : nop ; ( -- : do nothing! )
 
@@ -2616,31 +2654,31 @@ there 2/ primitive t!
 \ Note which variables are USER variables and which are just
 \ normal memory locations.
 \
-\ "<ok>", "<emit>", "<echo>", "<literal>" and "<cold>" are used
-\ for system hooks. This allows the words they are used in to
-\ change at run time. For example, "<ok>" contains the
-\ execution token used to print the "ok" prompt, which we have
-\ already encountered. By changing that execution token we
-\ can change that prompt. For example:
+\ "\<ok\>", "\<emit\>", "\<echo\>", "\<literal\>" and 
+\ "\<cold\>" are used for system hooks. This allows the words 
+\ they are used in to change at run time. For example, "\<ok\>"
+\ contains the execution token used to print the "ok" prompt, 
+\ which we have already encountered. By changing that execution
+\ token we can change that prompt. For example:
 \
-\	: prompt cr ." ok>" ;
-\	' prompt <ok> !
+\        : prompt cr ." ok>" ;
+\        ' prompt <ok> !
 \
-\ Will print a prompt that says "ok>" after each line is
+\ Will print a prompt that says "ok\>" after each line is
 \ executed.
 \
-\ "<cold>" is a normal variable and not a USER variable as it
+\ "\<cold\>" is a normal variable and not a USER variable as it
 \ needs to be available before the first thread is set up, it
 \ contains the execution token of the first Forth word to be
 \ executed.
 \
-\ "<ok> is in the normal Forth vocabulary despite it being a
+\ "\<ok\> is in the normal Forth vocabulary despite it being a
 \ non-standard word, this is because we need to silence the ok
 \ prompt at the start of the script to ensure our output is
 \ not corrupted.
 \
 \ It is not a hard rule, but usually hook variables have the
-\ "<>" brackets enclosing them, and the functionality is
+\ "\<\>" brackets enclosing them, and the functionality is
 \ provided by a word with a name like "(name)", the word that
 \ executes the hook will be called just "name".
 \
@@ -2648,7 +2686,7 @@ there 2/ primitive t!
 \
 \ That is,
 \
-\	' (cold) <cold> !
+\        ' (cold) <cold> !
 \
 \ Will not work, this works for setting most execution vectors,
 \ but not this one, "{cold}" needs to be executed by the
@@ -2659,7 +2697,7 @@ there 2/ primitive t!
 \
 \ The following should work:
 \
-\	' (cold) 2/ <cold> !
+\        ' (cold) 2/ <cold> !
 \
 : <ok> {ok} up ; ( -- a )
 :s <emit> {emit} up ;s ( -- a )
@@ -2728,7 +2766,7 @@ there 2/ primitive t!
 \ "state" is best dealt with when talking about the interpreter
 \ loop.
 \
-\ "hld" also belongs with numeric I/O with "dpl", ">in" with
+\ "hld" also belongs with numeric I/O with "dpl", "\>in" with
 \ the parsing words.
 \
 \ "base" controls the input and output radix, if you want
@@ -2747,8 +2785,8 @@ there 2/ primitive t!
 \ in hexadecimal, regardless of what base you are in, you could
 \ use the following word definition:
 \
-\	decimal
-\	: .hex base @ >r 16 base ! . r> base ! ;
+\        decimal
+\        : .hex base @ >r 16 base ! . r> base ! ;
 \
 \ It is common to see the expressions "base @ \>r" and
 \ "r\> base !" in Forth words definitions that deal with
@@ -2775,7 +2813,7 @@ there 2/ primitive t!
 \ are in at the time, if you want to print out a number in
 \ hexadecimal you could use the expression:
 \
-\	16 base !
+\        16 base !
 \
 \ However, this will not necessarily work when you are
 \ interactively entering commands and you have lost track of
@@ -2789,9 +2827,9 @@ there 2/ primitive t!
 \
 \ Also commonly defined:
 \
-\	decimal
-\	: octal 8 base ! ;
-\	: binary 2 base ! ;
+\        decimal
+\        : octal 8 base ! ;
+\        : binary 2 base ! ;
 \
 \ You could use higher bases as a data interchange format,
 \ allowing binary data to be transferred as text with a
@@ -2827,8 +2865,8 @@ there 2/ primitive t!
 \ The words are often used within other word definitions to
 \ get back into command mode temporarily. For example:
 \
-\	: x 2 2 + . cr ;
-\	: y [ 2 2 + ] literal . cr ;
+\        : x 2 2 + . cr ;
+\        : y [ 2 2 + ] literal . cr ;
 \
 \ Both print the same result, however "y" is smaller and
 \ executes faster (not that it matters for such a short word).
@@ -2838,19 +2876,19 @@ there 2/ primitive t!
 \ look like this:
 \
 \
-\	X:
-\		opPush 2
-\		opPush 2
-\		address of +
-\		address of .
-\		address of cr
-\		opExit
+\        X:
+\                opPush 2
+\                opPush 2
+\                address of +
+\                address of .
+\                address of cr
+\                opExit
 \
-\	Y:
-\		opPush 4
-\		address of .
-\		address of cr
-\		opExit
+\        Y:
+\                opPush 4
+\                address of .
+\                address of cr
+\                opExit
 \
 \ This is why it is important "\[" is immediate, but "\]" does
 \ not need to be. It needs to immediately switch from compile
@@ -3164,9 +3202,9 @@ there 2/ primitive t!
 \ The word "pick" fetches the n-th item on the stack, using
 \ zero indexing, so for example:
 \
-\ 	50 40 30 20 10 0 pick . ( prints 10 )
-\ 	50 40 30 20 10 1 pick . ( prints 20 )
-\ 	50 40 30 20 10 2 pick . ( prints 30 )
+\         50 40 30 20 10 0 pick . ( prints 10 )
+\         50 40 30 20 10 1 pick . ( prints 20 )
+\         50 40 30 20 10 2 pick . ( prints 30 )
 \
 \ That is, the first element on the stack is at position 0,
 \ the second at position 1, and so on. Not the positions are
@@ -3177,7 +3215,7 @@ there 2/ primitive t!
 \ the following version of "pick" that shifts values between
 \ the data and return stack can be defined:
 \
-\	: pick ?dup if swap >r 1- pick r> swap exit then dup ;
+\        : pick ?dup if swap >r 1- pick r> swap exit then dup ;
 \
 \ Be warned though, this version of "pick" is slower but the
 \ main concern is its high stack usage, especially as systems
@@ -3200,8 +3238,8 @@ there 2/ primitive t!
 \
 \ "1+!" and "1-!" are easy enough to define yourself:
 \
-\	: 1+!  1 swap +! ;
-\	: 1-! -1 swap +! ;
+\        : 1+!  1 swap +! ;
+\        : 1-! -1 swap +! ;
 \
 \ If you need them. Do not forget to change the ":" and ";"
 \ into ":t" and ";t", as well as changing "1" to "#1" and "-1"
@@ -3310,7 +3348,7 @@ there 2/ primitive t!
 \ two numbers between the return and data stacks. Note that
 \ the implementation of "2\>r" *cannot* just be:
 \
-\	: 2>r >r >r ;
+\        : 2>r >r >r ;
 \
 \ As the return stack is used to store the position of
 \ where a function was called from, if we implement as above
@@ -3347,11 +3385,11 @@ there 2/ primitive t!
 \
 \ For some example mappings:
 \
-\	0 aligned -> 0
-\	1 aligned -> 2
-\	2 aligned -> 2
-\	3 aligned -> 4
-\	4 aligned -> 4
+\        0 aligned -> 0
+\        1 aligned -> 2
+\        2 aligned -> 2
+\        3 aligned -> 4
+\        4 aligned -> 4
 \
 \ "align" does the same for "aligned", but operates on the
 \ dictionary pointer. It is common to want to align the
@@ -3368,8 +3406,8 @@ there 2/ primitive t!
 \ useful, however it is usually used by the user to allocate
 \ space for an array, or a string, like so:
 \
-\	decimal
-\	create example 100 allot
+\        decimal
+\        create example 100 allot
 \
 \ Which creates a word which when run returns an address, that
 \ address has 100 *bytes*, not cells, allocated to it.
@@ -3379,10 +3417,10 @@ there 2/ primitive t!
 \ call "align" before hand. It can also be used to allocate
 \ memory in the dictionary:
 \
-\	create example 1 , 2 , 3 ,
-\	example @ .
-\	example cell+ @ .
-\	example cell+ cell+ @ .
+\        create example 1 , 2 , 3 ,
+\        example @ .
+\        example cell+ @ .
+\        example cell+ cell+ @ .
 \
 \ This creates a word "example" which returns an address when
 \ run which points the dictionary space where we have just
@@ -3402,8 +3440,8 @@ there 2/ primitive t!
 \
 \ For example:
 \
-\	: x 2 2 [ ' + compile, ] . cr ;
-\	: y 2 2 [ ' + , ] . cr ;
+\        : x 2 2 [ ' + compile, ] . cr ;
+\        : y 2 2 [ ' + , ] . cr ;
 \
 \ The function "x" will work, but "y" will not. "compile,"
 \ is defined later.
@@ -3426,11 +3464,11 @@ there 2/ primitive t!
 \
 \ An example for doing a byte-wise memory dump using "count":
 \
-\	: cdump for aft count . then next ;
+\        : cdump for aft count . then next ;
 \
 \ And a common idiom for printing out counted strings:
 \
-\	count type
+\        count type
 \
 \ Which uses "type", a word we will encounter next.
 \
@@ -3493,17 +3531,17 @@ there 2/ primitive t!
 \
 \ How does "do\$" work? Let us see a compiled string:
 \
-\	: x ." HELLO" cr ;
+\        : x ." HELLO" cr ;
 \
 \ This will be compiled to something like this, with one 16-bit
 \ cell per line:
 \
-\	X:
-\		address of .$
-\		5,'H'
-\		'E','L'
-\		'L','O'
-\		address of exit
+\        X:
+\                address of .$
+\                5,'H'
+\                'E','L'
+\                'L','O'
+\                address of exit
 \
 \ Note that the word '."' does not appear in the compiled
 \ program! It compiles ".\$" and the string into the
@@ -3547,14 +3585,14 @@ there 2/ primitive t!
 \ Another example of messing around with the return stack
 \ to achieve greatness is:
 \
-\	: ?exit if rdrop then ; compile-only
+\        : ?exit if rdrop then ; compile-only
 \
 \ Which will conditionally return from the *caller* of the
 \ function, an example usage:
 \
-\	: x ." Executed." cr ?exit ." Conditionally Exec." cr ;
-\	0 x
-\	1 x
+\        : x ." Executed. " ?exit ." Conditionally Exec." cr ;
+\        0 x
+\        1 x
 \
 
 :s do$ r> r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
@@ -3573,7 +3611,7 @@ there 2/ primitive t!
 \
 \ For exceptional circumstances Forth provides the words
 \ "catch" and "throw", usually the author does not like 
-\ exceptions in languages other than Forth (specifically C like 
+\ exceptions in languages other than Forth (specifically C like
 \ languages, although the higher level the language is, the 
 \ more acceptable they are), I instead prefer other mechanisms,
 \ or even just returning error codes.
@@ -3633,16 +3671,16 @@ there 2/ primitive t!
 \ operators are expensive and branching is cheap, is to use
 \ the following construct to conditionally throw:
 \
-\	0= -1 and throw
+\        0= -1 and throw
 \
 \ Or more generally:
 \
-\	<conditional> <error-code> and throw
+\        <conditional> <error-code> and throw
 \
 \ Which will throw an error if a condition is true, which
 \ replaces:
 \
-\	<conditional> if <error-code> throw then
+\        <conditional> if <error-code> throw then
 \
 \ "if...then" generates slightly larger code on most Forth
 \ implementations, and branches, than using "and". The source
@@ -3802,7 +3840,7 @@ there 2/ primitive t!
 \
 \ Given "um\*", "\*" can be coded with:
 \
-\	: * um* drop ;
+\        : * um* drop ;
 \
 \ Rendering its implementation trivial. To really improve
 \ the speed of this implementation, and any similar eForth 
@@ -3845,15 +3883,15 @@ there 2/ primitive t!
 \ We can implement some of the signed double cell arithmetic
 \ words if we need them as well, with:
 \
-\	: 2swap >r -rot r> -rot ;        ( w x y z -- y z w x )
-\	: d< rot 2dup >                    ( d -- f )
-\	  if = nip nip if 0 exit then -1 exit then
-\	  2drop u< ;
-\	: d>  2swap d< ;                   ( d -- t )
-\	: du> 2swap du< ;                  ( d -- t )
-\	: d=  rot = -rot = and ;           ( d d -- t )
-\	: d- dnegate d+ ;                  ( d d -- d )
-\	: dabs  s>d if dnegate exit then ; ( d -- ud )
+\        : 2swap >r -rot r> -rot ;       ( w x y z -- y z w x )
+\        : d< rot 2dup >                    ( d -- f )
+\          if = nip nip if 0 exit then -1 exit then
+\          2drop u< ;
+\        : d>  2swap d< ;                   ( d -- t )
+\        : du> 2swap du< ;                  ( d -- t )
+\        : d=  rot = -rot = and ;           ( d d -- t )
+\        : d- dnegate d+ ;                  ( d d -- d )
+\        : dabs  s>d if dnegate exit then ; ( d -- ud )
 \
 \ But by default they will not be included as they are easy
 \ enough to define if we need them and we want to keep the
@@ -3903,10 +3941,10 @@ there 2/ primitive t!
 \ given four items on the stack, and return three, which is
 \ quite a lot. The arguments given are as follows:
 \
-\ 	bot - Bottom Of Text
-\ 	eot - End Of Text
-\ 	cur - Current Text Position
-\	c   - The character to process.
+\         bot - Bottom Of Text
+\         eot - End Of Text
+\         cur - Current Text Position
+\        c   - The character to process.
 \
 \ The input buffer and our position in it is represented by
 \ the first three arguments, "bot", "eot", and "cur". We are
@@ -3978,10 +4016,10 @@ there 2/ primitive t!
 \
 \ An example usage:
 \
-\	pad 20 accept
-\	HELLO WORLD
-\	.s
-\	type
+\        pad 20 accept
+\        HELLO WORLD
+\        .s
+\        type
 \
 \ Which will accept a line of text, "HELLO WORLD", and store
 \ it into the pad area, then print what "accept" returns,
@@ -4047,10 +4085,10 @@ there 2/ primitive t!
 \
 \ "parse" is more fiddly than complex, it creates the string
 \ variables from which it will work from the Terminal Input
-\ Buffer and the ">in" variable, then uses two calls to
+\ Buffer and the "\>in" variable, then uses two calls to
 \ "look" to find the start and end with "unmatch" and "match"
 \ respectively. It then calculates a delta between the unmatch
-\ and match which it adds to ">in", meaning subsequent calls
+\ and match which it adds to "\>in", meaning subsequent calls
 \ to "parse" will skip over the section we have just parsed.
 \
 \ After that it retrieves the beginning of the "unmatch"
@@ -4290,9 +4328,9 @@ there 2/ primitive t!
 \ syntax in order to enter them. This is done by entering the
 \ number with a period, for example:
 \
-\	123.
-\	1.23
-\	.123
+\        123.
+\        1.23
+\        .123
 \
 \ Are all valid Forth numbers, but when view with ".s" on the
 \ stack they all produce the same result when entered at the
@@ -4300,12 +4338,12 @@ there 2/ primitive t!
 \ however, the "dpl" variable will be set with different
 \ values.
 \
-\	123    -> dpl is -1 (single cell number was entered)
-\	123.   -> dpl is 0
-\	1.23   -> dpl is 2
-\	.123   -> dpl is 3
-\	0.123  -> dpl is 3
-\	0.0123 -> dpl is 4
+\        123    -> dpl is -1 (single cell number was entered)
+\        123.   -> dpl is 0
+\        1.23   -> dpl is 2
+\        .123   -> dpl is 3
+\        0.123  -> dpl is 3
+\        0.0123 -> dpl is 4
 \
 \ Note that this is used for fixed point, although with the
 \ right floating point words some Forth implementations have
@@ -4456,9 +4494,9 @@ there 2/ primitive t!
 \ on a match, the third on no match. The stack comment shows
 \ the three possible sets of returned values:
 \
-\	PWD PWD   1 : Word found, word is
-\	PWD PWD  -1 : Word found, word is
-\	  0   a   0 : Word not found, returns name in "a"
+\        PWD PWD   1 : Word found, word is
+\        PWD PWD  -1 : Word found, word is
+\          0   a   0 : Word not found, returns name in "a"
 \
 \ "a", the word passed in, is returned when the word is not
 \ found to make displaying an error message indicating that
@@ -4526,43 +4564,9 @@ there 2/ primitive t!
 \ words, numbers, and compile and command mode.
 \
 \
+\ ![Interpreter Control Flow](img/flow.png)
 \
-\	   .--------------------------.    .--------------.
-\	.->| Get Next Word From Input |<---| Error: Throw |
-\	|  .--------------------------.    .--------------.
-\	|    |                                           ^
-\	|   \|/                                          | (No)
-\	|    .                                           |
-\	^ .-----------------.(Not Found) .--------------------.
-\	| | Search For Word |----------->| Is token a number? |
-\	| .-----------------.            .--------------------.
-\	|    |                                       |
-\	^   \|/ (Found)                             \|/ (Yes)
-\	|    .                                       .
-\	|  .-------------------------.  .---------------------.
-\	|  | Are we in command mode? |  |  In command mode?   |
-\	^  .-------------------------.  .---------------------.
-\	|    |               |            |                 |
-\	|   \|/ (Yes)        | (No)      \|/ (Yes)     (No) |
-\	|    .               |            .                 |
-\	|  .--------------.  |   .------------------------. |
-\	.--| Execute Word |  |   | Push Number onto Stack | |
-\	|  .--------------.  |   .------------------------. |
-\	|    ^              \|/                |            |
-\	^    |               .                 |           \|/
-\	|    | (Yes)   .--------------------.  |            .
-\	|    ----------| Is word immediate? |  | .------------.
-\	|              .--------------------.  | | Compile num|
-\	^                        |             | | into next  |
-\	|                       \|/ (No)       | | location in|
-\	|                        .             | | dictionary |
-\	|  .--------------------------------.  | .------------.
-\	|  |    Compile Pointer to word     |  |            |
-\	.--| in next available location in  |  |            |
-\	|  |         the dictionary         | \|/          \|/
-\	|  .--------------------------------.  .            .
-\	|                                      |            |
-\	.----<-------<-------<-------<-------<------<------<.
+\ (See the Appendix for ASCII Art Version)
 \
 \ Whilst the diagram shows the overall flow of "interpret", it
 \ leaves out a few things, the "compile-only" words is one as
@@ -4580,11 +4584,11 @@ there 2/ primitive t!
 \ within word definitions to compile a number computed within
 \ that word definition, like this:
 \
-\	: example [ 2 2 + ] literal . cr ;
+\        : example [ 2 2 + ] literal . cr ;
 \
 \ Which is equivalent to:
 \
-\	: example 2 2 + . cr ;
+\        : example 2 2 + . cr ;
 \
 \ Except that the computation of adding two numbers together is
 \ done in the first during compilation and not during runtime,
@@ -4663,8 +4667,8 @@ there 2/ primitive t!
 \ define new words that are also numbers, but they would be
 \ treated as words and not numbers, for example:
 \
-\	: 1 2 ;
-\	1 ( pushes '2' )
+\        : 1 2 ;
+\        1 ( pushes '2' )
 \
 \ Is valid, if useless and confusing, Forth code. If numbers
 \ were dealt with first then it would still push "1".
@@ -4788,14 +4792,14 @@ there 2/ primitive t!
 \
 \ Some example uses of "set-order":
 \
-\	-1 set-order
-\	root-voc forth-wordlist 2 set-order
+\        -1 set-order
+\        root-voc forth-wordlist 2 set-order
 \
 \ Note that "set-order" will not check whether or not you
 \ have specified multiple vocabularies that happen to be
 \ the same, so:
 \
-\	root-voc root-voc 2 set-order
+\        root-voc root-voc 2 set-order
 \
 \ Will add two copies of the root vocabulary into the search
 \ order, which has negative utility. "words" will show two
@@ -4843,7 +4847,7 @@ there 2/ primitive t!
 \
 \ Typical usage as is mentioned:
 \
-\	only forth definitions
+\        only forth definitions
 \
 \ It is possible to call just "forth", instead of "only".
 \
@@ -5041,9 +5045,9 @@ there 2/ primitive t!
 \
 \ A contrived example usage is:
 \
-\	: x compile + ; immediate
-\	: y 2 2 + ;
-\	: z 2 2 x ;
+\        : x compile + ; immediate
+\        : y 2 2 + ;
+\        : z 2 2 x ;
 \
 \ In this case "y" and "z" are equivalent words, they both
 \ compute "4" at runtime. A simpler way of explaining "compile"
@@ -5105,7 +5109,7 @@ there 2/ primitive t!
 \ Field Address, but operated on the previously defined word
 \ like "recurse". This could be defined with:
 \
-\	:s smudge {last} lit @ nfa 80 lit swap toggle ;s
+\        :s smudge {last} lit @ nfa 80 lit swap toggle ;s
 \
 \ This was used to hide and unhide a word definition during
 \ its creation to implement the word hiding feature described
@@ -5147,13 +5151,13 @@ there 2/ primitive t!
 \
 \ The constructs we will make are:
 \
-\	begin...again
-\	begin...until
-\	begin...while...repeat
-\	if...then
-\	if...else...then
-\	for...next
-\	for...aft...then...next
+\        begin...again
+\        begin...until
+\        begin...while...repeat
+\        if...then
+\        if...else...then
+\        for...next
+\        for...aft...then...next
 \
 \ "if...then" and "begin...until" are some of the simplest
 \ constructs, understanding these constructs really helps
@@ -5163,18 +5167,18 @@ there 2/ primitive t!
 \ Both "if...then" and "begin...until" consist of a single
 \ jump. Let us start with an example of "if":
 \
-\	: example if 1 . cr then ;
+\        : example if 1 . cr then ;
 \
 \ Which will compile to something like this:
 \
-\	EXAMPLE:
-\		0: opJumpZ
-\		1: 6
-\		2: opPush
-\		3: 1
-\		4: address of "."
-\		5: address of "cr"
-\		6: opExit
+\        EXAMPLE:
+\                0: opJumpZ
+\                1: 6
+\                2: opPush
+\                3: 1
+\                4: address of "."
+\                5: address of "cr"
+\                6: opExit
 \
 \ The address written down the side are not realistic ones,
 \ just illustrative ones. The purpose of this function is to
@@ -5248,7 +5252,7 @@ there 2/ primitive t!
 
 \ # Create, DOES>, and other special Forth words
 \
-\ "create" and "does>" are sometimes called the jewels of
+\ "create" and "does\>" are sometimes called the jewels of
 \ Forth, they allow the creation of words which can in turn
 \ create new words. They are often used to make data-structure
 \ related words, for example a word set for making and
@@ -5281,7 +5285,7 @@ there 2/ primitive t!
 \ are not very useful to anyone other than the person defining
 \ the words here, such as "(var)" and "(const)".
 \
-\ 
+\ TODO: Explain more 
 \
 
 :s (var) r> 2* ;s compile-only
@@ -5315,12 +5319,12 @@ there 2/ primitive t!
 \
 \ An example usage might be:
 \
-\	marker xxx
-\	: ahoy cr ." BYE" ;
-\	words
-\	xxx
-\	words
-\	: ahoy cr ." HELLO" ;
+\        marker xxx
+\        : ahoy cr ." BYE" ;
+\        words
+\        xxx
+\        words
+\        : ahoy cr ." HELLO" ;
 \
 \ Creating a marker called "xxx", so if we make a mistake
 \ making a new word, in this case making the string "ahoy"
@@ -5334,12 +5338,13 @@ there 2/ primitive t!
 :to marker last here create cell negate allot compile
     (marker) , , ; ( --, "name" )
 
-
+\ # Return Stack Words
+\
 \ These target only words, defined with ":to", are both
 \ immediate and compile-only. They are defined here because
 \ the "compile" word needs defining first. They are all defined
 \ this way because they manipulate the call stack, it is
-\ possible to define a callable version of a word like "r>",
+\ possible to define a callable version of a word like "r\>",
 \ but it will be less efficient as it has to deal with its
 \ own return value, there is also little value (negative even)
 \ of being able to call these words in command mode, if they
@@ -5357,14 +5362,14 @@ there 2/ primitive t!
 \ just clicked, beforehand it looks like the code could not
 \ possibly work. I will be more explicit.
 \
-\	:to rp! compile rp! ; immediate compile-only
+\        :to rp! compile rp! ; immediate compile-only
 \           (1)         (2)
 \
-\	(1) : Newly defined header, not visible within the
-\	      body of the newly defined word.
-\	(2) : Points to the Forth Virtual Machine instruction,
-\	      which has the following definition;
-\	      ":a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a"
+\        (1) : Newly defined header, not visible within the
+\              body of the newly defined word.
+\        (2) : Points to the Forth Virtual Machine instruction,
+\              which has the following definition;
+\              ":a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a"
 \
 \ As we have discussed how each of these instructions work,
 \ we will not discuss what they do.
@@ -5378,7 +5383,34 @@ there 2/ primitive t!
 :to rdrop compile rdrop ; immediate compile-only
 :to exit compile opExit ; immediate compile-only
 
-\ TODO: Describe string words
+\ These words are target only words, as the meta-compiler has
+\ versions of these words which as well that should be used
+\ (except for *abort"*, however we still would not want to use
+\ this version as these words only work correctly on a running
+\ target and not in the meta-compiler).
+\
+\ These words are all string processing words, all limited to
+\ strings of 0 to 255 bytes in length as the length is stored
+\ in a single byte, like all Forth strings traditionally were,
+\ who needs more than 255 bytes for a string!?
+\
+\ The words do the following:
+\
+\        ."      Parse until ", compile a string, at run time
+\                The string is printed
+\        $"      Parse until ", compile a string, at run time
+\                a pointer to a counted string is pushed onto
+\                the stack.
+\        abort"  Parse until ", compile a string, at run time
+\                pop an item off of the stack, if the number is
+\                non-zero then print out the string and call
+\                abort, otherwise, continue on execution.
+\
+\ This handles most of string handling needs for Forth. They
+\ are all immediate words as they have to parse a string at
+\ compile time from the input stream and compile a word into
+\ the dictionary.
+\ 
 
 :to ." compile .$
   [char] " word count + h lit ! align ; immediate compile-only
@@ -5387,6 +5419,8 @@ there 2/ primitive t!
 :to abort" compile (abort)
   [char] " word count + h lit ! align ; immediate compile-only
 
+\ ## Comments
+\
 \ These words add comments to the Forth interpreter, and a
 \ word that prints out the contents of the comment. These are
 \ parsing words, they modifying the input stream in someway,
@@ -5411,12 +5445,12 @@ there 2/ primitive t!
 \ this is because sometimes comments are used to comment out
 \ code that is added back in for quick testing, for example:
 \
-\	: example ." HELLO " ( ." WORLD" ) ;
+\        : example ." HELLO " ( ." WORLD" ) ;
 \
 \ If we want to enable "WORLD" to be printed out, we need
 \ to remove the "(":
 \
-\	: example ." HELLO " ." WORLD" ) ;
+\        : example ." HELLO " ." WORLD" ) ;
 \
 \ It is annoying however to remove the ")", especially if we
 \ want to add the "(" back in after testing, but there is no
@@ -5441,13 +5475,13 @@ there 2/ primitive t!
 \ That word is "?\\", it is a non-standard word, it can be
 \ defined as follows:
 \
-\	: ?\ 0= if postpone \ then ; immediate
+\        : ?\ 0= if postpone \ then ; immediate
 \
 \ Usage:
 \
-\	0 ?\ .( ALPHA )
-\	1 ?\ .( BRAVO )
-\ 	( Only "BRAVO" is printed )
+\        0 ?\ .( ALPHA )
+\        1 ?\ .( BRAVO )
+\         ( Only "BRAVO" is printed )
 \
 \
 
@@ -5470,7 +5504,7 @@ there 2/ primitive t!
 \ seen an example of this, in the definition of a new form
 \ of conditional comment:
 \
-\	: ?\ 0= if postpone \ then ; immediate
+\        : ?\ 0= if postpone \ then ; immediate
 \
 \ "postpone" is called and compiles and instance of an
 \ immediate word, "\\", into the dictionary. The reason this
@@ -5499,15 +5533,15 @@ there 2/ primitive t!
 \ the exact opposite of "if", it executes its clause only
 \ if given a zero. We can do this in the following way:
 \
-\ 	: unless compile 0= postpone if ; immediate
+\         : unless compile 0= postpone if ; immediate
 \
 \ And it can be used with "then", just like "if":
 \
-\	: example unless ." HERE" then ;
-\	0 example
-\	( prints "HERE" )
-\	1 example
-\	( prints nothing )
+\        : example unless ." HERE" then ;
+\        0 example
+\        ( prints "HERE" )
+\        1 example
+\        ( prints nothing )
 \
 \ In this example we do not need to know how "if" works on
 \ this platform, but we can reuse it to do what we want.
@@ -5535,9 +5569,9 @@ there 2/ primitive t!
 \ at this bit, "immediate" just needs to set it in the word
 \ to make "interpret" treat it at immediate.
 \
-:to immediate last nfa @ 40 lit or last nfa ! ;
+:to immediate last nfa @ 40 lit or last nfa ! ; ( -- )
 
-\ # Some Programmer Utilities
+\ # Some Programmer Utilities (Decompilation and Dump)
 \
 \ Nearly every Forth comes with a built in decompiler, that
 \ can take a Forth word and produce and show how that Forth
@@ -5596,12 +5630,28 @@ there 2/ primitive t!
 \ "." would have to be replaced with a word for getting a
 \ number from the input and writing it to a memory location.
 \
+\ Due to the simplicity of the implementation, the following
+\ phrase:
+\
+\        0 here dump
+\
+\ Can be used to spit out the entire dictionary ready for ti
+\ to be backed up, this could be used to create a new
+\ "turn-key" application by replacing the execution vector
+\ for "cold" with a newly defined word and then saving the
+\ entire image to disk, which when next executed would jump
+\ straight to the new definition, or just to save newly defined
+\ words into a new image. This might be easier for some than
+\ meta-compiling a new image.
+\
 
 :to dump aligned ( a u -- : display section of memory )
   begin ?dup
   while swap dup @ . cell+ swap cell -
   repeat drop ;
 
+\ ## Check sums over the image
+\
 \ "cksum" is used by the system to make sure the image has
 \ not been corrupted or tampered with. It does it in a limited
 \ way as self-modifying code means that it cannot make sure
@@ -5693,14 +5743,14 @@ there 2/ primitive t!
 \ security to ensure the construct is used in its intended
 \ usage. For example:
 \
-\	[else] ( CODE ) [then]
+\        [else] ( CODE ) [then]
 \
 \ Will not throw an error, the CODE section will not be
 \ executed however.
 \
 
 : defined bl word find nip 0<> ; ( -- f )
-:to [then] ; immediate
+:to [then] ; immediate ( -- )
 :to [else]
  begin
   begin bl word dup c@ while
@@ -5763,6 +5813,8 @@ there 2/ primitive t!
 
 : ms for pause calibration @ for next next ; ( ms -- )
 
+\ ## Terminal Words
+\
 \ The words "bell", "csi", "page" and "at-xy" make some
 \ assumptions which may not be valid on all output devices,
 \ it is assumed that if a user is typing commands into the
@@ -5777,18 +5829,18 @@ there 2/ primitive t!
 \ the following word can be defined to change the color of
 \ the terminal:
 \
-\	: color csi 0 u.r ." m" ;
+\        : color csi 0 u.r ." m" ;
 \
 \ Note that "csi" is in the system vocabulary, so it will
 \ need to be loaded before this word can be defined.
 \
 \ The following words could then be defined:
 \
-\	decimal
-\	: red 31 color ;
-\	: green 32 color ;
-\	: blue 34 color ;
-\	: reset 0 color ;
+\        decimal
+\        : red 31 color ;
+\        : green 32 color ;
+\        : blue 34 color ;
+\        : reset 0 color ;
 \
 \ This will most likely work under Unix systems, and quite
 \ likely fail if done under Windows CMD.EXE (although a program
@@ -5924,7 +5976,7 @@ there 2/ primitive t!
 \ (also known as "blanks") to that section of memory. It can
 \ be used to format a block with the following expression:
 \
-\	47 block b/buf blank
+\        47 block b/buf blank
 \
 \ If we wanted to format block "47" for editing.
 \
@@ -5976,10 +6028,10 @@ there 2/ primitive t!
 \ turned off before it outputs a single "ok", with the first
 \ line in this file.
 \
-\	defined eforth [if] ' nop <ok> ! [then]
+\        defined eforth [if] ' nop <ok> ! [then]
 \
 \ "ok" is not called directly, but is stored as an execution
-\ token in "<ok>".
+\ token in "\<ok\>".
 \
 
 :s ok state @ 0= if ."  ok" cr then ;s ( -- )
@@ -5991,13 +6043,15 @@ there 2/ primitive t!
 \ of limited error detection.
 \
 \ It also prints out "ok", by execution the contents of
-\ "<ok>", as just mentioned.
+\ "\<ok\>", as just mentioned.
 \
 :s eval
    begin bl word dup c@ while
      interpret #0 ?depth
    repeat drop <ok> @ execute ;s ( "word" -- )
 
+\ ## Evaluate
+\ 
 \ "evaluate" takes a string and evaluates that string, it
 \ is careful to preserve the input state prior to evaluation
 \ so that it can be restored after, it also catches any error
@@ -6025,8 +6079,8 @@ there 2/ primitive t!
 \ * "load" evaluates an entire block.
 \
 \ The other two words missing from this version of forth, that
-\ could easily be added later, are "thru" and "-->", "thru"
-\ loads and executes a range of blocks inclusively, and "-->"
+\ could easily be added later, are "thru" and "--\>", "thru"
+\ loads and executes a range of blocks inclusively, and "--\>"
 \ when used within a block discards the rest of the block from
 \ being executed and continues execution from the next block,
 \ which can be chained together.
@@ -6055,6 +6109,8 @@ there 2/ primitive t!
   ." Repo:    https://github.com/howerj/subleq" cr
   ." License: The Unlicense / Public Domain" cr ;s
 
+\ ## Task Initialization
+\ 
 \ "task-init" is a poor Forth function, it really should be
 \ split up into words that deal with the different aspects of
 \ setting up a task.
@@ -6091,7 +6147,7 @@ there 2/ primitive t!
 \  4. Making the saved top of the stack empty for the task.
 \  5. Setting the default input and output radix (to decimal).
 \  6. Setting up the I/O behavior.
-\  7. Making the input buffer position ">in" is zero.
+\  7. Making the input buffer position "\>in" is zero.
 \  8. Putting default values in a few variables like "dpl".
 \  9. Making the terminal input buffer point to the right place
 \     within the tasks memory.
@@ -6101,7 +6157,12 @@ there 2/ primitive t!
 \     executing commands (which may cause problems), but it is
 \     setup just in case.
 \
-\ TODO: Talk about XIO, HAND, ...
+\ TODO: Talk about XIO, HAND, ...also a simple network
+\ protocol using the text interpreter vectors (ie. you could
+\ input a line of Forth code with a length and checksum, as
+\ part of a protocol for a debugger and/or bootloader). Also
+\ note $INTERPRET and $COMPILE as execution vectors for eval
+\ so they can be swapped out, to aid this kind of thing.
 \
 
 \ h: quite? 4 cpu@ and 0<> ; ( -- t : in quite mode? )
@@ -6146,6 +6207,8 @@ there 2/ primitive t!
 \
 :s ini {up} lit @ task-init ;s ( -- : initialize current task )
 
+\ ## Quit and Cold
+\ 
 \ "quit" is the heart of the Forth system, it is responsible
 \ for fetching and evaluating each line of Forth code. It
 \ also contains the error handler of last resort, which catches
@@ -6188,7 +6251,7 @@ there 2/ primitive t!
 \
 :s (cold) ( -- : Forth boot sequence )
   only forth definitions ( un-mess-up dictionary / set it )
-  ini
+  ini ( initialize the current thread correctly )
   {options} lit @ 4 lit and if info then ( display info? )
   {options} lit @ 2 lit and if ( checksum on? )
     primitive lit @ 2* dup here swap - cksum  ( calc. cksum )
@@ -6261,21 +6324,21 @@ there 2/ primitive t!
 \ An example program, that uses the tasks (make sure the system
 \ vocabulary is loaded prior to executing this):
 \
-\ 	task: rx
-\ 	task: tx1
-\ 	task: tx2
+\         task: rx
+\         task: tx1
+\         task: tx2
 \
-\ 	: .tx1 begin [char] X rx send 100 ms again ;
-\ 	: .tx2 begin [char] Y rx send 200 ms again ;
-\ 	: .rx begin
-\ 	  multi receive single . space emit cr again ;
+\         : .tx1 begin [char] X rx send 100 ms again ;
+\         : .tx2 begin [char] Y rx send 200 ms again ;
+\         : .rx begin
+\           multi receive single . space emit cr again ;
 \
-\ 	single
-\ 	' .tx1 tx1 activate
-\ 	' .tx2 tx2 activate
-\ 	' .rx rx activate
-\ 	: schedule begin pause again ;
-\ 	multi schedule
+\         single
+\         ' .tx1 tx1 activate
+\         ' .tx2 tx2 activate
+\         ' .rx rx activate
+\         : schedule begin pause again ;
+\         multi schedule
 \
 \ This creates three new threads, two of which transmit a
 \ a single character to a third, "tx1" and "tx2" transmit
@@ -6441,20 +6504,20 @@ there 2/ primitive t!
 \
 \ Here is a short description of each of the commands:
 \
-\ "editor", enter editor mode
-\ "q", quit editor
-\ "?", display current block number
-\ "l", list current forth block
-\ "e", execute current forth block
-\ "ia", insert line of text into line at position
-\ "i", insert line of text into line
-\ "w", list commands
-\ "s", save and flush
-\ "n", go to next block and list it
-\ "p", go to previous block and list it
-\ "r", list a specific block
-\ "x", erase the screen, replacing it with spaces
-\ "d", delete a line, it takes a number as an argument
+\ * "editor", enter editor mode
+\ * "q", quit editor
+\ * "?", display current block number
+\ * "l", list current forth block
+\ * "e", execute current forth block
+\ * "ia", insert line of text into line at position
+\ * "i", insert line of text into line
+\ * "w", list commands
+\ * "s", save and flush
+\ * "n", go to next block and list it
+\ * "p", go to previous block and list it
+\ * "r", list a specific block
+\ * "x", erase the screen, replacing it with spaces
+\ * "d", delete a line, it takes a number as an argument
 \
 \ Missing are words to perform searching, replacing, swapping
 \ lines. They are all easy to add, but are not necessary. The
@@ -6471,23 +6534,23 @@ there 2/ primitive t!
 \
 \ An example of its use:
 \
-\	editor
-\	x
-\	0 i ( HELLO WORLD PROGRAM VERSION 3.4 )
-\	1 i : ahoy cr ." HELLO, WORLD" ;
-\	2 i ahoy
-\	l
-\	e
+\        editor
+\        x
+\        0 i ( HELLO WORLD PROGRAM VERSION 3.4 )
+\        1 i : ahoy cr ." HELLO, WORLD" ;
+\        2 i ahoy
+\        l
+\        e
 \
 \ This will make the block containing the following text:
 \
-\	( HELLO WORLD PROGRAM VERSION 3.4 )
-\	: ahoy cr ." HELLO, WORLD" ;
-\	ahoy
+\        ( HELLO WORLD PROGRAM VERSION 3.4 )
+\        : ahoy cr ." HELLO, WORLD" ;
+\        ahoy
 \
 \ Which when run should print out:
 \
-\	HELLO, WORLD
+\        HELLO, WORLD
 \
 \ It takes a little getting used to, but is not that difficult.
 \ Feel free to edit the commands into something more suitable
@@ -6498,7 +6561,7 @@ there 2/ primitive t!
 \ after making sure there are at least two items on the stack,
 \ it does not range checking on those variable unfortunately,
 \ a common "feature" of Forth. It looks at the Terminal Input
-\ Buffer, with ">in" and "tib", copying the results into the
+\ Buffer, with "\>in" and "tib", copying the results into the
 \ location within the block specified, and then skips over
 \ the line so it is not executed. It also calls "update",
 \ which marks the current block as dirty (as it has just been
@@ -6566,7 +6629,7 @@ there 2/ primitive t!
 \ and only one method of input or output, the build process
 \ for a new image looks like this (on a Unix system):
 \
-\	./subleq old-image.dec < subleq.fth > new-image.dec
+\        ./subleq old-image.dec < subleq.fth > new-image.dec
 \
 \ "old-image.dec" contains an eForth interpreter, "subleq.fth"
 \ contains this file, and "new-image.dec" is the new eForth
@@ -6586,13 +6649,13 @@ save-target                   \ Output target
 \ is possible to output a C program that contains the entire
 \ interpreter, this would look something like this:
 \ 
-\ 	.\ #include <stdio.h> /* eForth for 16-bit SUBLEQ */
-\ 	.\ int main(void){short p=0,m[65536] = {
-\	save-target  \ Output target
-\ 	.\ }; while(p>=0){int
-\ 	.\ a=m[p++],b=m[p++],c=m[p++];
-\ 	.\ a<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])
-\ 	.\ <=0?p=c:0;}}
+\         .\ #include <stdio.h> /* eForth for 16-bit SUBLEQ */
+\         .\ int main(void){short p=0,m[65536] = {
+\        save-target  \ Output target
+\         .\ }; while(p>=0){int
+\         .\ a=m[p++],b=m[p++],c=m[p++];
+\         .\ a<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])
+\         .\ <=0?p=c:0;}}
 \
 \ The process could also be done as part of the build system
 \ as well.
@@ -6621,7 +6684,6 @@ it being run.
 \ - <https://forth-standard.org/standard/block>,
 \   For the block word-set, which is partially implemented.
 \ - <https://github.com/howerj/subleq-js>
-\
 
 \ # Appendix
 \
@@ -6663,42 +6725,42 @@ it being run.
 \ numbers instead. It should work on all platforms that have
 \ the fixed width typedefs.
 \
-\	#include <stdint.h>
-\	#include <stdio.h>
-\	#define SZ   (32768)
-\	#define L(X) ((X)%SZ)
-\	int main(int s, char **v) {
-\		static uint16_t m[SZ];
-\		uint16_t pc = 0;
-\		for (int i = 1, d = 0; i < s; i++) {
-\			FILE *f = fopen(v[i], "r");
-\			if (!f)
-\				return 1;
-\			while (fscanf(f, "%d", &d) > 0)
-\				m[L(pc++)] = d;
-\			if (fclose(f) < 0)
-\				return 2;
-\		}
-\		for (pc = 0; pc < SZ;) {
-\			uint16_t a = m[L(pc++)];
-\			uint16_t b = m[L(pc++)];
-\			uint16_t c = m[L(pc++)];
-\			if (a == 65535) {
-\				m[L(b)] = getchar();
-\			} else if (b == 65535) {
-\				if (putchar(m[L(a)]) < 0)
-\					return 3;
-\				if (fflush(stdout) < 0)
-\					return 4;
-\			} else {
-\				uint16_t r = m[L(b)] - m[L(a)];
-\				if (r & 32768 || r == 0)
-\					pc = c;
-\				m[L(b)] = r;
-\			}
-\		}
-\		return 0;
-\	}
+\        #include <stdint.h>
+\        #include <stdio.h>
+\        #define SZ   (32768)
+\        #define L(X) ((X)%SZ)
+\        int main(int s, char **v) {
+\                static uint16_t m[SZ];
+\                uint16_t pc = 0;
+\                for (int i = 1, d = 0; i < s; i++) {
+\                        FILE *f = fopen(v[i], "r");
+\                        if (!f)
+\                                return 1;
+\                        while (fscanf(f, "%d", &d) > 0)
+\                                m[L(pc++)] = d;
+\                        if (fclose(f) < 0)
+\                                return 2;
+\                }
+\                for (pc = 0; pc < SZ;) {
+\                        uint16_t a = m[L(pc++)];
+\                        uint16_t b = m[L(pc++)];
+\                        uint16_t c = m[L(pc++)];
+\                        if (a == 65535) {
+\                                m[L(b)] = getchar();
+\                        } else if (b == 65535) {
+\                                if (putchar(m[L(a)]) < 0)
+\                                        return 3;
+\                                if (fflush(stdout) < 0)
+\                                        return 4;
+\                        } else {
+\                                uint16_t r = m[L(b)]-m[L(a)];
+\                                if (r & 32768 || r == 0)
+\                                        pc = c;
+\                                m[L(b)] = r;
+\                        }
+\                }
+\                return 0;
+\        }
 \
 \
 \ ## Non-blocking input SUBLEQ machine written in C
@@ -6728,122 +6790,122 @@ it being run.
 \ to exit, CTRL-D will no longer work nor can End-Of-File be
 \ detected any more.
 \
-\	#include <stdint.h>
-\	#include <stdio.h>
-\	#include <stdlib.h>
+\        #include <stdint.h>
+\        #include <stdio.h>
+\        #include <stdlib.h>
 \
-\	#define ESCAPE (27)
-\	#define DELETE (127)
-\	#define BACKSPACE (8)
+\        #define ESCAPE (27)
+\        #define DELETE (127)
+\        #define BACKSPACE (8)
 \
-\	#ifdef __unix__
-\	#include <unistd.h>
-\	#include <termios.h>
-\	static struct termios oldattr, newattr;
+\        #ifdef __unix__
+\        #include <unistd.h>
+\        #include <termios.h>
+\        static struct termios oldattr, newattr;
 \
-\	static void restore(void) {
-\		tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
-\	}
+\        static void restore(void) {
+\                tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
+\        }
 \
-\	static int setup(void) {
-\		tcgetattr(STDIN_FILENO, &oldattr);
-\		newattr = oldattr;
-\		newattr.c_iflag &= ~(ICRNL);
-\		newattr.c_lflag &= ~(ICANON | ECHO);
-\		newattr.c_cc[VMIN]  = 0;
-\		newattr.c_cc[VTIME] = 0;
-\		tcsetattr(STDIN_FILENO, TCSANOW, &newattr);
-\		atexit(restore);
-\		return 0;
-\	}
+\        static int setup(void) {
+\                tcgetattr(STDIN_FILENO, &oldattr);
+\                newattr = oldattr;
+\                newattr.c_iflag &= ~(ICRNL);
+\                newattr.c_lflag &= ~(ICANON | ECHO);
+\                newattr.c_cc[VMIN]  = 0;
+\                newattr.c_cc[VTIME] = 0;
+\                tcsetattr(STDIN_FILENO, TCSANOW, &newattr);
+\                atexit(restore);
+\                return 0;
+\        }
 \
-\	static int getch(void) {
-\		static int init = 0;
-\		if (!init) {
-\			setup();
-\			init = 1;
-\		}
-\		unsigned char r = 0;
-\		if (read(STDIN_FILENO, &r, 1) != 1)
-\			return -1;
-\		return r;
-\	}
+\        static int getch(void) {
+\                static int init = 0;
+\                if (!init) {
+\                        setup();
+\                        init = 1;
+\                }
+\                unsigned char r = 0;
+\                if (read(STDIN_FILENO, &r, 1) != 1)
+\                        return -1;
+\                return r;
+\        }
 \
-\	static int putch(int c) {
-\		int res = putchar(c);
-\		fflush(stdout);
-\		return res;
-\	}
+\        static int putch(int c) {
+\                int res = putchar(c);
+\                fflush(stdout);
+\                return res;
+\        }
 \
-\	static void sleep_ms(unsigned ms) {
-\		usleep((unsigned long)ms * 1000);
-\	}
-\	#else
-\	#ifdef _WIN32
+\        static void sleep_ms(unsigned ms) {
+\                usleep((unsigned long)ms * 1000);
+\        }
+\        #else
+\        #ifdef _WIN32
 \
-\	extern int getch(void);
-\	extern int putch(int c);
-\	static void sleep_ms(unsigned ms) {
-\		usleep((unsigned long)ms * 1000);
-\	}
-\	#else
-\	static int getch(void) {
-\		return getchar();
-\	}
+\        extern int getch(void);
+\        extern int putch(int c);
+\        static void sleep_ms(unsigned ms) {
+\                usleep((unsigned long)ms * 1000);
+\        }
+\        #else
+\        static int getch(void) {
+\                return getchar();
+\        }
 \
-\	static int putch(const int c) {
-\		return putchar(c);
-\	}
+\        static int putch(const int c) {
+\                return putchar(c);
+\        }
 \
-\	static void sleep_ms(unsigned ms) {
-\		(void)ms;
-\	}
-\	#endif
-\	#endif /** __unix__ **/
+\        static void sleep_ms(unsigned ms) {
+\                (void)ms;
+\        }
+\        #endif
+\        #endif /** __unix__ **/
 \
-\	static int wrap_getch(void) {
-\		const int ch = getch();
-\		if (ch == EOF) {
-\			sleep_ms(1);
-\		}
-\		if (ch == ESCAPE)
-\			exit(0);
-\		return ch == DELETE ? BACKSPACE : ch;
-\	}
+\        static int wrap_getch(void) {
+\                const int ch = getch();
+\                if (ch == EOF) {
+\                        sleep_ms(1);
+\                }
+\                if (ch == ESCAPE)
+\                        exit(0);
+\                return ch == DELETE ? BACKSPACE : ch;
+\        }
 \
-\	#define SZ   (32768)
-\	#define L(X) ((X)%SZ)
-\	int main(int s, char **v)
-\	{
-\		static uint16_t m[SZ];
-\		uint16_t pc = 0;
-\		for (int i = 1, d = 0; i < s; i++) {
-\			FILE *f = fopen(v[i], "r");
-\			if (!f)
-\				return 1;
-\			while (fscanf(f, "%d", &d) > 0)
-\				m[L(pc++)] = d;
-\			if (fclose(f) < 0)
-\				return 2;
-\		}
-\		for (pc = 0; !(pc & 32768);) {
-\			uint16_t a = m[L(pc++)];
-\			uint16_t b = m[L(pc++)];
-\			uint16_t c = m[L(pc++)];
-\			if (a == 65535) {
-\				m[L(b)] = wrap_getch();
-\			} else if (b == 65535) {
-\				if (putch(m[L(a)]) < 0)
-\					return 3;
-\			} else {
-\				uint16_t r = m[L(b)] - m[L(a)];
-\				if (r & 32768 || r == 0)
-\					pc = c;
-\				m[L(b)] = r;
-\			}
-\		}
-\		return 0;
-\	}
+\        #define SZ   (32768)
+\        #define L(X) ((X)%SZ)
+\        int main(int s, char **v)
+\        {
+\                static uint16_t m[SZ];
+\                uint16_t pc = 0;
+\                for (int i = 1, d = 0; i < s; i++) {
+\                        FILE *f = fopen(v[i], "r");
+\                        if (!f)
+\                                return 1;
+\                        while (fscanf(f, "%d", &d) > 0)
+\                                m[L(pc++)] = d;
+\                        if (fclose(f) < 0)
+\                                return 2;
+\                }
+\                for (pc = 0; !(pc & 32768);) {
+\                        uint16_t a = m[L(pc++)];
+\                        uint16_t b = m[L(pc++)];
+\                        uint16_t c = m[L(pc++)];
+\                        if (a == 65535) {
+\                                m[L(b)] = wrap_getch();
+\                        } else if (b == 65535) {
+\                                if (putch(m[L(a)]) < 0)
+\                                        return 3;
+\                        } else {
+\                                uint16_t r = m[L(b)]-m[L(a)];
+\                                if (r & 32768 || r == 0)
+\                                        pc = c;
+\                                m[L(b)] = r;
+\                        }
+\                }
+\                return 0;
+\        }
 \
 \
 \ ## Error Code list
@@ -6851,89 +6913,89 @@ it being run.
 \ This is a list of Error codes, not all of which are used by
 \ the application.
 \
-\ 	| Hex  | Dec  | Message                               |
-\ 	| ---- | ---- | ------------------------------------- |
-\ 	| FFFF |  -1  | ABORT                                 |
-\ 	| FFFE |  -2  | ABORT"                                |
-\ 	| FFFD |  -3  | stack overflow                        |
-\ 	| FFFC |  -4  | stack underflow                       |
-\ 	| FFFB |  -5  | return stack overflow                 |
-\ 	| FFFA |  -6  | return stack underflow                |
-\ 	| FFF9 |  -7  | do-loops nested too deeply            |
-\ 	| FFF8 |  -8  | dictionary overflow                   |
-\ 	| FFF7 |  -9  | invalid memory address                |
-\ 	| FFF6 | -10  | division by zero                      |
-\ 	| FFF5 | -11  | result out of range                   |
-\ 	| FFF4 | -12  | argument type mismatch                |
-\ 	| FFF3 | -13  | undefined word                        |
-\ 	| FFF2 | -14  | interpreting a compile-only word      |
-\ 	| FFF1 | -15  | invalid FORGET                        |
-\ 	| FFF0 | -16  | attempt to use 0-len string as a name |
-\ 	| FFEF | -17  | pictured numeric output str. overflow |
-\ 	| FFEE | -18  | parsed string overflow                |
-\ 	| FFED | -19  | definition name too long              |
-\ 	| FFEC | -20  | write to a read-only location         |
-\ 	| FFEB | -21  | unsupported operation                 |
-\ 	| FFEA | -22  | control structure mismatch            |
-\ 	| FFE9 | -23  | address alignment exception           |
-\ 	| FFE8 | -24  | invalid numeric argument              |
-\ 	| FFE7 | -25  | return stack imbalance                |
-\ 	| FFE6 | -26  | loop parameters unavailable           |
-\ 	| FFE5 | -27  | invalid recursion                     |
-\ 	| FFE4 | -28  | user interrupt                        |
-\ 	| FFE3 | -29  | compiler nesting                      |
-\ 	| FFE2 | -30  | obsolescent feature                   |
-\ 	| FFE1 | -31  | >BODY used on non-CREATEd definition  |
-\ 	| FFE0 | -32  | invalid name argument (e.g., TO xxx)  |
-\ 	| FFDF | -33  | block read exception                  |
-\ 	| FFDE | -34  | block write exception                 |
-\ 	| FFDD | -35  | invalid block number                  |
-\ 	| FFDC | -36  | invalid file position                 |
-\ 	| FFDB | -37  | file I/O exception                    |
-\ 	| FFDA | -38  | non-existent file                     |
-\ 	| FFD9 | -39  | unexpected end of file                |
-\ 	| FFD8 | -40  | wrong BASE in floating point convert  |
-\ 	| FFD7 | -41  | loss of precision                     |
-\ 	| FFD6 | -42  | floating-point divide by zero         |
-\ 	| FFD5 | -43  | floating-point result out of range    |
-\ 	| FFD4 | -44  | floating-point stack overflow         |
-\ 	| FFD3 | -45  | floating-point stack underflow        |
-\ 	| FFD2 | -46  | floating-point invalid argument       |
-\ 	| FFD1 | -47  | compilation word list deleted         |
-\ 	| FFD0 | -48  | invalid POSTPONE                      |
-\ 	| FFCF | -49  | search-order overflow                 |
-\ 	| FFCE | -50  | search-order underflow                |
-\ 	| FFCD | -51  | compilation word list changed         |
-\ 	| FFCC | -52  | control-flow stack overflow           |
-\ 	| FFCB | -53  | exception stack overflow              |
-\ 	| FFCA | -54  | floating-point underflow              |
-\ 	| FFC9 | -55  | floating-point unidentified fault     |
-\ 	| FFC8 | -56  | QUIT                                  |
-\ 	| FFC7 | -57  | exception in tx or rx a character     |
-\ 	| FFC6 | -58  | [IF], [ELSE], or [THEN] exception     |
+\         | Hex  | Dec  | Message                             |
+\         | ---- | ---- | ----------------------------------- |
+\         | FFFF |  -1  | ABORT                               |
+\         | FFFE |  -2  | ABORT"                              |
+\         | FFFD |  -3  | stack overflow                      |
+\         | FFFC |  -4  | stack underflow                     |
+\         | FFFB |  -5  | return stack overflow               |
+\         | FFFA |  -6  | return stack underflow              |
+\         | FFF9 |  -7  | do-loops nested too deeply          |
+\         | FFF8 |  -8  | dictionary overflow                 |
+\         | FFF7 |  -9  | invalid memory address              |
+\         | FFF6 | -10  | division by zero                    |
+\         | FFF5 | -11  | result out of range                 |
+\         | FFF4 | -12  | argument type mismatch              |
+\         | FFF3 | -13  | undefined word                      |
+\         | FFF2 | -14  | interpreting a compile-only word    |
+\         | FFF1 | -15  | invalid FORGET                      |
+\         | FFF0 | -16  | attempt to use 0-len str. as a name |
+\         | FFEF | -17  | pictured numeric out. str. overflow |
+\         | FFEE | -18  | parsed string overflow              |
+\         | FFED | -19  | definition name too long            |
+\         | FFEC | -20  | write to a read-only location       |
+\         | FFEB | -21  | unsupported operation               |
+\         | FFEA | -22  | control structure mismatch          |
+\         | FFE9 | -23  | address alignment exception         |
+\         | FFE8 | -24  | invalid numeric argument            |
+\         | FFE7 | -25  | return stack imbalance              |
+\         | FFE6 | -26  | loop parameters unavailable         |
+\         | FFE5 | -27  | invalid recursion                   |
+\         | FFE4 | -28  | user interrupt                      |
+\         | FFE3 | -29  | compiler nesting                    |
+\         | FFE2 | -30  | obsolescent feature                 |
+\         | FFE1 | -31  | >BODY used on non-CREATEd def.      |
+\         | FFE0 | -32  | invalid name arg. (e.g., TO xxx)    |
+\         | FFDF | -33  | block read exception                |
+\         | FFDE | -34  | block write exception               |
+\         | FFDD | -35  | invalid block number                |
+\         | FFDC | -36  | invalid file position               |
+\         | FFDB | -37  | file I/O exception                  |
+\         | FFDA | -38  | non-existent file                   |
+\         | FFD9 | -39  | unexpected end of file              |
+\         | FFD8 | -40  | wrong BASE in float point convert   |
+\         | FFD7 | -41  | loss of precision                   |
+\         | FFD6 | -42  | floating-point divide by zero       |
+\         | FFD5 | -43  | floating-point result out of range  |
+\         | FFD4 | -44  | floating-point stack overflow       |
+\         | FFD3 | -45  | floating-point stack underflow      |
+\         | FFD2 | -46  | floating-point invalid argument     |
+\         | FFD1 | -47  | compilation word list deleted       |
+\         | FFD0 | -48  | invalid POSTPONE                    |
+\         | FFCF | -49  | search-order overflow               |
+\         | FFCE | -50  | search-order underflow              |
+\         | FFCD | -51  | compilation word list changed       |
+\         | FFCC | -52  | control-flow stack overflow         |
+\         | FFCB | -53  | exception stack overflow            |
+\         | FFCA | -54  | floating-point underflow            |
+\         | FFC9 | -55  | floating-point unidentified fault   |
+\         | FFC8 | -56  | QUIT                                |
+\         | FFC7 | -57  | exception in tx or rx a character   |
+\         | FFC6 | -58  | [IF], [ELSE], or [THEN] exception   |
 \
 \ <http://www.forth200x.org/throw-iors.html>
 \
-\ 	| Hex  | Dec  | Message                               |
-\ 	| ---- | ---- | ------------------------------------- |
-\ 	| FFC5 | -59  | ALLOCATE                              |
-\ 	| FFC4 | -60  | FREE                                  |
-\ 	| FFC3 | -61  | RESIZE                                |
-\ 	| FFC2 | -62  | CLOSE-FILE                            |
-\ 	| FFC1 | -63  | CREATE-FILE                           |
-\ 	| FFC0 | -64  | DELETE-FILE                           |
-\ 	| FFBF | -65  | FILE-POSITION                         |
-\ 	| FFBE | -66  | FILE-SIZE                             |
-\ 	| FFBD | -67  | FILE-STATUS                           |
-\ 	| FFBC | -68  | FLUSH-FILE                            |
-\ 	| FFBB | -69  | OPEN-FILE                             |
-\ 	| FFBA | -70  | READ-FILE                             |
-\ 	| FFB9 | -71  | READ-LINE                             |
-\ 	| FFB8 | -72  | RENAME-FILE                           |
-\ 	| FFB7 | -73  | REPOSITION-FILE                       |
-\ 	| FFB6 | -74  | RESIZE-FILE                           |
-\ 	| FFB5 | -75  | WRITE-FILE                            |
-\ 	| FFB4 | -76  | WRITE-LINE                            |
+\         | Hex  | Dec  | Message                             |
+\         | ---- | ---- | ----------------------------------- |
+\         | FFC5 | -59  | ALLOCATE                            |
+\         | FFC4 | -60  | FREE                                |
+\         | FFC3 | -61  | RESIZE                              |
+\         | FFC2 | -62  | CLOSE-FILE                          |
+\         | FFC1 | -63  | CREATE-FILE                         |
+\         | FFC0 | -64  | DELETE-FILE                         |
+\         | FFBF | -65  | FILE-POSITION                       |
+\         | FFBE | -66  | FILE-SIZE                           |
+\         | FFBD | -67  | FILE-STATUS                         |
+\         | FFBC | -68  | FLUSH-FILE                          |
+\         | FFBB | -69  | OPEN-FILE                           |
+\         | FFBA | -70  | READ-FILE                           |
+\         | FFB9 | -71  | READ-LINE                           |
+\         | FFB8 | -72  | RENAME-FILE                         |
+\         | FFB7 | -73  | REPOSITION-FILE                     |
+\         | FFB6 | -74  | RESIZE-FILE                         |
+\         | FFB5 | -75  | WRITE-FILE                          |
+\         | FFB4 | -76  | WRITE-LINE                          |
 \
 \
 \ ## Advanced version of "see"
@@ -7054,4 +7116,86 @@ it being run.
   r> dup immediate? if ."  immediate" then
   compile-only? if ."  compile-only" then cr ;
 
-
+\ ## ASCII Art Diagram: Interpreter Control Flow
+\
+\ Interpreter control Flow as an ASCII art diagram:
+\
+\           .--------------------------.    .--------------.
+\        .->| Get Next Word From Input |<---| Error: Throw |
+\        |  .--------------------------.    .--------------.
+\        |    |                                          ^
+\        |   \|/                                         | (No)
+\        |    .               (Not Found)                |
+\        ^ .-----------------.           .--------------------.
+\        | | Search For Word |---------->| Is token a number? |
+\        | .-----------------.           .--------------------.
+\        |    |                                       |
+\        ^   \|/ (Found)                             \|/ (Yes)
+\        |    .                                       .
+\        |  .------------------.  .---------------------.
+\        |  | In command mode? |  |  In command mode?   |
+\        ^  .------------------.  .---------------------.
+\        |    |               |            |                 |
+\        |   \|/ (Yes)        | (No)      \|/ (Yes)     (No) |
+\        |    .               |            .                 |
+\        |  .--------------.  |   .------------------------. |
+\        .--| Execute Word |  |   | Push Number onto Stack | |
+\        |  .--------------.  |   .------------------------. |
+\        |    ^              \|/               |            |
+\        ^    |               .                |           \|/
+\        |    | (Yes)   .--------------------. |            .
+\        |    ----------| Is word immediate? | | .------------.
+\        |              .--------------------. | | Compile num|
+\        ^                        |            | | into next  |
+\        |                       \|/ (No)      | | location in|
+\        |                        .            | | dictionary |
+\        |  .--------------------------------. | .------------.
+\        |  |    Compile Pointer to word     | |            |
+\        .--| in next available location in  | |            |
+\        |  |         the dictionary         |\|/          \|/
+\        |  .--------------------------------. .            .
+\        |                                     |            |
+\        .----<-------<-------<-------<-------<------<------<.
+\
+\ ## ASCII Art Diagram: Dictionary Structure
+\
+\ The dictionary structure as an ASCII art diagram:
+\
+\        +--------------------+
+\        | Vocabulary Pointer |
+\        +--------------------+
+\            |
+\           \|/
+\            .
+\        +------+----+-----------+--------...
+\        | Prev | CB | Word Name | Code...
+\        +------+----+-----------+--------...
+\            |
+\           \|/
+\            .
+\        +------+----+-----------+--------...
+\        | Prev | CB | Word Name | Code...
+\        +------+----+-----------+--------...
+\            |
+\           \|/
+\            .
+\        +-------+
+\        | NULL  |
+\        +-------+
+\
+\        Prev: Pointer to previous word in linked list
+\        CB:   Part of the Name Field Address along with
+\              the first byte of "Word Name", it contains
+\              word header flags, as well as the length of
+\              "Word Name", which is a variable length string.
+\        Word Name: The name of the Forth word, it's a variable
+\              length string. The length of which is stored in
+\              the lowest five bits of Cb.
+\        Code...: A variable length series cells that form the
+\              code portion of the Forth word, usually ending
+\              in an exit/return instruction.
+\        NULL: The end of the linked list.
+\        Vocabulary Pointer: The handle used to identify the
+\              vocabulary, a pointer to the start of the linked
+\              list of words.
+\

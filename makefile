@@ -22,23 +22,31 @@ gforth.dec: subleq.fth
 gforth: subleq gforth.dec
 	./subleq gforth.dec
 
-subleq.md: convert subleq.fth
-	./convert < subleq.fth > $@
+subleq.md: convert subleq.fth subleq 1.dec convert.fth
+	#./convert < subleq.fth > $@
+	cat convert.fth subleq.fth | ./subleq 1.dec > $@
+	echo "## Full eForth Image:" >> $@
+	echo >> $@
+	echo "A complete eForth image for reference (make sure not to copy page numbers):" >> $@
+	echo >> $@
+	cat 1.dec | tr '\n' ' ' | fmt -w 48 | sed 's/^/\t/' >> $@
+	echo >> $@
 
 subleq.htm: subleq.md
 	markdown $< > $@
 
-subleq.pdf: subleq.md
-	pandoc -V cover-image=img/subleq-ebook.png --toc $< -o $@
+META=--metadata=title:"SUBLEQ eForth" --metadata=author:"Richard James Howe" --metadata=lang:"en-US"
+IMAGES=img/flow.png img/dictionary.png
 
-subleq.epub: subleq.md
-	pandoc \
-		--epub-cover-image=img/subleq-ebook.png \
-		--metadata=title:"SUBLEQ eForth" \
-		--metadata=author:"Richard James Howe" \
-		--metadata=lang:"en-US" \
-		--toc \
-		$< -o $@
+subleq.pdf: subleq.md ${IMAGES}
+	pandoc ${META} -V cover-image=img/subleq-ebook.png --toc $< -o $@
+
+%.png: %.dia
+	dia -e $@ $<
+
+
+subleq.epub: subleq.md ${IMAGES}
+	pandoc --epub-cover-image=img/subleq-ebook.png ${META} --toc $< -o $@
 
 eforth.c: 1.dec
 	rm -f $@
