@@ -3,48 +3,12 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ * Edition: 1.0.0
 \ * Project: Cross Compiler / eForth for a SUBLEQ CPU
-\ * License: The Unlicense
 \ * Author:  Richard James Howe
 \ * Email:   howe.r.j.89@gmail.com
 \ * Repo:    <https://github.com/howerj/subleq>
-\
-\ TODO Section
-\
-\        - Minimal word-set necessary to support a Forth?
-\        - Add assembled version of image to appendix
-\        - Publish on Amazon
-\        - More headings for different sections, for groups
-\        of words perhaps.
-\        - Separate SUBLEQ assembler Tutorial
-\        - Other SUBLEQ projects and programs
-\        - Uses; learning, puzzles, games
-\        - Sokoban, floating point, file system,
-\        allocate/free, ...
-\        - Configuring the option bit in the image
-\        - Make sure that words cannot be longer than 32
-\        characters in length.
-\        - Talk about variable bit width and how that could
-\        be implemented, for a 32 or 64, or even N-bit version.
-\ 
-\ ## NOTES (Write about them in the book)
-\
-\ - The eForth image could determine the SUBLEQ machine size,
-\ and adjust itself accordingly, it would not even require a
-\ power-of-two integer width. Another interesting concept would
-\ be to adapt this eForth to a SUBLEQ machine that used bignums
-\ for each cell, this would require re-engineering functions
-\ like bitwise AND/OR/XOR as they require a fixed cell width to
-\ work efficiently.
-\ - It would be nice to make a 7400 Integrated Circuit board
-\ that could run and execute this code, or a project in VHDL
-\ for an FPGA that could do it.
-\ - The virtual machine could be sped up with optimization
-\ magic
-\ - Half of the memory used is just for the virtual machine
-\ that allows Forth to be written.
-
-\        -----------------------------------------------
-
+\ * License: The Unlicense / Public domain for code only, all 
+\ rights reserved for comments, the book, diagrams 
+\ and pictures.
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -80,7 +44,6 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ * <https://howerj.github.io/subleq.htm>
 \ * <https://github.com/howerj/subleq>
-\
 \
 \ ## Building This Image
 \
@@ -264,6 +227,51 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ by C.H. Ting. The link <http://forth.org/eforth.html> has
 \ more information.
 \
+\ There have been debates about the minimal viable word-set
+\ in Forth, and various different schemes have been proposed.
+\ Some schemes are:
+\
+\ * The 1992 entry "third" by buzzard 
+\ <https://www.ioccc.org/years.html>. Which makes an obfuscated
+\ interpreter for a Forth like language in C which can 
+\ bootstrap itself. It has about 15 primitives.
+\ * A 3-Instruction Forth <https://pygmy.utoh.org/3ins4th.html>
+\ which takes the concept in a different direction and is
+\ arguably not a Forth but a way of tethering a Forth for a
+\ new system.
+\ * "sectorforth" is a Forth interpreter in a (512 byte)
+\ boot-sector, available at 
+\ <https://github.com/cesarblum/sectorforth>.
+\
+\ The three schemes, whilst impressive, are a bit too spartan.
+\ It is not possible to definitively say that X number of
+\ primitives is the absolute minimum built-in primitives to
+\ implement a Forth, and the above three schemes have different
+\ caveats and limitations (such as are those implementations
+\ *real* Forth implementations, are they *viable* and *useful*)
+\ which can be argued back and forth to no effect and with
+\ nothing learned.
+\
+\ eForth aims at a minimal and viable (runs relatively fast)
+\ solution.
+\
+\ ## TODO Section
+\
+\ - Publish on Amazon
+\ - More headings for different sections, for groups of words 
+\ perhaps.
+\ - Separate SUBLEQ assembler Tutorial
+\ - Other SUBLEQ projects and programs
+\ - Make sure that words cannot be longer than 32
+\ characters in length.
+\ - OISC history
+\ - Editing, use
+\ https://matt.might.net/articles/shell-scripts-for-passive-vo\
+\ ice-weasel-words-duplicates/ 
+\ - Detect cell width and print out error message if too
+\ small or too big.
+\
+\
 \ ## A little about SUBLEQ
 \
 \ So the goal is to port a system capable of compiling itself
@@ -274,6 +282,13 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ this implementation the cell size is 16-bits, which will be
 \ important later. A SUBLEQ machine that uses sizes other than
 \ this, or bignums, will not work.
+\
+\ The SUBLEQ Virtual Machine is written in C, and one has also
+\ been written in JavaScript. It would be relatively easy to
+\ write one in VHDL and run the system on an FPGA. It is even
+\ possible to build a machine capable of running eForth made
+\ from discrete 7400 series Integrated Circuits, EEPROM and
+\ RAM chips, although that is beyond this project.
 \
 \ The single instruction that is executed is:
 \
@@ -391,7 +406,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \        ADD a, b
 \
 \                subleq a, Z
-\                 subleq Z, b
+\                subleq Z, b
 \                subleq Z, Z
 \
 \ "ADD" stores a temporary result in "Z", but it should
@@ -410,6 +425,52 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ This should give you some idea of how the SUBLEQ machine
 \ works, but it is a long journey to get anything useful built
 \ upon it.
+\
+\ It is possible to implement a fully featured eForth in around
+\ 8kiB with a few hundred words, the image we will create 
+\ however is nearly double that in size as half the image will
+\ be dedicated to implementing a virtual machine which eForth
+\ can run on. On a more conventional architecture that VM could
+\ be implemented in perhaps as little as a few hundred bytes.
+\
+\ ### Detecting SUBLEQ virtual machine size
+\
+\ Although an account of how a SUBLEQ machine has been given,
+\ there are other SUBLEQ machines that exist that will not
+\ run this program, either they lack the memory, they do not
+\ use twos-compliment arithmetic, they use bignums (or 
+\ arbitrary precision arithmetic) or even floating point 
+\ numbers for each cell, or, more likely they use a different
+\ cell width than this one.
+\
+\ Instead of specifying an exact width it is most likely
+\ that a SUBLEQ machine written in C would use "int" as the
+\ storage type for each cell, which might be 16-bit but is
+\ much more likely to be 32-bit or 64-bit. It would be possible
+\ to create an image that is entirely agnostic to the cell
+\ width and could perhaps patch itself up so it would run on
+\ any bit width above a minimum, this image does not do that,
+\ but it would be a very interesting exercise, perhaps even 
+\ more difficult than constructing the original VM required to
+\ support Forth. The cell width would not even necessarily
+\ need to be 16, 32 or 64 bit, perhaps a 18 bit or 36 bit
+\ system could be accommodated for.
+\
+\ A system that used bignums would be yet another difficulty,
+\ arbitrary precision numbers do not overflow, the fact that
+\ integers overflow is used by this implementation to implement
+\ a fast (for SUBLEQ machines) bitwise operations. Instead
+\ the bitwise operations would have to be re-engineered around
+\ multiplication and division instead of bit by bit testing
+\ of the topmost bit (which indicates a number is negative,
+\ an easy test for a SUBLEQ machine).
+\
+\ A future improvement to the image might be to detect the
+\ image size and print out an error message if the wrong
+\ cell width is detect, which could be done in a relatively
+\ portable way, assuming only 8-bit cells. This would be
+\ similar to the error messages given by Windows applications
+\ when run under MS-DOS.
 \
 \ ## Meta-compilation (Cross compilation with Forth)
 \
@@ -977,20 +1038,19 @@ defined eforth [if] system -order [then]
 \
 \ The memory layout of the Forth Virtual Machine is as follows:
 \
-\ TODO: Turn into image, add in thread/word layout
+\ * 0: Zero Register.
+\ * 1: Zero Register.
+\ * 2: Jump to Forth Virtual Machine Start.
+\ * 3: Options variable.
+\ * 3 to W-1: System variables.
+\ * W: label start; The Forth VM entry point.
+\ * X: label vm; The Forth VM.
+\ * Y: Forth VM instruction implementation.
+\ * Z: Forth Code that uses Forth VM instructions.
+\ * End - 1024/$400 bytes: First thread area.
 \
-\        0: Zero Register.
-\         1: Zero Register.
-\         2: Jump to Forth Virtual Machine Start.
-\        3: Options variable.
-\
-\        3 to W-1: System variables.
-\        ...
-\
-\        W: label start; The Forth VM entry point.
-\        X: label vm; The Forth VM.
-\        Y: Forth VM instruction implementation.
-\        Z: Forth Code that uses Forth VM instructions.
+\ This is a rough layout only, 'W', 'X', 'Y' and 'Z' refer to
+\ locations that may vary in location and length.
 \
 \ Cells 0, 1, and 2 also form the first SUBLEQ instruction,
 \ and the first two cells must be zero, as mentioned
@@ -1178,6 +1238,75 @@ meta.1 +order definitions
 \ however the first location is also used as the "Z" location
 \ in SUBLEQ instructions.
 \
+\ This section also contains various constants ("one", "two",
+\ "bwidth" and others), and virtual machine registers ("w", 
+\ "x", and others).
+\
+\ The variables that are worth noting are; "h", "primitive",
+\ "{options}", "{up}", "check" and "{ms}". 
+\
+\ * "h" contains the dictionary pointer, as used by "here",
+\ this will be used much later one.
+\ * "primitive" is used by the virtual machine to determine
+\ which instructions are VM instructions and which are calls
+\ to Forth words.
+\ * "{up}" is used for thread local storage, which will be
+\ describe later, also known as user variables.
+\ * "check" is used to hold a checksum over the Forth image.
+\ * "{ms}" is part of a hack used to calibrate a delay loop.
+\ * "{options}" is a variable near the beginning of the image
+\ that can be manually edited to change various fundamental
+\ behaviors of the image. It deserves more explantion.
+\
+\ ## {options} variable
+\
+\ The "{options}" variable is used as a bit-field containing
+\ 16-bits, of which only the lowest four are used. The options
+\ are:
+\
+\ * bit 1: If set turn echoing of characters off when 
+\   processing input characters.
+\ * bit 2: If set checksum is checked on startup.
+\ * bit 3: If set a greeting is printed out on startup.
+\ * bit 4: If set "bye" is called if an error or End-of-File
+\   occurs when attempting to read a character from input.
+\
+\ The "{options}" variable is placed so near the beginning of
+\ the generated file so it can be edited manually in generated
+\ images if needed.
+\ 
+\ Bit options 1 and 4 are used for terminal input and output
+\ and might need to change depending on how I/O is processed.
+\
+\ Using the virtual machine that uses non-blocking input means
+\ an error code is returned if there is no input, by clearing
+\ bit 4 is means that instead of the system calling HALT it
+\ passes the error code up. The default, tiny, interpreter
+\ does blocking input, so we want this bit set normally.
+\
+\ On some systems turning on non-blocking mode also enables
+\ or disables other terminal operations, such as echoing 
+\ characters back when they are input by the user, hence why
+\ bit 1 is also needed, to enable or disable echoing.
+\
+\ The checksum is checked when the image is first loaded but
+\ not on subsequent boot operations, as the image might have
+\ been modified since last boot. If set, it will be cleared on
+\ a successful checksum calculation.
+\
+\ Some Forth implementations like to be noisy and print out
+\ a banner, the behavior is quite obnoxious however as it
+\ prevents the Forth from being used like a standard Unix
+\ utility with commands piped into the interpreter, and output
+\ printed to standard output (which is how the 
+\ meta-compilation works, almost) unless extra complication is
+\ added to determine whether the program is tailing to an
+\ interactive terminal or not (on Unix systems the function
+\ call "isatty" does this). This complication is not needed
+\ if by default the verbose banner is not printed out, which
+\ is the case here. If you need or want it to be printed out,
+\ this option can be enabled.
+\
 
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
@@ -1211,7 +1340,7 @@ label: entry       \ used to set entry point in next cell
 \ brackets, so for example the word "cold", defined later on,
 \ is defined as:
 \
-\        :t cold {cold} lit @ execute ;t
+\        : cold {cold} lit @ execute ;
 \
 \ It just refers to "{cold}", what "cold" does will be
 \ described later at a more appropriate juncture.
@@ -5281,11 +5410,25 @@ there 2/ primitive t!
 \ after the newly defined word. The interesting thing about
 \ words that have been created is that the default action to
 \ push an address can be changed to something else with the
-\ "does\>" word. There are a number of internal words which
+\ "does\>" word. 
+\ 
+\ There are also a number of internal words which
 \ are not very useful to anyone other than the person defining
-\ the words here, such as "(var)" and "(const)".
+\ the words here, such as "(var)" and "(const)". Which are
+\ used in "variable" and "constant", the standard Forth words
+\ for creating variables and constants respectively. "variable"
+\ and "constant" could also be defined as:
 \
-\ TODO: Explain more 
+\	: constant create , does> @ ;
+\	: variable create 0 , does> ;
+\
+\ But we do not have the runtime version of "create" and
+\ "does\>" available, hence the usage of "(var)", and 
+\ "(const)". "(marker)" will be used in the next section, it
+\ is used to retrieve stored information required by the word
+\ "marker", it is similar in to "(var)" and "(const)".
+\
+\ TODO: more explanation 
 \
 
 :s (var) r> 2* ;s compile-only
@@ -6221,6 +6364,8 @@ there 2/ primitive t!
 \ "query", execute the line with "eval" under "catch", and
 \ handle any errors, loop until satisfied.
 \
+\ TODO: Explain name
+\
 
 : quit ( -- : interpreter loop )
   begin
@@ -6606,6 +6751,21 @@ there 2/ primitive t!
 \ as well, so it contains a cell address, meaning it has to
 \ be multiplied by two before hand.
 \
+\ The word name comes "cold start", as opposed to a "warm
+\ start", from the automotive terms of starting an engine
+\ in a cold state relative to its normal operating temperature,
+\ the term has caught on in computer science circles to mean
+\ to start a system or program completely from the very
+\ beginning. We could define a "warm" word with the following
+\ definition:
+\
+\        : warm 0 >r ;
+\
+\ This definition performs a "warm start" of sorts, and does
+\ so in a non-portable manner. The VM handles the return stack
+\ jumps, this just happens to work on this system and should
+\ not be relied upon.
+\  
 
 : cold {cold} lit 2* @ execute ; ( -- )
 
@@ -6668,6 +6828,45 @@ bye                           \ Auf Wiedersehen
 As we have called "bye", we can write what we want here without
 it being run.
 
+\ ## Further Programs
+\
+\ Even given such a limited environment it is possible to
+\ create complex programs, as demonstrated. It might seem
+\ necessary to include more memory, or more peripherals, 
+\ however only the surface has been scratched on what is
+\ possible with what is available, even if the limit lies
+\ somewhere one the same level as the micro-computing systems
+\ of the 1980s. Still, that level of system would allow us to
+\ make in memory database systems and file systems, perhaps
+\ based on Forth blocks, to implement a Floating Point Word
+\ Set, or ALLOCATE and FREE for dynamic memory allocation.
+\
+\ It might not seem possible to extend this Forth 
+\ implementation so it supports floating point numbers, or
+\ dynamic memory allocation, but those features can be written
+\ in pure Forth, special hardware is not required to implement
+\ those features, only code.
+\
+\ For example, <https://wilsonminesco.com/Forth/ALLOC.html>
+\ implements ALLOCATE and FREE in Forth. There are other
+\ pure Forth implementations of these words about.
+\
+\ An article in "Vierte Dimension Vol.2, No.4 1986" titles
+\ "A FAST HIGH-LEVEL FLOATING POINT" by "Robert F. Illyes"
+\ implements a floating point system optimized for the 16-bit
+\ Forth implementations that were common at the time.
+\
+\ Simple games could be made that only require a terminal,
+\ such as Sokoban, 2048, Conway's Game Of Life, or Minesweeper. 
+\ More dynamic games like Space Invaders or Tetris would 
+\ require non-blocking input, which is possible to add to
+\ the virtual machine without breaking any Forth code.
+\
+\ It would be nice to see this system in use elsewhere, perhaps
+\ integrated into a game, or another system, impractical as it
+\ is. Please contact the author if you find a use for this
+\ system, other than for pedagogical purposes or as an
+\ interesting puzzle to solve.
 \
 \ # References:
 \
@@ -6684,7 +6883,14 @@ it being run.
 \ - <https://forth-standard.org/standard/block>,
 \   For the block word-set, which is partially implemented.
 \ - <https://github.com/howerj/subleq-js>
-
+\ - URISC, the original OISC, a SUBLEQ machine: 
+\  Mavaddat, F.; Parhami, B. (October 1988). "URISC: The 
+\  Ultimate Reduced Instruction Set Computer".
+\ - <https://en.wikipedia.org/wiki/Turing_tarpit>, which
+\ SUBLEQ could be argued to be one.
+\ - For other Single Instruction Set Computers:
+\ <https://en.wikipedia.org/wiki/One-instruction_set_computer>
+\ 
 \ # Appendix
 \
 \ ## About the author

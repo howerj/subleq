@@ -22,14 +22,18 @@ gforth.dec: subleq.fth
 gforth: subleq gforth.dec
 	./subleq gforth.dec
 
-subleq.md: convert subleq.fth subleq 1.dec convert.fth
-	#./convert < subleq.fth > $@
+subleq.md: subleq.fth subleq 1.dec convert.fth
 	cat convert.fth subleq.fth | ./subleq 1.dec > $@
+	dos2unix $@
 	echo "## Full eForth Image:" >> $@
 	echo >> $@
 	echo "A complete eForth image for reference (make sure not to copy page numbers):" >> $@
 	echo >> $@
 	cat 1.dec | tr '\n' ' ' | fmt -w 48 | sed 's/^/\t/' >> $@
+	echo >> $@
+	echo "## Source code without (major) comments:" >> $@
+	echo >> $@
+	grep '^[^\\]' subleq.fth | sed 's/^/\t/' >> $@
 	echo >> $@
 
 subleq.htm: subleq.md

@@ -1,9 +1,12 @@
 # 16-bit SUBLEQ eForth
 
+* Edition: 1.0.0
 * Author: Richard James Howe
 * Email: <mailto:howe.r.j.89@gmail.com>
 * Repo: <https://github.com/howerj/subleq>
-* License: [The Unlicense](LICENSE) / Public Domain
+* License: The Unlicense / Public domain for code only, all rights reserved 
+for comments, the book, diagrams and pictures.
+
 
 This project contains a working (self-hosting) Forth interpreter that runs
 on top of a SUBLEQ 16-bit machine. SUBLEQ machines belong to the class
