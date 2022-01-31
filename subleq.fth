@@ -210,6 +210,54 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ keep definitions on a single line, lower case names, and
 \ add a stack effect comment.
 \
+\ ## SUBLEQ History
+\ 
+\ SUBLEQ machines belong to a class of machines called "One
+\ Instruction Set Computer(s)", they only have a single
+\ instruction that allows them to compute anything that is
+\ computable, albeit not efficiently. SUBLEQ is possibly the
+\ original OISC, which was named "URISC", the idea was to
+\ provide a simple platform for those students at university
+\ learning computer engineering so that they could implement
+\ their own instruction set in a single course and create
+\ the microcode for that platform. The system was outlined
+\ in the paper "URISC: The Ultimate Reduced Instruction Set
+\ Computer"  by Mavaddat, F. and Parhami, B. published in
+\ October 1988.
+\ 
+\ SUBLEQ is an OISC that belongs to the category of single
+\ instruction set computers built around an arithmetic
+\ operation (the other two main categories include bit
+\ manipulation instructions and architectures build
+\ around a MOVE instruction called transport triggered
+\ architectures). They feel closet to a real machine whilst
+\ at the same time being very far away from them. As you will
+\ find out, it would not take much to radically improve the
+\ efficiency of the system with just a few extra instructions
+\ for bit-manipulation, perhaps even as little as one (such
+\ as an instruction set that could perform SUBLEQ and a NAND,
+\ or SUBLEQ and a Right Shift).
+\ 
+\ Other OISCs can be found online, such as SUBNEG (subtract
+\ and branch if negative), SUBLEQ with an accumulator, SBNZ
+\ (Subtract and Branch if not zero) and many others. They
+\ are all difficult to use, some more than others. SUBLEQ
+\ appears to be the more popular of the various OISCs. Those
+\ instructions are the universal ones (given infinite memory),
+\ there are other trivial and completely useless OISC systems
+\ out there, for example a machine consisting of just a single
+\ No-operation or NOP instruction, which are disregarded as
+\ uninteresting.
+\ 
+\ SUBLEQ, and OISC systems generally, feel like they
+\ are close to and perhaps belong to the same category
+\ as Esoteric Programming Languages and Turing Tar-pits,
+\ languages that are technically Turing complete, it is
+\ possible to compute anything that can be computed in them,
+\ but are incredibly difficult to use and are only ever used
+\ as a puzzle to satisfy intellectual curiosity.
+\ 
+\
 \ ## eForth
 \
 \ The image we will create is a variant of Forth called
@@ -257,20 +305,13 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ ## TODO Section
 \
-\ - Publish on Amazon
 \ - More headings for different sections, for groups of words 
 \ perhaps.
 \ - Separate SUBLEQ assembler Tutorial
 \ - Other SUBLEQ projects and programs
-\ - Make sure that words cannot be longer than 32
-\ characters in length.
-\ - OISC history
 \ - Editing, use
 \ https://matt.might.net/articles/shell-scripts-for-passive-vo\
 \ ice-weasel-words-duplicates/ 
-\ - Detect cell width and print out error message if too
-\ small or too big.
-\
 \
 \ ## A little about SUBLEQ
 \
@@ -1195,23 +1236,60 @@ defined eforth [if] system -order [then]
 \ memory location provided contains a positive or a negative
 \ value respectively, which is easy to compute in SUBLEQ.
 \
-\ TODO: More description
+\ Here is a short overview of the constructs:
+\
+\ * "if...then", the standard "if" clause, if the value 
+\ provided in the given location is non-zero then the clause is 
+\ execute, otherwise execution begins after "then". "else" is 
+\ not provided here in the assembler because it is not needed.
+\ * "-if...then", much like "if...then" but it executes the
+\ clause if the given location contains a negative cell.
+\ * "+if...then", like "-if" but only executes the clause if
+\ given a positive cell.
+\ * "begin...again", an infinite loop.
+\ * "begin...until" is the simplest loop on most platforms,
+\ on a SUBLEQ machine it is more complex, but kept in because
+\ a lot of Forth code uses the loop. It continues to run
+\ until the location given to "until" is non-zero.
+\ * "begin..while...repeat" will repeat until the location
+\ given to "while" is zero, it is easier to use than the
+\ "begin...until" loop.
+\
+\ These constructs allow us to make a language that is not
+\ quite raw assembler, and not really a high level language
+\ either. The macros work by either pushing locations and/or
+\ writing holes into the assembled image, or by patching up
+\ those holes in various different ways, or by manipulating
+\ the memory locations already on the stack, some words to
+\ a combination of those three options.
+\ 
+\ For example "mark" creates an empty location in the
+\ dictionary and pushes that location onto the meta-compilers
+\ variable stack. Later control structures can use that
+\ location to patch up it up with a new jump destination. 
+\ "mark" should be used in place of the last operand of a
+\ partially completed SUBLEQ instruction, as it is in the
+\ definition of "if".
+\
+\ None of these words contain any compiler security, unlike
+\ the later ones, or run time checks to make sure the control
+\ structures line up correctly, so use them carefully.
 \
 
 assembler.1 +order definitions
-: begin talign there ;
-: again JMP ;
-: mark there 0 t, ;
-: if ( NB. "if" does not work for 8000 )
+: begin talign there ; ( -- a )
+: again JMP ; ( a -- )
+: mark there 0 t, ; ( -- a : create hole in dictionary )
+: if ( a -- a : NB. "if" does not work for 8000 )
    2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t,
    mark ;
 : until 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t,
-   Z Z NADDR Z t, 2/ t, ;
-: +if   Z 2/ t, mark ;
+   Z Z NADDR Z t, 2/ t, ; ( a -- a )
+: +if   Z 2/ t, mark ; ( a -- a )
 : -if 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;
-: then begin 2/ swap t! ;
-: while if swap ;
-: repeat JMP then ;
+: then begin 2/ swap t! ; ( a -- )
+: while if swap ; ( a a -- a a )
+: repeat JMP then ; ( a a -- )
 assembler.1 -order
 meta.1 +order definitions
 
@@ -1649,10 +1727,46 @@ label: entry       \ used to set entry point in next cell
 \ of the second instruction in "PYTHAGORAS", which contains
 \ the address of "SWAP". You can see how this will proceed.
 \
+\ TODO: Detect incorrect VM size, must be 16-bit system.
+\ - Detect cell width and print out error message if too
+\ small or too big. The string "Error: Not a 16-bit SUBLEQ VM" 
+\ is:
+\ 
+\ 29 69 114 114 111 114 58 32 78 111 116 32 97 32 49 54 45 98 
+\ 105 116 32 83 85 66 76 69 81 32 86 77 73
+\
+\ (Including length)
+
+( label: wrong-vm-width-string )
+( decimal )
+( 29 t, 69 t, 114 t, 114 t, 111 t, 114 t, 58 t, 32 t, 78 t, ) 
+( 111 t, 116 t, 32 t, 97 t, 32 t, 49 t, 54 t, 45 t, 98 t, )
+( 105 t, 116 t, 32 t, 83 t, 85 t, 66 t, 76 t, 69 t, 81 t, )
+( 32 t, 86 t, 77 t, 73 )
+( hex )
+( wrong-vm-width-string 2/ tvar err-str-addr )
+(  )
+( assembler.1 +order )
+( label: die )
+(   err-str-addr x MOV )
+(   x INC )
+(   w wrong-vm-width-string iLOAD )
+(   begin )
+(     w )
+(   while )
+(     bl2 x iLOAD )
+(     bl2 PUT )
+(     x INC )
+(     w DEC )
+(   repeat )
+(   HALT )
 
 assembler.1 +order
 label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
+
+\  hbit +if die JMP then
+
   {sp0} {sp} MOV     \ Setup initial variable stack
   {rp0} {rp} MOV     \ Setup initial return stack
   {cold} ip MOV      \ Get the first instruction to execute
@@ -1668,6 +1782,7 @@ label: vm ( Forth Inner Interpreter )
   ip {rp} iSTORE     \ and store ip to return stack
   w ip MOV vm a-optim \ "w" becomes our next instruction
   vm JMP             \ Ad infinitum...
+
 assembler.1 -order
 
 \ This meta-compiler word, ";a", used to end the definition of
@@ -2614,7 +2729,41 @@ there 2/ primitive t!
 \ addresses to jump to or holes in the dictionary that need to
 \ be patched with the correct addresses.
 \
-\ TODO: More description.
+\ There are more constructs here than in the assembler 
+\ versions, but constructs likes "+if...then" and "-if...then"
+\ are missing as they are not standard Forth control 
+\ structures.
+\
+\ The "for...next" and "for...aft...then...next" control
+\ structures are more common in eForth, most Forth 
+\ implementations use "do...loop" and "do...+loop" which are
+\ more difficult to implement, slower, and use more items
+\ on the return stack, but easier to use.
+\
+\ The "for...next" construct keeps a loop counter on the
+\ return stack ("for" compiles "\>r" into the dictionary
+\ and a jump location after the "\>r"), "opNext" has already
+\ been encountered in the Virtual Machine instruction section,
+\ but it decrements and tests that loop counter and jumps
+\ back to instruction after "\>r" if the counter is positive,
+\ if negative it removes the counter from the return stack
+\ and continues on after the "next" statement.
+\
+\ These meta-compiler words do not take locations at cross
+\ compile time like the assembler versions do, instead taking
+\ variables to test off of the variable stack at run time.
+\
+\ If you understood the assembly versions, you will understand
+\ these versions. Note that these implementations are actually
+\ quite portable, or have the ability to be ported easy, other
+\ platforms might not need the "2\/" but they all follow the
+\ same general pattern; compile in a conditional jump or
+\ hole in the dictionary, modify it later on, push locations
+\ on to the stack for a word defined later to act on.
+\
+\ The section on Control Structures has more detail and
+\ diagrams as to how the compilation of these is achieved.
+\
 
 :m begin talign there ;m ( -- a )
 :m until talign opJumpZ 2/ t, ;m  ( a -- )
@@ -5406,11 +5555,11 @@ there 2/ primitive t!
 \ dictionary which when that newly created word is run pushes
 \ a variable onto the stack which is the address of the 
 \ location after the newly defined word, allowing you to
-\ allocate memory after the word (for example, for an array)
-\ after the newly defined word. The interesting thing about
-\ words that have been created is that the default action to
-\ push an address can be changed to something else with the
-\ "does\>" word. 
+\ allocate memory after the word (for example, for an array).
+\
+\ The interesting thing about words that have been created is 
+\ that the default action to push an address can be changed to
+\ something else with the "does\>" word. 
 \ 
 \ There are also a number of internal words which
 \ are not very useful to anyone other than the person defining
@@ -5428,11 +5577,48 @@ there 2/ primitive t!
 \ is used to retrieve stored information required by the word
 \ "marker", it is similar in to "(var)" and "(const)".
 \
-\ TODO: more explanation 
+\ The explanation of "does\>" will require more effort, it
+\ modifies the created word so that it now executes a different
+\ set of instructions, the ones pointing to after the "does\>"
+\ in the current defining word. "create" can be execute outside
+\ of a word definition, and it makes sense and can be valid
+\ to do so, "does\>" needs to be done with a word definition.
+\
+\ The following peculiar behavior is also standard for
+\ "create...does\>" constructs:
+\
+\        : x create does> ." Hello" does> ." World" ;
+\        x y
+\        y ( prints "Hello" )
+\        y ( prints "World", behavior has changed )
+\        y ( prints "World", behavior has now settled )
+\
+\ Which has limited uses, but is more of a curiosity than
+\ anything. "does\>" compiles in two into the creating word
+\ that we are making, one to patch up the created word called
+\ "(comp)" to point to the next word "(does)" which we
+\ redirect execution to continue after the "does\>".
+\
+\ "(comp)" can look at the last defined word and move to the
+\ code field in order to rewrite it by looking at the "{last}"
+\ variable. It pops off the topmost return stack variable,
+\ this is the location of "(does)" which will be written in
+\ after "(comp)", by popping the return stack it means that
+\ when "(comp)" exits it will return to the callers caller,
+\ ensuring that "(does)" not get executed prematurely.
+\
+\ "(does)" gets executed in the newly created word, it gets
+\ called from it, which means that it can look at its return
+\ stack to see where it was called from and pass a copy of that
+\ pointer to the code after it which will get executed.
+\
+\ That should give an overview of how "create...does\>" works,
+\ the easiest way to truly understand it is to reimplement
+\ it yourself.
 \
 
-:s (var) r> 2* ;s compile-only
-:s (const) r> [@] ;s compile-only
+:s (var) r> 2* ;s compile-only ( R: a --, -- a )
+:s (const) r> [@] ;s compile-only ( R: a --, -- u )
 :s (marker) r> 2* dup @ h lit ! cell+ @ get-current ! ;s
    compile-only
 : create postpone : drop postpone [ compile (var)
