@@ -6,8 +6,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ * Author:  Richard James Howe
 \ * Email:   howe.r.j.89@gmail.com
 \ * Repo:    <https://github.com/howerj/subleq>
-\ * License: The Unlicense / Public domain for code only, all 
-\ rights reserved for comments, the book, diagrams 
+\ * License: The Unlicense / Public domain for code only, all
+\ rights reserved for comments, the book, diagrams
 \ and pictures.
 \
 \ This file contains an assembler for a SUBLEQ CPU, a virtual
@@ -211,7 +211,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ add a stack effect comment.
 \
 \ ## SUBLEQ History
-\ 
+\
 \ SUBLEQ machines belong to a class of machines called "One
 \ Instruction Set Computer(s)", they only have a single
 \ instruction that allows them to compute anything that is
@@ -224,7 +224,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ in the paper "URISC: The Ultimate Reduced Instruction Set
 \ Computer"  by Mavaddat, F. and Parhami, B. published in
 \ October 1988.
-\ 
+\
 \ SUBLEQ is an OISC that belongs to the category of single
 \ instruction set computers built around an arithmetic
 \ operation (the other two main categories include bit
@@ -237,7 +237,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ for bit-manipulation, perhaps even as little as one (such
 \ as an instruction set that could perform SUBLEQ and a NAND,
 \ or SUBLEQ and a Right Shift).
-\ 
+\
 \ Other OISCs can be found online, such as SUBNEG (subtract
 \ and branch if negative), SUBLEQ with an accumulator, SBNZ
 \ (Subtract and Branch if not zero) and many others. They
@@ -248,7 +248,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ out there, for example a machine consisting of just a single
 \ No-operation or NOP instruction, which are disregarded as
 \ uninteresting.
-\ 
+\
 \ SUBLEQ, and OISC systems generally, feel like they
 \ are close to and perhaps belong to the same category
 \ as Esoteric Programming Languages and Turing Tar-pits,
@@ -256,7 +256,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ possible to compute anything that can be computed in them,
 \ but are incredibly difficult to use and are only ever used
 \ as a puzzle to satisfy intellectual curiosity.
-\ 
+\
 \
 \ ## eForth
 \
@@ -279,16 +279,16 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ in Forth, and various different schemes have been proposed.
 \ Some schemes are:
 \
-\ * The 1992 entry "third" by buzzard 
+\ * The 1992 entry "third" by buzzard
 \ <https://www.ioccc.org/years.html>. Which makes an obfuscated
-\ interpreter for a Forth like language in C which can 
+\ interpreter for a Forth like language in C which can
 \ bootstrap itself. It has about 15 primitives.
 \ * A 3-Instruction Forth <https://pygmy.utoh.org/3ins4th.html>
 \ which takes the concept in a different direction and is
 \ arguably not a Forth but a way of tethering a Forth for a
 \ new system.
 \ * "sectorforth" is a Forth interpreter in a (512 byte)
-\ boot-sector, available at 
+\ boot-sector, available at
 \ <https://github.com/cesarblum/sectorforth>.
 \
 \ The three schemes, whilst impressive, are a bit too spartan.
@@ -305,13 +305,14 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ ## TODO Section
 \
-\ - More headings for different sections, for groups of words 
+\ - More headings for different sections, for groups of words
 \ perhaps.
 \ - Separate SUBLEQ assembler Tutorial
+\ - Run Time Assembler Wordset?
 \ - Other SUBLEQ projects and programs
 \ - Editing, use
 \ https://matt.might.net/articles/shell-scripts-for-passive-vo\
-\ ice-weasel-words-duplicates/ 
+\ ice-weasel-words-duplicates/
 \
 \ ## A little about SUBLEQ
 \
@@ -468,7 +469,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ upon it.
 \
 \ It is possible to implement a fully featured eForth in around
-\ 8kiB with a few hundred words, the image we will create 
+\ 8kiB with a few hundred words, the image we will create
 \ however is nearly double that in size as half the image will
 \ be dedicated to implementing a virtual machine which eForth
 \ can run on. On a more conventional architecture that VM could
@@ -479,8 +480,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ Although an account of how a SUBLEQ machine has been given,
 \ there are other SUBLEQ machines that exist that will not
 \ run this program, either they lack the memory, they do not
-\ use twos-compliment arithmetic, they use bignums (or 
-\ arbitrary precision arithmetic) or even floating point 
+\ use twos-compliment arithmetic, they use bignums (or
+\ arbitrary precision arithmetic) or even floating point
 \ numbers for each cell, or, more likely they use a different
 \ cell width than this one.
 \
@@ -491,7 +492,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ to create an image that is entirely agnostic to the cell
 \ width and could perhaps patch itself up so it would run on
 \ any bit width above a minimum, this image does not do that,
-\ but it would be a very interesting exercise, perhaps even 
+\ but it would be a very interesting exercise, perhaps even
 \ more difficult than constructing the original VM required to
 \ support Forth. The cell width would not even necessarily
 \ need to be 16, 32 or 64 bit, perhaps a 18 bit or 36 bit
@@ -1193,10 +1194,13 @@ defined eforth [if] system -order [then]
 \ "MOV" the same, to zero out the "Z" register.
 \
 \ There are remarkably few macro instructions in the base;
-\ I/O, Loads/Stores, and arithmetic. The conditional 
-\ instruction macros will be defined in the next section. 
-\ 
-
+\ I/O, Loads/Stores, and arithmetic. The conditional
+\ instruction macros will be defined in the next section.
+\
+\ TODO: Optimize
+\ via https://web.archive.org/web/20151121172708/
+\ http://www.sccs.swarthmore.edu/users/06/adem/engin/e25/finale
+\
 :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
 :m NADDR there 2/ 1+ t, ;m ( --, jump to next cell )
 :m HALT 0 t, 0 t, -1 t, ;m ( --, Halt but do not catch fire )
@@ -1238,9 +1242,9 @@ defined eforth [if] system -order [then]
 \
 \ Here is a short overview of the constructs:
 \
-\ * "if...then", the standard "if" clause, if the value 
-\ provided in the given location is non-zero then the clause is 
-\ execute, otherwise execution begins after "then". "else" is 
+\ * "if...then", the standard "if" clause, if the value
+\ provided in the given location is non-zero then the clause is
+\ execute, otherwise execution begins after "then". "else" is
 \ not provided here in the assembler because it is not needed.
 \ * "-if...then", much like "if...then" but it executes the
 \ clause if the given location contains a negative cell.
@@ -1262,11 +1266,11 @@ defined eforth [if] system -order [then]
 \ those holes in various different ways, or by manipulating
 \ the memory locations already on the stack, some words to
 \ a combination of those three options.
-\ 
+\
 \ For example "mark" creates an empty location in the
 \ dictionary and pushes that location onto the meta-compilers
 \ variable stack. Later control structures can use that
-\ location to patch up it up with a new jump destination. 
+\ location to patch up it up with a new jump destination.
 \ "mark" should be used in place of the last operand of a
 \ partially completed SUBLEQ instruction, as it is in the
 \ definition of "if".
@@ -1317,11 +1321,11 @@ meta.1 +order definitions
 \ in SUBLEQ instructions.
 \
 \ This section also contains various constants ("one", "two",
-\ "bwidth" and others), and virtual machine registers ("w", 
+\ "bwidth" and others), and virtual machine registers ("w",
 \ "x", and others).
 \
 \ The variables that are worth noting are; "h", "primitive",
-\ "{options}", "{up}", "check" and "{ms}". 
+\ "{options}", "{up}", "check" and "{ms}".
 \
 \ * "h" contains the dictionary pointer, as used by "here",
 \ this will be used much later one.
@@ -1342,7 +1346,7 @@ meta.1 +order definitions
 \ 16-bits, of which only the lowest four are used. The options
 \ are:
 \
-\ * bit 1: If set turn echoing of characters off when 
+\ * bit 1: If set turn echoing of characters off when
 \   processing input characters.
 \ * bit 2: If set checksum is checked on startup.
 \ * bit 3: If set a greeting is printed out on startup.
@@ -1352,7 +1356,7 @@ meta.1 +order definitions
 \ The "{options}" variable is placed so near the beginning of
 \ the generated file so it can be edited manually in generated
 \ images if needed.
-\ 
+\
 \ Bit options 1 and 4 are used for terminal input and output
 \ and might need to change depending on how I/O is processed.
 \
@@ -1363,7 +1367,7 @@ meta.1 +order definitions
 \ does blocking input, so we want this bit set normally.
 \
 \ On some systems turning on non-blocking mode also enables
-\ or disables other terminal operations, such as echoing 
+\ or disables other terminal operations, such as echoing
 \ characters back when they are input by the user, hence why
 \ bit 1 is also needed, to enable or disable echoing.
 \
@@ -1376,7 +1380,7 @@ meta.1 +order definitions
 \ a banner, the behavior is quite obnoxious however as it
 \ prevents the Forth from being used like a standard Unix
 \ utility with commands piped into the interpreter, and output
-\ printed to standard output (which is how the 
+\ printed to standard output (which is how the
 \ meta-compilation works, almost) unless extra complication is
 \ added to determine whether the program is tailing to an
 \ interactive terminal or not (on Unix systems the function
@@ -1481,6 +1485,12 @@ label: entry       \ used to set entry point in next cell
   tuser {literal}   \ execution vector for literal
   tuser {ok}        \ execution vector for .ok
   tuser {echo}      \ execution vector for echo
+\ TODO: implement these
+\  tuser {ktap}      \ execution vector for ktap
+\  tuser {expect}    \ execution vector for expect
+\  tuser {compile}   \ execution vector for compilation
+\  tuser {interpret} \ execution vector for interpreting
+\  tuser {error}     \ execution vector for error handling
   tuser {state}     \ compiler state
   tuser {handler}   \ throw/catch handler
   tuser {sender}    \ multitasking; msg. send, 0 = no message
@@ -1729,17 +1739,17 @@ label: entry       \ used to set entry point in next cell
 \
 \ TODO: Detect incorrect VM size, must be 16-bit system.
 \ - Detect cell width and print out error message if too
-\ small or too big. The string "Error: Not a 16-bit SUBLEQ VM" 
+\ small or too big. The string "Error: Not a 16-bit SUBLEQ VM"
 \ is:
-\ 
-\ 29 69 114 114 111 114 58 32 78 111 116 32 97 32 49 54 45 98 
+\
+\ 29 69 114 114 111 114 58 32 78 111 116 32 97 32 49 54 45 98
 \ 105 116 32 83 85 66 76 69 81 32 86 77 73
 \
 \ (Including length)
 
 ( label: wrong-vm-width-string )
 ( decimal )
-( 29 t, 69 t, 114 t, 114 t, 111 t, 114 t, 58 t, 32 t, 78 t, ) 
+( 29 t, 69 t, 114 t, 114 t, 111 t, 114 t, 58 t, 32 t, 78 t, )
 ( 111 t, 116 t, 32 t, 97 t, 32 t, 49 t, 54 t, 45 t, 98 t, )
 ( 105 t, 116 t, 32 t, 83 t, 85 t, 66 t, 76 t, 69 t, 81 t, )
 ( 32 t, 86 t, 77 t, 73 )
@@ -1995,15 +2005,15 @@ assembler.1 -order
 \ what "{rp}" points to into "ip" and then decrementing the
 \ return stack pointer for the next return or call.
 \
-\ Some aliases for this word include "unnest", "exit", 
+\ Some aliases for this word include "unnest", "exit",
 \ "return".
 \
 \ Some Forth implementations also do some optimizations when
 \ compiling an exit into the dictionary (this one does not).
 \ The H2 CPU from <https://github.com/howerj/forth-cpu> Forth
 \ implementation does this more advanced optimizations on exit
-\ allowed by the instruction set, however most Forth 
-\ implementations can at least perform a tail-call 
+\ allowed by the instruction set, however most Forth
+\ implementations can at least perform a tail-call
 \ optimization (again, this version does not do this for
 \ simplicities sake). The optimization is simple, when
 \ you have a Forth word like:
@@ -2013,18 +2023,18 @@ assembler.1 -order
 \ The words "a", "b" and "c" are all function calls, however
 \ the last call to "c" could instead be made to be a simple
 \ jump assuming that "c" is itself a normal Forth function,
-\ it will instead call "opExit". This is sometimes fast 
+\ it will instead call "opExit". This is sometimes fast
 \ (a direct jump sometimes being faster than a function call)
 \ but it always saves on return stack space as the return
 \ site does not have to be pushed to the return stack.
 \
 \ The way this would be implemented is the word that will
-\ compile "opExit" would need to look at the previously 
+\ compile "opExit" would need to look at the previously
 \ compiled (and perhaps some meta-information) and check if it
 \ is a function call, if so, it can change it to a jump. We
 \ will not do this optimization in this Forth. The optimizer
 \ has to either be aware of cells that might look like calls
-\ but are not (think compiled numbers) and be aware not to 
+\ but are not (think compiled numbers) and be aware not to
 \ cross control structure boundaries or the programmer has
 \ to selectively apply the optimization themselves which is
 \ error prone.
@@ -2092,7 +2102,7 @@ assembler.1 -order
 \ implement and relatively fast. Much like "opJump" a
 \ jump destination follows the "opNext" instruction.
 \
-\ The "for...next" loop if given N will run for N+1 times,
+\ The "for...next" loop if given N will run for N + 1 times,
 \ counting backwards from N until 0 is reached on the final
 \ loop.
 \
@@ -2687,8 +2697,8 @@ there 2/ primitive t!
 \ we use meta-compiler commands to compile into the target
 \ always, so for the meta-compiler the words both do the same
 \ thing, which is to get a single character from the input
-\ stream and compile into the dictionary instructions which 
-\ push the number representing that character on to the 
+\ stream and compile into the dictionary instructions which
+\ push the number representing that character on to the
 \ variable stack.
 \
 \ All of these operations take up two cells in the dictionary
@@ -2729,13 +2739,13 @@ there 2/ primitive t!
 \ addresses to jump to or holes in the dictionary that need to
 \ be patched with the correct addresses.
 \
-\ There are more constructs here than in the assembler 
+\ There are more constructs here than in the assembler
 \ versions, but constructs likes "+if...then" and "-if...then"
-\ are missing as they are not standard Forth control 
+\ are missing as they are not standard Forth control
 \ structures.
 \
 \ The "for...next" and "for...aft...then...next" control
-\ structures are more common in eForth, most Forth 
+\ structures are more common in eForth, most Forth
 \ implementations use "do...loop" and "do...+loop" which are
 \ more difficult to implement, slower, and use more items
 \ on the return stack, but easier to use.
@@ -2932,10 +2942,10 @@ there 2/ primitive t!
 \ Note which variables are USER variables and which are just
 \ normal memory locations.
 \
-\ "\<ok\>", "\<emit\>", "\<echo\>", "\<literal\>" and 
-\ "\<cold\>" are used for system hooks. This allows the words 
+\ "\<ok\>", "\<emit\>", "\<echo\>", "\<literal\>" and
+\ "\<cold\>" are used for system hooks. This allows the words
 \ they are used in to change at run time. For example, "\<ok\>"
-\ contains the execution token used to print the "ok" prompt, 
+\ contains the execution token used to print the "ok" prompt,
 \ which we have already encountered. By changing that execution
 \ token we can change that prompt. For example:
 \
@@ -2982,7 +2992,14 @@ there 2/ primitive t!
 :s <key>  {key} up ;s ( -- a )
 :s <echo> {echo} up ;s ( -- a )
 :s <literal> {literal} up ;s ( -- a )
+\ TODO: implement these
+\ :s <ktap> {ktap} up ;s
+\ :s <expect> up ;s
+\ :s <compile> {compile} up ;s
+\ :s <interpret> {interpret} u ;sp 
+\ :s <error> {error} up ;s
 :s <cold> {cold} lit ;s ( -- a )
+
 
 \ There are quite a lot of variables in this part of the code,
 \ much like at the beginning of the image, and they will all
@@ -3184,6 +3201,19 @@ there 2/ primitive t!
 \ This will be shown in more detail in the capture containing
 \ the word "interpret", where naturally we go into more
 \ detail about how the interpreter internals work.
+\
+\ Other eForth models instead store execution vectors for
+\ compilation and interpreting, this does make the system more
+\ flexible, but is not done here for simplicities sake.
+\ "\<interpret\>" and "\<compile\>" are two hooks, including
+\ a few others, that have been cut from this implementation of
+\ eForth. There is a trade-off, you could potentially put a
+\ hook in for every single defined word, but that would be too
+\ cumbersome, if we had more room then those two hooks would
+\ be added, along with modifications to "evaluate" so they
+\ are used. -1 and 0 would still need to be stored in the
+\ "state" variable, as that variable is part of the standard
+\ word set.
 \
 
 : ] #-1 state ! ; ( -- : return to compile mode )
@@ -3415,7 +3445,7 @@ there 2/ primitive t!
 \ If we integrated entropy collection into the "key" word,
 \ then we could use this to create a higher quality (but
 \ still fairly bad, it would still not be suitable as a
-\ source for a Cryptographically Secure Random Number 
+\ source for a Cryptographically Secure Random Number
 \ Generator). Adding entropy collection along with implementing
 \ a reasonable Pseudo Random Number Generator algorithm such
 \ as "XORSHIFT+" would allow a word usually called "random"
@@ -3888,9 +3918,9 @@ there 2/ primitive t!
 \ # Exception Mechanism: Catch and Throw
 \
 \ For exceptional circumstances Forth provides the words
-\ "catch" and "throw", usually the author does not like 
+\ "catch" and "throw", usually the author does not like
 \ exceptions in languages other than Forth (specifically C like
-\ languages, although the higher level the language is, the 
+\ languages, although the higher level the language is, the
 \ more acceptable they are), I instead prefer other mechanisms,
 \ or even just returning error codes.
 \
@@ -3980,11 +4010,11 @@ there 2/ primitive t!
 \ and the application note "Catch and Throw" by
 \ Michael Milendorf, Sun Microsystems from EuroForth 98.
 \
-\ The idea is in "catch" we store the data stack pointer on 
+\ The idea is in "catch" we store the data stack pointer on
 \ the return stack saving our data stack position, along with
 \ the previous exception handler, we then store the current
 \ return stack position in the handler and then execute the
-\ token given. If the execution token throws an exception 
+\ token given. If the execution token throws an exception
 \ then the rest of "catch" after "execute" is not executed,
 \ only when no exception is thrown is it executed, it just
 \ has to restore the variable stack pointer and the previous
@@ -4121,8 +4151,8 @@ there 2/ primitive t!
 \        : * um* drop ;
 \
 \ Rendering its implementation trivial. To really improve
-\ the speed of this implementation, and any similar eForth 
-\ implementation which uses "um+" for multiplication, "um+" 
+\ the speed of this implementation, and any similar eForth
+\ implementation which uses "um+" for multiplication, "um+"
 \ should be made to be as fast as possible.
 \
 
@@ -4466,7 +4496,7 @@ there 2/ primitive t!
 \ that form the core of the numeric output words, although it
 \ is defined first. It removes a number from the stack and
 \ returns a string and string length to the string we have just
-\ formed in hold space by using various combinations of "\<#", 
+\ formed in hold space by using various combinations of "\<#",
 \ "\#" and "hold".
 \
 : #> 2drop hld @ this =num lit + over - ; ( u -- b u )
@@ -5237,6 +5267,21 @@ there 2/ primitive t!
 \ Field, the other three being used for flags, if it is too
 \ long, an exception is thrown.
 \
+\ Other eForth implementations provided "!csp" and "?csp" but
+\ did not use it within the base system itself, they can be
+\ defined as:
+\
+\        variable csp
+\        : !csp sp@ csp ! ;
+\        : ?csp sp@ csp @ <> abort" stack mismatch" ;
+\
+\ They are useful for testing new words but not for embedding
+\ in word definitions as there is only one "csp" location
+\ available. The word "?csp" call abort if there is a mismatch
+\ in the current stack pointer and the pointer stored by
+\ "!csp", which can be used to check whether words consume
+\ and produce the right number of arguments.
+\
 \ With that compiler security and those words, most problems
 \ can be found quite easily. They are not expensive to check
 \ for.
@@ -5417,7 +5462,9 @@ there 2/ primitive t!
 \ Missing from this Forth are the looping mechanism "do...loop"
 \ and its variants. This is one of the main stumbling blocks
 \ for porting ANS Forth (one of the main Forth standards) code
-\ to eForth.
+\ to eForth. I, personally, dislike the "do...loop" mechanism
+\ and avoid its use within my own code, preferring the simpler
+\ but less well known "for...next" loops.
 \
 \ Forth does not have a fixed grammar, it starts off with a
 \ very simple one, but words can be added that do arbitrary
@@ -5510,7 +5557,54 @@ there 2/ primitive t!
 \ on the stack, nor do they have to have exactly the same
 \ meaning.
 \
-\ TODO: More explanation
+\ ## FOR...NEXT
+\
+\ The "for...next" loop is given a counter which it decrements
+\ until it is equal to zero, when it then stops. It loops
+\ for N + 1 times, so given 9 it will loop 10 times, or 1 it
+\ will loop 2 times. This is not always desired, so the
+\ "for...aft...then...next" construct can be used to loop
+\ fewer times, the construct is more flexible than we generally
+\ needed it, when using "aft...then" we normally just want to
+\ loop one fewer times, however the full behavior is:
+\
+\ * "for...aft" is run on the first loop iteration and
+\ every time "aft...then" is.
+\ * "aft...then" is the main part of the loop body, it runs
+\ for N times, if given N as a loop counter to "for".
+\ * "then...next" is run every loop iteration.
+\
+\ This means "for" must put the loop counter onto the stack,
+\ as with a normal "for...next" loop, however "aft...then"
+\ must make an unconditional jump over it, and "next" must be
+\ made to point to after "aft".
+\
+\ The example words:
+\
+\        : fn for r@ . cr next ;
+\        : fatn
+\           for
+\             ." A:" r@ . cr
+\           aft
+\             ." B:" r@ . cr
+\           then
+\             ." C:" r@ . cr
+\           next ;
+\
+\ Shows the (convoluted) control structure in its full gory
+\ (glory?). One of the costs of reusing existing mechanisms
+\ and not coming up with a new one is this complex "aft"/"then"
+\ modifier, the "for...next" loop is simple and easy to use,
+\ but remembering all the details of a
+\ "for...aft...then...next" can be confusing. Instead it is
+\ usually just used in the following manner:
+\
+\        : example for aft (code) then next ;
+\
+\ Which executes "(code)" N times instead of N + 1 times.
+\
+\ The text detailing "opNext" contains more of a description 
+\ of how it works.
 \
 
 :to begin align here ; immediate compile-only
@@ -5536,31 +5630,31 @@ there 2/ primitive t!
 \ related words, for example a word set for making and
 \ manipulating arrays, which are not a native Forth construct.
 \
-\ "create"/"does\>" words are separated into an action 
-\ performed during the creation of the new word, and the 
-\ behavior of the new word at runtime. The word pair is used 
-\ heavily during meta-compilation to make new words that do 
-\ something with the target image. They are also some of the 
-\ most difficult words to explain, as in this situation we are 
-\ creating a set of words the will be used to create another 
+\ "create"/"does\>" words are separated into an action
+\ performed during the creation of the new word, and the
+\ behavior of the new word at runtime. The word pair is used
+\ heavily during meta-compilation to make new words that do
+\ something with the target image. They are also some of the
+\ most difficult words to explain, as in this situation we are
+\ creating a set of words the will be used to create another
 \ set of words.
 \
 \ Included in this section is a word for manipulating words
 \ defined with "create"/"does\>", called "\>body", and words
-\ which use "create"/"does\>", such as "variable" and 
+\ which use "create"/"does\>", such as "variable" and
 \ "constant".
 \
 \ When "create" is run it expects the name of a word to follow
 \ in the input stream, it then creates a new word in the target
 \ dictionary which when that newly created word is run pushes
-\ a variable onto the stack which is the address of the 
+\ a variable onto the stack which is the address of the
 \ location after the newly defined word, allowing you to
 \ allocate memory after the word (for example, for an array).
 \
-\ The interesting thing about words that have been created is 
+\ The interesting thing about words that have been created is
 \ that the default action to push an address can be changed to
-\ something else with the "does\>" word. 
-\ 
+\ something else with the "does\>" word.
+\
 \ There are also a number of internal words which
 \ are not very useful to anyone other than the person defining
 \ the words here, such as "(var)" and "(const)". Which are
@@ -5572,7 +5666,7 @@ there 2/ primitive t!
 \	: variable create 0 , does> ;
 \
 \ But we do not have the runtime version of "create" and
-\ "does\>" available, hence the usage of "(var)", and 
+\ "does\>" available, hence the usage of "(var)", and
 \ "(const)". "(marker)" will be used in the next section, it
 \ is used to retrieve stored information required by the word
 \ "marker", it is similar in to "(var)" and "(const)".
@@ -5628,7 +5722,11 @@ there 2/ primitive t!
 
 : >body cell+ ; ( a -- a : move to a create words body )
 :s (does) r> r> 2* swap >r ;s compile-only
-:s (comp) r> {last} lit @ cfa ! ;s compile-only
+:s (comp)
+  r> {last} lit @ cfa
+  ( check we are running does> on a created word )
+  dup @ to' (var) half lit <> if -1F lit throw then
+  ! ;s compile-only
 : does> compile (comp) compile (does) ;
    immediate compile-only
 
@@ -5712,6 +5810,8 @@ there 2/ primitive t!
 :to rdrop compile rdrop ; immediate compile-only
 :to exit compile opExit ; immediate compile-only
 
+\ # Meta-compiler string words
+\
 \ These words are target only words, as the meta-compiler has
 \ versions of these words which as well that should be used
 \ (except for *abort"*, however we still would not want to use
@@ -5739,7 +5839,7 @@ there 2/ primitive t!
 \ are all immediate words as they have to parse a string at
 \ compile time from the input stream and compile a word into
 \ the dictionary.
-\ 
+\
 
 :to ." compile .$
   [char] " word count + h lit ! align ; immediate compile-only
@@ -5748,7 +5848,7 @@ there 2/ primitive t!
 :to abort" compile (abort)
   [char] " word count + h lit ! align ; immediate compile-only
 
-\ ## Comments
+\ # Comments
 \
 \ These words add comments to the Forth interpreter, and a
 \ word that prints out the contents of the comment. These are
@@ -6380,7 +6480,7 @@ there 2/ primitive t!
    repeat drop <ok> @ execute ;s ( "word" -- )
 
 \ ## Evaluate
-\ 
+\
 \ "evaluate" takes a string and evaluates that string, it
 \ is careful to preserve the input state prior to evaluation
 \ so that it can be restored after, it also catches any error
@@ -6414,10 +6514,10 @@ there 2/ primitive t!
 \ being executed and continues execution from the next block,
 \ which can be chained together.
 \
-:s line 6 lit lshift swap block + 40 lit ;s
-:s loadline line evaluate ;s
+:s line 6 lit lshift swap block + 40 lit ;s ( k l -- a u )
+:s loadline line evaluate ;s ( k l -- ??? : execute a line! )
 : load #0 F lit for
-   2dup 2>r loadline 2r> 1+ next 2drop ; ( k -- )
+   2dup 2>r loadline 2r> 1+ next 2drop ; ( k -- : exec blk )
 
 \ Two words that allow the user of the environment to get
 \ information about the system, "eforth", which has uses in
@@ -6439,7 +6539,7 @@ there 2/ primitive t!
   ." License: The Unlicense / Public Domain" cr ;s
 
 \ ## Task Initialization
-\ 
+\
 \ "task-init" is a poor Forth function, it really should be
 \ split up into words that deal with the different aspects of
 \ setting up a task.
@@ -6486,26 +6586,78 @@ there 2/ primitive t!
 \     executing commands (which may cause problems), but it is
 \     setup just in case.
 \
-\ TODO: Talk about XIO, HAND, ...also a simple network
-\ protocol using the text interpreter vectors (ie. you could
-\ input a line of Forth code with a length and checksum, as
-\ part of a protocol for a debugger and/or bootloader). Also
-\ note $INTERPRET and $COMPILE as execution vectors for eval
-\ so they can be swapped out, to aid this kind of thing.
+\ The original eForth interpreter handled I/O in a more
+\ decomposed manner, which might be worth emulating, however
+\ the system is too big as it is as it has provided a large
+\ VM the allows the execution of Forth (which is also the
+\ reason other, useful, words are missing). It provided a more
+\ direct and fine control over the input/output mechanism with
+\ an alternative scheme for loading lots of code on what might
+\ have been quite a slow platform.
+\
+\ eForth provided the following words (which this system
+\ *will not* provide:
+\
+\ * "io!", or Initialize I/O, this does various system
+\ dependant functions necessary to initialize the Input/Output
+\ system, for example setting the baud rate on a Forth that
+\ talked over a UART, for hosted Forth implementations this
+\ is usually a No Operation.
+\ * "xio", or Exchange I/O, this took three execution tokens
+\ and set the vectors for "\<echo\>", "\<ok\>" and two
+\ executions vectors that do not exist on this platform, one
+\ allowing the behavior of "tap" to be changed and another to
+\ change the behavior of "expect" which was set to call the
+\ word "accept" which is present in this system.
+\ * "hand" provides default execution vectors for the okay
+\ prompt, terminal input handling with ktap, and then calls
+\ "xio".
+\ * "console" set the default input and output vectors for
+\ "\<key\>" and "\<emit\>" to read from and output to
+\ the terminal, or console, hence the name. It would then
+\ in turn call "hand", which in turn calls "xio".
+\ * "pace" emits a single ASCII character, a vertical tab,
+\ or the 11th character in the table of ASCII characters.
+\ * "file" setup I/O for file transfer, it also required
+\ support from the word "quit" which would detect if the
+\ execution vector for the okay prompt was not the one that
+\ printed "ok", if so, on error it would emit an ASCII
+\ escape character instead of an error message. "file" set
+\ the execution vector of "\<ok\>" to "pace" and disabled
+\ echoing of characters.
+\
+\ It is not difficult to imagine a better version of "file",
+\ or at least a more feature rich version, perhaps one that
+\ could be used as a basis of networking between different
+\ eForth systems with access to a common bus, one that would
+\ leverage the Data-Is-Code approach of Forth (opposite to the
+\ Code-Is-Data approach that Lisp takes) and existing Forth
+\ mechanism for reading and executing words like the Forth
+\ block editor does.
+\
+\ This would in effect make two of the text interpreters the
+\ programmer would use talk to each other in an automated
+\ manner, with little difference between typing the commands
+\ in and executing them, the line input mechanism could be
+\ extended with a line length and checksum prefix to ensure
+\ data integrity over a potentially unreliable communications
+\ medium (which means "accept" would have to be vectored to a
+\ different word that implemented this), and acknowledgement
+\ of success echoed back with via "ok".
+\
+\ This is all hypothetical, but is one reason for vectoring
+\ I/O, another is so that you can read directly from a file
+\ system without much difficulty.
+
+\ TODO: Implement xio, hand, add in other execution vectors?
 \
 
-\ h: quite? 4 cpu@ and 0<> ; ( -- t : in quite mode? )
-\ : io! preset fallthrough;  ( -- : initialize I/O )
-\ h: console ' rx? <key> ! ' tx! <emit> ! fallthrough;
-\ h: hand
-\   quite? 0= ' (ok) and
-\   ' drop ' tap
-\   raw? if 2drop
-\     ' emit  ' ktap
-\   then fallthrough;
-\ h: xio  ' accept <expect> ! <tap> ! <echo> ! <ok> ! ;
-\ h: pace 11 emit ;
-\ : file ' pace ' drop ' ktap xio ;
+\ :s xio ( t' accept <expect> ! <tap> ! ) <echo> ! <ok> ! ;s
+\ :s hand t' ok lit t' (emit) lit ( t' ktap ) postpone [ xio ;s
+\ :s pace B lit emit ;s
+\ :s file t' pace lit to' drop lit ( t' ktap ) xio ;s
+\ :s console t' key? lit <key> ! t' (emit) lit <emit> ! hand ;s
+\ :s io! console ;s
 
 :s task-init ( task-addr -- )
   {up} lit @ swap {up} lit !
@@ -6537,7 +6689,7 @@ there 2/ primitive t!
 :s ini {up} lit @ task-init ;s ( -- : initialize current task )
 
 \ ## Quit and Cold
-\ 
+\
 \ "quit" is the heart of the Forth system, it is responsible
 \ for fetching and evaluating each line of Forth code. It
 \ also contains the error handler of last resort, which catches
@@ -6550,13 +6702,18 @@ there 2/ primitive t!
 \ "query", execute the line with "eval" under "catch", and
 \ handle any errors, loop until satisfied.
 \
-\ TODO: Explain name
+\ The name "quit" certainly is an odd one, and despite being
+\ a poor name for the top interpreter loop (it would be better
+\ suited for a word that halted the machine), the name comes
+\ from the fact that calling "quit" makes the Forth system
+\ quit what it is doing and continue on executing Forth if it
+\ is called.
 \
 
 : quit ( -- : interpreter loop )
   begin
    query t' eval lit catch
-   ?dup if
+   ?dup if ( NB. Vectoring error handling might be useful )
      dup space . [char] ? emit cr #-1 = if bye then ini then
   again ;
 
@@ -6951,7 +7108,7 @@ there 2/ primitive t!
 \ so in a non-portable manner. The VM handles the return stack
 \ jumps, this just happens to work on this system and should
 \ not be relied upon.
-\  
+\
 
 : cold {cold} lit 2* @ execute ; ( -- )
 
@@ -6994,7 +7151,7 @@ save-target                   \ Output target
 \ the Forth word ".\\" which echos only the current line it
 \ is possible to output a C program that contains the entire
 \ interpreter, this would look something like this:
-\ 
+\
 \         .\ #include <stdio.h> /* eForth for 16-bit SUBLEQ */
 \         .\ int main(void){short p=0,m[65536] = {
 \        save-target  \ Output target
@@ -7018,7 +7175,7 @@ it being run.
 \
 \ Even given such a limited environment it is possible to
 \ create complex programs, as demonstrated. It might seem
-\ necessary to include more memory, or more peripherals, 
+\ necessary to include more memory, or more peripherals,
 \ however only the surface has been scratched on what is
 \ possible with what is available, even if the limit lies
 \ somewhere one the same level as the micro-computing systems
@@ -7027,7 +7184,7 @@ it being run.
 \ based on Forth blocks, to implement a Floating Point Word
 \ Set, or ALLOCATE and FREE for dynamic memory allocation.
 \
-\ It might not seem possible to extend this Forth 
+\ It might not seem possible to extend this Forth
 \ implementation so it supports floating point numbers, or
 \ dynamic memory allocation, but those features can be written
 \ in pure Forth, special hardware is not required to implement
@@ -7043,8 +7200,8 @@ it being run.
 \ Forth implementations that were common at the time.
 \
 \ Simple games could be made that only require a terminal,
-\ such as Sokoban, 2048, Conway's Game Of Life, or Minesweeper. 
-\ More dynamic games like Space Invaders or Tetris would 
+\ such as Sokoban, 2048, Conway's Game Of Life, or Minesweeper.
+\ More dynamic games like Space Invaders or Tetris would
 \ require non-blocking input, which is possible to add to
 \ the virtual machine without breaking any Forth code.
 \
@@ -7069,18 +7226,18 @@ it being run.
 \ - <https://forth-standard.org/standard/block>,
 \   For the block word-set, which is partially implemented.
 \ - <https://github.com/howerj/subleq-js>
-\ - URISC, the original OISC, a SUBLEQ machine: 
-\  Mavaddat, F.; Parhami, B. (October 1988). "URISC: The 
+\ - URISC, the original OISC, a SUBLEQ machine:
+\  Mavaddat, F.; Parhami, B. (October 1988). "URISC: The
 \  Ultimate Reduced Instruction Set Computer".
 \ - <https://en.wikipedia.org/wiki/Turing_tarpit>, which
 \ SUBLEQ could be argued to be one.
 \ - For other Single Instruction Set Computers:
 \ <https://en.wikipedia.org/wiki/One-instruction_set_computer>
-\ 
+\
 \ # Appendix
 \
 \ ## About the author
-\ 
+\
 \ Hello! Instead of writing about myself awkwardly in the
 \ third person with words such as "The author has..." I
 \ have decided to down a more informal route. I, Richard
@@ -7090,19 +7247,19 @@ it being run.
 \ sector. I have a degree in electronic engineering and have
 \ had a few internships related to that. I also studied in
 \ Germany for a year as part of the Erasmus program.
-\ 
+\
 \ I have interests in programming languages, operating
 \ systems, starting businesses, travelling, going to galleries
 \ and pretending I know about art, reading and would like to
 \ branch out into other hobbies such as wood-working and
 \ web-development (unrelated).
-\ 
+\
 \ I have never programmed Forth (or VHDL) professionally,
 \ only having done so fun.
-\ 
+\
 \ I currently reside in the UK.
 \
-\ The book was written for fun, it has next to no real 
+\ The book was written for fun, it has next to no real
 \ technical value whatsoever but the entire SUBLEQ eForth
 \ system was a lovely puzzle to crack. My next big project will
 \ probably be my own Unix operating system in a Pascal like
@@ -7439,6 +7596,10 @@ it being run.
 \ in the dictionary for which it calls "cfa?". It uses "ndrop"
 \ to get rid of the remaining items vocabularies returned by
 \ "get-order" if the CFA has been found.
+\
+\ This word is called "\>name" in the original eForth, or more
+\ accurately "cfa?" is the equivalent to ">name".
+\
 :s name ( cwf -- a | 0 : search for CFA in the dictionary )
   >r
   get-order
