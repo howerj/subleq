@@ -1,0 +1,42 @@
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <inttypes.h>
+#define SZ     (32768)
+#define L(X)   ((X)%SZ)
+#define HI(X)  (1ull << ((X) - 1))
+#define MSK(X) ((X) < 64 ? (1ull << (X)) + 0xFFFFFFFFFFFFFFFFull : 0xFFFFFFFFFFFFFFFFull)
+int main(int s, char **v) {
+	if (s < 2)
+		return 1;
+	static uint64_t m[SZ];
+	uint64_t pc = 0, N = atoi(v[1]);
+	if (N < 8 || N > 64)
+		return 2;
+	for (long i = 2, d = 0; i < s; i++) {
+		FILE *f = fopen(v[i], "r");
+		if (!f)
+			return 3;
+		while (fscanf(f, "%ld", &d) > 0)
+			m[L(pc++)] = ((int64_t)d) & MSK(N);
+		if (fclose(f) < 0)
+			return 4;
+	}
+	for (pc = 0; pc < SZ;) {
+		uint64_t a = m[L(pc++)], b = m[L(pc++)], c = m[L(pc++)];
+		if (a == MSK(N)) {
+			m[L(b)] = getchar() & MSK(N);
+		} else if (b == MSK(N)) {
+			if (putchar(m[L(a)]) < 0)
+				return 5;
+			if (fflush(stdout) < 0)
+				return 6;
+		} else {
+			uint64_t r = (m[L(b)] - m[L(a)]) & MSK(N);
+			if (r & HI(N) || r == 0)
+				pc = c;
+			m[L(b)] = r;
+		}
+	}
+	return 0;
+}

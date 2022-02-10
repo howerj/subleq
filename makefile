@@ -1,6 +1,6 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O3
 
-.PHONY: all clean test run gforth
+.PHONY: all clean test run gforth width
 
 all: subleq
 
@@ -13,8 +13,15 @@ run: subleq subleq.dec
 2.dec: subleq 1.dec subleq.fth
 	./subleq 1.dec < subleq.fth > $@
 
-test: 1.dec 2.dec
+test: 1.dec 2.dec nbit
 	diff -w 1.dec 2.dec
+
+width: nbit 1.dec
+	./nbit 17 1.dec
+	./nbit 18 1.dec
+	./nbit 32 1.dec
+	./nbit 63 1.dec
+	./nbit 64 1.dec
 
 gforth.dec: subleq.fth
 	gforth $< > $@

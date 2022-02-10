@@ -24,12 +24,15 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ to it, then you can port a Forth implementation to anything.
 \
 \ This program is written in Forth entirely, and should
-\ compile both under gforth (tested with version 0.7.3) and
-\ by executing it against a pre-generated eForth image
-\ running on the SUBLEQ machine. The file is formatted so that
-\ no line is longer than 64 bytes (or characters, it should be
-\ encoded as ASCII) long, this is so that source code could
-\ potentially be stored in something called "Forth Blocks".
+\ compile both under gforth (tested with version 0.7.3, under
+\ both Linux and WIndows) and by executing it against a 
+\ pre-generated eForth image running on the SUBLEQ machine. 
+\
+\ The file is formatted so that no line is longer than 64 bytes
+\ (or characters, it should be encoded as ASCII) long, this is
+\ so that source code could potentially be stored in something
+\ called "Forth Blocks". Although further formatting would be
+\ required to be useable with Forth blocks.
 \
 \ This program and explanation is for an esoteric, oddball,
 \ system, it is quite likely it will never be useful for
@@ -53,7 +56,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ be described shortly, both written in C. The C versions will
 \ obviously require a C compiler.
 \
-\ Anyway, to build, on a Unix system:
+\ To build, on a Unix system:
 \
 \        gcc subleq.c -o subleq
 \        ./subleq subleq.dec < subleq.fth > new-image.dec
@@ -79,9 +82,10 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ this would have been useful in a few places, however instead
 \ the meta-compilation system is used as a giant unit test
 \ framework. If the system can compile and image "A" which can
-\ compile another image "B" that is byte for byte as image "A",
-\ then we can be pretty confident that the new image is
-\ correct, it is at least correct enough to compile itself.
+\ compile another image "B" that is byte for byte the same as 
+\ image "A", then we can be pretty confident that the new 
+\ image is correct, it is at least correct enough to compile 
+\ itself.
 \
 \ This is done with the following commands on a Unix system:
 \
@@ -108,7 +112,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ "subleq.fth" source and turned into a markdown file, a well
 \ known format, that can be used to generate a book. If you are
 \ viewing the original "subleq.fth" file then the comments will
-\ contain markdown formatting, do less than or greater than
+\ contain markdown formatting, eg. less than or greater than
 \ characters will have to be escaped, as will asterisks. If
 \ you are viewing the book format (epub, PDF, ...) then the
 \ formatting for *bold* words should appear, and characters
@@ -363,9 +367,11 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ being pedantic.
 \
 \ A SUBLEQ machine that has and can address infinite memory
-\ memory is Turing complete, our implementation, as all real
+\ memory is Turing complete. Our implementation, as all real
 \ world implementations of any system, does not have infinite
-\ memory, but it can be imagined to be Turing complete.
+\ memory, but in practical terms it means we can solve any
+\ programming problem on it (modulo memory and speed 
+\ constraints) even if it is not an ideal system to do it on.
 \
 \ Assuming a twos compliment machine and 16-bit shorts, then
 \ this tiny C program will execute the image we will make:
@@ -752,7 +758,7 @@ variable tlocal 0 tlocal !
 
 defined eforth [if]
   :m tpack dup tc, for aft count tc, then next drop ;m
-  :m parse-word bl word ?nul count ;m
+  :m parse-word bl word ?nul count ;m ( -- a u )
   :m limit ;m ( u -- u16 : not needed on 16-bit systems )
 [else]
   :m tpack talign dup tc, 0 ?do count tc, loop drop ;m
@@ -1397,6 +1403,7 @@ label: entry       \ used to set entry point in next cell
                    \ #4=info, #8=die on EOF
   0 tvar primitive \ any address lower must be a VM primitive
   8000 tvar hbit   \ must contain 8000
+  7FFF tvar imax   \ must contain 7FFF
   =stksz half tvar stacksz \ must contain 80
   -2   tvar ntwo   \ must contain -2
   -1 tvar neg1     \ must contain -1
@@ -1441,7 +1448,7 @@ label: entry       \ used to set entry point in next cell
   0 tvar {single}   \ is multi processing off?
   2F tvar {blk}     \ current loaded block
   2F tvar {scr}     \ last viewed screen
-  0 tvar padding    \ BUG: Getting during image generation
+  0 tvar padding    \ BUG: Getting set during image generation
 
 \ Most of these are thread local variables, with the exception
 \ of "ip" and "tos", the stack variables "{rp}" and "{sp}" and
@@ -1485,12 +1492,11 @@ label: entry       \ used to set entry point in next cell
   tuser {literal}   \ execution vector for literal
   tuser {ok}        \ execution vector for .ok
   tuser {echo}      \ execution vector for echo
-\ TODO: implement these
-\  tuser {ktap}      \ execution vector for ktap
-\  tuser {expect}    \ execution vector for expect
-\  tuser {compile}   \ execution vector for compilation
-\  tuser {interpret} \ execution vector for interpreting
-\  tuser {error}     \ execution vector for error handling
+  tuser {tap}       \ execution vector for ktap
+  tuser {expect}    \ execution vector for expect
+  tuser {compile}   \ execution vector for compilation
+  tuser {interpret} \ execution vector for interpreting
+  tuser {error}     \ execution vector for error handling
   tuser {state}     \ compiler state
   tuser {handler}   \ throw/catch handler
   tuser {sender}    \ multitasking; msg. send, 0 = no message
@@ -1737,45 +1743,51 @@ label: entry       \ used to set entry point in next cell
 \ of the second instruction in "PYTHAGORAS", which contains
 \ the address of "SWAP". You can see how this will proceed.
 \
-\ TODO: Detect incorrect VM size, must be 16-bit system.
-\ - Detect cell width and print out error message if too
-\ small or too big. The string "Error: Not a 16-bit SUBLEQ VM"
-\ is:
+\ The VM also contains code to detect and prevent the image
+\ from running on a 32-bit system, as the image will not
+\ work. It detects the width of the VM using arithmetic
+\ properties of the VM that can only be maintained given
+\ a certain bit-width, such as adding 0x7FFF to 0x7FFF on
+\ a 16-bit machine should result in a negative number, on a 
+\ 32-bit machine it will be positive. It should be possible to
+\ extend this behavior to N bit detection. The code that checks
+\ this, and the code that prints out the error message, is 
+\ agnostic to the cell size up to a point, so it will works.
 \
-\ 29 69 114 114 111 114 58 32 78 111 116 32 97 32 49 54 45 98
-\ 105 116 32 83 85 66 76 69 81 32 86 77 73
-\
-\ (Including length)
 
-( label: wrong-vm-width-string )
-( decimal )
-( 29 t, 69 t, 114 t, 114 t, 111 t, 114 t, 58 t, 32 t, 78 t, )
-( 111 t, 116 t, 32 t, 97 t, 32 t, 49 t, 54 t, 45 t, 98 t, )
-( 105 t, 116 t, 32 t, 83 t, 85 t, 66 t, 76 t, 69 t, 81 t, )
-( 32 t, 86 t, 77 t, 73 )
-( hex )
-( wrong-vm-width-string 2/ tvar err-str-addr )
-(  )
-( assembler.1 +order )
-( label: die )
-(   err-str-addr x MOV )
-(   x INC )
-(   w wrong-vm-width-string iLOAD )
-(   begin )
-(     w )
-(   while )
-(     bl2 x iLOAD )
-(     bl2 PUT )
-(     x INC )
-(     w DEC )
-(   repeat )
-(   HALT )
+\ TODO: Get this working on 8-15 bit SUBLEQ machines
 
+( Error message string "Error: Not a 16-bit SUBLEQ VM" )
+1F tvar err-str
+ 45 t, 72 t, 72 t, 6F t, 72 t, 3A t, 20 t, 4E t,
+ 6F t, 74 t, 20 t, 61 t, 20 t, 31 t, 36 t, 2D t, 
+ 62 t, 69 t, 74 t, 20 t, 53 t, 55 t, 42 t, 4C t, 
+ 45 t, 51 t, 20 t, 56 t, 4D t, 0D t, 0A t, 00 t,
+err-str 2/ tvar err-str-addr
+
+\ Print error message if not on right machine width, 
+\ 16-bit SUBLEQ machines allowed only.
 assembler.1 +order
+label: die
+   err-str-addr x MOV
+   w ZERO
+   err-str w MOV
+   begin
+     w
+   while
+     w DEC
+     x INC
+     bl2 x iLOAD
+     bl2 PUT
+   repeat
+   HALT
+
 label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
 
-\  hbit +if die JMP then
+  \ check we are running on the right VM width
+  imax x MOV x x ADD x +if die JMP then
+  ( imax -if die JMP then )
 
   {sp0} {sp} MOV     \ Setup initial variable stack
   {rp0} {rp} MOV     \ Setup initial return stack
@@ -2992,12 +3004,11 @@ there 2/ primitive t!
 :s <key>  {key} up ;s ( -- a )
 :s <echo> {echo} up ;s ( -- a )
 :s <literal> {literal} up ;s ( -- a )
-\ TODO: implement these
-\ :s <ktap> {ktap} up ;s
-\ :s <expect> up ;s
-\ :s <compile> {compile} up ;s
-\ :s <interpret> {interpret} u ;sp 
-\ :s <error> {error} up ;s
+:s <tap> {tap} up ;s ( -- a )
+:s <expect> {expect} up ;s ( -- a )
+:s <compile> {compile} up ;s ( -- a )
+:s <interpret> {interpret} up ;s ( -- a )
+:s <error> {error} up ;s ( -- a )
 :s <cold> {cold} lit ;s ( -- a )
 
 
@@ -3153,6 +3164,8 @@ there 2/ primitive t!
 : hex  10 lit base ! ; ( -- : change to hexadecimal base )
 : decimal A lit base ! ; ( -- : change to decimal base )
 
+\ ## Command and Compile with "\[" and "\]"
+\ 
 \ "\]" and "\[" are two, very simple words, that require a
 \ lot more context to understand properly. Note one of them
 \ is immediate as well, that's important!
@@ -3216,8 +3229,12 @@ there 2/ primitive t!
 \ word set.
 \
 
-: ] #-1 state ! ; ( -- : return to compile mode )
-: [ #0  state ! ; immediate ( -- : initiate command mode )
+: ] 
+  \ t' (compile) lit <interpret> !
+  #-1 state ! ; ( -- : return to compile mode )
+: [ #0  
+  \ t' (command) lit <interpret> !
+  state ! ; immediate ( -- : initiate command mode )
 
 \ "many" is an interesting word, it is in the system vocabulary
 \ despite not being used, but I like the word so I have
@@ -4142,9 +4159,9 @@ there 2/ primitive t!
 \ is very slow. "um\*" only loops for 16 times however, on this
 \ 16-bit platform, one for each bit, and always loops for the
 \ same number of times, so it cannot logically be using that
-\ algorithm to perform multiplication.
-\
-\ TODO: Describe multiplication algorithm.
+\ algorithm to perform multiplication, instead it uses a shift
+\ and add, doubling the multiplier and taking care with the
+\ overflow each cycle to process each bit within it.
 \
 \ Given "um\*", "\*" can be coded with:
 \
@@ -4252,7 +4269,7 @@ there 2/ primitive t!
 \         bot - Bottom Of Text
 \         eot - End Of Text
 \         cur - Current Text Position
-\        c   - The character to process.
+\         c   - The character to process.
 \
 \ The input buffer and our position in it is represented by
 \ the first three arguments, "bot", "eot", and "cur". We are
@@ -4360,10 +4377,11 @@ there 2/ primitive t!
   over + over begin
     2dup <>
   while
-    key dup bl - 5F lit u< if tap else ktap then
+    key dup bl - 5F lit u< if tap else <tap> @ execute then
   repeat drop over - ;
+: expect <expect> @ execute ; ( TODO: Correct implementation )
 : tib source drop ; ( -- b )
-: query tib =buf lit accept tup ! drop #0 >in ! ; ( -- )
+: query tib =buf lit expect tup ! drop #0 >in ! ; ( -- )
 
 \ "-trailing" removes the trailing white-space from an input
 \ string, it does this non-destructively leaving the original
@@ -4987,6 +5005,9 @@ there 2/ primitive t!
 \ flexible, but neither is done, flexibility is not always a
 \ good thing.
 \
+\ TODO: Vector interpret and compile
+\ 
+
 : interpret ( b -- )
   find ?dup if
     state @
@@ -6532,7 +6553,7 @@ there 2/ primitive t!
 \ the project is stored with it.
 :r eforth 0107 lit ;r ( --, version )
 :s info cr ( --, print system info )
-  ." Project: eForth v1.7 " ( here . ) cr
+  ." Project: eForth v1.8"  here . check lit @ . cr
   ." Author:  Richard James Howe" cr
   ." Email:   howe.r.j.89@gmail.com" cr
   ." Repo:    https://github.com/howerj/subleq" cr
@@ -6586,45 +6607,51 @@ there 2/ primitive t!
 \     executing commands (which may cause problems), but it is
 \     setup just in case.
 \
-\ The original eForth interpreter handled I/O in a more
-\ decomposed manner, which might be worth emulating, however
-\ the system is too big as it is as it has provided a large
-\ VM the allows the execution of Forth (which is also the
-\ reason other, useful, words are missing). It provided a more
-\ direct and fine control over the input/output mechanism with
-\ an alternative scheme for loading lots of code on what might
-\ have been quite a slow platform.
+\ ### "xio" and related words
 \
-\ eForth provided the following words (which this system
-\ *will not* provide:
+\ The "xio" function and associated words are used to change 
+\ the Input and Output characteristics of the system in a 
+\ decomposed manner, allowing a more fine grained control of
+\ behavior. 
 \
-\ * "io!", or Initialize I/O, this does various system
-\ dependant functions necessary to initialize the Input/Output
-\ system, for example setting the baud rate on a Forth that
-\ talked over a UART, for hosted Forth implementations this
-\ is usually a No Operation.
-\ * "xio", or Exchange I/O, this took three execution tokens
-\ and set the vectors for "\<echo\>", "\<ok\>" and two
-\ executions vectors that do not exist on this platform, one
-\ allowing the behavior of "tap" to be changed and another to
-\ change the behavior of "expect" which was set to call the
-\ word "accept" which is present in this system.
+\ This is best shown with a description of the words 
+\ themselves, and what they are and can potentially be used 
+\ for.
+\
+\ * "io!", or Initialize I/O, sets up the Input/Output for the
+\ system, for example on some eForth system it might setup a
+\ UART, its baud rate, and other characteristics, on other
+\ hosted systems it might be a No-Operation, in this one it
+\ just calls "console", another word defined slightly later
+\ on.
+\ * "xio", or Exchange I/O, takes three executions tokens and
+\ set the vectors for "\<echo\>", "\<ok\>", "\<tap\>" and
+\ "\<expect\>" (it sets "\<expect\>" to the default words
+\ "accept". This does not change where the input comes from
+\ or goes to, but terminal (processing backspace characters
+\ or not, for example) behavior, the prompt (usually printing
+\ out "ok" after each line), and how input is acquired given
+\ an input stream and processed into a line.
 \ * "hand" provides default execution vectors for the okay
 \ prompt, terminal input handling with ktap, and then calls
 \ "xio".
-\ * "console" set the default input and output vectors for
+\ * "console" sets the default input and output vectors for
 \ "\<key\>" and "\<emit\>" to read from and output to
-\ the terminal, or console, hence the name. It would then
-\ in turn call "hand", which in turn calls "xio".
+\ the terminal, or console, hence the name. It then
+\ in turn calls "hand", which in turn calls "xio". This can
+\ be used to get the interpreter back into a "normal" state.
 \ * "pace" emits a single ASCII character, a vertical tab,
 \ or the 11th character in the table of ASCII characters.
-\ * "file" setup I/O for file transfer, it also required
-\ support from the word "quit" which would detect if the
-\ execution vector for the okay prompt was not the one that
-\ printed "ok", if so, on error it would emit an ASCII
-\ escape character instead of an error message. "file" set
-\ the execution vector of "\<ok\>" to "pace" and disabled
-\ echoing of characters.
+\ * "file" sets up I/O for a file transfer, in the original
+\ eForth this requires support from the word "quit", which 
+\ would detect if the execution vector for the okay prompt was
+\ not the one that printed "ok", if so, on error it would emit
+\ an ASCII escape character instead of an error message. "file"
+\ also set the execution vector of "\<ok\>" to "pace" and
+\ disabled echoing of characters back to the user, this allowed
+\ file redirection to give meaningful feedback to the user
+\ without overwhelming them on a DOS prompt. The interpreter
+\ loop in this version of Forth does not do that.
 \
 \ It is not difficult to imagine a better version of "file",
 \ or at least a more feature rich version, perhaps one that
@@ -6648,35 +6675,30 @@ there 2/ primitive t!
 \ This is all hypothetical, but is one reason for vectoring
 \ I/O, another is so that you can read directly from a file
 \ system without much difficulty.
-
-\ TODO: Implement xio, hand, add in other execution vectors?
 \
+:s xio t' accept lit <expect> ! <tap> ! <echo> ! <ok> ! ;s
+:s hand t' ok lit 
+    t' (emit) lit ( Default: echo on )
+    {options} lit @ lsb if drop to' drop lit then
+    t' ktap lit postpone [ xio ;s ( -- )
+:s pace B lit emit ;s ( -- : emit pacing character )
+:s file t' pace lit to' drop lit t' ktap lit xio ;s ( -- )
+:s console t' key? lit <key> ! t' (emit) lit <emit> ! hand ;s
+:s io! console ;s ( -- : setup system I/O )
 
-\ :s xio ( t' accept <expect> ! <tap> ! ) <echo> ! <ok> ! ;s
-\ :s hand t' ok lit t' (emit) lit ( t' ktap ) postpone [ xio ;s
-\ :s pace B lit emit ;s
-\ :s file t' pace lit to' drop lit ( t' ktap ) xio ;s
-\ :s console t' key? lit <key> ! t' (emit) lit <emit> ! hand ;s
-\ :s io! console ;s
-
-:s task-init ( task-addr -- )
+:s task-init ( task-addr -- : initialize USER task )
   {up} lit @ swap {up} lit !
   this 2/ {next-task} up !
-  t' bye lit 2/ {ip-save} up ! ( Default execution token )
+  to' bye lit 2/ {ip-save} up ! ( Default execution token )
   this =stksz        lit + 2/ {rp-save} up !
   this =stksz double lit + 2/ {sp-save} up !
   #0 {tos-save} up !
   decimal
-  t' key? lit <key> !
-  t' (emit) lit <echo> ! ( Default: Echoing of input on )
-  ( Turn off echoing if the 1st bit set )
-  {options} lit @ lsb if to' drop lit <echo> ! then
-  t' (emit) lit <emit> !
-  t' ok lit <ok> !
+  io!
   t' (literal) lit <literal> !
+  to' bye lit <error> !
   #0 >in ! #-1 dpl !
   this =tib lit + #0 tup 2! \ Set terminal input buffer loc.
-  postpone [
   {up} lit ! ;s
 
 \ "ini" initializes the current task, the system brings itself
@@ -6700,7 +6722,10 @@ there 2/ primitive t!
 \
 \ The actual interpreter loop is quite simple, get a line with
 \ "query", execute the line with "eval" under "catch", and
-\ handle any errors, loop until satisfied.
+\ handle any errors, loop until satisfied. It also sets up the
+\ default error handler, replacing the error handler set in
+\ "task-init" with one that prints out an error message instead
+\ of calling "bye".
 \
 \ The name "quit" certainly is an odd one, and despite being
 \ a poor name for the top interpreter loop (it would be better
@@ -6709,13 +6734,31 @@ there 2/ primitive t!
 \ quit what it is doing and continue on executing Forth if it
 \ is called.
 \
+\ "(error)" is the default error handling word, it will be 
+\ called from via the "\<error\>" execution vector, it
+\ prints out the error number, then a "?" (inspired by the
+\ wonderful error handling of the text editor "ed", expounded
+\ upon in the article "Ed is the standard text editor"), and
+\ calls "bye" if the error was "-1", which is "abort". If not
+\ it calls "ini", but makes sure it will be called in case of
+\ an error next time instead of "bye". Another candidate for
+\ error handling is the "\<ok\>" vector, instead of having a
+\ separate prompt vector, that could also act as an error
+\ handler, as we never want to print out "ok" when an error
+\ has occurred. To keep things conceptually simple, they are
+\ in separate vectors.
+\
+
+:s (error) ( u -- : quit loop error handler )
+   dup space . [char] ? emit cr #-1 = if bye then 
+   ini t' (error) lit <error> ! ;s
 
 : quit ( -- : interpreter loop )
-  begin
-   query t' eval lit catch
-   ?dup if ( NB. Vectoring error handling might be useful )
-     dup space . [char] ? emit cr #-1 = if bye then ini then
-  again ;
+  t' (error) lit <error> !         ( set error handler )
+  begin                            ( infinite loop start... )
+   query t' eval lit catch         ( evaluate a line )
+   ?dup if <error> @ execute then  ( error? )
+  again ;                          ( do it all again... )
 
 \ "(cold)" is the first word that gets executed, it performs
 \ the task of continuing to setup the environment before
@@ -7107,7 +7150,10 @@ there 2/ primitive t!
 \ This definition performs a "warm start" of sorts, and does
 \ so in a non-portable manner. The VM handles the return stack
 \ jumps, this just happens to work on this system and should
-\ not be relied upon.
+\ not be relied upon, it causes the VM to jump to the first
+\ instruction, which in turn jumps into the reset vector for
+\ the system. (All address lower than the value stored in
+\ "primitive" are treated as jump locations by the VM).
 \
 
 : cold {cold} lit 2* @ execute ; ( -- )

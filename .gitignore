@@ -1,13 +1,14 @@
 *.dec
 *.epub
+*.exe
 *.hex
 *.htm
 *.md
 *.pdf
-*.exe
-*.txt
 *.png
-eforth.c
+*.txt
 eforth
+eforth.c
 full
+nbit
 subleq
