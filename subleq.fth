@@ -311,12 +311,10 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ - More headings for different sections, for groups of words
 \ perhaps.
-\ - Separate SUBLEQ assembler Tutorial
-\ - Run Time Assembler Wordset?
-\ - Other SUBLEQ projects and programs
-\ - Editing, use
-\ https://matt.might.net/articles/shell-scripts-for-passive-vo\
-\ ice-weasel-words-duplicates/
+\ - Section on SWAR optimizations in Forth (not this one)
+\ - Note important difference in dictionary location in this
+\ Forth implementation!
+\ - Make a SUBLEQ VM in Forth! (Port other programs?)
 \
 \ ## A little about SUBLEQ
 \
@@ -598,6 +596,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 only forth definitions hex
 
+\ ## Order!
+\
 \ If you are not familiar with these words, it would help
 \ that you do, as we will be using the Forth vocabulary
 \ word set to create words for the meta-compiler, and for
@@ -708,9 +708,9 @@ create tflash tflash size cells allot size erase
 \ multitasking into the system.
 \
 
-variable tdp 0 tdp !
-variable tlast 0 tlast !
-variable tlocal 0 tlocal !
+variable tdp 0 tdp ! ( target dictionary pointer )
+variable tlast 0 tlast ! ( last defined target word pointer )
+variable tlocal 0 tlocal ! ( local variable allocator )
 
 \ We will be switching between vocabularies later, by using
 \ word pairs like ":m"/";m" and ":t"/";t" we can define words
@@ -819,12 +819,12 @@ defined eforth [if]
 \
 0 constant cgen
 cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
-:m mdump taligned
+:m mdump taligned ( a u -- )
   begin ?dup
   while swap dup @ limit #dec msep tcell + swap tcell -
   repeat drop ;m
-:m save-target decimal tflash there mdump ;m
-:m .end only forth definitions decimal ;m
+:m save-target decimal tflash there mdump ;m ( -- )
+:m .end only forth definitions decimal ;m ( -- )
 
 \ "atlast" retrieves the last defined word, or a pointer to
 \ to it. It will be used to set the variable which will
@@ -865,7 +865,7 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ used during meta-compilation.
 \
 
-:m lallot >r tlocal @ r> + tlocal ! ;m
+:m lallot >r tlocal @ r> + tlocal ! ;m ( u -- allot in target )
 :m tuser ( --, "name", Created-Word: -- u )
   get-current >r meta.1 set-current create r>
   set-current tlocal @ =cell lallot , does> @ ;m
@@ -965,7 +965,6 @@ defined eforth [if]
 
 :m postpone ( --, "name" )
    target.only.1 +order t' target.only.1 -order 2/ t, ;m
-
 
 \ The dictionary in Forth is a list of all of the "words", or
 \ functions, available to the system, the "words" each have a
@@ -1117,6 +1116,10 @@ defined eforth [if] system -order [then]
 \ addition, loads, stores, indirect loads and stores, moves,
 \ some input and output, and a few other things.
 \
+\ ## The SUBLEQ Assembler
+\
+\ This section contains the assembler for the SUBLEQ machine.
+\
 \ The following words could also go into the target assembler,
 \ which is usually part of a vocabulary called "assembler",
 \ and can be activated to create words written in assembler
@@ -1124,8 +1127,37 @@ defined eforth [if] system -order [then]
 \ defined in this eForth, there would also need to be a
 \ mechanism to call Forth words written in assembler as well.
 \
-\ Onto the words themselves, they all write instructions into
-\ the target image with "t,".
+\ The influential Forth-83 standard defined the following
+\ assembler related words (which will not be present in this
+\ system), but would be added in to the target image on a
+\ "real" system. One reason they are not added in is because
+\ they would have to be redefined for "gforth" anyway, which
+\ is used for fast compilation of the target image. The words
+\ are:
+\
+\ * "ASSEMBLER": Adds the assembler word set into the search
+\ order, in this system, if present, it would add the
+\ few control structures defined, and "PUT", "MOV", "JMP", and
+\ the like, into the search order.
+\ * "CODE": Along with "END-CODE", as mentioned, this is the
+\ assembler version of ":", it sets up a new word in the
+\ dictionary that will not be visible until the corresponding
+\ "END-CODE" has been reached, it also adds in the "ASSEMBLER"
+\ vocabulary into the dictionary, so the assembler words can
+\ be found.
+\ * ";CODE": Starts a section of assembler *within* a normal
+\ word definition, which should be terminated with "END-CODE".
+\ * "END-CODE": Terminates a run of assembly defined with
+\ ";CODE" or "CODE".
+\
+\ Those are the only standard assembly words, naturally the
+\ rest would be platform specific, the mnemonics for an
+\ x86 or an ARM processor would be different.
+\
+\ Onto the SUBLEQ assembler words themselves.
+\
+\ The macros all write instructions into the target image 
+\ with "t,".
 \
 \ "Z" is the first word defined. It writes a zero into a cell,
 \ it is meant to be used as a register location that starts
@@ -1203,10 +1235,7 @@ defined eforth [if] system -order [then]
 \ I/O, Loads/Stores, and arithmetic. The conditional
 \ instruction macros will be defined in the next section.
 \
-\ TODO: Optimize
-\ via https://web.archive.org/web/20151121172708/
-\ http://www.sccs.swarthmore.edu/users/06/adem/engin/e25/finale
-\
+
 :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
 :m NADDR there 2/ 1+ t, ;m ( --, jump to next cell )
 :m HALT 0 t, 0 t, -1 t, ;m ( --, Halt but do not catch fire )
@@ -1220,7 +1249,7 @@ defined eforth [if] system -order [then]
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( a a -- )
-:m iJMP there 2/ E + 2* MOV NOOP ;m ( a -- )
+:m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
 :m iSTORE ( a a -- )
    swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV
    r> 0 MOV ;m
@@ -1302,6 +1331,14 @@ assembler.1 +order definitions
 : repeat JMP then ; ( a a -- )
 assembler.1 -order
 meta.1 +order definitions
+
+\ If we were to implement the ASSEMBLER words then we would put
+\ all of the words defined in this section into an assembler
+\ vocabulary in the target, they would look very similar. An
+\ added complication is getting the VM to JMP to the newly
+\ defined word because of how the Forth VM works, which might
+\ require a new primitive to do so.
+\
 
 \ # The System Variables
 \
@@ -1494,14 +1531,13 @@ label: entry       \ used to set entry point in next cell
   tuser {echo}      \ execution vector for echo
   tuser {tap}       \ execution vector for ktap
   tuser {expect}    \ execution vector for expect
-  tuser {compile}   \ execution vector for compilation
-  tuser {interpret} \ execution vector for interpreting
   tuser {error}     \ execution vector for error handling
   tuser {state}     \ compiler state
   tuser {handler}   \ throw/catch handler
   tuser {sender}    \ multitasking; msg. send, 0 = no message
   tuser {message}   \ multitasking; the message itself
   tuser {id}        \ executing from block or terminal?
+  tuser {span}      \ used by "expect" to store char count
   tuser {tib}       \ terminal input buffer: cell 1,
   =cell lallot      \ terminal input buffer: cell 2
 
@@ -1749,14 +1785,13 @@ label: entry       \ used to set entry point in next cell
 \ properties of the VM that can only be maintained given
 \ a certain bit-width, such as adding 0x7FFF to 0x7FFF on
 \ a 16-bit machine should result in a negative number, on a 
-\ 32-bit machine it will be positive. It should be possible to
-\ extend this behavior to N bit detection. The code that checks
-\ this, and the code that prints out the error message, is 
-\ agnostic to the cell size up to a point, so it will works.
+\ 32-bit machine it will be positive. The code should work for
+\ SUBLEQ machines have greater than 16-bit width, and not less
+\ (so a 17-bit SUBLEQ machine would print the error message,
+\ a 15-bit one would not), it could be extended to do this,
+\ but those machines are far less common than greater bit-width
+\ ones.
 \
-
-\ TODO: Get this working on 8-15 bit SUBLEQ machines
-
 ( Error message string "Error: Not a 16-bit SUBLEQ VM" )
 1F tvar err-str
  45 t, 72 t, 72 t, 6F t, 72 t, 3A t, 20 t, 4E t,
@@ -1892,10 +1927,10 @@ assembler.1 -order
 \ SUBLEQ machine, "1-" decrements the top of the stack, you
 \ can work out the other two.
 \
-:a bye HALT ;a
-:a 1- tos DEC ;a
-:a 1+ tos INC ;a
-:a invert tos INV ;a
+:a bye HALT ;a       ( -- : HALT system )
+:a 1- tos DEC ;a     ( u -- u : increment by one )
+:a 1+ tos INC ;a     ( u -- u : decrement by one )
+:a invert tos INV ;a ( u -- u : invert value )
 
 \ The following two functions are use to build "@" and "!",
 \ however they deal with cell addresses and not with byte
@@ -1929,11 +1964,20 @@ assembler.1 -order
 \ for controlling the behavior of "key", defined later on,
 \ which uses this instruction.
 \
+\ A non-blocking version of "opEmit" would require a virtual
+\ machine change, not a radical one, but just information on
+\ whether the operation succeeded. The change in the virtual
+\ machine necessary to do this is present in the appendix
+\ containing the virtual machine (at the end of the
+\ non-blocking input version). This would also require
+\ a change in "opEmit" and would render this SUBLEQ machine
+\ different to the majority of SUBLEQ machines out there.
+\
 \ These two instructions provide the only real interaction
 \ with the outside world, and you can do a lot with just that.
 \
-:a opEmit tos PUT tos {sp} iLOAD --sp ;a
-:a opKey ++sp tos {sp} iSTORE tos GET ;a
+:a opEmit tos PUT tos {sp} iLOAD --sp ;a ( c -- )
+:a opKey ++sp tos {sp} iSTORE tos GET ;a ( -- n )
 
 \ We need a way of pushing a literal value, a number, onto
 \ the variable stack, "opPush" does that.
@@ -2004,9 +2048,9 @@ assembler.1 -order
 \ them in their entirety.
 \
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
-:a opDup ++sp tos {sp} iSTORE ;a
+:a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
 :a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
-:a opDrop tos {sp} iLOAD --sp ;a
+:a opDrop tos {sp} iLOAD --sp ;a ( n -- )
 :a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 
@@ -2052,13 +2096,13 @@ assembler.1 -order
 \ error prone.
 \
 
-:a opExit ip {rp} iLOAD --rp ;a
+:a opExit ip {rp} iLOAD --rp ;a ( R: a -- )
 
 \ Subtraction and addition need no real explanation, just note
 \ that they are quite fast to execute.
 \
-:a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a
-:a + w {sp} iLOAD w tos ADD --sp ;a
+:a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a ( n n -- n )
+:a + w {sp} iLOAD w tos ADD --sp ;a ( n n -- n )
 
 \ These are various stack manipulation words that warrant a
 \ little more explanation than the implementations of
@@ -2083,10 +2127,10 @@ assembler.1 -order
 \ described later on.
 \
 
-:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a
-:a rdrop --rp ;a
-:a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a
-:a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a
+:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a ( R: u --, -- u )
+:a rdrop --rp ;a ( R: u -- )
+:a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a ( R: ???, -- u )
+:a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a ( u -- R: ??? )
 
 \ "sp@" and "sp!" do for the variable stack what "rp@" and
 \ "rp!" do for the return stack, they can set them to arbitrary
@@ -2100,8 +2144,8 @@ assembler.1 -order
 \ for error checking and debugging purposes.
 \
 
-:a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a
-:a sp! tos {sp} MOV ;a
+:a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a ( -- u )
+:a sp! tos {sp} MOV ;a ( u u -- )
 
 \ "opNext" is the only other control structure instruction
 \ that is needed, apart from "opJump" and "opJumpZ". It should
@@ -2136,7 +2180,7 @@ assembler.1 -order
 \ "2 1 0".
 \
 
-:a opNext w {rp} iLOAD
+:a opNext w {rp} iLOAD ( R: n -- | n-1 )
    w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then
    ip INC --rp ;a
 
@@ -2155,7 +2199,7 @@ assembler.1 -order
 \ until the lowest bit has been shifted into the highest bit
 \ location and then testing whether it is set or not.
 \
-:a lsb
+:a lsb ( u -- f )
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
@@ -2198,8 +2242,8 @@ assembler.1 -order
 \ chapter.
 \
 
-:a opJump ip ip iLOAD ;a
-:a opJumpZ
+:a opJump ip ip iLOAD ;a ( -- )
+:a opJumpZ ( u -- )
   tos w MOV 0 t MOV
   w if neg1 t MOV then w DEC w +if neg1 t MOV then
   tos {sp} iLOAD --sp
@@ -3006,8 +3050,6 @@ there 2/ primitive t!
 :s <literal> {literal} up ;s ( -- a )
 :s <tap> {tap} up ;s ( -- a )
 :s <expect> {expect} up ;s ( -- a )
-:s <compile> {compile} up ;s ( -- a )
-:s <interpret> {interpret} up ;s ( -- a )
 :s <error> {error} up ;s ( -- a )
 :s <cold> {cold} lit ;s ( -- a )
 
@@ -3108,6 +3150,7 @@ there 2/ primitive t!
 : blk {blk} lit ; ( -- a : latest loaded block )
 : scr {scr} lit ; ( -- a : last view block )
 : >in {in} up ; ( -- a : input buffer position var )
+: span {span} up ; ( -- u : number of chars saved by expect )
 : bl 20 lit ; ( -- 32 : push space character )
 : cycles {cycles} lit ; ( -- a : number of "cycles" ran for )
 
@@ -3230,10 +3273,8 @@ there 2/ primitive t!
 \
 
 : ] 
-  \ t' (compile) lit <interpret> !
   #-1 state ! ; ( -- : return to compile mode )
 : [ #0  
-  \ t' (command) lit <interpret> !
   state ! ; immediate ( -- : initiate command mode )
 
 \ "many" is an interesting word, it is in the system vocabulary
@@ -4379,9 +4420,9 @@ there 2/ primitive t!
   while
     key dup bl - 5F lit u< if tap else <tap> @ execute then
   repeat drop over - ;
-: expect <expect> @ execute ; ( TODO: Correct implementation )
+: expect <expect> @ execute span ! drop ; ( a u -- )
 : tib source drop ; ( -- b )
-: query tib =buf lit expect tup ! drop #0 >in ! ; ( -- )
+: query tib =buf lit <expect> @ execute tup ! drop #0 >in ! ;
 
 \ "-trailing" removes the trailing white-space from an input
 \ string, it does this non-destructively leaving the original
@@ -5002,11 +5043,9 @@ there 2/ primitive t!
 \ We could make it so that "interpret" executes an execution
 \ vector, or it executes one if neither a number or a word is
 \ found. Either vector would make the interpreter more
-\ flexible, but neither is done, flexibility is not always a
-\ good thing.
+\ flexible, but neither is done, due to limitations on the
+\ image size.
 \
-\ TODO: Vector interpret and compile
-\ 
 
 : interpret ( b -- )
   find ?dup if
@@ -5683,8 +5722,8 @@ there 2/ primitive t!
 \ for creating variables and constants respectively. "variable"
 \ and "constant" could also be defined as:
 \
-\	: constant create , does> @ ;
-\	: variable create 0 , does> ;
+\       : constant create , does> @ ;
+\       : variable create 0 , does> ;
 \
 \ But we do not have the runtime version of "create" and
 \ "does\>" available, hence the usage of "(var)", and
@@ -7279,6 +7318,12 @@ it being run.
 \ SUBLEQ could be argued to be one.
 \ - For other Single Instruction Set Computers:
 \ <https://en.wikipedia.org/wiki/One-instruction_set_computer>
+\ - For the Forth-83 Standard:
+\ <http://forth.sourceforge.net/standard/fst83/>
+\ <http://forth.sourceforge.net/standard/fst83/FORTH-83.PRN>
+\ - DPANS84 FORTH standard:
+\ <http://forth.sourceforge.net/std/dpans/>
+\
 \
 \ # Appendix
 \
@@ -7316,7 +7361,7 @@ it being run.
 \ This section contains a fully portable version of SUBLEQ
 \ machine, written in C, it is not minified, or obfuscated, but
 \ designed to as portable as possible. It does not even rely
-\ on twos compliment, doing all arithmetic with unsigned
+\ on signed arithmetic, doing all arithmetic with unsigned
 \ numbers instead. It should work on all platforms that have
 \ the fixed width typedefs.
 \
@@ -7502,6 +7547,16 @@ it being run.
 \                return 0;
 \        }
 \
+\ Note that the machine could be changed so that output could
+\ be non-blocking as well, "putch" would have to be changed
+\ so it attempted to output the character, and would instead
+\ feedback the information to the program running on the VM
+\ in this manner:
+\
+\	m[L(a)] = putch(m[L(a)]);
+\
+\ It would be up to the running program to handle this
+\ correctly, and retry and failed operations if necessary.
 \
 \ ## Error Code list
 \
@@ -7644,7 +7699,7 @@ it being run.
 \ "get-order" if the CFA has been found.
 \
 \ This word is called "\>name" in the original eForth, or more
-\ accurately "cfa?" is the equivalent to ">name".
+\ accurately "cfa?" is the equivalent to "\>name".
 \
 :s name ( cwf -- a | 0 : search for CFA in the dictionary )
   >r
@@ -7797,4 +7852,146 @@ it being run.
 \        Vocabulary Pointer: The handle used to identify the
 \              vocabulary, a pointer to the start of the linked
 \              list of words.
+\
+\ ## Faster SUBLEQ Assembly Operations
+\
+\ Here is an alternate set of assembly instruction macros for
+\ common operations, they could be integrated the system, some
+\ are faster and shorter than the ones that the author has
+\ come up with.
+\
+\ Taken from:
+\
+\ https://web.archive.org/web/20151121172708/\
+\ http://www.sccs.swarthmore.edu/users/06/adem/engin/e25/finale
+\
+\ Some notes on the notation; "ZR" indicates the zero register
+\ which should start out (and end up as zero), "TA"/"TB"/"TC"
+\ are all temporary registers, "NR" should contain negative
+\ one (or all bits set). If the third operand is missing the
+\ jump destination is the next instruction, or in the notation
+\ used here the jump address is "+1" (although the might be
+\ converted to a "+3" by the assembler), the same goes for
+\ "+2"/"-2", they refer to the two instructions forward or
+\ back, and not cell addresses. If only one operand is present
+\ then the third operand is the usual jump to next instruction,
+\ and the first operand is zeroed by subtracting it from
+\ itself, eg. "subleq a" expands to "subleq a a +1". The
+\ JMP instruction is the same as our JMP instruction, ie.
+\ "JMP c" is "subleq Z Z c".
+\
+\ ### ADD a b c
+\
+\ Addition.
+\
+\        \ ADD a b c: m(c) = m(a) + m(b)
+\        subleq a  ZR
+\        subleq b  ZR    \ ZR = - a - b
+\        subleq c  c     \ c  = 0
+\        subleq ZR c     \ c  = a + b
+\        subleq ZR ZR    \ ZR = 0
+\        
+\ ### SUB a b c
+\
+\ Subtraction.
+\
+\        \ SUB a b c: m(c) = m(b) - m(a)
+\        subleq TA TA    \ TA = 0
+\        subleq TB TB    \ TB = 0
+\        subleq a  TA
+\        subleq b  TB
+\        subleq TB TA    \ TA = b - a
+\        subleq c  c
+\        subleq TB TB
+\        subleq TA TB    \ TB = a - b
+\        subleq TB c     \ c = b - a
+\        
+\ ### MOV a b
+\
+\ Move.
+\
+\        \ MOV a b: move m(a) to m(b)
+\        subleq b  b
+\        subleq a  ZR
+\        subleq ZR b
+\        subleq ZR ZR
+\        
+\ ### JMPI a
+\
+\ Jump indirect.
+\
+\        \ JMPI a: jump to memory location stored in m(a)
+\        subleq ZR a
+\        subleq TA TA
+\        subleq TA ZR
+\        subleq ZR ZR TA
+\        
+\ ### IFLE a b c (if less than or equal to)
+\
+\ If less than or equal to.
+\
+\        \ IFLE a b c: IF a<=b THEN JMP c
+\        subleq TA TA
+\        subleq a  TA    \ TA = -a
+\        subleq TB TB
+\        subleq TA TB    \ TB = a
+\        subleq b  TB c  \  TB = a - b, if (a - b) <= 0 JMP c
+\        
+\ ### IFGT a b c (if greater than)
+\
+\ If greater than.
+\
+\        \ IFGT a b c: IF a > b THEN JMP c   
+\        subleq TA TA
+\        subleq a  TA    \ TA = -a
+\        subleq TB TB
+\        subleq b  TB    \ TB = -b
+\        subleq TB TA    \ TA = b - a
+\        subleq NR TB c  \ TB = b - a + 1, if (b-a+1)<=0 JMP c 
+\        
+\ ### DIV a b c
+\
+\ Division.
+\
+\        \ DIV a b c: m(c) = m(a) / m(b) 
+\        subleq TA
+\        subleq TB
+\        subleq TC
+\        
+\        subleq b  TA
+\        subleq TA TB    \ TB = b
+\        
+\        subleq TA TA
+\        subleq a  TA
+\        subleq TA TC    \ TC = a
+\        
+\        subleq c c
+\        
+\        subleq NR c     \ c++
+\        subleq TC TB +2 \ b -= a, if b <= 0 JMP 2
+\        subleq ZR ZR -2 \ loop back to c++
+\
+\ ### MUL a b c
+\
+\ Multiply.
+\
+\        \ MUL a b c: m(c) = m(a) * m(b) 
+\        subleq TA
+\        subleq TB
+\        subleq TC
+\        
+\        subleq b  TA
+\        subleq TA TB    \ TB = b
+\        
+\        subleq NR c     \ c = 1
+\        
+\        subleq TA TA
+\        subleq a  TA    \ TA = -a
+\        
+\        subleq c c
+\        
+\        \ sub (-a) from dest and b--, when b <=0 escape
+\        subleq TA c
+\        subleq TC TB +2
+\        subleq ZR ZR -2 \ loop back
 \
