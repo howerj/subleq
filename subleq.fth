@@ -315,6 +315,9 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ - Note important difference in dictionary location in this
 \ Forth implementation!
 \ - Make a SUBLEQ VM in Forth! (Port other programs?)
+\ - Weasel word removal
+\ https://matt.might.net/articles/shell-scripts-for-passive-
+\ voice-weasel-words-duplicates/
 \
 \ ## A little about SUBLEQ
 \
