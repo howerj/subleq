@@ -116,14 +116,26 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ programming terms, the following terms should be describe
 \ in more detail to avoid confusion.
 \
-\ TODO: Describe more!
+\ * "Forth", the programming language that will be used
+\ for cross compilation onto the target, and the language
+\ that will be running on the target.
+\ * "eForth", the specific version of Forth that this version
+\ of Forth most resembles.
+\ * "SUBLEQ machine"/"SUBLEQ VM", this is the machine that
+\ the system will be running on.
+\ * "VM"/"Forth VM", this is a set of functions and a small
+\ bit of code that will be compiled and run upon the SUBLEQ
+\ machine that will allow a Forth implementation to be hosted
+\ upon the SUBLEQ machine.
+\ * "meta-compilation", another word for cross-compilation
+\ but using Forth instead, distinct from the more widely
+\ known Computer Science term.
 \
-\ * "Forth"
-\ * "eForth"
-\ * "cell"
-\ * "SUBLEQ machine"/"SUBLEQ VM"
-\ * "VM"/"Forth VM"
-\ * "meta-compilation"
+\ The most important terms to differentiate between are
+\ what is the Forth VM and what is the SUBLEQ machine. The
+\ SUBLEQ machine implementation is itself a Virtual Machine
+\ written in C, when using the term "VM", it will not refer
+\ to the SUBLEQ machine however, but the Forth VM.
 \
 \ ## Markdown and Formatting
 \
@@ -282,6 +294,9 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ but are incredibly difficult to use and are only ever used
 \ as a puzzle to satisfy intellectual curiosity.
 \
+\ It would be nice to write a Forth implementation of a SUBLEQ
+\ machine, there are some available online, but it would just
+\ take up much needed space here.
 \
 \ ## eForth
 \
@@ -327,18 +342,6 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ nothing learned.
 \
 \ eForth aims at a minimal and viable (runs fast) solution.
-\
-\ ## TODO Section
-\
-\ - More headings for different sections, for groups of words
-\ perhaps.
-\ - Section on SWAR optimizations in Forth (not this one)
-\ - Make a SUBLEQ VM in Forth! (Port other programs?)
-\ - Weasel word removal (and notes about style)
-\ https://matt.might.net/articles/shell-scripts-for-passive-
-\ voice-weasel-words-duplicates/
-\ - Glossary of terms (words, cells, VM, SUBLEQ machine,
-\ Forth VM, ...).
 \
 \ ## A little about SUBLEQ
 \
@@ -1096,8 +1099,8 @@ defined eforth [if] system -order [then]
 
 \ # Forth Virtual Machine
 \
-\ This section contains the Forth Virtual Machine; a tiny
-\ VM that does the bare minimum surround by about forty or
+\ This section contains the Forth Virtual Machine; a VM
+\ that does the bare minimum surround by about forty or
 \ so instructions which when implemented can be used to make
 \ porting trivial.
 \
@@ -1649,7 +1652,7 @@ label: entry       \ used to set entry point in next cell
 \
 \ The core of the Forth Virtual Machine starts here, it is
 \ short and is executed for each Virtual Machine
-\ instruction, so any optimization here would make a huge
+\ instruction, so any optimization here would make a large
 \ difference. It only has things it needs to do and the
 \ Wikipedia page on Threaded Code Interpreters would help in
 \ understanding how it works.
@@ -1702,7 +1705,7 @@ label: entry       \ used to set entry point in next cell
 \ and "swap" are primitives, "square", "pythagoras" and "isqrt"
 \ are functions. What would the code potentially look like?
 \ The Forth compiler, an interactive and lightweight compiler,
-\ must generate code, there are several ways it could make it.
+\ must generate code, there are multiple ways it could make it.
 \
 \ One way would be something like this:
 \
@@ -1919,7 +1922,7 @@ assembler.1 -order
 \ instructions in the VM is sort of hidden from the view
 \ of the programmer, for example the "MOV" macro word is
 \ comprised of four SUBLEQ instructions, an indirect load
-\ more, each VM cycle takes many of those macros, you end
+\ more, each VM cycle takes multiples of those macros, you end
 \ up spending more and more time in the VM than you should have
 \ to.
 \
@@ -1928,7 +1931,7 @@ assembler.1 -order
 \ be too tricky or impossible.
 \
 \ We have 42 primitives, more than is ideal, but it is
-\ necessary given the nature of this system. Many of them
+\ necessary given the nature of this system. Critical words
 \ have to be implemented in terms of primitives otherwise the
 \ system would be far too slow. For example "lsb" is a
 \ primitive that gets the Least Significant Bit, an expensive
@@ -1942,9 +1945,9 @@ assembler.1 -order
 \ keep it as minimal as possible, as if this Forth were to
 \ be ported to a new platform, all of these routines would
 \ have to be rewritten. One of the reasons eForth was so
-\ portable is because there were few primitive words in
-\ it, most of eForth was written in eForth, a higher level and
-\ more portable language than assembly.
+\ portable is because there were a small set of primitive words 
+\ that it required, most of eForth was written in eForth, a 
+\ higher level and more portable language than assembly.
 \
 \ ## The Assembly Primitives in Detail
 \
@@ -2314,6 +2317,7 @@ assembler.1 -order
 \ "min" and "max" will not be defined like this later, as
 \ bitwise operators are expensive on the SUBLEQ machine.
 \
+\
 \ NB. There are some bugs with the comparison operators "op\<"
 \ and "op\>" when they deal with extreme values like
 \ "\$8000 1 \<", "\$8002 1 \<" works fine.
@@ -2460,6 +2464,28 @@ assembler.1 -order
 \ for SUBLEQ the opposite is the case. Subtraction and addition
 \ are, so some words later on have be rewritten to use
 \ arithmetic instead.
+\
+\ It is possible to do all kinds of optimizations with what
+\ are usually fast bitwise operations, for example, SWAR 
+\ operations or SIMD With A Register SIMD stands for Single 
+\ Instruction Multiple Data). 
+\
+\ The idea of SWAR optimizations is that you can process 
+\ multiple N-bit operations (say 8-bit) on a machine capable of
+\ doing k*N bit arithmetic (k = 2 for a 16-bit machine). 
+\
+\ Unfortunately,
+\ these optimizations tend to be bit-wise heavy and more 
+\ suitable for larger cell width systems anyway, but such
+\ optimizations are worth known about. We can do a very
+\ limited version of SWAR potentially in comparing Forth
+\ strings (comparing them cell by cell instead of byte by
+\ byte) if the strings are aligned (which they will be for
+\ Forth words) and there is no junk in at the end of the
+\ string.
+\
+\ *SWAR* operations, whilst well worth knowing about, are
+\ not worth doing on this machine.
 \
 :a opOr
   bwidth w MOV
@@ -3396,10 +3422,13 @@ there 2/ primitive t!
 \ speed is not too much of a concern, they are here for
 \ completeness sake.
 \
-
-\ TODO: Test different version of u\<
-: u< 2dup xor 0< if swap drop 0< exit then - 0< ;
-\ : u< 2dup 0< 0= swap 0< 0= <> >r < r> <> ; ( u1 u2 -- f )
+\ An alternative implementation of "u\<" is as follows:
+\
+\        : u< 2dup xor 0< if swap drop 0< exit then - 0< ;
+\
+\ However, this uses "xor".
+\
+: u< 2dup 0< 0= swap 0< 0= <> >r < r> <> ; ( u1 u2 -- f )
 : u> swap u< ; ( u1 u2 -- f )
 : u>= u< 0= ; ( u1 u2 -- f )
 : u<= u> 0= ; ( u1 u2 -- f )
@@ -3423,7 +3452,7 @@ there 2/ primitive t!
 \ function is only properly defined within the range of
 \ Minimum Signed Value + 1 to Maximum Signed Value, if you
 \ entered the Minimum Signed Value ($8000 or -32768) you will
-\ get back the same number. This is common for many
+\ get back the same number. This is common to the majority of
 \ implementations of "abs" and is a consequence of twos
 \ compliment arithmetic having one more negative numbers than
 \ than positive non-zero numbers.
@@ -3623,8 +3652,8 @@ there 2/ primitive t!
 \
 \ Be warned though, this version of "pick" is slower but the
 \ main concern is its high stack usage, especially as systems
-\ with hardware stacks are likely to have small stacks of
-\ just a few, perhaps even as low as eight, values. This
+\ with hardware stacks are likely to have small stacks,
+\ perhaps with even as low as eight values. This
 \ version of "pick" will quickly eat through that, overflow,
 \ and give incorrect results.
 \
@@ -4040,7 +4069,9 @@ there 2/ primitive t!
 \ Java uses exceptions because it believes programmers are too
 \ lazy to check return codes, which is true, but just leads to
 \ programmers being lazy with exceptions (and catching too
-\ many of them). Adding exceptions to a language does not solve
+\ ones they should not be).
+\
+\ Adding exceptions to a language does not solve
 \ the lazy programmer problem, making it easier to check an
 \ error than to ignore it does, which is what Rust does.
 \ C++ is best left not talked about, which I find is true in
@@ -4182,12 +4213,17 @@ there 2/ primitive t!
 \ which are twice the normal width of a number, so on a 16-bit
 \ system a 32-bit value stored as two integers on the stack
 \ would be a "double". It comes from "double width" or
-\ "double precision". Many Forth implementations do not define
-\ the floating point word-set as Forth originated on
-\ limited systems, systems that might not have had floating
-\ point numbers and it would have been quite the slow down to
-\ implement them in software (and the routines would have taken
-\ up precious space). A lot of the decisions that went into
+\ "double precision". 
+\
+\ It is usual for Forth implementations that target small
+\ or embedded system to not define the floating point word-set.
+\ The original Forth implementations predated widely available
+\ floating point units integrated into the CPU, and 
+\ implementing floating point arithmetic in software on a
+\ 16-bit system would be slow and take up limited memory
+\ space.
+\
+\ A lot of the decisions that went into
 \ Forth are a consequence of the limited hardware on
 \ microcomputers available in the 1980s. If starting from
 \ scratch software wise, but with modern hardware, you would
@@ -4210,7 +4246,7 @@ there 2/ primitive t!
 \ "um/mod" in terms of "/".
 \
 \ The numeric tower of words is all built upon "um+", this
-\ word performs an addition with carry, which many
+\ word performs an addition with carry, which most modern
 \ systems have instructions specifically for. This one does
 \ not, so it has to compute the carry itself, we already have
 \ addition thankfully.
@@ -6636,7 +6672,7 @@ there 2/ primitive t!
 \ it is not necessary, but it means that information about
 \ the project is stored with it.
 \ 
-\ It might be to refactor "info" into several words (if we
+\ It might be to refactor "info" into multiple words (if we
 \ had the space) to break down the information provided into
 \ a word for "author", and "version", such as this:
 \
