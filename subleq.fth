@@ -402,8 +402,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ this C program will execute the image we will make:
 \
 \        #include <stdio.h>
-\        int main(int x, char **v)
-\        {
+\        int main(int x, char **v) {
 \                FILE *f=fopen(v[1], "r");
 \                short p=0, m[1<<16], *i=m;
 \                while (fscanf(f, "%hd", i++) > 0) ;
@@ -1261,7 +1260,7 @@ defined eforth [if] system -order [then]
 \ "iSTORE" is the most complex of all of these single
 \ instruction macros, as mentioned, it contains four "MOV"
 \ instructions, each containing four SUBLEQ instructions,
-\ meaning twelve SUBLEQ instructions, or thirty six cells just
+\ meaning twelve SUBLEQ instructions, or forty eight cells just
 \ to perform an indirect store. It requires three "MOV"
 \ instructions in order to modify three locations in a
 \ final "MOV", leaving the last instruction of the modified
@@ -1646,7 +1645,7 @@ label: entry       \ used to set entry point in next cell
 :m --sp {sp} INC ;m ( -- : shrink variable stack )
 :m --rp {rp} DEC ;m ( -- : shrink return stack )
 :m ++rp {rp} INC ;m ( -- : grow return stack )
-:m a-optim >r there =cell - r> 2/ t! ;m ( a -- )
+:m a-optim ;m \ >r there =cell - r> 2/ t! ;m ( a -- )
 
 \ # The Core Forth Virtual Machine
 \

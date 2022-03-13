@@ -12,3 +12,4 @@ eforth.c
 full
 nbit
 subleq
+recomp

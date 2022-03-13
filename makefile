@@ -29,8 +29,21 @@ gforth.dec: subleq.fth
 gforth: subleq gforth.dec
 	./subleq gforth.dec
 
-subleq.md: subleq.fth subleq 1.dec convert.fth
-	cat convert.fth subleq.fth | ./subleq 1.dec > $@
+subleq.md: subleq.fth subleq 1.dec convert.fth makefile
+	rm -f $@
+	echo "---" >> $@
+	#echo "title: \"SUBLEQ eForth Meta-Compilation\"" >> $@
+	#echo "author: [Richard James Howe]" >> $@
+	#echo "date: \"2022-03-01\"" >> $@
+	#echo "subject: \"SUBLEQ eForth\"" >> $@
+	#echo "keywords: [SUBLEQ, Forth]" >> $@
+	#echo "subtitle: \"Forth Meta-Compilation for a SUBLEQ machine\"" >> $@
+	#echo "lang: \"en\"" >> $@
+	echo "titlepage: true," >> $@
+	echo "titlepage-rule-color: \"360049\"" >> $@
+	echo "titlepage-background: \"img/subleq-ebook.png\"" >> $@
+	echo "---" >> $@
+	cat convert.fth subleq.fth | ./subleq 1.dec >> $@
 	dos2unix $@
 	echo "## Full eForth Image:" >> $@
 	echo >> $@
@@ -38,19 +51,19 @@ subleq.md: subleq.fth subleq 1.dec convert.fth
 	echo >> $@
 	cat 1.dec | tr '\n' ' ' | fmt -w 48 | sed 's/^/\t/' >> $@
 	echo >> $@
-	echo "## Source code without (major) comments:" >> $@
-	echo >> $@
-	grep '^[^\\]' subleq.fth | sed 's/^/\t/' >> $@
+	#echo "## Source code without (major) comments:" >> $@
+	#echo >> $@
+	#grep '^[^\\]' subleq.fth | sed 's/^/\t/' >> $@
 	echo >> $@
 
 subleq.htm: subleq.md
 	markdown $< > $@
 
-META=--metadata=title:"SUBLEQ eForth" --metadata=author:"Richard James Howe" --metadata=lang:"en-US"
+#META=--metadata=title:"SUBLEQ eForth" --metadata=author:"Richard James Howe" --metadata=lang:"en-US"
 IMAGES=img/flow.png img/dictionary.png
 
 subleq.pdf: subleq.md ${IMAGES}
-	pandoc ${META} -V cover-image=img/subleq-ebook.png --toc $< -o $@
+	pandoc ${META} --template eisvogel.tex -V book --toc $< -o $@
 
 %.png: %.dia
 	dia -e $@ $<
