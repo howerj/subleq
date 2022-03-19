@@ -153,10 +153,6 @@ begin
 --		clock_reg_rx_we <= '0'  after g.delay;
 --		control_reg_we  <= '0'  after g.delay;
 
-		if ae = '1' then f.r_a <= a        & c.r_a(c.r_a'high downto 1) after g.delay; end if;
-		if oe = '1' then f.r_o <= c.r_o(0) & c.r_o(c.r_o'high downto 1) after g.delay; end if;
-		if ie = '1' then f.r_i <= i        & c.r_i(c.r_i'high downto 1) after g.delay; end if;
-
 		if oe = '0' and ae = '0' then
 			if io = false then
 				dre <= '1' after g.delay;

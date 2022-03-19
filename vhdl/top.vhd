@@ -32,7 +32,7 @@ entity top is
 end entity;
 
 architecture rtl of top is
-	constant W:        positive   := N;
+	constant W:        positive   := N - 1;
 	signal rst:        std_ulogic := '0';
 	signal i, o, a:    std_ulogic_vector(N - 1 downto 0) := (others => '0');
 	signal oe, ie, ae: std_ulogic := 'X';

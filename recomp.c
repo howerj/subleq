@@ -10,26 +10,29 @@
  * In Time compiler to recompile common expressions on the fly,
  * however, doing this ahead of time is simpler.
  *
- * TODO: Options, N-bit version, debugging options */
+ * This is currently only an 16-bit version, it could be make
+ * to be N-bit but execution speed is the goal, not being as
+ * generic as possible. */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <time.h>
 #define SZ   (32768)
 #define L(X) ((X)%SZ)
 //#define L(X) (X)
-#define DEPTH (48)
+#define DEPTH (3*64)
 enum {
 	SUBLEQ, JMP, ADD, SUB, MOV, ZERO, PUT, GET, HALT,
-	IJMP, ILOAD, ISTORE, INC, DEC, INV, /* MUL, DIV */
+	IJMP, ILOAD, ISTORE, INC, DEC, INV, DOUBLE, LSHIFT, /* MUL, DIV */
 
 	MAX
 };
 
 static const char *names[] = {
 	"SUBLEQ ", "JMP    ", "ADD    ", "SUB    ", "MOV    ", "ZERO   ", "PUT    ", "GET    ", "HALT   ",
-	"IJMP   ", "ILOAD  ", "ISTORE ", "INC    ", "DEC    ", "INV    ", "MUL    ", "DIV    ", 
+	"IJMP   ", "ILOAD  ", "ISTORE ", "INC    ", "DEC    ", "INV    ", "DOUBLE ", "LSHIFT ",
 };
 
 typedef struct {
@@ -42,6 +45,8 @@ typedef struct {
 	int set[9];
 	uint16_t v[9];
 	unsigned char z_reg[SZ], one_reg[SZ], neg1_reg[SZ];
+	clock_t start, end;
+	int64_t cnt[MAX];
 } optimizer_t;
 
 static int match(optimizer_t *o, uint16_t *n, int sz, uint16_t pc, const char *s, ...) {
@@ -141,6 +146,37 @@ static int optimizer(optimizer_t *o, instruction_t *m, uint16_t pc) {
 			continue;
 		}
 
+		int shift = 0, l = 0, dest = 0;
+		for (l = 0; l < DEPTH; l += 9) {
+			if (match(o, n+l, DEPTH-l, i+l, "!Z> Z!> ZZ>", &q0, &q1) == 1 && q0 == q1) {
+				if (l == 0) {
+					dest = q0;
+				} else {
+					if (dest != q0) {
+						break;
+					}
+				}
+				shift++;
+			} else {
+				break;
+			}
+		}
+		if (shift >= 2) {
+			m[L(i)].instruction = LSHIFT;
+			m[L(i)].d = L(dest);
+			m[L(i)].s = shift;
+			o->matches[LSHIFT]++;
+			continue;
+		}
+
+
+		if (match(o, n, DEPTH, i, "00> 10> 11> 2Z> Z1> ZZ> !1>", &q0) == 1 && o->one_reg[q0]) {
+			m[L(i)].instruction = INV;
+			m[L(i)].d = L(get(o, '1'));
+			o->matches[INV]++;
+			continue;
+		}
+
 		if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>", &q0) == 1 && get(o, '0') == (i + (3*4) + 2)) {
 			m[L(i)].instruction = IJMP;
 			m[L(i)].d = L(q0);
@@ -156,11 +192,13 @@ static int optimizer(optimizer_t *o, instruction_t *m, uint16_t pc) {
 			continue;
 		}
 
-		// TODO: (should match 1)
-		if (match(o, n, DEPTH, i, "00> 10> 00> ?Z> Z0> ZZ> 21>") == 1) {
-			//m[L(i)].instruction = INV;
-			//m[L(i)].s = L(q0);
-			o->matches[INV]++;
+		/* We should match multiple ones in a row and turn them into
+		 * a left shift */
+		if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>", &q0, &q1) == 1 && q0 == q1) {
+			m[L(i)].instruction = DOUBLE;
+			m[L(i)].d = L(q1);
+			m[L(i)].s = L(q0);
+			o->matches[DOUBLE]++;
 			continue;
 		}
 
@@ -234,10 +272,38 @@ static int optimizer(optimizer_t *o, instruction_t *m, uint16_t pc) {
 	return 0;
 }
 
+static int report(optimizer_t *o) {
+	double elapsed_s = (double)(o->end - o->start) / CLOCKS_PER_SEC;
+	int64_t total = 0, subs = 0;
+	for (int i = 0; i < MAX; i++) {
+		total += o->cnt[i];
+		subs  += o->matches[i];
+	}
+	if (fprintf(stderr, "+--------+--------+--------------+----------+\n") < 0)
+		return -1;
+	if (fprintf(stderr, "| Instr. | Subs.  | Instr. Cnt   | Instr. %% |\n") < 0)
+		return -1;
+	if (fprintf(stderr, "+--------+--------+--------------+----------+\n") < 0)
+		return -1;
+	for (int i = 0; i < MAX; i++)
+		if (fprintf(stderr, "| %s| % 6d | % 12"PRId64" | % 7.1f%% |\n", names[i], o->matches[i], o->cnt[i], 100.0*((float)o->cnt[i])/(float)total) < 0)
+			return 1;
+	if (fprintf(stderr, "+--------+--------+--------------+----------+\n") < 0)
+		return -1;
+	if (fprintf(stderr, "| Totals | % 6d | % 12"PRId64" |          |\n", (int)subs, total) < 0)
+		return -1;
+	if (fprintf(stderr, "+--------+--------+--------------+----------+\n") < 0)
+		return -1;
+	if (fprintf(stderr, "|         EXECUTION TIME %.3f SECONDS      |\n", elapsed_s) < 0)
+		return -1;
+	if (fprintf(stderr, "+--------+--------+--------------+----------+\n") < 0)
+		return -1;
+	return 0;
+}
+
 int main(int s, char **v) {
 	static instruction_t m[SZ];
 	static optimizer_t o = { .matches = { 0, }, };
-	int64_t cnt[MAX] = { 0, };
 	uint16_t pc = 0;
 	const int dbg = 0, optimize = 1, stats = 1;
 	for (int i = 1, d = 0; i < s; i++) {
@@ -253,17 +319,19 @@ int main(int s, char **v) {
 	if (optimize)
 		if (optimizer(&o, m, pc) < 0)
 			return 1;
-
+	o.start = clock();
 	for (pc = 0; pc < SZ;) {
 		const int instruction = m[pc].instruction;
 		const uint16_t s = m[pc].s, d = m[pc].d;
 		if (dbg) {
 			if (fprintf(stderr, "{%ld:%d}", (long)pc, m[pc].instruction) < 0)
-				return 1;
+				return 1; /* Could return __LINE__ if simple debugging, but return val is limited to 255 usually */
 		}
-		cnt[instruction % MAX]++;
+		if (stats) {
+			o.cnt[instruction/*% MAX*/]++;
+		}
 		switch (instruction) {
-		case SUBLEQ: {
+		case SUBLEQ: { /* OG Instruction */
 			uint16_t a = m[pc++].m, b = m[L(pc++)].m, c = m[L(pc++)].m;
 			if (a == 65535) {
 				m[L(b)].m = getchar();
@@ -285,11 +353,13 @@ int main(int s, char **v) {
 		 * within the bounds of an instruction macro, this would
 		 * slow things down however. */
 		case JMP: pc = d; m[s].m = 0; break;
-		case MOV: m[d].m  = m[s].m; m[0].m = 0; pc += 12; break;
-		case ADD: m[d].m += m[s].m; m[0].m = 0; pc += 9; break;
+		case MOV: m[d].m  = m[s].m; pc += 12; break;
+		case ADD: m[d].m += m[s].m; pc += 9; break;
+		case DOUBLE: m[d].m <<= 1; pc += 9; break;
+		case LSHIFT: m[d].m <<= s; pc += 9 * s; break;
 		case SUB: m[d].m -= m[s].m; pc += 3; break;
 		case ZERO: m[d].m = 0; pc += 3; break;
-		case IJMP: pc = m[d].m; m[0].m = 0; break;
+		case IJMP: pc = m[d].m;  break;
 		case ILOAD: m[d].m = m[L(m[s].m)].m; pc += 24; break;
 		case ISTORE: m[L(m[d].m)].m = m[s].m; pc += 48; break;
 		case PUT:
@@ -309,16 +379,9 @@ int main(int s, char **v) {
 		}
 	}
 done:
-	if (stats) {
-		int64_t total = 0;
-		for (int i = 0; i < MAX; i++)
-			total += cnt[i];
-		if (fprintf(stderr, "Total  ( Match) = % 10"PRId64"\n\n", total) < 0)
+	o.end = clock();
+	if (stats)
+		if (report(&o) < 0)
 			return 1;
-		for (int i = 0; i < MAX; i++)
-			if (fprintf(stderr, "%s(% 6d) = % 10"PRId64"\t%.1f%%\n", names[i], o.matches[i], cnt[i], 100.0*((float)cnt[i])/(float)total) < 0)
-				return 1;
-
-	}
 	return 0;
 }

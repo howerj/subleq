@@ -50,7 +50,7 @@ begin
 	uut: entity work.top
 		generic map(
 			g          => g,
-			file_name  => "subleq.dec",
+			file_name  => "subleq.hex",
 			N          => N,
 			baud       => baud,
 			debug      => debug)

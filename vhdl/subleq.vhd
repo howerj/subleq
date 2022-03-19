@@ -13,7 +13,7 @@ entity subleq is
 	generic (
 		asynchronous_reset: boolean    := true;   -- use asynchronous reset if true, synchronous if false
 		delay:              time       := 0 ns;   -- simulation only, gate delay
-		N:                  positive   := 16;     -- size the CPU
+		N:                  positive   := 16;     -- size of the CPU
 		debug:              natural    := 0);     -- debug level, 0 = off
 	port (
 		clk, rst:       in std_ulogic;
@@ -102,7 +102,7 @@ begin
 	assert N >= 8                      report "CPU Width too small: N >= 8"    severity failure;
 	assert not (ie = '1' and oe = '1') report "input/output at the same time"  severity failure;
 	assert not (ie = '1' and ae = '1') report "input whilst changing address"  severity failure;
-	assert not (oe = '1' and ae = '1') report "output whilst changing address" severity failure;
+	--assert not (oe = '1' and ae = '1') report "output whilst changing address" severity failure;
 
 	--special_address <= '1' when c.ra = (others => '1') and c.rb = (others => '1') else '0';
 

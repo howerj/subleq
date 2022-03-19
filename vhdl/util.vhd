@@ -87,7 +87,7 @@ use work.util.all;
 
 entity single_port_block_ram is
 	generic (g: common_generics;
-		addr_length: positive    := 12;
+		addr_length: positive    := 15;
 		data_length: positive    := 16;
 		file_name:   string      := "memory.bin";
 		file_type:   file_format := FILE_BINARY);

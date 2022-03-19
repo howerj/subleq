@@ -41,7 +41,8 @@ tb: tb.o subleq.o peripherals.o top.o
 
 tb.ghw: tb tb.conf subleq.dec
 	#ghdl -r $< --wave=$<.ghw --max-stack-alloc=16384 --ieee-asserts=disable
-	ghdl -r $< --wave=$<.ghw --ieee-asserts=disable
+	#ghdl -r $< --wave=$<.ghw --ieee-asserts=disable
+	ghdl -r $< --wave=$<.ghw 
 
 SOURCES = \
 	top.vhd \
