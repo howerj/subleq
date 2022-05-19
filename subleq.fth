@@ -10,38 +10,37 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ rights reserved for comments, the book, diagrams
 \ and pictures.
 \
-\ This file contains an assembler for a SUBLEQ CPU, a virtual
+\ This book contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
 \ a cross compiler capable of targeting the Forth VM, and
 \ finally the Forth interpreter itself, based on the eForth
 \ family of the Forth programming language. This system is
 \ self-hosted, which means it can be used to create new,
-\ modified systems. Also contained is a description of how this
-\ system works, how the internals of a Forth interpreter works,
-\ and the difficulties and trade-offs involved in targeting
-\ such an anemic CPU, called SUBLEQ, which is an esoteric,
-\ impractical, single instruction CPU. If you can port a Forth
-\ to it, then you can port a Forth implementation to anything.
+\ modified, systems. Also contained is a description of how 
+\ this system works, how the internals of a Forth interpreter 
+\ works, and the difficulties and trade-offs involved in 
+\ targeting such an anemic CPU architecture, called SUBLEQ, 
+\ which is an esoteric, impractical, single instruction CPU. If 
+\ you can port a Forth to SUBLEQ, then you can port a Forth 
+\ implementation to anything.
 \
 \ This program is written in Forth entirely, and should
 \ compile both under gforth (tested with version 0.7.3, under
 \ both Linux and Windows) and by executing it against a
 \ pre-generated eForth image running on the SUBLEQ machine.
 \
-\ The file is formatted so that no line is longer than 64 bytes
-\ (or characters, it should be encoded as ASCII) long, this is
-\ so that source code could potentially be stored in something
-\ called "Forth Blocks". Although further formatting would be
-\ required to be useable with Forth blocks.
-\
 \ This program and explanation is for an esoteric, oddball,
 \ system, it is likely it will never be useful for
 \ anything. It will also not designed for beginner programmers,
 \ it would help if you had some understanding of Forth and
-\ Assembly before hand.
+\ Assembly before you read this file.
 \
-\ This tutorial will use a 16-bit SUBLEQ VM written in C,
-\ to interact with just the eForth interpreter running itself
+\ The explanation for this system is tied into the order in
+\ which each subsystem is defined, which I find understandable
+\ but others may not.
+\
+\ This tutorial will use a 16-bit SUBLEQ VM written in C.
+\ To interact with just the eForth interpreter running itself
 \ no installation is required as there is a web-based version
 \ written in JavaScript available here:
 \
@@ -64,12 +63,12 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ To build, on a Unix system:
 \
-\        gcc subleq.c -o subleq
+\        cc subleq.c -o subleq
 \        ./subleq subleq.dec < subleq.fth > new-image.dec
 \
 \ And on Windows:
 \
-\        gcc subleq.c -o subleq.exe
+\        cc subleq.c -o subleq.exe
 \        subleq.exe subleq.dec < subleq.fth > new-image.dec
 \
 \ And with gforth on Unix and Windows:
@@ -82,15 +81,15 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ The command shells redirection facilities are used to make
 \ up for a lack of input/output mechanisms within the SUBLEQ
-\ machine, discussed later.
+\ machine, which will be discussed later.
 \
 \ Most modern complex programs have a system of unit tests,
 \ this would have been useful in places, however instead
 \ the meta-compilation system is used as a giant unit test
-\ framework. If the system can compile and image "A" which can
+\ framework. If the system can compile an image "A" which can
 \ compile another image "B" that is byte for byte the same as
 \ image "A", then we can be pretty confident that the new
-\ image is correct, it is at least correct enough to compile
+\ image is correct, or it is at least correct enough to compile
 \ itself.
 \
 \ This is done with the following commands on a Unix system:
@@ -127,9 +126,31 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ bit of code that will be compiled and run upon the SUBLEQ
 \ machine that will allow a Forth implementation to be hosted
 \ upon the SUBLEQ machine.
+\ * "compiler-security", a term used for some run time checks
+\ present when compiling Forth words.
 \ * "meta-compilation", another word for cross-compilation
 \ but using Forth instead, distinct from the more widely
-\ known Computer Science term.
+\ known Computer Science term. The reason for this difference 
+\ is that Forth evolved within the microcomputer scene, which 
+\ was very distinct from the academic scene in the 1980s and 
+\ prior. The term seems to have been mistranslated somewhat.
+\ * "word" in the context of Forth means "A forth function",
+\ the term "word" is used because a Forth function consists of
+\ space delimited characters that usually form a single
+\ descriptive word as a name. Words form vocabularies and
+\ vocabularies form the dictionary.
+\ * "cell" is used as a term because "word" is already used 
+\ for Forth functions. It is used to refer to a memory location
+\ that is of the computers natural width, on a 16-bit machine a
+\ single cell is a 16-bit location, aligned on a 2 byte 
+\ boundary. On this SUBLEQ machine the smallest addressable 
+\ unit is the cell, not the byte, byte access will have to be 
+\ simulated.
+\ * "Target Dictionary", the dictionary in the image we will
+\ be assembling, this is distinct from the words used for
+\ meta-compilation, and the words made in the meta-compiler 
+\ used to refer to memory locations of defined words within
+\ in the Target Dictionary.
 \
 \ The most important terms to differentiate between are
 \ what is the Forth VM and what is the SUBLEQ machine. The
@@ -140,7 +161,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ ## Markdown and Formatting
 \
 \ The comments in this file, the long descriptions at least,
-\ not the short stack effect comments, are written with the
+\ and not the short stack effect comments, are written with the
 \ intention that they are extracted from the original
 \ "subleq.fth" source and turned into a markdown file, a well
 \ known format, that can be used to generate a book. If you are
@@ -183,7 +204,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ The stack refers to the variable stack, and to the number of
 \ items the word consumes or produces. The description is
-\ usually laconic, as there is little room for it, the
+\ usually laconic, as there is little room on screen for it 
+\ given historical terminal character widths, the
 \ word name itself should offer some clue as to what it does,
 \ and the word should be short, ideally a single line, so it
 \ can be inspected to see what it *actually* does.
@@ -200,7 +222,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \        a - A cell address, it should be aligned to a 2 byte
 \           boundary on this system.
 \        b - An address that points to bytes, it will not
-\           be aligned.
+\           need to be aligned.
 \        f - a Forth flag, 0 = false, -1 = true.
 \        x y z - Used when the position of the before and
 \           after picture for the cells matters more than the
@@ -242,10 +264,16 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ number.
 \
 \ The Forth code itself has minimal guidelines for formatting
-\ it, try to keep it short and clean, use two spaces where
-\ possible per indentation level when it is needed, try to
-\ keep definitions on a single line, lower case names, and
-\ add a stack effect comment.
+\ it:
+\
+\ * Try to keep word definitions short and clean.
+\ * Use two spaces where possible per indentation level
+\ * Try to keep definitions on a single line.
+\ * Use lower case names.
+\ * Add a stack effect comment if possible.
+\
+\ Notice the liberal use of the word "try", do what makes sense
+\ first.
 \
 \ ## SUBLEQ History
 \
@@ -253,7 +281,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ Instruction Set Computer(s)", they only have a single
 \ instruction that allows them to compute anything that is
 \ computable, albeit not efficiently. SUBLEQ is possibly the
-\ original OISC, which was named "URISC", the idea was to
+\ original OISC, which was named "URISC". The idea was to
 \ provide a simple platform for those students at university
 \ learning computer engineering so that they could implement
 \ their own instruction set in a single course and create
@@ -266,45 +294,42 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ instruction set computers built around an arithmetic
 \ operation (the other two main categories include bit
 \ manipulation instructions and architectures build
-\ around a MOVE instruction called transport triggered
-\ architectures). They feel closet to a real machine whilst
-\ at the same time being far away from them. As you will
-\ find out, it would not take much to radically improve the
-\ efficiency of the system with extra instructions
-\ for bit-manipulation, perhaps even as little as one (such
-\ as an instruction set that could perform SUBLEQ and a NAND,
-\ or SUBLEQ and a Right Shift).
+\ around a MOVE instruction called Transport Triggered
+\ Architectures). The arithmetic architecture feel closet to a 
+\ real machine whilst at the same time being far away from 
+\ them. As you will find out, it would not take much to 
+\ radically improve the efficiency of the system with extra 
+\ instructions for bit-manipulation, perhaps even as little as
+\ one (such as an instruction set that could perform SUBLEQ and
+\ a NAND, or SUBLEQ and a Right Shift).
 \
 \ Other OISCs can be found online, such as SUBNEG (subtract
 \ and branch if negative), SUBLEQ with an accumulator, SBNZ
 \ (Subtract and Branch if not zero) and others. They
 \ are all difficult to use, some more than others. SUBLEQ
 \ appears to be the more popular of the OISCs. Those
-\ instructions are the universal ones (given infinite memory),
-\ there are other trivial and useless OISC systems
+\ instructions are the universal ones (given infinite memory).
+\ There are other trivial and useless OISC systems
 \ out there, for example a machine consisting of just a single
-\ No-operation or NOP instruction, which are disregarded as
+\ No-operation or NOP instruction, which we will disregarded as
 \ uninteresting.
 \
 \ SUBLEQ, and OISC systems generally, feel like they
 \ are close to and perhaps belong to the same category
 \ as Esoteric Programming Languages and Turing Tar-pits,
-\ languages that are technically Turing complete, it is
-\ possible to compute anything that can be computed in them,
+\ languages that are technically Turing complete, 
 \ but are incredibly difficult to use and are only ever used
 \ as a puzzle to satisfy intellectual curiosity.
-\
-\ It would be nice to write a Forth implementation of a SUBLEQ
-\ machine, there are some available online, but it would just
-\ take up much needed space here.
 \
 \ ## eForth
 \
 \ The image we will create is a variant of Forth called
-\ "eForth", what the "e" stands for is up for debate. There
-\ are differences between this eForth implementation and
+\ "eForth", what the "e" stands for is up for debate. Perhaps
+\ "embedded", although there are other contenders.
+\
+\ There are differences between this eForth implementation and
 \ standard ANS Forth implementations, such as the lack of the
-\ "do...loop" construct and variants, do not be surprised if
+\ "do...loop" construct and variants. Do not be surprised if
 \ some standard words are missing or have different semantics.
 \
 \ The idea of eForth was to have a system that required only
@@ -330,7 +355,9 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ new system.
 \ * "sectorforth" is a Forth interpreter in a (512 byte)
 \ boot-sector, available at
-\ <https://github.com/cesarblum/sectorforth>.
+\ <https://github.com/cesarblum/sectorforth> which is very
+\ platform specific and aims at a minimal number of bytes and
+\ not primitives.
 \
 \ The three schemes, whilst impressive, are a bit too spartan.
 \ It is not possible to definitively say that X number of
@@ -341,7 +368,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ which can be argued back and forth to no effect and with
 \ nothing learned.
 \
-\ eForth aims at a minimal and viable (runs fast) solution.
+\ eForth aims at a minimal and viable (runs fast enough) 
+\ solution.
 \
 \ ## A little about SUBLEQ
 \
@@ -350,8 +378,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ it difficult? As mentioned it is a single instruction
 \ machine, each instruction consisting of three operands; "A",
 \ "B", and "C". Each operand is stored in a single cell, in
-\ this implementation the cell size is 16-bits, which will be
-\ important later. A SUBLEQ machine that uses sizes other than
+\ this implementation the cell size is 16-bits, which is 
+\ important. A SUBLEQ machine that uses sizes other than
 \ this, or bignums, will not work.
 \
 \ The SUBLEQ Virtual Machine is written in C, and one has also
@@ -368,7 +396,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ 3. Subtract A from B, and store the result back to cell B.
 \    If the result is less than or equal to zero, jump to the
 \    location pointed to by C. Otherwise advance the program
-\    counter to the next location and execute from there.
+\    counter to the next instruction (or over the three 
+\    operands) and execute from there.
 \
 \ This machine does not specify I/O, it could be memory mapped
 \ but the most common is the following, by modifying
@@ -376,20 +405,22 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ values:
 \
 \ 1. If A is -1, or all bits set, then get a byte from the
-\ input channel (AKA read a character from the keyboard) and
+\ input channel (or read a character from the keyboard) and
 \ store it in the cell pointed to by B. Operand C is ignored,
-\ and no jumps occur for either I/O instruction.
+\ and no jumps occur for either I/O instruction beyond moving
+\ to the next instruction.
 \ 2. If B is -1, then load the contents pointed to by A and
 \ write a byte to the output channel (or display a single
 \ character), again no jump is performed.
 \
 \ Another special case is that if the program counter goes
-\ outside memory then the machine halts.
+\ outside memory then the machine halts. On some machines this
+\ only happens if the program counter goes negative.
 \
 \ This sort of makes most SUBLEQ implementations three
 \ instruction machines, with the instructions SUBLEQ, INPUT
-\ and OUTPUT, and perhaps HALT. However, that is sort of
-\ being pedantic.
+\ and OUTPUT, and perhaps HALT. However, that is being too
+\ pedantic.
 \
 \ A SUBLEQ machine that has and can address infinite memory
 \ memory is Turing complete. Our implementation, as all real
@@ -418,10 +449,11 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ <https://howerj.github.io/subleq.htm>
 \
-\ Also note, the SUBLEQ machine has no way of saving to disk,
-\ and the only peripherals it offers are inputting and
-\ outputting a single byte. This does not hold us back during
-\ cross compilation, as you will see.
+\ Also note, the SUBLEQ machine has no way of saving to disk 
+\ (or mass storage as it is sometimes known) and the only 
+\ peripherals it offers are inputting and outputting a single 
+\ byte. This does not hold us back during cross compilation, 
+\ as you will see.
 \
 \ The image is passed to the program simulating the machine
 \ (which will not be referred to as a Virtual Machine (VM) to
@@ -434,9 +466,9 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \        9 -1 3 10 -1 6 0 0 -1 72 105 0
 \
-\ You can see that this CPU architecture is barren, spartan, it
-\ does not offer what we usually expect from a processor. It
-\ has no native way to left shift, multiple, divide, it has
+\ You can see that this CPU architecture is barren and spartan,
+\ it does not offer what we usually expect from a processor. It
+\ has no native way to left shift, multiply, divide, it has
 \ no interrupts, traps, nor a memory management unit, it cannot
 \ load or store without doing a subtraction. The instruction it
 \ can do will have to be manipulated so it can do just a store,
@@ -535,7 +567,11 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ the bitwise operations would have to be re-engineered around
 \ multiplication and division instead of bit by bit testing
 \ of the topmost bit (which indicates a number is negative,
-\ an easy test for a SUBLEQ machine).
+\ an easy test for a SUBLEQ machine). It might instead be 
+\ easier to simulate a 16-bit SUBLEQ machine on an N-bit
+\ architecture, where N is greater than 16, falling back to
+\ direct evaluation if we detect we are running on a 16-bit
+\ machine (and thus do not need the simulator).
 \
 \ ## Meta-compilation (Cross compilation with Forth)
 \
@@ -563,7 +599,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ in another language, usually C. This can either be on the
 \ bare metal or hosted.
 \ * A physical machine such as a Z80, a x86, or an ARM CPU.
-\ This can be with or without an operating system.
+\ Again, this can be bare metal or hosted.
 \ * A physical machine designed to execute Forth directly,
 \ such as the H2, the J1, or others. This environment
 \ usually does not have an operating system.
@@ -617,10 +653,10 @@ only forth definitions hex
 
 \ ## Order!
 \
-\ If you are not familiar with these words, it would help
-\ that you do, as we will be using the Forth vocabulary
-\ word set to create words for the meta-compiler, and for
-\ the target dictionary and assembler.
+\ If you are not well versed with the vocabulary words, it 
+\ would help that you become so, as we will be using the Forth 
+\ vocabulary word set to create words for the meta-compiler, 
+\ and for the target dictionary and assembler.
 \
 \ This is one of the advantages of explaining a Forth written
 \ in pure assembler as opposed to one written in a Forth
@@ -629,7 +665,7 @@ only forth definitions hex
 \ are not intimately familiar with the platform. However a
 \ Forth cross compiler requires an understanding of Forth and
 \ how vocabularies work, along with search orders, and the
-\ like. It is possible to come back to these things.
+\ like.
 \
 \ The words "(order)", "-order", "+order" are defined as the
 \ built in words for manipulating Forth vocabularies are
@@ -668,20 +704,23 @@ defined eforth [if]
 
 \ We then define the following wordlists, "meta.1" is used for
 \ the meta-compiler, words for image generation, some
-\ constants, for making word definitions go into specific
-\ vocabularies, go here. Some example words include "t@", for
+\ constants, and for making word definitions go into specific
+\ vocabularies. Some example words include "t@", for
 \ fetching a value from the generated target image, or "t:"
 \ for switching to the "target.1" vocabulary and defining new
 \ words in it. "target.1" contains words that refer to the
 \ target vocabulary, that is words that have been defined
 \ within the new eForth image we are creating. We will want
 \ to refer to them, such that when we use "+" we will want
-\ as some point for that "+" to refer to a location within
+\ at some point for that "+" to refer to a location within
 \ the target image. "assembler.1" is for words relating to
 \ the assembler that we use to tame the SUBLEQ machine, and
-\ "target.only.1" is not strictly necessary, but it is to
-\ refer to define words that only exist in the target
-\ dictionary.
+\ "target.only.1" is used for words that we do not normally
+\ (but occasionally do) want to refer to when meta-compiling
+\ but must also exist in the target dictionary. We might want
+\ to use this "target.order.1" dictionary to define a target
+\ version of ":" for example, we will want to use the
+\ meta-compilers version of ":" when meta-compiling.
 \
 
 wordlist constant meta.1        ( meta-compiler word set )
@@ -695,9 +734,10 @@ defined eforth [if] system +order [then]
 meta.1 +order definitions
 
 \ Some system constants are defined, "=cell" is the size of
-\ a cell in bytes, for out 16-bit machine it is "2", if we
+\ a cell in bytes, for our 16-bit machine it is "2", if we
 \ want to allocate a cell within the image, we will need to
 \ refer to this constant.
+\
 
    2 constant =cell  \ Target cell size
 4000 constant size   \ Size of image working area
@@ -709,16 +749,18 @@ meta.1 +order definitions
 007F constant =del   \ Delete character
 FC00 constant =stack-start \ Initial start of stack
 
-\ Create an area to store the new image in, called "tflash",
-\ and clear it. The image generate is not that big. We will
-\ need under 16KiB (although we are cutting it close).
+\ Now we need to create an area to store the new image in, 
+\ called "tflash", and clear it. The image generated is not 
+\ that big. We will need under 16KiB (although we are cutting 
+\ it close).
 \
 
 create tflash tflash size cells allot size erase
 
-\ "tdp" is the target dictionary pointer, "there" will return
-\ the contents of it when it is defined. "t" is usually used
-\ as a prefix to mean "target".
+\ "tdp" is the Target Dictionary Pointer, "there" (pronounced
+\ "T-here" for "target-here") will return the contents of it 
+\ when it is defined. "t" is usually used as a prefix to mean
+\ "target" in this implementation.
 \
 \ "tlast" is a pointer to the last defined word in the target.
 \
@@ -734,7 +776,7 @@ variable tlocal 0 tlocal ! ( local variable allocator )
 \ We will be switching between vocabularies later, by using
 \ word pairs like ":m"/";m" and ":t"/";t" we can define words
 \ and put them in the "meta.1" or "target.1" word sets
-\ automatically.
+\ using those word pairs.
 \
 
 : :m meta.1 +order definitions : ; ( --, "name" )
@@ -770,9 +812,10 @@ variable tlocal 0 tlocal ! ( local variable allocator )
 \ Useful if we want to define strings in the target, which we
 \ will when defining new words in the target header.
 \
-\ "limit" is used on systems which are not 16-bit (ie. Gforth)
+\ "limit" is used on systems which are not 16-bit (i.e. Gforth)
 \ to limit the maximum value of a number to be modulo 2 raised
-\ to the 16. It does nothing on SUBLEQ machine.
+\ to the 16. It does nothing on SUBLEQ eForth as that is a
+\ 16-bit machine.
 \
 
 defined eforth [if]
@@ -790,7 +833,7 @@ defined eforth [if]
 \
 \ "\$literal" parses input until a double quote is reached
 \ and then compiles that string into the dictionary. It also
-\ takes care of alignment, given its description in this
+\ takes care of alignment. Given its description in this
 \ paragraph, why can we not use it? Because there is no code
 \ yet written for the target to print out the strings that
 \ "\$literal" can compile into the target dictionary, until
@@ -803,7 +846,7 @@ defined eforth [if]
 \ Some more conditional compilation, this time it is because
 \ of the potential differences in arithmetic between the
 \ gforth implementation and the SUBLEQ eForth (which is always
-\ 16-bit). The image saving routine need to print out a 16-bit
+\ 16-bit). The image saving routine needs to print out a 16-bit
 \ signed value, so for gforth implementations that are likely
 \ to be 32 or even 64 bit, the value to be printed out will
 \ need to be sign-extended from a 16-bit signed value to a
@@ -826,16 +869,20 @@ defined eforth [if]
 \
 \ A line ending is used instead of a space as it makes the
 \ diff tools recognize similar sections in the SUBLEQ image,
-\ instead of a single line changing if only one or two cells
-\ have changed.
+\ instead of a single giant line changing if only one or two 
+\ cells have changed. This makes an otherwise binary image
+\ (albeit stored in a textual format) play better with version
+\ control systems such as "git", or "svn".
 \
 \ "save-target" actually calls "mdump", making sure we are in
 \ decimal base before hand, which the output format requires.
 \
 \ Due to defining our own versions of "only", "forth",
-\ "definitions" and "hex" we will define a word called ".end"
-\ that will restore the interpreter to the correct state.
+\ "definitions" and "hex" in the target image we will define a
+\ word called ".end" that will restore the interpreter to a
+\ standard, usable state, after compilation is complete.
 \
+
 0 constant cgen
 cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 :m mdump taligned ( a u -- )
@@ -849,7 +896,10 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ to it. It will be used to set the variable which will
 \ contain the Forth vocabulary, and the "{last}" variable,
 \ which contains the last defined word when running the target
-\ eForth.
+\ eForth. The "{last}" variable and the Forth vocabulary,
+\ which is stored in "forth-wordlist", is set at the end of
+\ the image generation.
+\
 
 :m atlast tlast @ ;m ( -- a )
 
@@ -858,12 +908,16 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ block used to store the tasks variable and return stacks,
 \ buffers, and also USER variables - task specific or thread
 \ local storage. "lallot" keeps track of an offset into thread
-\ local storage ("tlocal"). "tuser" can be used to allocate
-\ a cell in local storage space, and assign a name for that
-\ space in the meta-compiler, which when run will compile that
-\ offset into the target image. There is a limited amount
-\ of space within the thread, so user variables should not be
-\ allocated freely.
+\ local storage ("tlocal") for those USER variables. "tuser" 
+\ can be used to allocate a cell in local storage space, and 
+\ assign a name for that space in the meta-compiler, which when 
+\ run will compile that offset into the target image. There is 
+\ a limited amount of space within each thread, so user 
+\ variables should not be allocated freely.
+\
+\ USER variables are thread-local variables, there is an
+\ instance of a USER variable for each thread that has been
+\ created.
 \
 \ "tvar" is a more conventional variable, however, much like
 \ "tuser" the name is not copied into the target dictionary.
@@ -913,22 +967,24 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ image such as ":" and "create".
 \
 
-:m compile-only tlast @ tnfa t@ 20 or tlast @ tnfa t! ;m ( -- )
-:m immediate    tlast @ tnfa t@ 40 or tlast @ tnfa t! ;m ( -- )
+:m compile-only tlast @ tnfa t@ 20 or tlast @ tnfa t! ;m 
+:m immediate    tlast @ tnfa t@ 40 or tlast @ tnfa t! ;m 
 
 \ "half" and "double" are just synonyms for "2/" and "2\*", it
 \ is much easier to know you are calling the correct version of
-\ the words when they have different names. We will need to
-\ convert from Forth to VM addresses with these two when
-\ setting execution tokens.
+\ the words when they have different names. During 
+\ meta-compilation we will need to convert from Forth to VM 
+\ addresses using these two words when setting execution 
+\ tokens.
 \
 
 :m half dup 1 and abort" unaligned" 2/ ;m ( a -- a )
 :m double 2* ;m ( a -- a )
 
-\ Some more conditional code due to the differences between the
-\ implementations of the single quote, "'", on the two
-\ different Forth implementations used to compile this program.
+\ Some more conditional code is needed due to the differences 
+\ between the implementations of the single quote, "'", on the 
+\ two different Forth implementations used to compile this 
+\ program.
 \
 \ "\>body" works (correctly) only on words defined with
 \ "create". It moves an execution token pointer to point to the
@@ -958,10 +1014,11 @@ defined eforth [if]
 \ "tcksum" is used to calculate the checksum over the part of
 \ the image that is checked. At the end of the meta-compilation
 \ process this value is calculated and poked into the target
-\ image. The corresponding word in the target is called
-\ "cksum". The algorithm only uses addition, which makes for a
-\ weak form of checksum, but it is easy to compute.
+\ image. The corresponding word in the target used at runtime 
+\ is called "cksum". The algorithm only uses addition, which 
+\ makes for a weak form of checksum, but it is easy to compute.
 \
+
 :m tcksum taligned dup C0DE - FFFF and >r
    begin ?dup
    while swap dup t@ r> + FFFF and >r =cell + swap =cell -
@@ -977,9 +1034,9 @@ defined eforth [if]
 \ "postpone". It is not always needed to use "postpone" on
 \ some of the words it is called on, however to make the cross
 \ compiled code more similar to actual Forth code it is
-\ executed on "immediate" words being compiled in the target,
+\ used on "immediate" words being compiled in the target,
 \ even though their immediateness only applies to it when the
-\ target is running, which it is not.
+\ target is running, which it is not when cross compiling.
 \
 
 :m postpone ( --, "name" )
@@ -997,23 +1054,28 @@ defined eforth [if]
 \ other Forth implementations, it is the location of the where
 \ the Forth word name fields are stored. In this Forth
 \ implementation they are stored conjoined with the words
-\ themselves, as with other Forth implementations. This
-\ simplifies the system conceptually and means code and the
-\ names form one contiguous block, which has some advantages,
-\ but most Forth implementations have a separate Forth name
+\ themselves, as with other Forth implementations such as
+\ JonesForth. This simplifies the system conceptually and 
+\ means code and the names form one contiguous block, which has 
+\ some advantages.
+\
+\ However most Forth implementations have a separate Forth name
 \ location and code location. This means that it is easier to
 \ erase the names for words, which may no longer be needed,
 \ it is even possible to erase all of the word names and keep
 \ the code intact which is not possible in this implementation,
-\ although it is less compact than a conjoined system. Both
-\ systems can be designed to use the same amount of memory.
+\ although separate storage is less compact than a conjoined 
+\ system. Both systems can be designed to use the same amount 
+\ of memory, with caveats.
 \
 \ The word "thead" makes a header for a word in the target, it
 \ writes a pointer to the previously defined word making a link
-\ in the dictionary linked list, parses the next word in the
+\ in the dictionaries linked list, parses the next word in the
 \ input stream, and copies that name into the target dictionary
-\ with "tpack", making sure to align things for code generation
-\ stage. "thead" is not called directly, but is called by
+\ with "tpack", making sure to align the Dictionary Pointer for 
+\ the code generation stage. 
+\ 
+\ "thead" is not called directly, but is called by
 \ "header", which saves and restores the "\>in" variable, this
 \ is done so that the name we just parsed from the input stream
 \ is parsed *again* as we want to be able to create a word in
@@ -1099,9 +1161,10 @@ defined eforth [if] system -order [then]
 \ # Forth Virtual Machine
 \
 \ This section contains the Forth Virtual Machine; a VM
-\ that does the bare minimum surround by about forty or
-\ so instructions which when implemented can be used to make
-\ porting trivial.
+\ that does the bare minimum by implementing about forty or
+\ so instructions. If these instructions were implemented on
+\ different platform this Forth would then be trivial to port
+\ to it.
 \
 \ Implementing and debugging the Forth VM was the hardest task
 \ of porting this Forth to the SUBLEQ platform, usually it is
@@ -1186,7 +1249,7 @@ defined eforth [if] system -order [then]
 \
 \ Those are the only standard assembly words, naturally the
 \ rest would be platform specific, the mnemonics for an
-\ x86 or an ARM processor would be different.
+\ x86 or an ARM processor would be different for example.
 \
 \ Onto the SUBLEQ assembler words themselves.
 \
@@ -1195,15 +1258,15 @@ defined eforth [if] system -order [then]
 \
 \ "Z" is the first word defined. It writes a zero into a cell,
 \ it is meant to be used as a register location that starts
-\ off as zero, as mentioned, and should end backup as zero
-\ by the and of the instruction. It is not an instruction, but
+\ off as zero, as mentioned, and should end back up as zero
+\ by the end of the instruction. It is not an instruction, but
 \ is used to build one. The same with "NADDR", which compiles
 \ the next memory location into the current cell.
 \
 \ "HALT" is our first instruction, "0 0 -1" will always halt
 \ the machine. This will be used to implement the Forth word
-\ "bye", but it is useful for debugging the lower levels when
-\ the Forth VM had to be built.
+\ "bye", but it is also useful for debugging the lower levels 
+\ when the Forth VM had to be built.
 \
 \ "JMP" accepts a Forth Address, converts it to a Cell Address,
 \ and when run, it will unconditionally jump to that location.
@@ -1232,14 +1295,14 @@ defined eforth [if] system -order [then]
 \ simple to implement, just put the "-1" in the correct place.
 \ They both accept a memory location to get data from or write
 \ to. They are used to get and put a single byte of input or
-\ output.
+\ output respectively.
 \
 \ "MOV" copies the location of a cell to another one, it
-\ requires for individual SUBLEQ instructions to implement.
-\ "a b MOV" would copy "a" to "b", first "b" is zeroed, then
+\ requires four individual SUBLEQ instructions to implement.
+\ "a b MOV" would copy "a" to "b". First "b" is zeroed, then
 \ "a" is negated and stored in "Z", then "Z" which now contains
 \ the negated "a" is subtracted from "b", moving the contents
-\ stored a "a" to "b". Finally "Z" is returned to its original
+\ stored in "a" to "b". Finally "Z" is returned to its original
 \ state by subtracting "Z" from itself, so it now contains
 \ zero as it should. Four instructions.
 \
@@ -1266,8 +1329,8 @@ defined eforth [if] system -order [then]
 \ final "MOV", leaving the last instruction of the modified
 \ "MOV" the same, to zero out the "Z" register.
 \
-\ There are under twenty macro instructions in the base;
-\ I/O, Loads/Stores, and arithmetic. The conditional
+\ There are under twenty macro instructions in the base 
+\ assembler; I/O, Loads/Stores, and arithmetic. The conditional
 \ instruction macros will be defined in the next section. That
 \ the instruction number is so small is remarkable.
 \
@@ -1290,7 +1353,7 @@ defined eforth [if] system -order [then]
    swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV
    r> 0 MOV ;m
 
-\ To simplify program flow the normal control structures
+\ To simplify program flow some control structures
 \ will be defined, they work a little differently than the
 \ Forth ones, as they must be given an address instead of
 \ taking items off of the stack, however they make everything
@@ -1298,11 +1361,10 @@ defined eforth [if] system -order [then]
 \ structured programming paradigm. Programming in straight
 \ assembler sucks.
 \
-\ The assembler versions of the control structures will work
-\ a little differently from the way they do in Forth. In Forth
-\ "if" pulls an item off of the variable stack to test again,
-\ however the assembler version of "if" instead reads (and does
-\ not modify) a memory location, so it must be used like so:
+\ In Forth "if" pulls an item off of the variable stack to test 
+\ again, however the assembler version of "if" instead reads 
+\ (and does not modify) a memory location, so it must be used 
+\ like so:
 \
 \        <location> if ... then
 \
@@ -1335,7 +1397,7 @@ defined eforth [if] system -order [then]
 \ either. The macros work by either pushing locations and/or
 \ writing holes into the assembled image, or by patching up
 \ those holes in different ways, or by manipulating
-\ the memory locations already on the stack, some words to
+\ the memory locations already on the stack, some words do
 \ a combination of those three options.
 \
 \ For example "mark" creates an empty location in the
@@ -1347,8 +1409,8 @@ defined eforth [if] system -order [then]
 \ definition of "if".
 \
 \ None of these words contain any compiler security, unlike
-\ the later ones, or run time checks to make sure the control
-\ structures line up correctly, so use them carefully.
+\ the control structure words defined in the target, or defined
+\ in the meta-compiler, so use them carefully.
 \
 
 assembler.1 +order definitions
@@ -1375,7 +1437,6 @@ meta.1 +order definitions
 \ defined word because of how the Forth VM works, which might
 \ require a new primitive to do so.
 \
-
 \ # The System Variables
 \
 \ There is not a lot in this section in terms logic, it nearly
@@ -2316,10 +2377,11 @@ assembler.1 -order
 \ "min" and "max" will not be defined like this later, as
 \ bitwise operators are expensive on the SUBLEQ machine.
 \
-\
 \ NB. There are some bugs with the comparison operators "op\<"
 \ and "op\>" when they deal with extreme values like
 \ "\$8000 1 \<", "\$8002 1 \<" works fine.
+\
+
 :a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
 :a op0=
    tos w MOV neg1 tos MOV
@@ -7650,11 +7712,530 @@ it being run.
 \ feedback the information to the program running on the VM
 \ in this manner:
 \
-\	m[L(a)] = putch(m[L(a)]);
+\        m[L(a)] = putch(m[L(a)]);
 \
 \ It would be up to the running program to handle this
 \ correctly, and retry and failed operations if necessary.
 \
+\ ## N-Bit SUBLEQ machine
+\
+\ This C program implements a SUBLEQ machine with a variable
+\ width for the SUBLEQ cell, it can be used to simulated fixed
+\ width SUBLEQ machines from 8 to 64 bits inclusive, but only
+\ twos compliment machines, it could be extended if needs be
+\ to deal with different number representations (such as ones
+\ compliment or sign magnitude representation).
+\
+\        #include <stdint.h>
+\        #include <stdio.h>
+\        #include <stdlib.h>
+\        #include <inttypes.h>
+\        #define SZ     (32768)
+\        #define L(X)   ((X)%SZ)
+\        #define HI(X)  (1ull << ((X) - 1))
+\        
+\        static inline uint64_t msk(int n) {
+\          return n < 64 ? 
+\            (1ull << n) + 0xFFFFFFFFFFFFFFFFull :
+\            0xFFFFFFFFFFFFFFFFull;
+\        }
+\        
+\        int main(int s, char **v) {
+\          if (s < 2)
+\            return 1;
+\          static uint64_t m[SZ];
+\          uint64_t pc = 0, N = atoi(v[1]);
+\          if (N < 8 || N > 64)
+\            return 2;
+\          for (long i = 2, d = 0; i < s; i++) {
+\            FILE *f = fopen(v[i], "r");
+\            if (!f)
+\              return 3;
+\            while (fscanf(f, "%ld", &d) > 0)
+\              m[L(pc++)] = ((int64_t)d) & msk(N);
+\            if (fclose(f) < 0)
+\              return 4;
+\          }
+\          for (pc = 0; pc < SZ;) {
+\            uint64_t a = m[L(pc++)], 
+\               b = m[L(pc++)], 
+\               c = m[L(pc++)];
+\            if (a == msk(N)) {
+\              m[L(b)] = getchar() & msk(N);
+\            } else if (b == msk(N)) {
+\              if (putchar(m[L(a)]) < 0)
+\                return 5;
+\              if (fflush(stdout) < 0)
+\                return 6;
+\            } else {
+\              uint64_t r = m[L(b)] - m[L(a)];
+\              r &= msk(N);
+\              if (r & HI(N) || r == 0)
+\                pc = c;
+\              m[L(b)] = r;
+\            }
+\          }
+\          return 0;
+\        }
+\
+\ This program is useful for testing the error messages printed
+\ out when the eForth image detects the wrong SUBLEQ cell width
+\ is used.
+\
+\ ## Recompiling Virtual Machine
+\
+\ This is a 16-bit SUBLEQ VM that attempts to optimize the
+\ code that it is to execute so it runs much faster, it finds
+\ common sequences of instructions and turns them into a single
+\ instruction. The system is brittle and liable to break code
+\ as SUBLEQ code tends to be highly self-modifying. Initially
+\ the idea was to make a Just In Time compiler to recompile
+\ common expressions on the fly, however doing this ahead of
+\ time is simpler. This could be turned into an N-bit version,
+\ but execution speed and not being generic is the goal.
+\
+\ The core of the system is a pattern matching mini-language
+\ that can match on sequences SUBLEQ instructions and extract
+\ values for further comparison. This is embodied in the
+\ function "match", which is used by "optimizer".
+\
+\ It must be emphasized again, that this program is *brittle*,
+\ it works perfectly on the "eforth.dec" image that is 
+\ generated but it will fail on arbitrary SUBLEQ programs.
+\
+\ One some systems this speeds execution up, on others it seems
+\ to slow it down. There is a lot in this program that could
+\ itself be optimized, it was written to demonstrate the 
+\ concept and not for efficiency and speeds sake in itself.
+\
+\
+\       #include <stdint.h>
+\       #include <stdio.h>
+\       #include <stdarg.h>
+\       #include <ctype.h>
+\       #include <inttypes.h>
+\       #include <time.h>
+\       #define SZ   (32768)
+\       #define L(X) ((X)%SZ)
+\       #define DEPTH (3*64)
+\       enum {
+\         SUBLEQ, JMP, ADD, SUB, MOV,
+\         ZERO, PUT, GET, HALT,
+\         IJMP, ILOAD, ISTORE, INC, DEC,
+\         INV, DOUBLE, LSHIFT,
+\       
+\         MAX
+\       };
+\       
+\       static const char *names[] = {
+\         "SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
+\         "MOV    ", "ZERO   ", "PUT    ", "GET    ",
+\         "HALT   ", "IJMP   ", "ILOAD  ", "ISTORE ",
+\         "INC    ", "DEC    ", "INV    ", "DOUBLE ",
+\         "LSHIFT ",
+\       };
+\       
+\       typedef struct {
+\         int instruction;
+\         uint16_t m, s, d;
+\       } instruction_t;
+\       
+\       typedef struct {
+\         int matches[MAX];
+\         int set[9];
+\         uint16_t v[9];
+\         unsigned char z_reg[SZ], one_reg[SZ], neg1_reg[SZ];
+\         clock_t start, end;
+\         int64_t cnt[MAX];
+\       } optimizer_t;
+\       
+\       static int match(optimizer_t *o, uint16_t *n,
+\         int sz, uint16_t pc, const char *s, ...) {
+\         va_list ap;
+\         int r = 0, i = 0, j = 0;
+\         for (int i = 0; i < 9; i++) {
+\           o->set[i] = 0;
+\           o->v[i] = 0;
+\         }
+\         va_start(ap, s);
+\         for (i = 0, j = 0; s[j] && i < sz; j++) {
+\           switch (s[j]) {
+\           case '0': case '1': case '2': case '3':
+\           case '4': case '5': case '6': case '7':
+\           case '8': case '9': {
+\             int p = s[j] - '0';
+\             if (o->set[p]) {
+\               if (n[i] != o->v[p]) goto end;
+\             } else {
+\               o->set[p] = 1;
+\               o->v[p] = n[i];
+\             }
+\             i++;
+\             break;
+\           }
+\           /* Mem location 0 must be 0 in SUBLEQ image! */
+\           case 'Z': if (n[i] != 0) goto end; i++; break;
+\           case 'N': if (n[i] != 65535) goto end; i++; break;
+\           case '>': if (n[i] != (pc + i + 1)) goto end; i++;
+\            break;
+\           case '%': {
+\             int q = va_arg(ap, int);
+\             if (n[i] != q)
+\               goto end;
+\             i++;
+\           } break;
+\           case '!': {
+\               uint16_t *p = va_arg(ap, uint16_t*);
+\               *p = n[i];
+\               i++;
+\           } break;
+\           case '?': i++; break;
+\           case ' ': case '\t':
+\           case '\n': case '\r': break;
+\           default: r = -1; goto end;
+\           }
+\         }
+\         while (isspace(s[j]))
+\           j++;
+\         r = (s[j] == 0) && (i <= sz);
+\       end:
+\         va_end(ap);
+\         return r;
+\       }
+\       
+\       static long get(optimizer_t *o, char var) {
+\         if (var < '0' || var > '9' || o->set[var - '0'] == 0)
+\           return -1;
+\         return o->v[var - '0'];
+\       }
+\       
+\       /* This section pattern matches the code finding
+\        * sequences of SUBLEQ instructions against known
+\        * instruction macros.  It is essentially a
+\        * disassembler. It is liable not to work for every
+\        * case, but will do so for the code that *I* want to
+\        * speed up. */
+\       static int optimizer(optimizer_t *o,
+\           instruction_t *m, uint16_t pc) {
+\       
+\         for (uint16_t i = 0; i < pc; i++) {
+\           switch (m[i].m) {
+\           case 0: o->z_reg[i] = 1; break;
+\           case 1: o->one_reg[i] = 1; break;
+\           case 0xFFFF: o->neg1_reg[i] = 1; break;
+\           }
+\         }
+\       
+\         for (uint16_t i = 0; i < pc; i++) {
+\           uint16_t q0 = 0, q1 = 0;
+\           uint16_t n[DEPTH] = { 0, };
+\       
+\           for (size_t j = 0; j < DEPTH; j++)
+\             n[j] = m[L(i + j)].m;
+\       
+\           /* Largest instructions *must* go first */
+\       
+\           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11>\
+\           ?Z> Z1> ZZ> 22> ?Z> Z2> ZZ> 33> !Z> Z3> ZZ>",
+\           &q0, &q1) == 1
+\             && get(o, '0') == (i+(3*12))
+\             && get(o, '1') == (i+(3*12)+1)) {
+\             m[L(i)].instruction = ISTORE;
+\             m[L(i)].d = L(q0);
+\             m[L(i)].s = L(q1);
+\             o->matches[ISTORE]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11>\
+\           ?Z> Z1> ZZ>", &q0) == 1
+\               && get(o, '0') == (i + 15)) {
+\             m[L(i)].instruction = ILOAD;
+\             m[L(i)].d = L(get(o, '1'));
+\             m[L(i)].s = L(q0);
+\             o->matches[ILOAD]++;
+\             continue;
+\           }
+\       
+\           int shift = 0, l = 0, dest = 0;
+\           for (l = 0; l < DEPTH; l += 9) {
+\             if (match(o, n+l, DEPTH-l, i+l, "!Z>\
+\                 Z!> ZZ>", &q0, &q1) == 1
+\                 && q0 == q1) {
+\               if (l == 0) {
+\                 dest = q0;
+\               } else {
+\                 if (dest != q0) {
+\                   break;
+\                 }
+\               }
+\               shift++;
+\             } else {
+\               break;
+\             }
+\           }
+\           if (shift >= 2) {
+\             m[L(i)].instruction = LSHIFT;
+\             m[L(i)].d = L(dest);
+\             m[L(i)].s = shift;
+\             o->matches[LSHIFT]++;
+\             continue;
+\           }
+\       
+\       
+\           if (match(o, n, DEPTH, i, "00> 10> 11> 2Z>\
+\               Z1> ZZ> !1>", &q0) == 1
+\               && o->one_reg[q0]) {
+\             m[L(i)].instruction = INV;
+\             m[L(i)].d = L(get(o, '1'));
+\             o->matches[INV]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>",
+\           &q0) == 1
+\               && get(o, '0') == (i + (3*4) + 2)) {
+\             m[L(i)].instruction = IJMP;
+\             m[L(i)].d = L(q0);
+\             o->matches[IJMP]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
+\           &q0) == 1) {
+\             m[L(i)].instruction = MOV;
+\             m[L(i)].d = L(get(o, '0'));
+\             m[L(i)].s = L(q0);
+\             o->matches[MOV]++;
+\             continue;
+\           }
+\       
+\           /* We should match multiple ones in a row and
+\            * turn them into a left shift */
+\           if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
+\           &q0, &q1) == 1
+\               && q0 == q1) {
+\             m[L(i)].instruction = DOUBLE;
+\             m[L(i)].d = L(q1);
+\             m[L(i)].s = L(q0);
+\             o->matches[DOUBLE]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
+\           &q0, &q1) == 1) {
+\             m[L(i)].instruction = ADD;
+\             m[L(i)].d = L(q1);
+\             m[L(i)].s = L(q0);
+\             o->matches[ADD]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "00>") == 1) {
+\             m[L(i)].instruction = ZERO;
+\             m[L(i)].d = L(get(o, '0'));
+\             o->matches[ZERO]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "ZZ!", &q0) == 1
+\           && q0 >= SZ) {
+\             m[L(i)].instruction = HALT;
+\             o->matches[HALT]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "00!", &q0) == 1) {
+\             m[L(i)].instruction = JMP;
+\             m[L(i)].d = q0;
+\             m[L(i)].s = L(get(o, '0'));
+\             o->matches[JMP]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "N!>", &q0) == 1) {
+\             m[L(i)].instruction = GET;
+\             m[L(i)].d = L(q0);
+\             o->matches[GET]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "!N>", &q0) == 1) {
+\             m[L(i)].instruction = PUT;
+\             m[L(i)].s = L(q0);
+\             o->matches[PUT]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
+\             && q0 != q1 && o->neg1_reg[L(q0)]) {
+\             m[L(i)].instruction = INC;
+\             m[L(i)].d = L(q1);
+\             o->matches[INC]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
+\             && q0 != q1 && o->one_reg[L(q0)]) {
+\             m[L(i)].instruction = DEC;
+\             m[L(i)].d = L(q1);
+\             o->matches[DEC]++;
+\             continue;
+\           }
+\       
+\           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
+\             && q0 != q1) {
+\             m[L(i)].instruction = SUB;
+\             m[L(i)].d = L(q1);
+\             m[L(i)].s = L(q0);
+\             o->matches[SUB]++;
+\             continue;
+\           }
+\       
+\           o->matches[SUBLEQ]++;
+\         }
+\         return 0;
+\       }
+\       
+\       
+\       static int report(optimizer_t *o) {
+\         double elapsed_s = (double)(o->end - o->start);
+\         elapsed_s /= CLOCKS_PER_SEC;
+\         int64_t total = 0, subs = 0;
+\         FILE *e = stderr;
+\         for (int i = 0; i < MAX; i++) {
+\           total += o->cnt[i];
+\           subs  += o->matches[i];
+\         }
+\         static const char *rep_div =
+\         "+--------+--------+--------------+----------+\n";
+\       
+\         if (fputs(rep_div, e) < 0)
+\           return -1;
+\         if (fprintf(e, "| Instr. | Subs.  | Instr. Cnt   |\
+\        Instr. %% |\n") < 0)
+\           return -1;
+\         if (fputs(rep_div, e) < 0)
+\           return -1;
+\         for (int i = 0; i < MAX; i++)
+\           if (fprintf(e, "| %s| % 6d | % 12"PRId64" |\
+\        % 7.1f%% |\n", 
+\               names[i], o->matches[i], o->cnt[i], 
+\               100.0*((float)o->cnt[i])/(float)total) < 0)
+\             return 1;
+\         if (fputs(rep_div, e) < 0)
+\           return -1;
+\         if (fprintf(e, "| Totals | % 6d | % 12"PRId64" |\
+\                 |\n", 
+\                    (int)subs, total) < 0)
+\           return -1;
+\         if (fputs(rep_div, e) < 0)
+\           return -1;
+\         if (fprintf(e, "|         EXECUTION TIME %.3f \
+\       SECONDS      |\n", 
+\                     elapsed_s) < 0)
+\           return -1;
+\         if (fputs(rep_div, e) < 0)
+\           return -1;
+\         return 0;
+\       }
+\       
+\       int main(int s, char **v) {
+\         static instruction_t m[SZ];
+\         static optimizer_t o = { .matches = { 0, }, };
+\         uint16_t pc = 0;
+\         const int dbg = 0, optimize = 1, stats = 1;
+\         for (int i = 1, d = 0; i < s; i++) {
+\           FILE *f = fopen(v[i], "r");
+\           if (!f)
+\             return 1;
+\           while (fscanf(f, "%d", &d) > 0)
+\             m[L(pc++)].m = d;
+\           if (fclose(f) < 0)
+\             return 2;
+\         }
+\       
+\         if (optimize)
+\           if (optimizer(&o, m, pc) < 0)
+\             return 1;
+\         o.start = clock();
+\         for (pc = 0; pc < SZ;) {
+\           const int instruction = m[pc].instruction;
+\           const uint16_t s = m[pc].s, d = m[pc].d;
+\           if (dbg) {
+\             if (fprintf(stderr, "{%ld:%d}",
+\                  (long)pc, m[pc].instruction) < 0)
+\               return 1;
+\               /* Could return __LINE__ for simple debugging,
+\                * but return val is limited to 255 usually */
+\           }
+\           if (stats) {
+\             o.cnt[instruction/*% MAX*/]++;
+\           }
+\           switch (instruction) {
+\           case SUBLEQ: { /* OG Instruction */
+\             uint16_t a = m[pc++].m,
+\                      b = m[L(pc++)].m,
+\                      c = m[L(pc++)].m;
+\             if (a == 65535) {
+\               m[L(b)].m = getchar();
+\             } else if (b == 65535) {
+\               if (putchar(m[L(a)].m) < 0)
+\                 return 3;
+\               if (fflush(stdout) < 0)
+\                 return 4;
+\             } else {
+\               uint16_t r = m[L(b)].m - m[L(a)].m;
+\               if (r & 32768 || r == 0)
+\                 pc = c;
+\               m[L(b)].m = r;
+\             }
+\             }
+\             break;
+\           /* NB. We might be able to run more programs
+\            * correctly if we disable these instructions if
+\            * a write occurs within the bounds of an
+\            * instruction macro, this would slow things down
+\            * however. */
+\           case JMP: pc = d; m[s].m = 0; break;
+\           case MOV: m[d].m  = m[s].m; pc += 12; break;
+\           case ADD: m[d].m += m[s].m; pc += 9; break;
+\           case DOUBLE: m[d].m <<= 1; pc += 9; break;
+\           case LSHIFT: m[d].m <<= s; pc += 9 * s; break;
+\           case SUB: m[d].m -= m[s].m; pc += 3; break;
+\           case ZERO: m[d].m = 0; pc += 3; break;
+\           case IJMP: pc = m[d].m;  break;
+\           case ILOAD: m[d].m = m[L(m[s].m)].m; pc += 24;
+\             break;
+\           case ISTORE: m[L(m[d].m)].m = m[s].m; pc += 48;
+\             break;
+\           case PUT:
+\             if (putchar(m[L(m[pc].s)].m) < 0)
+\               return 3;
+\             if (fflush(stdout) < 0)
+\               return 4;
+\             pc += 3;
+\             break;
+\           case GET: m[m[pc].d].m = getchar(); pc += 3; break;
+\           case HALT: goto done;
+\           case INC: m[d].m++; pc += 3; break;
+\           case DEC: m[d].m--; pc += 3; break;
+\           case INV: m[d].m = ~m[d].m; pc += 21; break;
+\           default:
+\             return 5;
+\           }
+\         }
+\       done:
+\         o.end = clock();
+\         if (stats)
+\           if (report(&o) < 0)
+\             return 1;
+\         return 0;
+\       }
+\       
+\ A report is printed to standard error at the end of 
+\ execution.       
+\       
 \ ## Error Code list
 \
 \ This is a list of Error codes, not all of which are used by
@@ -8091,4 +8672,168 @@ it being run.
 \        subleq TA c
 \        subleq TC TB +2
 \        subleq ZR ZR -2 \ loop back
+\
+\ ## Future Direction / Additional tasks.
+\
+\ There is still a lot that could be done with this system,
+\ there are many programs and extensions that could be written 
+\ for it. Some of them have already been mentioned.
+\
+\ For example any of these games could be ported to the system;
+\ 2048, Minesweeper, Sokoban, Conways' Game of Life, Checkers,
+\ perhaps a small chess engine, hangman, Sudoku, a rogue like
+\ game similar to Hack/Nethack and more. These games all do
+\ not require any non-blocking input and none of their game
+\ elements require time as one of their variables.
+\
+\ The chess engine might seem impossible to implement in such
+\ a small space, but there have been many that play on okay
+\ game written for more constrained systems, see
+\ <https://nanochess.org/chess.html> for more information.
+\ Given 32k of code space, no doubt a decent engine could be
+\ made, even if not by me.
+\
+\ Interactive games that would require non-blocking input and
+\ perhaps a better timing mechanism include; Tetris, Snake,
+\ Space Invaders, and Pacman. Programming a CHIP-8 emulator
+\ would allow other, tiny, games to emulated (although the
+\ slow-down of hosting an emulator on this SUBLEQ machine would
+\ be horrendous).
+\
+\ Some of those games exist, written in Forth, in some of my
+\ other projects, and some online. They are the type of game
+\ that can be ported to these systems. A library of such games
+\ written in a highly portable Forth dialect would be a nice
+\ thing to have.
+\
+\ Games like these used to come as listing in microcomputer
+\ magazines, usually written in a dialect of BASIC and 
+\ requiring only a terminal for the display of the games
+\ graphics. 
+\
+\ It would be quite easy to add in words for "free", "allocate"
+\ and "resize", from 
+\ <http://lars.nocrew.org/forth2012/memory.html>. A simple
+\ allocator only requires a handful of words and could be done
+\ in two blocks of Forth code. We have seen though that you do
+\ not need such an allocator package in order to produce
+\ useful programs. In order to write an allocator you just need
+\ a static section of memory (perhaps as little as 4KiB) 
+\ to divide up into sections, you do not need support from the
+\ operating system or special system calls, this can be done in
+\ pure Forth.
+\
+\ Again, links to a Floating Point implementation in Forth
+\ have been given. However adding floating point words is
+\ a more tasking operation, it interacts with more of the
+\ system and there are design decisions that will have to be
+\ made that mean one Floating Point system could differ greatly
+\ from another. It could still be done in pure Forth and left
+\ as an optional extra, however you must ask yourself if it
+\ is worth the trouble. Forth is not good at making application
+\ level programs, it is good at tinkering around with hardware,
+\ with cross assemblers and the like, but anything that demands
+\ floating points would be better either being rewritten to
+\ used Fixed Point arithmetic, or being done in a different
+\ language.
+\
+\ There are a number of optimizations, or just changes, that
+\ could be done to the system. The bitwise operators currently
+\ take up quite a bit of room as they are all implemented in
+\ SUBLEQ assembly. It might be best to implement them in terms
+\ of a 2:1 multiplexing function, or "mux". This can the be
+\ used to trivially implement "AND", "OR", and "XOR", with far 
+\ fewer operations and multiple applications of the bitwise 
+\ operators than would be needed if we were to implement "OR" 
+\ in terms "AND" and "NOT", meaning performance would be 
+\ maintained somewhat. I am sure there are other optimizations
+\ that could be performed to speed things up in general or
+\ reduce the images size.
+\
+\ The main and most useful task would be the creation of an
+\ MS-DOS like subsystem for this Forth. 
+\
+\ DOS (Disk Operating System) is an incredibly
+\ simple operating system, suitable for tiny systems and
+\ embedded environment. It is basically a glorified program
+\ loader married to an equally simple file system with a few
+\ basic drivers. A DOS like operating system with a command
+\ prompt could easily be implemented on top of the Forth block
+\ system (and thus on top of this SUBLEQ machine). Using Forth
+\ blocks would make it portable to the majority of Forth
+\ implementations. Whether to implement a custom file system
+\ or reimplement FAT-12, FAT-16 and/or FAT-32 would need to be
+\ decided, they are all simple file systems but they are also
+\ crufty. Commands for directory manipulation would need to
+\ be implemented, the command line parsed, and functions for
+\ opening, reading, and writing to files made. 
+\
+\ Again, it should be emphasized that the retrieval mechanism
+\ used should be Forth blocks in this DOS. If a custom file
+\ system is made, it might be beneficial to create data
+\ structures built around the 1024 byte block.
+\
+\ Making this DOS would mean the editor provided in this Forth,
+\ a block editor, would need to be improved so it could work
+\ on blocks that are not stored contiguously, or so it would
+\ work on normal files.
+\
+\ Not many commands would need to be implemented; mkdir, edit,
+\ chdir, pwd, rmdir, del, move, copy, rename, format, stat,
+\ time, df, and a few others. 
+\
+\ Programs could consist of Forth scripts, that could be
+\ executed, with their input and output redirected to and from
+\ files. Alternatively they could be SUBLEQ instructions.
+\
+\ Another path for development would be to implement more
+\ peripherals in the SUBLEQ machine, perhaps disk storage (the
+\ above DOS would have to be stored within memory in this
+\ system), a timer, and networking. All networking would have
+\ to consist of is the ability to send UDP packets to another
+\ SUBLEQ eForth system, which would be trivial to integrate.
+\
+\ For this image itself the best feature that could be added
+\ would be to include a self-interpreter, which is mentioned
+\ in the startup code. A correctly designed self-interpreter
+\ would allow the system to execute (albeit much more slowly)
+\ on systems that were the wrong bit-width, or even on systems
+\ that used a different arithmetic (such as ones compliment,
+\ or bignums) by simulating the correct system. Such self
+\ interpreters have been written before, such as the one
+\ from <https://eigenratios.blogspot.com/2006/08>.
+\
+\ There is a real "risk" of the eForth image being run on a
+\ SUBLEQ machine that has the wrong bit-width, if that happens
+\ then the image will not run (although the system does print
+\ out an error message for width greater than 16-bits)
+\ hampering use of the system.
+\
+\ Another project would be to implement a SUBLEQ machine in
+\ hardware, either in 7400 series logic gates with a UART
+\ for the interface and RAM chips for the main memory (loading
+\ the eForth image into the RAM chip would need doing as well),
+\ or making a SUBLEQ machine in VHDL and testing it on an FPGA,
+\ or even going as far as to make an ASIC for the SUBLEQ
+\ architecture! Making a SUBLEQ computer in 7400 series chips
+\ would be rewarding and would teach the maker a lot about
+\ electronics, in a way it would be more rewarding as producing
+\ physical device is far more tangible than a software project
+\ and there is less temptation to tinker after it is finished
+\ as there is with software, in can be "complete" in a way
+\ software is never complete (much like this project I 
+\ declared complete and after a while came back to it). The
+\ initial design could be done one of the various electronics
+\ simulators that are available.
+\
+\ What would the purpose of these little programs and 
+\ extensions however? A lot of effort could be dedicated to
+\ this system and other Forth systems like it, for little
+\ gain other than as an intellectual exercise. Code written for
+\ this eForth could be ported to more viable and usable 
+\ systems, or this system could be a component in a virtual
+\ world. One could imagine this eForth and SUBLEQ machine being
+\ used to control a 3D model of a 1980s style microcomputer, or
+\ to control virtual entities that could be programmed by the
+\ game-player. Apart from this, eForth SUBLEQ is just a puzzle!
 \

@@ -1,4 +1,6 @@
 defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
+\ Program: Specialized script to turn custom markup in Forth
+\          code into a markdown file.
 \ Usage:
 \    cat convert.fth subleq.fth | ./subleq 1.dec > subleq.md
 hex

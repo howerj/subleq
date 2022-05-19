@@ -9,7 +9,5 @@
 *.txt
 eforth
 eforth.c
-full
 nbit
 subleq
-recomp

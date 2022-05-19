@@ -1,0 +1,204 @@
+# https://eigenratios.blogspot.com/2006/08/self-written-self-modifying-self.html
+#
+# Self interpreter for OISC ("One Instruction Set Computer") using "subleq".
+#
+# This uses "subleq" as the "one instruction" where A, B and C are memory
+# addresses, and in the explanations and comments [A] means the integer value
+# stored at address A. Memory is a zero based array of integers of some
+# suitable "width". Signed 32 bit values are perfectly adequate.
+#
+# A single "subleq" instruction written like this
+#
+#    subleq A B C
+#
+# and is stored in memory as three addresses A B and C in consecutive
+# locations. The following pseudocode describes what happens when one
+# instruction is executed.
+#
+#    [B] = [B] - [A]
+#    if [B] <= 0 goto C
+#
+# Note that value of C is taken to be the value before the subtraction.
+#
+# Omitting the C operand (i.e. writing just "subleq A B") is understood to be
+# shorthand for specifying C as the address of the next instruction. When the
+# program starts running, the program counter is 0. It halts when a branch
+# to a negative address happens.
+#
+# This self-interpreter expects the program that it should run to appear
+# directly after its own code/data in memory.
+#
+# Written by Clive Gifford, 29/30 August 2006 based on the Wikipedia
+# description of a OISC using the "subleq" instruction.
+
+start:
+
+# [A1] = [PC]
+
+      subleq A1   A1
+      subleq PC   ZERO
+      subleq ZERO A1
+      subleq ZERO ZERO
+
+# Code below (after modification from above) is equivalent to [A] = [[A1]]
+
+      subleq A    A
+A1:   data   0
+      data   ZERO
+      data   A2
+A2:   subleq ZERO A
+      subleq ZERO ZERO
+
+# [A] = [A] + [LEN]
+
+      subleq LEN  ZERO
+      subleq ZERO A
+      subleq ZERO ZERO
+
+# [B1] = [PC] + 1
+
+      subleq B1   B1
+      subleq PC   ZERO
+      subleq ZERO B1
+      subleq ZERO ZERO
+
+      subleq NEG1 B1
+
+# Code below (after modification from above) is equivalent to [B] = [[B1]]
+
+      subleq B    B
+B1:   data   0
+      data   ZERO
+      data   B2
+B2:   subleq ZERO B
+      subleq ZERO ZERO
+
+# [B] = [B] + [LEN]
+
+      subleq LEN  ZERO
+      subleq ZERO B
+      subleq ZERO ZERO
+
+# We have to copy [C] now, just in case the emulated subtraction modifies [[PC] + 2].
+# [C1] = [PC] + 2
+
+      subleq C1    C1
+      subleq PC    ZERO
+      subleq ZERO  C1
+      subleq ZERO  ZERO
+
+      subleq NEG2  C1
+
+# Code below (after modification from above) is equivalent to [C] = [[C1]]
+
+      subleq C    C
+C1:   data   0
+      data   ZERO
+      data   C2
+C2:   subleq ZERO C
+      subleq ZERO ZERO
+
+# [[B]] = [[B]] - [[A]];
+# if [[B]] <= 0 goto LEQZ
+
+# Earlier code referring to addresses A and B has modified the next
+# couple of words to create the equivalent of "subleq [A] [B] LEQZ"
+# This is where we're "emulating" the subtraction...
+
+A:    data   0
+B:    data   0
+      data   LEQZ
+
+# [PC] += 3
+
+      subleq NEG3  PC
+      subleq ZERO  ZERO START
+
+# We come to address LEQZ when the emulated subleq is going to take
+# the branch to the emulated address C.
+
+LEQZ:
+
+# First save the "raw" value in PC
+# [PC] = [C]
+
+      subleq PC    PC
+      subleq C     ZERO
+      subleq ZERO  PC
+      subleq ZERO  ZERO
+
+# Check if [C] is less than zero. Halt if it is. 
+# We don't care about changing [C] as we've already copied the value to [PC] above.
+
+      subleq NEG1  C     -1
+
+# [PC] = [PC] + [LEN]
+
+      subleq LEN   ZERO
+      subleq ZERO  PC
+      subleq ZERO  ZERO  START
+
+NEG3: data  -3
+NEG2: data  -2
+NEG1: data  -1
+ZERO: data   0
+
+C:    data   0
+PC:   data   PROG
+LEN:  data   PROG
+
+# Code for the program to be interpreted must start at the PROG address...
+PROG:
+
+
+# Assembled:
+# 15  15   3
+# 134 132   6
+# 132  15   9
+# 132 132  12
+#  96  96  15
+#   0 132  18
+# 132  96  21
+# 132 132  24
+# 135 132  27
+# 132  96  30
+# 132 132  33
+#  51  51  36
+# 134 132  39
+# 132  51  42
+# 132 132  45
+# 131  51  48
+#  97  97  51
+#   0 132  54
+# 132  97  57
+# 132 132  60
+# 135 132  63
+# 132  97  66
+# 132 132  69
+#  87  87  72
+# 134 132  75
+# 132  87  78
+# 132 132  81
+# 130  87  84
+# 133 133  87
+#   0 132  90
+# 132 133  93
+# 132 132  96
+#   0   0 105
+# 129 134 102
+# 132 132   0
+# 134 134 108
+# 133 132 111
+# 132 134 114
+# 132 132 117
+# 131 133  -1
+# 135 132 123
+# 132 134 126
+# 132 132   0
+#  -3
+#  -2
+#  -1
+#   0
+#   0
+# 136
+# 136

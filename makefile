@@ -23,9 +23,6 @@ width: nbit 1.dec
 	./nbit 63 1.dec
 	./nbit 64 1.dec
 
-faster: recomp subleq.dec
-	./recomp subleq.dec
-
 gforth.dec: subleq.fth
 	gforth $< > $@
 

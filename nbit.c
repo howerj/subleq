@@ -1,3 +1,4 @@
+/* N-Bit SUBLEQ machine, Twos compliment. Richard James Howe */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,7 +6,13 @@
 #define SZ     (32768)
 #define L(X)   ((X)%SZ)
 #define HI(X)  (1ull << ((X) - 1))
-#define MSK(X) ((X) < 64 ? (1ull << (X)) + 0xFFFFFFFFFFFFFFFFull : 0xFFFFFFFFFFFFFFFFull)
+
+static inline uint64_t msk(int n) {
+	return n < 64 ? 
+		(1ull << n) + 0xFFFFFFFFFFFFFFFFull :
+		0xFFFFFFFFFFFFFFFFull;
+}
+
 int main(int s, char **v) {
 	if (s < 2)
 		return 1;
@@ -18,21 +25,24 @@ int main(int s, char **v) {
 		if (!f)
 			return 3;
 		while (fscanf(f, "%ld", &d) > 0)
-			m[L(pc++)] = ((int64_t)d) & MSK(N);
+			m[L(pc++)] = ((int64_t)d) & msk(N);
 		if (fclose(f) < 0)
 			return 4;
 	}
 	for (pc = 0; pc < SZ;) {
-		uint64_t a = m[L(pc++)], b = m[L(pc++)], c = m[L(pc++)];
-		if (a == MSK(N)) {
-			m[L(b)] = getchar() & MSK(N);
-		} else if (b == MSK(N)) {
+		uint64_t a = m[L(pc++)], 
+			 b = m[L(pc++)], 
+			 c = m[L(pc++)];
+		if (a == msk(N)) {
+			m[L(b)] = getchar() & msk(N);
+		} else if (b == msk(N)) {
 			if (putchar(m[L(a)]) < 0)
 				return 5;
 			if (fflush(stdout) < 0)
 				return 6;
 		} else {
-			uint64_t r = (m[L(b)] - m[L(a)]) & MSK(N);
+			uint64_t r = m[L(b)] - m[L(a)];
+			r &= msk(N);
 			if (r & HI(N) || r == 0)
 				pc = c;
 			m[L(b)] = r;

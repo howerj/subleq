@@ -94,6 +94,33 @@
 : ndrop for aft drop then next ;
 : unused $FFFF here - ; ( 65536 bytes available in this VM )
 : char+ 1+ ;
+\ Usage:
+\
+\        : x case
+\          1 of ." one" endof
+\          2 of ." two" endof
+\          ." default"
+\          endcase ;
+\
+: compile-only ;
+: (case) r> swap >r >r	; compile-only
+: case compile (case) 30 ; compile-only immediate
+: (of) r> r@ swap >r = ; compile-only
+: of compile (of) postpone if ; compile-only immediate
+: endof postpone else 31 ; compile-only immediate
+: (endcase) r> r> drop >r ;
+: endcase
+   begin
+    dup 31 =
+   while
+    drop			
+    postpone then
+   repeat
+   30 <> abort" Bad case construct!"
+   compile (endcase) ; compile-only immediate
+
+
+
 \ : c, $FF and
 \   here @ here 1 and if 
 \     $FF and swap 8 lshift or 
@@ -101,7 +128,6 @@
 \   here ! 1 allot ;
 \ : thru ;
 
-: compile-only ;
 
 \ TODO: Get this working!
 \
@@ -130,29 +156,36 @@
 : i r> r> tuck >r >r ; compile-only
 \ : j ; compile-only
 
-\ Usage:
-\
-\        : x case
-\          1 of ." one" endof
-\          2 of ." two" endof
-\          ." default"
-\          endcase ;
-\
-: (case) r> swap >r >r	; compile-only
-: case compile (case) 30 ; compile-only immediate
-: (of) r> r@ swap >r = ; compile-only
-: of compile (of) postpone if ; compile-only immediate
-: endof postpone else 31 ; compile-only immediate
-: (endcase) r> r> drop >r ;
-: endcase
-   begin
-    dup 31 =
-   while
-    drop			
-    postpone then
-   repeat
-   30 <> abort" Bad case construct!"
-   compile (endcase) ; compile-only immediate
 <ok> !
 .( LOADED. DIC: ) here . .(  UNUSED: ) unused u. cr
 
+\ \ https://news.ycombinator.com/item?id=27485454
+\ 
+\ : struct 0 ;
+\ : field:  ( offset size -- offset' )
+\   create over , +
+\   does> @ + ;
+\ : byte:   /c field: ;
+\ : word:   /w field: ;
+\ : long:   /l field: ;
+\ : normal: /n field: ;
+\ : union:  0 field: ;
+\ : unused  +  ;
+\ 
+\ : size:  constant  ;
+\ : ;struct drop ;
+\ 
+\ \ Example:
+\ 
+\ struct
+\   byte: >b1
+\   byte: >b2
+\   word: >w1
+\   long: >l1
+\ size: /foo
+\ 
+\ struct
+\   byte: >c1
+\   7 unused
+\   /foo field: >foo
+\ ;struct       
