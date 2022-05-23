@@ -1432,18 +1432,19 @@ meta.1 +order definitions
 
 \ If we were to implement the ASSEMBLER words then we would put
 \ all of the words defined in this section into an assembler
-\ vocabulary in the target, they would look similar. An
-\ added complication is getting the VM to JMP to the newly
-\ defined word because of how the Forth VM works, which might
-\ require a new primitive to do so.
+\ vocabulary in the target. An added complication is getting 
+\ the VM to JMP to the newly defined word because of how the 
+\ Forth VM works, which might require a new primitive to do so,
+\ a hypothetical concern as we will not be implementing this
+\ feature, and a concern that will make more sense later when
+\ we see how the Virtual Machine is implemented.
 \
 \ # The System Variables
 \
 \ There is not a lot in this section in terms logic, it nearly
 \ all allocation of variables. They will be described, however
-\ they are registers, and other memory locations that will
-\ not make sense until later, it might be best just to refer
-\ back to this chapter later on.
+\ they are registers for the VM and locations of Forth 
+\ variables, context is required to understand them.
 \
 \ This section also contains the first instruction to
 \ be executed, which is formed by three "t," statements.
@@ -1454,21 +1455,23 @@ meta.1 +order definitions
 \ fact that the third value is overwritten later with the
 \ location of the Forth Virtual Machine entry point.
 \
-\ The first two memory locations must both be zero, the
-\ second memory location must be zero so it does not interfere
-\ with the first jump, the same for the first instruction,
-\ however the first location is also used as the "Z" location
-\ in SUBLEQ instructions.
+\ The first three memory locations comprise a single SUBLEQ
+\ instruction which has more than one use, the first two memory
+\ locations must be zero, to ensure that the third operand
+\ is jumped to (which will jump to the Forth Virtual Machine)
+\ and because it is used as the location of the "Z" register,
+\ which must contain zero as is used in subsequent SUBLEQ
+\ instructions.
 \
 \ This section also contains constants ("one", "two", "bwidth"
 \ and others), and virtual machine registers ("w", "x", and
 \ others).
 \
-\ The variables that are worth noting are; "h", "primitive",
-\ "{options}", "{up}", "check" and "{ms}".
+\ The variables that are worth noting now are; "h", 
+\ "primitive", "{options}", "{up}", "check" and "{ms}".
 \
 \ * "h" contains the dictionary pointer, as used by "here",
-\ this will be used much later one.
+\ this will be used much later on.
 \ * "primitive" is used by the virtual machine to determine
 \ which instructions are VM instructions and which are calls
 \ to Forth words.
@@ -1500,11 +1503,11 @@ meta.1 +order definitions
 \ Bit options 1 and 4 are used for terminal input and output
 \ and might need to change depending on how I/O is processed.
 \
-\ Using the virtual machine that uses non-blocking input means
+\ Using the C implementation that uses non-blocking input means
 \ an error code is returned if there is no input, by clearing
 \ bit 4 is means that instead of the system calling HALT it
-\ passes the error code up. The default interpreter  does
-\ blocking input, so we want this bit set normally.
+\ passes the error code up. The default SUBLEQ implementation 
+\ does blocking input, so we want this bit set normally.
 \
 \ On some systems turning on non-blocking mode also enables
 \ or disables other terminal operations, such as echoing
@@ -1517,17 +1520,18 @@ meta.1 +order definitions
 \ a successful checksum calculation.
 \
 \ Some Forth implementations like to be noisy and print out
-\ a banner, the behavior is obnoxious however as it
-\ prevents the Forth from being used like a standard Unix
-\ utility with commands piped into the interpreter, and output
-\ printed to standard output (which is how the
-\ meta-compilation works, almost) unless extra complication is
-\ added to determine whether the program is tailing to an
-\ interactive terminal or not (on Unix systems the function
-\ call "isatty" does this). This complication is not needed
-\ if by default the verbose banner is not printed out, which
-\ is the case here. If you need or want it to be printed out,
-\ this option can be enabled.
+\ a banner, the behavior is obnoxious as it prevents the Forth 
+\ from being used like a standard Unix utility with commands 
+\ piped into the interpreter, and output printed to standard 
+\ output (which is how the meta-compilation works, almost) 
+\ unless extra complication is added to determine whether the 
+\ program is talking to an interactive terminal or not (on Unix 
+\ systems the function call "isatty" does this). 
+\
+\ This complication is not needed if by default the verbose 
+\ banner is not printed out, which is the case here. If you 
+\ need or want it to be printed out, this option can 
+\ be enabled.
 \
 
   0 t, 0 t,        \ both locations must be zero
@@ -1557,9 +1561,9 @@ label: entry       \ used to set entry point in next cell
   F00 tvar {ms}    \ delay loop calibration variable
   0 tvar check     \ used for system checksum
 
-\ These variables will described at a later point, there is
+\ The following will described at a later point, there is
 \ no point in going over them again, but they are the memory
-\ locations that are referred by words without the "{}"
+\ locations that are referred to by words without the "{}"
 \ brackets, so for example the word "cold", defined later on,
 \ is defined as:
 \
@@ -1584,12 +1588,12 @@ label: entry       \ used to set entry point in next cell
   2F tvar {scr}     \ last viewed screen
   0 tvar padding    \ BUG: Getting set during image generation
 
-\ Most of these are thread local variables, with the exception
-\ of "ip" and "tos", the stack variables "{rp}" and "{sp}" and
-\ the initial stack positions "{rp0}" and "{rp0}", which are
-\ only stored in thread local storage on a task switch, all
-\ words defined with "tuser" are locations of memory relative
-\ to thread local storage.
+\ Most of the following are thread local variables, with the 
+\ exception of "ip" and "tos", the stack variables "{rp}" and 
+\ "{sp}" and the initial stack positions "{rp0}" and "{rp0}", 
+\ which are only stored in thread local storage on a task 
+\ switch. All words defined with "tuser" are locations of 
+\ memory relative to thread local storage.
 \
 \ The stacks pointers "{rp}" and "{sp}" themselves point into
 \ a stack location.
@@ -1600,7 +1604,7 @@ label: entry       \ used to set entry point in next cell
 \ Part of the initial stack is also set up here, there is a
 \ word called "task-init", defined later, which initializes
 \ new tasks. It sets up where the locations of variable
-\ and return tasks as well as initial execution hooks with
+\ and return stacks as well as initial execution hooks with
 \ that task. However, for the first task the stacks and input
 \ buffers need to be set up manually.
 \
@@ -1638,10 +1642,13 @@ label: entry       \ used to set entry point in next cell
   tuser {tib}       \ terminal input buffer: cell 1,
   =cell lallot      \ terminal input buffer: cell 2
 
+\ # Meta-compiler Assembly Macros
+\
 \ Ideally these meta-compiler macros would be defined along
 \ with the other meta-compiler words, however they require
-\ the locations of constants to be know, such as "one" or
-\ "neg1". This will happen throughout, the definitions of
+\ the locations of constants which are in the target image to 
+\ be known, such as "one" or "neg1", which have only just been
+\ defined. This will happen throughout, the definitions of
 \ meta-compiler words that require knowledge of a Forth
 \ function that has yet to be defined, or of a new constant,
 \ will require a non-contiguous grouping of these functions.
@@ -1693,9 +1700,9 @@ label: entry       \ used to set entry point in next cell
 \
 \ The other bitwise operations will be much more difficult
 \ to implement. When making the system for the first time,
-\ getting those operators correct was the most onerous task
-\ of bringing the system up, as a bug in those operators makes
-\ everything else more difficult to debug.
+\ getting those bitwise operators correct was the most onerous 
+\ task of bringing the system up, as a bug in those operators 
+\ makes everything else more difficult to debug.
 \
 
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
@@ -1713,12 +1720,12 @@ label: entry       \ used to set entry point in next cell
 \ The core of the Forth Virtual Machine starts here, it is
 \ short and is executed for each Virtual Machine
 \ instruction, so any optimization here would make a large
-\ difference. It only has things it needs to do and the
-\ Wikipedia page on Threaded Code Interpreters would help in
-\ understanding how it works.
+\ difference. It only has a small set of things it needs to do.
+\ Articles on Threaded Code Interpreters help in understanding
+\ how the Virtual Machine works.
 \
 \ The entry point is the label "start", which is executed
-\ on startup naturally, it just sets up the initial stack
+\ on startup naturally, it sets up the initial stack
 \ positions in "{sp}" and "{rp}" for the data and return stacks
 \ respectively. It also sets the first instruction to be
 \ executed by moving the contents of "{cold}" into "ip", the
@@ -1736,20 +1743,23 @@ label: entry       \ used to set entry point in next cell
 \ The VM has a number of registers that are well known across
 \ different Forth implementations, such as "ip" (the
 \ Instruction Pointer), "w" (the Working Pointer). Also
-\ required is a stack to place the calls, which uses "{rp}"
-\ (the Return stack Pointer).
+\ required is a stack to place the calls, which "{rp}"
+\ (the Return stack Pointer) is used for, well, it is used as
+\ a pointer to the call stack.
 \
 \ The way the Forth VM determines whether an instruction is a
 \ call or a VM instruction to jump to is by assuming any
-\ address bellow a value contained in "primitive" (which will
-\ be set later) is a VM instruction, anything about that should
-\ be something that can be called instead. This is done because
-\ all that is needed to test this is a subtraction and jump,
-\ all of which the SUBLEQ machine can do easily.
+\ address bellow a value contained in a variable called 
+\ "primitive" (which will be set later) is a VM instruction, 
+\ anything above that is something that is called instead, as
+\ it is a Forth function. This is done because all that is 
+\ needed to test this is a subtraction and jump, all of which 
+\ the SUBLEQ machine can do easily.
 \
 \ There are three main types of threaded code interpreters;
 \ direct, indirect and subroutine. There are other kinds, but
-\ they will not be considered.
+\ they will not be considered. This system uses hybrid approach
+\ on a custom VM designed to executed Forth.
 \
 \ We can imagine a Forth program as consisting of a
 \ series of calls, with primitives and mechanisms for pushing
@@ -1765,7 +1775,8 @@ label: entry       \ used to set entry point in next cell
 \ and "swap" are primitives, "square", "pythagoras" and "isqrt"
 \ are functions. What would the code potentially look like?
 \ The Forth compiler, an interactive and lightweight compiler,
-\ must generate code, there are multiple ways it could make it.
+\ must generate the code on-the-fly. There are multiple ways 
+\ it could do this.
 \
 \ One way would be something like this:
 \
@@ -1782,7 +1793,10 @@ label: entry       \ used to set entry point in next cell
 \        SWAP:
 \                Assembly instructions...
 \                exit
-\         SQUARE:
+\        ISQRT:
+\                Integer Square Root implementation...
+\                exit
+\        SQUARE:
 \                call dup
 \                call *
 \                exit
@@ -1795,9 +1809,9 @@ label: entry       \ used to set entry point in next cell
 \                exit
 \
 \ Where "call", "exit", and the assembly instructions are
-\ native instructions in the machine. This is known as
+\ native instructions to the machine. This is known as
 \ subroutine threaded code. However, our SUBLEQ machine does
-\ not have those instructions built in. If we want to perform
+\ not a call instruction built in. If we want to perform
 \ a call or return then we must implement that in our VM.
 \
 \        +:
@@ -1814,19 +1828,32 @@ label: entry       \ used to set entry point in next cell
 \                Jump to VM
 \        EXIT:
 \                Assembly instructions...
-\                 Jump to VM
-\        \ ----- END OF VM INSTRUCTIONS -----
-\         SQUARE:
-\                Address of dup
-\                Address of *
+\                Jump to VM
+\
+\         
+\         -----  END OF VM INSTRUCTIONS  -----
+\               SUPER IMPORTANT BARRIER!
+\
+\        Anything below this line must be a Forth
+\        function and not an assembly instruction so
+\        the Forth VM can decide it should jump to it
+\        instead of calling it!
+\
+\
+\        ISQRT:  
+\                Integer Square root implementation...
 \                Address of exit
+\        SQUARE:
+\                Address of instruction dup
+\                Address of instruction *
+\                Address of instruction exit
 \        PYTHAGORAS:
-\                Address of square
-\                Address of swap
-\                Address of square
-\                Address of +
-\                Address of isqrt
-\                Address of exit
+\                Address of Forth Function square
+\                Address of instruction swap
+\                Address of Forth Function square
+\                Address of instruction +
+\                Address of Forth Function isqrt
+\                Address of instruction exit
 \
 \ In this version, our compiled words consist of addresses of
 \ functions and VM instructions, instead of raw calls to
@@ -1848,8 +1875,8 @@ label: entry       \ used to set entry point in next cell
 \ In this interpreter, the VM determines whether to perform
 \ a call or a jump by seeing if the address belongs to one
 \ of the built in VM instructions by comparing to see if the
-\ address if less than the address contained in "primitive",
-\ a unique feature of this VM. It is not, as "SQUARE" is not
+\ address if less than the address contained in "primitive" 
+\ (a unique feature of this VM). It is not, as "SQUARE" is not
 \ a primitive, it is a defined function. As this is the case,
 \ the return stack point "{rp} is incremented, "ip" (which
 \ contains the next address to be executed) is pushed onto the
@@ -1858,12 +1885,13 @@ label: entry       \ used to set entry point in next cell
 \ with the VM.
 \
 \ Our "ip" now points to the first address of "SQUARE", which
-\ the address of "DUP", this is not a defined word, it is a
+\ is the address of "DUP", this is not a defined word, it is a
 \ VM primitive or instruction. This means we do not call it,
 \ we do an indirect jump to it. We still copy "ip" to "w",
 \ indirect load through "w", and increment "ip" after. However,
 \ instead of doing a simulated call, we do an indirect jump
-\ through the contents of "w", a double indirect through "w".
+\ through the contents of "w", or a double indirect through 
+\ "w".
 \
 \ At the end of the assembler routine that implements "DUP"
 \ the last instruction is a unconditional jump back to the
@@ -1877,18 +1905,37 @@ label: entry       \ used to set entry point in next cell
 \ the address of "SWAP". You can see how this will proceed.
 \
 \ The VM also contains code to detect and prevent the image
-\ from running on a 32-bit system, as the image will not
-\ work. It detects the width of the VM using arithmetic
+\ from running on a SUBLEQ machine that is not a 16-bit one, as 
+\ the image will not work correctly if it is. 
+\
+\ It detects the width of the VM using arithmetic
 \ properties of the VM that can only be maintained given
 \ a certain bit-width, such as adding 0x7FFF to 0x7FFF on
 \ a 16-bit machine should result in a negative number, on a
-\ 32-bit machine it will be positive. The code should work for
-\ SUBLEQ machines have greater than 16-bit width, and not less
-\ (so a 17-bit SUBLEQ machine would print the error message,
-\ a 15-bit one would not), it could be extended to do this,
-\ but those machines are far less common than greater bit-width
-\ ones.
+\ 32-bit machine it will be positive.
 \
+\ The code will detect machine widths greater than 16-bits and
+\ print this error message and exit, so the system fails
+\ gracefully instead of just not working. It will detect 32-bit
+\ SUBLEQ machines (the most common) as well as odd ones such
+\ as 17-bit machines. The image will work on 16-bit machines so
+\ this error message and exit will not be triggered, however
+\ it will also not be triggered for machine widths lower than
+\ 16-bits (such as an 8-bit or a 15-bit SUBLEQ machine), which
+\ are far less common so it is not a worry.
+\
+\ Tests to determine if we are on a ones-compliment, sign
+\ magnitude, or arbitrary precision machine are not tested
+\ for either, so this detection system might give false
+\ positives (only twos-compliment is supported). These could
+\ be tested for. To support those machines whilst keeping the
+\ system mostly the same an emulator for a 16-bit twos
+\ compliment SUBLEQ machine could be written and prepended
+\ to the target image, this is a complication too far. Note,
+\ on systems with fewer than 16-bit cells we can address
+\ fewer bytes than might be necessary to do this.
+\
+
 ( Error message string "Error: Not a 16-bit SUBLEQ VM" )
 1F tvar err-str
  45 t, 72 t, 72 t, 6F t, 72 t, 3A t, 20 t, 4E t,
@@ -1897,8 +1944,11 @@ label: entry       \ used to set entry point in next cell
  45 t, 51 t, 20 t, 56 t, 4D t, 0D t, 0A t, 00 t,
 err-str 2/ tvar err-str-addr
 
-\ Print error message if not on right machine width,
-\ 16-bit SUBLEQ machines allowed only.
+\ This prints the error message if we are not on right machine 
+\ width, 16-bit SUBLEQ machines allowed only. The test and
+\ jump to here is in the "start" routine.
+\
+
 assembler.1 +order
 label: die
    err-str-addr x MOV
@@ -1914,6 +1964,15 @@ label: die
    repeat
    HALT
 
+\ Here is the "start" routine, we set the system entry point
+\ to the location in the label, do the cell bit-width test
+\ (and jump to the failure handler if we are a system with
+\ the wrong bit-width), set up the stacks and get the first
+\ Forth VM instruction to execute. We then fall into the
+\ Forth VM proper, no need to jump to it as it is the next
+\ instruction after "start" is finished.
+\
+
 label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
 
@@ -1925,6 +1984,12 @@ label: start         \ System Entry Point
   {rp0} {rp} MOV     \ Setup initial return stack
   {cold} ip MOV      \ Get the first instruction to execute
   ( fall-through )
+
+\ This is the Forth Virtual Machine itself. A very short
+\ routine. It just needs to call, or jump, depending on the
+\ instruction it is given.
+\
+
 label: vm ( Forth Inner Interpreter )
   ip w MOV           \ Move Instruction Pointer To Working Ptr.
   ip INC             \ IP now points to next instruction!
@@ -1941,7 +2006,10 @@ assembler.1 -order
 
 \ This meta-compiler word, ";a", used to end the definition of
 \ assembly word, requires that the VM has been implemented
-\ first, as it jumps back to it.
+\ first, as it jumps back to it, so we define it here instead
+\ of using a forward reference (which we could have used, but
+\ have studiously avoided as many forward references as is
+\ possible).
 \
 
 :m ;a (a); vm a-optim vm JMP ;m
@@ -1965,69 +2033,83 @@ assembler.1 -order
 \ one cell. So there is a trade-off, we cannot put everything
 \ in assembler to make things faster, as the resulting image
 \ would be too big. It is also harder to code in assembly, than
-\ Forth. The eForth model just has about thirty primitives,
-\ which we will aim to do, other Forth implementations have
-\ hundreds, some pedagogical ones have fewer.
+\ in Forth. The eForth model just has about thirty primitives,
+\ which we will aim to emulate, other Forth implementations 
+\ have hundreds, some pedagogical ones have fewer.
 \
-\ If this was on a real machine, we would want about thirty
-\ to implement a reasonably efficient machine, we would want
-\ assembly routines for things like multiplication, division,
-\ basic stack manipulation, and the like.
+\ If this was on a more conventional architecture we would want 
+\ about thirty base primitive instruction to implement a 
+\ reasonably efficient Forth, we would want assembly routines 
+\ for things like multiplication, division, basic stack 
+\ manipulation, and the like. We will need more just to 
+\ maintain some level of speed. Although it should be noted
+\ that eForth eschews implementing multiplication and division
+\ in terms of assembly primitives to keep the system much more
+\ portable (as those routines can be tricky to implemented
+\ correctly), writing them instead in Forth.
 \
 \ If we implement a multiplication routine in Forth it will
 \ have to go through the virtual machine, if we do it in
 \ assembly it will not, it will still be slow as
-\ we are implementing it in terms of addition, however it
+\ we are implementing it in terms of subtraction, however it
 \ be much fast than the Forth version. The number of
 \ instructions in the VM is sort of hidden from the view
 \ of the programmer, for example the "MOV" macro word is
 \ comprised of four SUBLEQ instructions, an indirect load
-\ more, each VM cycle takes multiples of those macros, you end
-\ up spending more and more time in the VM than you should have
-\ to.
+\ more, each VM cycle takes multiples of those macros, so you 
+\ end up spending more time in the VM than you think you would.
 \
-\ Other routines like "pause", "exit", or "opEmit", have to
+\ Other routines like "pause", "exit", or "opEmit", have to be
 \ implemented as VM instructions as doing so otherwise would
 \ be too tricky or impossible.
 \
 \ We have 42 primitives, more than is ideal, but it is
-\ necessary given the nature of this system. Critical words
-\ have to be implemented in terms of primitives otherwise the
-\ system would be far too slow. For example "lsb" is a
-\ primitive that gets the Least Significant Bit, an expensive
-\ operation that would normally be implemented by "1 and",
-\ but for performance reasons it is not. The same goes for
-\ the multiplication and division routines, as well as "1-"
-\ and "1+".
+\ necessary given the nature of this system. Performance 
+\ critical words have to be implemented as primitives 
+\ otherwise the system would be far too slow. 
 \
-\ It is partly a matter of philosophy and part a matter of
+\ For example "lsb" is a primitive that gets the Least 
+\ Significant Bit, an expensive operation on a SUBLEQ machine 
+\ that would *normally* be implemented by the *normally* very 
+\ fast "1 and", but for performance reasons it is implemented 
+\ as a unique instruction. The same goes for the multiplication 
+\ and division routines, as well as "1-" and "1+".
+\
+\ It is partly a matter of philosophy and partly a matter of
 \ engineering concerns as to what goes where. It is best to
-\ keep it as minimal as possible, as if this Forth were to
-\ be ported to a new platform, all of these routines would
-\ have to be rewritten. One of the reasons eForth was so
-\ portable is because there were a small set of primitive words 
-\ that it required, most of eForth was written in eForth, a 
-\ higher level and more portable language than assembly.
+\ keep the set of primitives as minimal as possible, as if this 
+\ Forth were to be ported to a new platform, all of these 
+\ routines would have to be rewritten. (It "is best" because
+\ the author values portability).
+\ 
+\ One of the reasons eForth was so portable is because there 
+\ were a small set of primitive words that it required, most 
+\ of eForth was written in eForth, a higher level and more 
+\ portable language than assembly is.
 \
 \ ## The Assembly Primitives in Detail
 \
 \ Each of the virtual machine instructions written in assembly,
 \ or primitives, will be described, some are trivial, others
-\ less so. They will be acting upon the data or variable
-\ stacks and the "tos" register, which is an optimization. That
-\ variable contains the top of the variable stack. It means
-\ fewer loads and stores have to be done to access the values
-\ on the variable stack.
+\ less so. They will be acting upon the data (or variable)
+\ stacks and the "tos" register, which is an optimization. The
+\ "tos" variable contains the top of the variable stack, or the
+\ first item on it. It means fewer loads and stores have to be
+\ done to access the values on the variable stack.
+\
+\ There are many ways in which these primitives could be
+\ optimized, both in terms of size and speed, but they are
+\ current in a "good enough" state.
 \
 \ "bye", "1-", "1+" and "invert" are nothing special, they are
 \ backed by simple assembly instructions. "bye" halts the
-\ SUBLEQ machine, "1-" decrements the top of the stack, you
+\ SUBLEQ machine, "1-" decrements the top of the stack, and you
 \ can work out the other two.
 \
 :a bye HALT ;a       ( -- : HALT system )
-:a 1- tos DEC ;a     ( u -- u : increment by one )
-:a 1+ tos INC ;a     ( u -- u : decrement by one )
-:a invert tos INV ;a ( u -- u : invert value )
+:a 1- tos DEC ;a     ( u -- u : increment tos by one )
+:a 1+ tos INC ;a     ( u -- u : decrement tos by one )
+:a invert tos INV ;a ( u -- u : bitwise invert tos )
 
 \ The following two functions are use to build "@" and "!",
 \ however they deal with cell addresses and not with byte
@@ -2039,18 +2121,21 @@ assembler.1 -order
 \
 \ That will be corrected later, but these two form the core
 \ of those words. It does mean that the Forth implementation
-\ can address less memory than is available is potentially
-\ available to the SUBLEQ machine. The SUBLEQ machine can
-\ address 65536 cells, or 128kiB, however the Forth can address
-\ 65536 bytes, or 64kiB.
+\ can address less memory than is potentially available to the 
+\ SUBLEQ machine. The SUBLEQ machine can address approximately
+\ 65536 cells, or 128kiB, however the Forth can address
+\ 65536 bytes, or 64kiB. Note the word "approximately", some
+\ addresses (such as "-1") are treated specially and are not
+\ available as memory locations.
 \
 :a [@] tos tos iLOAD ;a
 :a [!] w {sp} iLOAD w tos iSTORE --sp tos {sp} iLOAD --sp ;a
 
 \ "opEmit" and "opKey" perform the I/O functions, of which
 \ there are only two, there are Forth functions which wrap
-\ this functions but the basic I/O is done by these two. They
-\ both operate on single bytes pulled or pushed to the stack.
+\ these primitives but the basic I/O is done by these two. They
+\ both operate on cells pulled or pushed to the stack, with
+\ only the lowest 8-bits used by those I/O functions.
 \
 \ "opEmit", called by "emit", outputs a single byte. It is
 \ always blocking. "opKey" accepts a single byte of input
@@ -2059,7 +2144,7 @@ assembler.1 -order
 \ received yet" (it is non-blocking) or it can mean "End Of
 \ Input". There are option bits in the "{options}" variable
 \ for controlling the behavior of "key", defined later on,
-\ which uses this instruction.
+\ which uses the instruction "opKey".
 \
 \ A non-blocking version of "opEmit" would require a virtual
 \ machine change, not a radical one, but just information on
@@ -2084,7 +2169,7 @@ assembler.1 -order
 \ pointer. Remember "ip" points to the next cell, if we store
 \ the number in the next cell when compiling the number into
 \ a word definition, then once we have loaded it via "ip", we
-\ just need to increment "ip" in order put it back onto a
+\ just need to increment "ip" in order put "ip" back onto a
 \ valid instruction.
 \
 \ As an example, the following word "x", pushes "2", then "3"
@@ -2101,11 +2186,14 @@ assembler.1 -order
 \                3
 \                exit
 \
+\ "opPush" is defined as:
+\
+
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
 
 \ The "opUp" function is similar to the "opPush" function,
 \ however it is used to access USER variables instead, that
-\ is variables stored in thread local store, or to think of
+\ is variables stored in the thread local store, or to think of
 \ them another way, variables stored relative to a tasks
 \ memory area. They are part of the cooperative multitasking
 \ system. This instruction should be understood in conjunction
@@ -2123,7 +2211,7 @@ assembler.1 -order
 \ Would refer to the first thread local cell and push the
 \ address of it onto the stack.
 \
-\ "tuser" is used to reserve those thread local variables by
+\ "tuser" is used to reserve those thread local variables in
 \ the meta-compiler, which has already been described.
 \
 :a opUp ++sp tos {sp} iSTORE tos ip iLOAD ip INC
@@ -2131,7 +2219,7 @@ assembler.1 -order
 
 \ The following instructions are nothing special, just simple
 \ stack manipulation functions, they implement the following
-\ Forth functions, as is to be expected:
+\ Forth functions, and are as expected by a Forth programmer:
 \
 \        opSwap  -> swap ( x y -- y x )
 \        opDup   -> dup  ( x -- x x )
@@ -7782,7 +7870,7 @@ it being run.
 \ out when the eForth image detects the wrong SUBLEQ cell width
 \ is used.
 \
-\ ## Recompiling Virtual Machine
+\ ## Recompiling Virtual Machine; The "Recompiler"
 \
 \ This is a 16-bit SUBLEQ VM that attempts to optimize the
 \ code that it is to execute so it runs much faster, it finds
@@ -8750,6 +8838,44 @@ it being run.
 \ that could be performed to speed things up in general or
 \ reduce the images size.
 \
+\ Writing an LZSS CODEC in pure Forth would be a utility that
+\ could find use elsewhere, and compression routines in 
+\ general. As mentioned a substantial amount of room could be
+\ saved if the image could be compressed during creation and
+\ decompressed on the fly. For the system a tiny decompressor
+\ written in SUBLEQ assembly would allow the greatest saving.
+\ This might mean the compression algorithm would have to be
+\ selected for execution speed on SUBLEQ with no other 
+\ concerns. There is a similarity between dictionary encoding
+\ compression schemes, such as LZSS and the Forth concept of
+\ "factoring". Factoring in Forth means finding common runs of
+\ instruction sequences in words and creating a new word that
+\ makes logical sense that can be applied to both words, or
+\ finding the common factor of those words. Highly and well
+\ factored Forth code is considered good Forth code. This is
+\ quite similar to the automatic searching and replacing of
+\ repeated sub-sequences in dictionary encoding. 
+\ 
+\ An LZSS encoder for this system would best being adapted to
+\ work on 16-bit data instead of bytes, perhaps using the top
+\ most bit to determine whether compressed data is a run of
+\ literals or a location in the dictionary. This might not
+\ compress the data as well (or it might compress it better)
+\ but it would be needed so byte access does not have used,
+\ which is expensive under SUBLEQ.
+\
+\ The "recompiler", which matches known sequences of SUBLEQ
+\ instructions and replaces them single instructions to run
+\ on a modified virtual machine (under the "Recompiling Virtual
+\ Machine" section) could also be used as the basis of
+\ compression. Essentially the system is doing just that,
+\ replacing sequences with known, shorter equivalents. The
+\ CODEC for compression would not need to be general, much
+\ like the "recompiler", it would only need to work for the
+\ given, known input of this image. It would only succeed in
+\ compressing the SUBLEQ virtual machine part of the generated
+\ image, and not the compiled Forth section.
+\
 \ The main and most useful task would be the creation of an
 \ MS-DOS like subsystem for this Forth. 
 \
@@ -8825,6 +8951,18 @@ it being run.
 \ declared complete and after a while came back to it). The
 \ initial design could be done one of the various electronics
 \ simulators that are available.
+\
+\ There are some things that are missing in this Forth that
+\ could be added, which are present in the ANS Forth standard,
+\ some control structures ("case", "do" loops), the locals word
+\ set which allows Forth words to create and use named 
+\ parameters (which would be too complex to implement), the
+\ file access word-set (which requires a file system, although
+\ the DOS extensions could be used as a basis to implement 
+\ them), words for dealing with structures (such as "+field",
+\ "field:", "begin-structure", "end-structure"), and more. The
+\ main aim implementing these words would be for portability
+\ purposes.
 \
 \ What would the purpose of these little programs and 
 \ extensions however? A lot of effort could be dedicated to
