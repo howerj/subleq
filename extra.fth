@@ -1,13 +1,31 @@
-\ TODO: Merge this into subleq.fth in its own section
-\ : debug source type ."  ok" cr ;
 <ok> @ ' nop <ok> !
+: debug source type ."  ok" cr ; ' debug <ok> !
+
+ 0 constant false
+-1 constant true
+variable seed ( NB. Could be mixed with keyboard input )
+: random ( -- u : 16-bit xorshift )
+  seed @ dup 0= if 0= then ( seed must not be zero )
+  dup 13 lshift xor
+  dup  9 rshift xor
+  dup  7 lshift xor
+  dup seed ! ;
+: (order) ( w wid*n n -- wid*n w n )
+  dup if
+    1- swap >r recurse over r@ xor
+    if 1+ r> -rot exit then rdrop
+  then ;
+: -order get-order (order) nip set-order ; ( wid -- )
+: +order dup >r -order get-order r> swap 1+ set-order ;
+: cell- 2 - ;
+: rpick rp@ swap - 1- 2* @ ;
+: c, here c! 1 allot ; ( c -- )
 : cell- cell - ; ( a -- a )
 : umin 2dup swap u< if swap then drop ; ( u u -- u )
 : umax 2dup      u< if swap then drop ; ( u u -- u )
- 0 constant false
--1 constant true
 : off false swap ! ; ( a -- )
 : on true swap ! ; ( a -- )
+: ?exit if rdrop then ;
 : tab 9 emit ; ( -- )
 : spaces ( n -- : equiv. bl banner  )
     ?dup 0> if for aft space then next then ;
@@ -94,6 +112,10 @@
 : ndrop for aft drop then next ;
 : unused $FFFF here - ; ( 65536 bytes available in this VM )
 : char+ 1+ ;
+: mux dup >r and swap r> invert and or ; ( x1 x2 mask -- x )
+\ : or dup mux ;
+\ : and 0 -rot mux ;
+
 \ Usage:
 \
 \        : x case
@@ -102,13 +124,14 @@
 \          ." default"
 \          endcase ;
 \
-: compile-only ;
+system +order definitions
 : (case) r> swap >r >r	; compile-only
-: case compile (case) 30 ; compile-only immediate
 : (of) r> r@ swap >r = ; compile-only
+: (endcase) r> r> drop >r ;
+forth-wordlist +order definitions
+: case compile (case) 30 ; compile-only immediate
 : of compile (of) postpone if ; compile-only immediate
 : endof postpone else 31 ; compile-only immediate
-: (endcase) r> r> drop >r ;
 : endcase
    begin
     dup 31 =
@@ -118,74 +141,91 @@
    repeat
    30 <> abort" Bad case construct!"
    compile (endcase) ; compile-only immediate
+only forth definitions
 
-
-
-\ : c, $FF and
-\   here @ here 1 and if 
-\     $FF and swap 8 lshift or 
-\   else $FF00 and or then
-\   here ! 1 allot ;
-\ : thru ;
-
-
-\ TODO: Get this working!
-\
-: (do) r> dup >r swap rot >r >r cell+ >r ; compile-only
+system +order definitions
+: r+ 1+ ; ( NB. Should be cell+ on most platforms )
+: (unloop) r> rdrop rdrop rdrop >r ; compile-only
+: (leave) rdrop rdrop rdrop ; compile-only
+: (j) 4 rpick ; compile-only
+: (k) 7 rpick ; compile-only
+: (do) r> dup >r swap rot >r >r r+ >r ; compile-only
 : (?do) 
    2dup <> if
-     r> dup >r swap rot >r >r cell+ >r exit
-   then 2drop exit ; compile-only
+     r> dup >r swap rot >r >r r+ >r exit
+   then 2drop ; compile-only
 : (loop) 
-   r> r> 1+ r> 2dup <> if
-    >r >r @ >r exit
-  then >r 1- >r cell+ >r ; compile-only
+  r> r> 1+ r> 2dup <> if
+    >r >r 2* @ >r exit \ NB. 2* and 2/ cause porting problems
+  then >r 1- >r r+ >r ; compile-only
 : (+loop) 
    r> swap r> r> 2dup - >r
-   2 pick r@ + r@ xor 0< 0=
-   3 pick r> xor 0< 0= or if
-    >r + >r @ >r exit
-   then >r >r drop cell+ >r 
-; compile-only
-: unloop r> rdrop rdrop rdrop >r ; compile-only
-: ?do compile (?do) 0 , here ; immediate compile-only
+   2 pick r@ + r@ xor 0>=
+   3 pick r> xor 0>= or if
+     >r + >r 2* @ >r exit
+   then >r >r drop r+ >r ; compile-only
+forth-wordlist +order definitions
+: unloop compile (unloop) ; immediate compile-only 
+: i compile r@ ; immediate compile-only
+: j compile (j) ; immediate compile-only
+: k compile (k) ; immediate compile-only
+: leave compile (leave) ; immediate compile-only
 : do compile (do) 0 , here ; immediate compile-only
-: loop compile (loop) dup , compile unloop cell- here 2/ swap ! ; immediate compile-only
-: +loop compile (+loop) dup , compile unloop cell- here 2/ swap ! ; immediate compile-only
-: leave rdrop rdrop rdrop ; immediate compile-only
-: i r> r> tuck >r >r ; compile-only
-\ : j ; compile-only
+: ?do compile (?do) 0 , here ; immediate compile-only
+: loop 
+  compile (loop) dup 2/ , 
+  compile (unloop) 
+  cell- here cell- 2/ swap ! ; immediate compile-only
+: +loop 
+  compile (+loop) dup 2/ , 
+  compile (unloop) 
+  cell- here cell- 2/ swap ! ; immediate compile-only
+only forth definitions
 
-<ok> !
-.( LOADED. DIC: ) here . .(  UNUSED: ) unused u. cr
 
 \ \ https://news.ycombinator.com/item?id=27485454
 \ 
-\ : struct 0 ;
-\ : field:  ( offset size -- offset' )
-\   create over , +
-\   does> @ + ;
-\ : byte:   /c field: ;
-\ : word:   /w field: ;
-\ : long:   /l field: ;
-\ : normal: /n field: ;
-\ : union:  0 field: ;
-\ : unused  +  ;
-\ 
-\ : size:  constant  ;
-\ : ;struct drop ;
-\ 
-\ \ Example:
+\ \ TODO: make a standards compliant version,
+\ \ with "+field" and "field:" that can handle 32-bit data
+\ \ and perhaps even bit-fields. 
+\
+  
+: struct 0 ;
+: field:  ( offset size -- offset' )
+  create over , +
+  does> @ + ;
+: byte:   1 field: ;
+: cell:   2 field: ;
+: long:   4 field: ;
+: union:  0 field: ;
+: unused  +  ;
+
+: size:  constant  ;
+: ;struct drop ;
+
+\ Example:
 \ 
 \ struct
 \   byte: >b1
 \   byte: >b2
-\   word: >w1
-\   long: >l1
+\   cell: >w1
+\   cell: >w2
 \ size: /foo
 \ 
 \ struct
 \   byte: >c1
 \   7 unused
 \   /foo field: >foo
-\ ;struct       
+\ ;struct
+\ 
+: mark 
+  $" defined (mark) [if] (mark) [then] marker (mark) " 
+  count evaluate ;
+mark
+' nop <ok> !
+.( LOADED EFORTH. ) cr
+.( DICTIONARY: ) here . cr
+.( EFORTH:     ) ' 1- u. cr
+<ok> !
+
+

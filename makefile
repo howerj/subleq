@@ -1,6 +1,6 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O3
 
-.PHONY: all clean test run gforth width
+.PHONY: all clean test run gforth width extra
 
 all: subleq
 
@@ -28,6 +28,9 @@ gforth.dec: subleq.fth
 
 gforth: subleq gforth.dec
 	./subleq gforth.dec
+
+extra: subleq gforth.dec extra.fth
+	cat extra.fth /dev/stdin | ./subleq gforth.dec
 
 subleq.md: subleq.fth subleq 1.dec convert.fth makefile
 	rm -f $@

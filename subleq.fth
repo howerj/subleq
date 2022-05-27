@@ -4028,7 +4028,7 @@ there 2/ primitive t!
 \ The function "x" will work, but "y" will not. "compile,"
 \ is defined later.
 \
-: allot aligned h lit +! ; ( n -- : take dictionary space )
+: allot h lit +! ; ( n -- : take dictionary space )
 : , align here ! cell allot ;
 
 \ "count" and "+string" are two words used for string
@@ -5608,7 +5608,8 @@ there 2/ primitive t!
 \ is another milestone in making a Forth interpreter.
 \
 
-: word #1 ?depth parse here dup >r 2dup ! 1+ swap cmove r> ;
+: word ( -- b )
+  #1 ?depth parse here aligned dup >r 2dup ! 1+ swap cmove r> ;
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
@@ -5631,8 +5632,8 @@ there 2/ primitive t!
   bl word ?nul ?len ?unique ( parse word and do basic checks )
   count + h lit ! align ( skip over packed word and align )
   BABE lit              ( push constant for compiler safety )
-  postpone ] ;         ( turn compile mode on )
-:to :noname here #0 BABE lit ] ; ( "name", -- xt )
+  postpone ] ;          ( turn compile mode on )
+:to :noname align here #0 BABE lit ] ; ( "name", -- xt )
 
 \ "'" is an immediate word that attempts to
 \ find a word in the dictionary (and throws an error if one
@@ -5898,14 +5899,14 @@ there 2/ primitive t!
 :to until =jumpz lit , 2/ , ; immediate compile-only
 :to again =jump  lit , 2/ , ; immediate compile-only
 :to if =jumpz lit , here #0 , ; immediate compile-only
-:to then here 2/ swap ! ; immediate compile-only
+:to then align here 2/ swap ! ; immediate compile-only
 :to while postpone if ; immediate compile-only
 :to repeat swap postpone again postpone then ;
     immediate compile-only
 :to else =jump lit , here #0 , swap postpone then ;
     immediate compile-only
 :to for =>r lit , here ; immediate compile-only
-:to aft drop =jump lit , here #0 , align here swap ;
+:to aft drop =jump lit , here #0 , here swap ;
     immediate compile-only
 :to next =next lit , 2/ , ; immediate compile-only
 
@@ -6049,7 +6050,7 @@ there 2/ primitive t!
 \ used whilst changing the vocabularies used.
 \
 
-:to marker last here create cell negate allot compile
+:to marker last align here create cell negate allot compile
     (marker) , , ; ( --, "name" )
 
 \ # Return Stack Words
@@ -6285,7 +6286,11 @@ there 2/ primitive t!
 \ at this bit, "immediate" just needs to set it in the word
 \ to make "interpret" treat it at immediate.
 \
+\ "compile-only" works in the same way, except it sets a
+\ different bit. The flag is tested in "interpret".
+\
 :to immediate last nfa @ 40 lit or last nfa ! ; ( -- )
+:to compile-only last nfa @ 20 lit or last nfa ! ; ( -- )
 
 \ # Some Programmer Utilities (Decompilation and Dump)
 \
@@ -6471,7 +6476,7 @@ there 2/ primitive t!
  begin
   begin bl word dup c@ while
    find drop cfa dup to' [else] lit = swap to' [then] lit = or
-    if exit then repeat query again ; immediate
+    if exit then repeat query drop again ; immediate
 :to [if] if exit then postpone [else] ; immediate
 
 \ # Time and Hacks
@@ -7649,6 +7654,24 @@ it being run.
 \                return 0;
 \        }
 \
+\ Note that it is fairly easy to change this virtual machine
+\ so that is can either compute different OISC instructions
+\ or so it can perform SUBLEQ with different representations
+\ for negative numbers. An example of this would be to change
+\ the conditional test:
+\
+\        if (r & 32768 || r == 0)
+\                pc = c;
+\
+\ To:
+\
+\        if (r & 32768)
+\                pc = c;
+\
+\ This would give us a 16-bit SUBNEG (or Subtract and branch
+\ if Negative) machine, a similar machine to SUBLEQ but one
+\ that would require subtly different algorithms in the base
+\ image. 
 \
 \ ## Non-blocking input SUBLEQ machine written in C
 \
@@ -8544,36 +8567,36 @@ it being run.
 \        .->| Get Next Word From Input |<---| Error: Throw |
 \        |  .--------------------------.    .--------------.
 \        |    |                                          ^
-\        |   \|/                                         | (No)
-\        |    .               (Not Found)                |
+\        |    |                                          | (No)
+\        |    v               (Not Found)                |
 \        ^ .-----------------.           .--------------------.
 \        | | Search For Word |---------->| Is token a number? |
 \        | .-----------------.           .--------------------.
 \        |    |                                       |
-\        ^   \|/ (Found)                             \|/ (Yes)
-\        |    .                                       .
+\        ^    | (Found)                               |  (Yes)
+\        |    v                                       v
 \        |  .------------------.  .---------------------.
-\        |  | In command mode? |  |  In command mode?   |
-\        ^  .------------------.  .---------------------.
+\        |  | In command mode? |  |  In command mode?   |----.
+\        ^  .------------------.  .---------------------.    |
 \        |    |               |            |                 |
-\        |   \|/ (Yes)        | (No)      \|/ (Yes)     (No) |
-\        |    .               |            .                 |
+\        |    |  (Yes)        | (No)       |  (Yes)     (No) |
+\        |    v               |            v                 |
 \        |  .--------------.  |   .------------------------. |
-\        .--| Execute Word |  |   | Push Number onto Stack | |
+\        |<-| Execute Word |  |   | Push Number onto Stack | |
 \        |  .--------------.  |   .------------------------. |
-\        |    ^              \|/               |            |
-\        ^    |               .                |           \|/
-\        |    | (Yes)   .--------------------. |            .
+\        |    ^               |                |             |
+\        ^    |               v                |             | 
+\        |    | (Yes)   .--------------------. |             v
 \        |    ----------| Is word immediate? | | .------------.
 \        |              .--------------------. | | Compile num|
 \        ^                        |            | | into next  |
-\        |                       \|/ (No)      | | location in|
-\        |                        .            | | dictionary |
+\        |                        |  (No)      | | location in|
+\        |                        v            | | dictionary |
 \        |  .--------------------------------. | .------------.
 \        |  |    Compile Pointer to word     | |            |
 \        .--| in next available location in  | |            |
-\        |  |         the dictionary         |\|/          \|/
-\        |  .--------------------------------. .            .
+\        |  |         the dictionary         | |            | 
+\        |  .--------------------------------. v            v
 \        |                                     |            |
 \        .----<-------<-------<-------<-------<------<------<.
 \
@@ -8911,6 +8934,18 @@ it being run.
 \ Programs could consist of Forth scripts, that could be
 \ executed, with their input and output redirected to and from
 \ files. Alternatively they could be SUBLEQ instructions.
+\
+\ A user login system for the operating system could take 
+\ advantage of Forth words and vocabularies. By defining a 
+\ word for each user name, and only having the user name
+\ vocabulary loaded,and only having the user name
+\ vocabulary loaded, password validation would have to be
+\ done by the user name word, and the system would have to
+\ take care that it could not get into a state where normal
+\ Forth words could be executed without the correct password. 
+\
+\ It would be a simple system suitable for the type of limited
+\ operating system and not for serious use.
 \
 \ Another path for development would be to implement more
 \ peripherals in the SUBLEQ machine, perhaps disk storage (the
