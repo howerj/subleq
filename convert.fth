@@ -7,13 +7,10 @@ hex
 variable buf 80 allot
 variable text? 0 text? !
 variable cnt 0 cnt !
-
 : tab 9 emit ;
 : banner ( +n c -- )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ;
-
 : display 0 <# #s #> dup 4 swap - 0 max [char] 0 banner type ;
-
 : process
   begin
    buf 80 accept ?dup if

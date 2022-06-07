@@ -158,6 +158,10 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ written in C, when using the term "VM", it will not refer
 \ to the SUBLEQ machine however, but the Forth VM.
 \
+\ On a grammatical manner this document uses "ones compliment"
+\ and "twos compliment" without the apostrophe, which is
+\ perhaps incorrect, but it shall be done consistently.
+\
 \ ## Markdown and Formatting
 \
 \ The comments in this file, the long descriptions at least,
@@ -2252,8 +2256,9 @@ assembler.1 -order
 \ Some Forth implementations also do some optimizations when
 \ compiling an exit into the dictionary (this one does not).
 \ The H2 CPU from <https://github.com/howerj/forth-cpu> Forth
-\ implementation does this more advanced optimizations on exit
-\ allowed by the instruction set, however most Forth
+\ implementation does more advanced optimizations on exit
+\ as allowed by the instruction set (such as merging exit with
+\ the previous instruction if possible), however most Forth
 \ implementations can at least perform a tail-call
 \ optimization (again, this version does not do this for
 \ simplicities sake). The optimization is simple, when
@@ -2264,34 +2269,36 @@ assembler.1 -order
 \ The words "a", "b" and "c" are all function calls, however
 \ the last call to "c" could instead be made to be a simple
 \ jump assuming that "c" is itself a normal Forth function,
-\ it will instead call "opExit". This is sometimes fast
-\ (a direct jump sometimes being faster than a function call)
+\ "c" will instead call "opExit". This is sometimes faster
+\ (a direct jump usually being faster than a function call)
 \ but it always saves on return stack space as the return
 \ site does not have to be pushed to the return stack.
 \
 \ The way this would be implemented is the word that will
-\ compile "opExit" would need to look at the previously
-\ compiled (and perhaps some meta-information) and check if it
-\ is a function call, if so, it can change it to a jump. We
-\ will not do this optimization in this Forth. The optimizer
-\ has to either be aware of cells that might look like calls
-\ but are not (think compiled numbers) and be aware not to
-\ cross control structure boundaries or the programmer has
-\ to selectively apply the optimization themselves which is
+\ compile "opExit" into the dictionary would need to look at 
+\ the previously compiled word (and perhaps some 
+\ meta-information) and check if it is a function call, if so, 
+\ it can change it to a jump. We will not do this optimization 
+\ in this Forth. The optimizer has to either be aware of cells 
+\ that might look like calls but are not (think compiled 
+\ numbers) and also be aware not to cross control structure 
+\ boundaries, or alternatively the programmer has to 
+\ selectively apply the optimization themselves which is
 \ error prone.
 \
 
 :a opExit ip {rp} iLOAD --rp ;a ( R: a -- )
 
 \ Subtraction and addition need no real explanation, just note
-\ that they are fast to execute.
+\ that they are relatively fast to execute in this machine.
 \
 :a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a ( n n -- n )
 :a + w {sp} iLOAD w tos ADD --sp ;a ( n n -- n )
 
-\ These are stack manipulation words that warrant more
-\ explanation than the implementations of instructions like
-\ "swap", mainly due to what they are used for.
+\ These next words are for stack manipulation words that 
+\ warrant more explanation than the implementations of 
+\ instructions like "swap", mainly due to what they are used 
+\ for.
 \
 \ "r@" is especially useful, it is used often in "for...next"
 \ loops to fetch the loop counter (stored on the return stack),
@@ -2303,7 +2310,7 @@ assembler.1 -order
 \
 \ It should be noted that the instructions that modify the
 \ return stack should be that, instructions, and not function
-\ calls, as if you called then the call location would be
+\ calls, as if you called them the call location would be
 \ in the way of their operations.
 \
 \ "rp@" and "rp!" can get and set the return stack pointer
@@ -2324,8 +2331,8 @@ assembler.1 -order
 \
 \ "sp@" is more useful of the two, they are both used in
 \ throw/catch, but "sp@" is also used for words like "pick"
-\ and for checking the depth of the variable stack, useful
-\ for error checking and debugging purposes.
+\ and for checking the depth of the variable stack, it is
+\ also useful for error checking and debugging purposes.
 \
 
 :a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a ( -- u )
@@ -2334,13 +2341,17 @@ assembler.1 -order
 \ "opNext" is the only other control structure instruction
 \ that is needed, apart from "opJump" and "opJumpZ". It should
 \ be noted that the exception mechanism of throw/catch does
-\ not need to be implemented as an instruction, but for the
-\ sake of efficiency, "opNext" is implemented as an
-\ instruction. It is used as part of the primary definite
-\ looping mechanism available in eForth, which is the
-\ "for...next" construct, it is odd construct, but easy to
-\ implement and fast. Much like "opJump" a
-\ jump destination follows the "opNext" instruction.
+\ not need to be implemented as an instruction, which is also
+\ part of the control structure word set even if it is not
+\ thought as being so. For the sake of efficiency "opNext" 
+\ is implemented as an instruction. It could actually be 
+\ implemented in higher level Forth using return stack 
+\ manipulation. 
+\
+\ It is used as part of the definite looping mechanism 
+\ available in eForth, which is the "for...next" construct, it 
+\ is odd construct, but easy to implement and fast. Much like 
+\ "opJump" a jump destination follows the "opNext" instruction.
 \
 \ The "for...next" loop if given N will run for N + 1 times,
 \ counting backwards from N until 0 is reached on the final
@@ -2360,8 +2371,8 @@ assembler.1 -order
 \        2: address of .
 \        3: opNext 1
 \
-\ And if run with 2, like "2 example", would produce the output
-\ "2 1 0".
+\ And if run with 2, such as "2 example", would produce the 
+\ output "2 1 0".
 \
 
 :a opNext w {rp} iLOAD ( R: n -- | n-1 )
@@ -2381,7 +2392,9 @@ assembler.1 -order
 \
 \ The instruction works by repeatedly doubling the input number
 \ until the lowest bit has been shifted into the highest bit
-\ location and then testing whether it is set or not.
+\ location and then testing whether it is set or not, which
+\ on a twos compliment machine will make the input number 
+\ negative if the top bit is set.
 \
 :a lsb ( u -- f )
     tos tos ADD tos tos ADD tos tos ADD tos tos ADD
@@ -2392,12 +2405,14 @@ assembler.1 -order
 
 \ "opJump" and "opJumpZ" implement unconditional and
 \ conditional jumps respectively. The actual jump is performed
-\ by "ip ip iLOAD", as "ip" has been increment before the
+\ by "ip ip iLOAD", as "ip" has been incremented before the
 \ instruction has been called it points to the next cell,
 \ which is used to store the jump location, much like with
 \ "opPush". These instructions are used to implement the
 \ control structures "if", "begin", "again", "until", "repeat",
-\ along with other conditional statements and patching.
+\ along with other conditional statements. As shown later
+\ patching the binary and computing addresses will need to be
+\ done in order to make these instructions useful.
 \
 \ "opPushZ" does the same as "opJump" but it does it
 \ conditionally, it pulls a value off of the variable stack
@@ -2409,15 +2424,23 @@ assembler.1 -order
 \
 \ Will be compiled to something that looks like this:
 \
-\        0: opJumpZ 5
-\        1: opPush 2
-\        2: opPush 2
-\        3: address of +
-\        4: address of .
-\        5: opPush 3
-\        6: opPush 3
-\        7: address of +
-\        8: address of .
+\ 
+\        <word header not shown> 
+\         0: opJumpZ
+\         1: 12
+\         2: opPush
+\         3: 2
+\         4: opPush
+\         5: 2
+\         6: address of +
+\         7: address of .
+\         8: opPush
+\         9: 3
+\        10: opPush
+\        11: 3
+\        12: address of +
+\        13: address of .
+\        14: opExit
 \
 \ Where the address along the side are cell addresses.
 \
@@ -2434,7 +2457,7 @@ assembler.1 -order
   t if ip INC vm JMP then w ip iLOAD w ip MOV ;a
 
 \ The comparison operators are tricky to get right,
-\ and are still not right, however they do a good
+\ and are still not completely right, however they do a good
 \ enough job. The built in operators are all for signed
 \ comparison. Unsigned is synthesized in Forth code later
 \ on. They use some of the "if" statement constructs made
@@ -8784,6 +8807,312 @@ it being run.
 \        subleq TC TB +2
 \        subleq ZR ZR -2 \ loop back
 \
+\ ## Extra Code
+\
+\ This section of code can be fed to the interpreter with the
+\ following command (on Unix systems):
+\
+\        cat extra.fth /dev/stdin | ./subleq subleq.dec
+\
+\ It will need to be adapted if it is to be meta-compiled. It
+\ includes some missing standard Forth words, and the major
+\ things that are missing - do loops and case.
+\
+\
+<ok> @ ' nop <ok> !
+: debug source type ."  ok" cr ; ' debug <ok> !
+
+ 0 constant false
+-1 constant true
+variable seed ( NB. Could be mixed with keyboard input )
+: random ( -- u : 16-bit xorshift )
+  seed @ dup 0= if 0= then ( seed must not be zero )
+  dup 13 lshift xor
+  dup  9 rshift xor
+  dup  7 lshift xor
+  dup seed ! ;
+: (order) ( w wid*n n -- wid*n w n )
+  dup if
+    1- swap >r recurse over r@ xor
+    if 1+ r> -rot exit then rdrop
+  then ;
+: -order get-order (order) nip set-order ; ( wid -- )
+: +order dup >r -order get-order r> swap 1+ set-order ;
+: cell- 2 - ;
+: rpick rp@ swap - 1- 2* @ ;
+: c, here c! 1 allot ; ( c -- )
+: cell- cell - ; ( a -- a )
+: umin 2dup swap u< if swap then drop ; ( u u -- u )
+: umax 2dup      u< if swap then drop ; ( u u -- u )
+: off false swap ! ; ( a -- )
+: on true swap ! ; ( a -- )
+: ?exit if rdrop then ;
+: tab 9 emit ; ( -- )
+: spaces ( n -- : equiv. bl banner  )
+    ?dup 0> if for aft space then next then ;
+: 2+ 2 + ; ( u -- u )
+: 2- 2 - ; ( u -- u )
+: not -1 xor ; ( u -- u )
+: binary $2 base ! ; ( -- )
+: octal $8 base ! ; ( -- )
+: .base base @ dup decimal . base ! ; ( -- )
+: only -1 set-order ; ( -- )
+: also get-order over swap 1+ set-order ; ( -- )
+: previous get-order swap drop 1- set-order ; ( -- )
+: buffer block ; ( k -- a )
+: enum dup constant 1+ ; ( n --, <string> )
+: logical 0= 0= ; ( n -- f )
+: square dup * ; ( n -- n )
+: limit rot min max ; ( n lo hi -- n )
+: odd 1 and logical ; ( n -- f )
+: even odd invert ; ( n -- f )
+: nor or invert ; ( u u -- u )
+: nand and invert ; ( u u -- u )
+: under >r dup r> ; ( n1 n2 -- n1 n1 n2 )
+: 2nip >r >r 2drop r> r> ; ( n1 n2 n3 n4 -- n3 n4 )
+( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
+: 2over >r >r 2dup r> swap >r swap r> r> -rot ;
+: 2swap >r -rot r> -rot ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 )
+: 2tuck 2swap 2over ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 n3 n4 )
+: 4drop 2drop 2drop ; ( n1 n2 n3 n4 -- )
+: trip dup dup ; ( n -- n n n )
+: log  >r 0 swap ( u base -- u : integer logarithm )
+  begin swap 1+ swap r@ / dup 0= until
+  drop 1- rdrop ;
+: log2 0 swap ( u -- u : integer logarithm in base 2 )
+  begin swap 1+ swap   2/ dup 0= until
+  drop 1- ;
+: average um+ 2 um/mod nip ; ( u u -- u )
+: <=> 2dup > if 2drop -1 exit then < ;
+: bounds over + swap ;
+: 2, , , ; ( n n -- )
+: d< rot 2dup >                    ( d -- f )
+   if = nip nip if 0 exit then -1 exit then
+   2drop u< ;
+: d>= d< invert ;                  ( d -- f )
+: d>  2swap d< ;                   ( d -- f )
+: d<= d> invert ;                  ( d -- f )
+\ : du> 2swap du< ;                  ( d -- f )
+: d=  rot = -rot = and ;           ( d d -- f )
+: d- dnegate d+ ;                  ( d d -- d )
+: dabs  s>d if dnegate exit then ; ( d -- ud )
+: d<> d= 0= ;                      ( d d -- f )
+: 2rdrop r> rdrop rdrop >r ; ( R: n n -- )
+: 2. swap . . ;
+: m* 2dup xor 0< >r abs swap abs um* r> if dnegate then ;
+: */mod  >r m* r> m/mod ;  ( n n n -- r q )
+: */  */mod nip ;          ( n n n -- q )
+: holds begin dup while 1- 2dup + c@ hold repeat 2drop ;
+: roll  dup 0> if swap >r 1- recurse r> swap else drop then ;
+: signum dup 0< swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )
+: >< dup 8 rshift swap 8 lshift or ; ( u -- u : swap bytes )
+: #digits >r dup 0= if 1+ exit then r> log 1+ ; ( u b -- u )
+: ** ( n u -- n )
+  ?dup if
+    over >r
+    begin
+      dup 1 >
+    while
+      swap r@ * swap 1-
+    repeat rdrop drop
+  else logical 1 and then ;
+: b. base @ swap 2 base ! u. base ! ; ( u -- )
+: h. base @ swap hex u. base ! ;      ( u -- )
+: o. base @ swap 8 base ! u. base ! ; ( u -- )
+: d. base @ swap decimal . base ! ;   ( n -- )
+: @bits swap @ and ;                  ( a u -- u )
+: ?\ if postpone \ then ; immediate
+: ?( if postpone ( then ; immediate ( )
+: ?if compile dup postpone if ; immediate
+: screens ( k1 k2 -- : list blocks k1 to k2 )
+  over -
+  for
+    dup . dup list 1+ key $D = if rdrop drop exit then
+  next drop ;
+: thru over - for dup >r load r> 1+ next drop ;
+: /string over min rot over + -rot - ; 
+: ndrop for aft drop then next ; ( 0...n n -- )
+: unused $FFFF here - ; ( 65536 bytes available in this VM )
+: char+ 1+ ;
+: mux dup >r and swap r> invert and or ; ( x1 x2 mask -- x )
+\ You can use "mux" to define "or" and "and" as so:
+\
+\        : or dup mux ;
+\        : and 0 -rot mux ;
+
+\ Usage:
+\
+\        : x case
+\          1 of ." one" endof
+\          2 of ." two" endof
+\          ." default"
+\          endcase ;
+\
+system +order definitions
+: (case) r> swap >r >r	; compile-only
+: (of) r> r@ swap >r = ; compile-only
+: (endcase) r> r> drop >r ;
+forth-wordlist +order definitions
+: case compile (case) 30 ; compile-only immediate
+: of compile (of) postpone if ; compile-only immediate
+: endof postpone else 31 ; compile-only immediate
+: endcase
+   begin
+    dup 31 =
+   while
+    drop			
+    postpone then
+   repeat
+   30 <> abort" Bad case construct!"
+   compile (endcase) ; compile-only immediate
+only forth definitions
+
+system +order definitions
+: r+ 1+ ; ( NB. Should be cell+ on most platforms )
+: (unloop) r> rdrop rdrop rdrop >r ; compile-only
+: (leave) rdrop rdrop rdrop ; compile-only
+: (j) 4 rpick ; compile-only
+: (k) 7 rpick ; compile-only
+: (do) r> dup >r swap rot >r >r r+ >r ; compile-only
+: (?do) 
+   2dup <> if
+     r> dup >r swap rot >r >r r+ >r exit
+   then 2drop ; compile-only
+: (loop) 
+  r> r> 1+ r> 2dup <> if
+    >r >r 2* @ >r exit \ NB. 2* and 2/ cause porting problems
+  then >r 1- >r r+ >r ; compile-only
+: (+loop) 
+   r> swap r> r> 2dup - >r
+   2 pick r@ + r@ xor 0>=
+   3 pick r> xor 0>= or if
+     >r + >r 2* @ >r exit
+   then >r >r drop r+ >r ; compile-only
+forth-wordlist +order definitions
+: unloop compile (unloop) ; immediate compile-only 
+: i compile r@ ; immediate compile-only
+: j compile (j) ; immediate compile-only
+: k compile (k) ; immediate compile-only
+: leave compile (leave) ; immediate compile-only
+: do compile (do) 0 , here ; immediate compile-only
+: ?do compile (?do) 0 , here ; immediate compile-only
+: loop 
+  compile (loop) dup 2/ , 
+  compile (unloop) 
+  cell- here cell- 2/ swap ! ; immediate compile-only
+: +loop 
+  compile (+loop) dup 2/ , 
+  compile (unloop) 
+  cell- here cell- 2/ swap ! ; immediate compile-only
+only forth definitions
+
+\ One possible word-set for structures in Forth (something
+\ which Forth is really lacking in and is its major weakness).
+\
+\ Example:
+\ 
+\ struct
+\   byte: >b1
+\   byte: >b2
+\   cell: >w1
+\   cell: >w2
+\ size: /foo
+\ 
+\ struct
+\   byte: >c1
+\   7 unused
+\   /foo field: >foo
+\ ;struct
+\ 
+: struct 0 ;
+: field:  ( offset size -- offset' )
+  create over , +
+  does> @ + ;
+: byte:   1 field: ;
+: cell:   2 field: ;
+: long:   4 field: ;
+: union:  0 field: ;
+: unused  +  ;
+: size:  constant  ;
+: ;struct drop ;
+
+\ Make a word called "mark" which when called erases 
+\ everything after it has been defined.
+: mark 
+  $" defined (mark) [if] (mark) [then] marker (mark) " 
+  count evaluate ;
+mark
+' nop <ok> !
+.( LOADED EFORTH. ) cr
+.( DICTIONARY: ) here . cr
+.( EFORTH:     ) ' 1- u. cr
+<ok> !
+\
+\ ## User Login System
+\
+\ This section contains a (insecure) login system with period
+\ accurate cryptographic practices for the 1980s. It is
+\ another show case in leveraging the built in capabilities
+\ of Forth to accomplish a task. It has no utility.
+\
+
+<ok> @ ' ) <ok> !
+
+: wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
+
+: (order) ( w wid*n n -- wid*n w n )
+  dup if
+    1- swap >r recurse over r@ xor
+    if 1+ r> -rot exit then rdrop
+  then ;
+: -order get-order (order) nip set-order ; ( wid -- )
+: +order dup >r -order get-order r> swap 1+ set-order ;
+
+( NB. Bitwise ops must be masked off on non 16-bit machines )
+: crc ( b u -- u : calculate ccitt-ffff CRC )
+  $FFFF >r begin ?dup while
+   over c@ r> swap 
+   ( CCITT polynomial $1021, or "x16 + x12 + x5 + 1" )
+   over $8 rshift xor ( crc x )
+   dup  $4 rshift xor ( crc x )
+   dup  $5 lshift xor ( crc x )
+   dup  $C lshift xor ( crc x )
+   swap $8 lshift xor ( crc )
+   >r +string
+  repeat r> nip ;
+
+( A primitive user login system [that is super insecure]. )
+wordlist +order definitions
+wordlist constant users
+dup constant (prompt)
+: conceal $1B emit ." [8m" ; ( NB. Could also override <emit> )
+: reveal $1B emit ." [28m" ;
+: secure users 1 set-order ;
+: restore only forth definitions decimal (prompt) <ok> ! ;
+: message ." user: " ;
+: fail ." Invalid username or password" cr message ;
+: success ." logged in." ;
+: pass bl word count crc ; ( super-super-secure <_< )
+: ask ." pass: " conceal query reveal ;
+
+forth-wordlist +order definitions
+
+: user 
+  create pass ,
+  does> ask @ pass = if restore success exit then fail ;
+: login secure message ' ) <ok> ! ;
+: .users get-order secure words set-order ;
+
+users +order definitions
+user guest guest
+user admin password1
+user archer dangerzone
+user cyril figgis
+user lana stirling
+users -order
+.( EFORTH ONLINE ) cr
+<ok> ! login
+
 \ ## Future Direction / Additional tasks.
 \
 \ There is still a lot that could be done with this system,
@@ -9010,3 +9339,5 @@ it being run.
 \ to control virtual entities that could be programmed by the
 \ game-player. Apart from this, eForth SUBLEQ is just a puzzle!
 \
+
+
