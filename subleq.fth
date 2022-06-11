@@ -22,7 +22,9 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ targeting such an anemic CPU architecture, called SUBLEQ, 
 \ which is an esoteric, impractical, single instruction CPU. If 
 \ you can port a Forth to SUBLEQ, then you can port a Forth 
-\ implementation to anything.
+\ implementation to anything. There is a saying about Forth,
+\ "Forth is Sudoku for programmers", I think it sums up my
+\ relationship with the language perfectly and this project.
 \
 \ This program is written in Forth entirely, and should
 \ compile both under gforth (tested with version 0.7.3, under
@@ -481,7 +483,11 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ Also of note, we have no stack, no function calls and
 \ returns, no indirect load or stores. These will all require
-\ self-modifying code to implement.
+\ self-modifying code to implement. The operand "c" cannot be
+\ modified by the current instruction (so if "b" pointed to
+\ the location of "c" the next time the instruction is run
+\ it would have a new jump location), at least in most SUBLEQ
+\ specifications.
 \
 \ An example of this are the following, an unconditional Jump
 \ instruction, or "JMP", can be made in the following fashion,
@@ -1948,9 +1954,9 @@ label: entry       \ used to set entry point in next cell
  45 t, 51 t, 20 t, 56 t, 4D t, 0D t, 0A t, 00 t,
 err-str 2/ tvar err-str-addr
 
-\ This prints the error message if we are not on right machine 
-\ width, 16-bit SUBLEQ machines allowed only. The test and
-\ jump to here is in the "start" routine.
+\ This prints the error message if we are not on the 
+\ right machine width, 16-bit SUBLEQ machines allowed only. 
+\ The test and jump to here is in the "start" routine.
 \
 
 assembler.1 +order
@@ -1976,13 +1982,17 @@ label: die
 \ Forth VM proper, no need to jump to it as it is the next
 \ instruction after "start" is finished.
 \
+\ The checksum code could be moved here to enable (nearly)
+\ the entire image to be checked, it would not be too 
+\ difficult to do.
+\
 
 label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
 
   \ check we are running on the right VM width
   imax x MOV x x ADD x +if die JMP then
-  ( imax -if die JMP then )
+  \ hbit +if die JMP then
 
   {sp0} {sp} MOV     \ Setup initial variable stack
   {rp0} {rp} MOV     \ Setup initial return stack
@@ -2462,25 +2472,26 @@ assembler.1 -order
 \ comparison. Unsigned is synthesized in Forth code later
 \ on. They use some of the "if" statement constructs made
 \ in the assembler section to shunt the right constant in
-\ if the statement is true or false. Forth booleans are
+\ if the result is true or false. Forth booleans are
 \ different from booleans in language like C, in C true is
-\ non-zero but comparison operators yield 1 on true, on false
+\ non-zero but comparison operators yield one on true, on false
 \ zero is produced. In Forth zero is produced on false, whilst
-\ for true -1 is produced, this might seem odd, but -1 is
+\ for true -1 is produced. This might seem odd, but -1 is
 \ "all bits set", and allows the boolean to be used with
 \ the bitwise logical operators as a mask.
 \
-\ "op0\>" is used to make the Forth word "0\>", and "\>" the
+\ "op0\>" is used to make the Forth word "0\>", and "op\>" the
 \ Forth word "\>", and so on. They could also be defined in
 \ terms of each other, however for efficiencies sake they are
 \ not.
 \
 \ An example of this is the "mux" word, this can be used to
 \ select the bits from either "x1" or "x2" depending on a
-\ mask. It could be used like "2dup > mux" to perform the
-\ functionality of max, or "2dup < mux" to perform the
-\ functionality of min, both of which are contingent on the
-\ comparison operators returning a Forth, and not a C, boolean.
+\ mask. It could be used in the expression "2dup > mux" to 
+\ perform the functionality of "max", or "2dup < mux" to 
+\ perform the functionality of "min", both of which are 
+\ contingent on the comparison operators returning a Forth, and
+\ not a C, boolean.
 \
 \        : mux ( x1 x2 mask -- x )
 \                dup >r and swap r> invert and or ;
@@ -2510,29 +2521,30 @@ assembler.1 -order
 \ is no exception, it is however done deliberately.
 \
 \ It is meant to be a fast division by two, which is not the
-\ same as a right shift by one. It can also differ subtly from
-\ an arithmetic right shift by one, which it is also sometimes
-\ implemented as. Either way, we will need a fast logical
-\ right shift, and left shift, by one, to convert from
-\ different types of addresses understood by the Forth
-\ interpreter and the underlying SUBLEQ machine.
+\ same as a right shift by one which is what we want. It can 
+\ also differ subtly from an arithmetic right shift by one, 
+\ which it is also sometimes implemented as. Either way, we 
+\ will need a fast logical right shift, and left shift, by one,
+\ to convert from different types of addresses understood by 
+\ the Forth interpreter and the underlying SUBLEQ machine.
 \
-\ "op2/" is more complex than "op2*", as "op2*" just adds the
+\ "op2/" is more complex than "op2\*", as "op2\*" just adds the
 \ "tos" register to itself, a doubling is equivalent to a
-\ left shift by one. One some platforms that might not be
+\ left shift by one. On some platforms that might not be
 \ the case as the carry flag might be affected, not on this
 \ one however.
 \
 \ As is common for all bitwise operations on the SUBLEQ
-\ machine, it is expensive to compute. If the SUBLEQ machine
-\ could have any extra instructions a bitwise AND and left
-\ and right shifts would be it. You could gain back a lot
-\ in terms of efficiency just from those three extra additions.
+\ machine barring "invert", they are expensive to compute. If 
+\ the SUBLEQ machine could have any extra instructions a 
+\ bitwise "AND" and left and right shifts would be them. You 
+\ could gain back a lot in terms of efficiency just from those 
+\ three extra additions.
 \
-\ "op2/" works by looping for each bit in the 16-bit machine
-\ less on, and it tests whether the topmost bit is set (a
+\ "op2/" works by looping for each bit in a 16-bit value less 
+\ one bit, and it tests whether the topmost bit is set (a
 \ cheap operation on twos compliment SUBLEQ machines, as the
-\ top bit is set when the value is negative).
+\ top bit is set when the value is negative). 
 \
 \ If the topmost bit is set, then one is added to an
 \ accumulator register ("x" in this case), "x" will be our
@@ -2552,11 +2564,12 @@ assembler.1 -order
 \        1000     0101
 \
 \ In each cycle, "x" is first doubled, but as it starts as
-\ zero, this is has no effect, if the top most bit of "tos"
-\ is non-zero then 1 is added to "x", then "tos" is doubled.
+\ zero, this is has no effect initially, if the top most bit of
+\ "tos" is non-zero then 1 is added to "x", then "tos" is 
+\ doubled, until completion.
 \
 \ The algorithms for "AND", "OR", and "XOR" are similar.
-\ As well as for left and right shifts by "N" places.
+\ As are left and right shifts by "N" places.
 \
 
 :a op2* tos tos ADD ;a
@@ -8812,7 +8825,7 @@ it being run.
 \ This section of code can be fed to the interpreter with the
 \ following command (on Unix systems):
 \
-\        cat extra.fth /dev/stdin | ./subleq subleq.dec
+\        cat extra.fth - | ./subleq subleq.dec
 \
 \ It will need to be adapted if it is to be meta-compiled. It
 \ includes some missing standard Forth words, and the major
@@ -9113,7 +9126,7 @@ users -order
 .( EFORTH ONLINE ) cr
 <ok> ! login
 
-\ ## Future Direction / Additional tasks.
+\ ## Future Direction and Additional tasks.
 \
 \ There is still a lot that could be done with this system,
 \ there are many programs and extensions that could be written 
@@ -9339,5 +9352,40 @@ users -order
 \ to control virtual entities that could be programmed by the
 \ game-player. Apart from this, eForth SUBLEQ is just a puzzle!
 \
-
+\ ## A Forth Manifesto
+\
+\ I deliberately eschew standards when it comes to Forth (apart
+\ from the FORTH-83 and FORTH-79 standards), to me Forth is 
+\ best represented by eForth, or some of the long obsolete 
+\ Forth implementations and is only suitable for systems that
+\ are well out to pasture. It represents a simpler time, one
+\ that no longer exists. A time where the technology stack
+\ employed by a programmer could be understood entirely by
+\ them, and if there was any complexity involved it was the
+\ individual at fault and not some impenetrably Byzantine mess
+\ of leaky abstraction upon leaky abstraction that is 
+\ responsible for running internet, our operating systems and
+\ the web, today (to be fair, that mess is awfully productive
+\ and profitable).
+\
+\ So what should Forth be? To me it should be:
+\
+\ * Simple.
+\ * Used only for Fun (and perhaps specialized niches).
+\ * Understandable by one person.
+\ * Not use "complex" (for Forth) data structures internally,
+\ preferring the linked-list instead of a hash table for
+\ dictionaries.
+\ * Do minimal optimization.
+\ * Usable on a 16-bit system, where Forth's home is.
+\ * Forth code should not be afraid to use the capabilities
+\ of the system, and non-standard ways of implementing words
+\ the done thing.
+\
+\ I believe a lot of modern Forth implementations do not live
+\ up to this, especially ones that adhere to the ANS Forth
+\ specification (which does have uses, but it is not for me).
+\
+\ Happy hacking.
+\
 

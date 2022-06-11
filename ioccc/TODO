@@ -1,0 +1,8 @@
+- Branch and create new IOCCC eForth image.
+  - Reduce size as much as possible at the expense of speed.
+  This can be done with more "higher level" Forth, mux, lsb
+  and shift removal.
+- Separate Self-interpreter program that can be prepended.
+- Make a simple bootloader and embed it here to replace atoi()?
+- More obfuscation.
+- Test on 16/32/64 bit systems and windows.

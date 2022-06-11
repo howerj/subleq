@@ -29,7 +29,7 @@ int main(int s, char **v) {
 		if (fclose(f) < 0)
 			return 4;
 	}
-	for (pc = 0; pc < SZ;) {
+	for (pc = 0; pc < SZ && pc != msk(N);) {
 		uint64_t a = m[L(pc++)], 
 			 b = m[L(pc++)], 
 			 c = m[L(pc++)];

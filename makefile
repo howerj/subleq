@@ -16,21 +16,19 @@ run: subleq subleq.dec
 test: 1.dec 2.dec nbit
 	diff -w 1.dec 2.dec
 
-width: nbit 1.dec
-	./nbit 17 1.dec
-	./nbit 18 1.dec
-	./nbit 32 1.dec
-	./nbit 63 1.dec
-	./nbit 64 1.dec
+width: gforth.dec nbit 
+	./nbit 17 $<
+	./nbit 18 $<
+	./nbit 32 $<
+	./nbit 63 $<
+	./nbit 64 $<
+	echo ".( Ahoy, World! ) cr bye " | ./nbit 16 $<
 
 gforth.dec: subleq.fth
 	gforth $< > $@
 
 gforth: subleq gforth.dec
 	./subleq gforth.dec
-
-extra: subleq gforth.dec extra.fth
-	cat extra.fth /dev/stdin | ./subleq gforth.dec
 
 subleq.md: subleq.fth subleq 1.dec convert.fth makefile
 	rm -f $@
