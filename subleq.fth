@@ -2633,26 +2633,25 @@ assembler.1 -order
 \       1 + 0 = 1
 \       1 + 1 = 2
 \
-\ None of the operators output should be 1 when the result is
-\ zero, XOR should 1 when the result is equal to zero, OR when
-\ it is greater or equal to 1, and AND should only be 1 when
-\ the output is 2. Otherwise the output should be 0 for the new
-\ bit.
+\ None of the operators output should be one when the result is
+\ zero, XOR should output one when the result is equal to one, 
+\ OR when it is greater or equal to one, and AND should only be 
+\ one when the output is two. Otherwise the output should be 
+\ zero for the new bit.
 \
 \ The following Stack Overflow question goes over this in more
 \ detail <https://stackoverflow.com/questions/34120161>.
 \
 \ Making these operators fast is especially important, in all
-\ other Forth systems they have the reasonable expectation that
-\ these operators are fast, that is that they operate in a
-\ single clock cycle. The bitwise operators usually are, but
-\ for SUBLEQ the opposite is the case. Subtraction and addition
-\ are, so some words later on have be rewritten to use
-\ arithmetic instead.
+\ other Forth systems there is the reasonable expectation that
+\ these operators are fast, and that they operate in a
+\ single clock cycle, not so for the system. Subtraction and 
+\ addition are fast as usual, so some words later on have be 
+\ rewritten to use arithmetic instead.
 \
 \ It is possible to do all kinds of optimizations with what
 \ are usually fast bitwise operations, for example, SWAR 
-\ operations or SIMD With A Register SIMD stands for Single 
+\ operations or SIMD With A Register (SIMD stands for Single 
 \ Instruction Multiple Data). 
 \
 \ The idea of SWAR optimizations is that you can process 
@@ -2662,15 +2661,20 @@ assembler.1 -order
 \ Unfortunately,
 \ these optimizations tend to be bit-wise heavy and more 
 \ suitable for larger cell width systems anyway, but such
-\ optimizations are worth known about. We can do a very
+\ optimizations are worth knowing about. We can do a very
 \ limited version of SWAR potentially in comparing Forth
 \ strings (comparing them cell by cell instead of byte by
 \ byte) if the strings are aligned (which they will be for
-\ Forth words) and there is no junk in at the end of the
-\ string.
+\ Forth words) and there is no junk at the end of the string.
 \
 \ *SWAR* operations, whilst well worth knowing about, are
 \ not worth doing on this machine.
+\
+\ All of these operators could be replaced with a single
+\ bitwise operator known as "mux", already shown. This could be
+\ done to save on space without sacrificing speed too much.
+\ These operators take up quite a lot of space, and there is
+\ a lot that could be done to shrink the image.
 \
 :a opOr
   bwidth w MOV
@@ -2728,7 +2732,7 @@ assembler.1 -order
 
 \ "opDivMod" is purely here for efficiency reasons, it really
 \ improves the speed at which numbers can be printed, which
-\ would be slow if "um/mod" was used. Printing numbers
+\ would be too slow if "um/mod" was used. Printing numbers
 \ greatly increases the compilation speed as a large list of
 \ them has to be printed out at the end of the image
 \ generation. This is not a concern when "gforth" is used to
@@ -2768,6 +2772,8 @@ assembler.1 -order
   t tos MOV
   w {sp} iSTORE ;a
 
+\ ### PAUSE
+\
 \ "pause" is simple, but explaining its usage is more
 \ complex, it is a word that is implemented in assembly
 \ because it needs to be. It is at the core of the cooperative
@@ -2777,19 +2783,21 @@ assembler.1 -order
 \ it is possible to implement or approximate peripherals
 \ and other systems.
 \
-\ We will see that later on with the delay loop "ms", and with
-\ fake Forth Block system. This however, implements a
-\ usable multitasking system of a type which is more common
-\ in embedded control systems than on desktop computers. As
-\ it is not preemptive we do not need a way of doing
-\ interrupts. The multitasking system has interactions with
-\ the Input/Output layer which is blocking in the default C
-\ implementation of the SUBLEQ machine, and it also interacts
-\ with the USER variables.
+\ We will see that later on with the delay loop based "ms", and 
+\ with the fake Forth Block system. "pause" and the eForth 
+\ system however implements a usable multitasking system of a 
+\ type which is more common in embedded control systems than on 
+\ desktop computers. 
+\
+\ As the multitasking is not preemptive we do not need a way 
+\ of handling interrupts. The multitasking system has 
+\ interactions with the Input/Output layer which is blocking in 
+\ the default C implementation of the SUBLEQ machine, and it 
+\ also interacts with the USER variables.
 \
 \ Each Forth task, of which there is guaranteed to be at least
 \ one, has its own area in which is can store thread local
-\ variables. The system setups the first thread on boot, and
+\ variables. The system sets up the first thread on boot, and
 \ more can be added later. Each task consists of a 1024 byte
 \ thread local storage area, which contain the buffers used
 \ for the terminal input, the return and variable stacks,
@@ -2798,7 +2806,7 @@ assembler.1 -order
 \
 \ The job of "pause" is to switch from one task to another,
 \ if another task exists. Task switching can be disabled by
-\ setting the variable "{single}" to non-zero as well.
+\ setting the variable "{single}" to non-zero.
 \
 \ A good description of this concurrency model is here:
 \
@@ -2822,8 +2830,10 @@ assembler.1 -order
 \ allows the I/O functions to wait for the reception of a
 \ character without holding up the rest of the system.
 \
-\ It is also caused within the "ms" function (which causes
-\ problems in its current implementation), and in the Forth
+\ It is also called within the "ms" function (which causes
+\ problems in its current implementation, the "ms" function
+\ can vary depending on settings and only times the amount
+\ of time executed within a single thread), and in the Forth
 \ Block words (which usually would perform I/O, however the
 \ block system is virtual and not backed by massed storage).
 \
@@ -2872,28 +2882,27 @@ there 2/ primitive t!
 \ words, and such.
 \
 \ The first set of words we will define are for creating new
-\ words in the target dictionary, but for multiple different
+\ words in the target dictionary, for multiple different
 \ vocabularies, for the default Forth vocabulary (which
 \ contains the standard Forth words), for the root vocabulary
 \ (also contains standard Forth words, but the minimal set of
 \ words to get back to a "normal" system), for the System
 \ vocabulary (containing non-standard words and words used
-\ for building the internals), and for the block editor,
-\ described in a chapter on it.
+\ for building the internals), and for the block editor.
 \
 \ Here are the words and their usage:
 \
-\ ":t"/";t" - Define a word in the target dictionary
-\ ":to"     - Define a word in the target dictionary, but
-\             do not make it available during meta-compilation,
-\             the word is instead put into the "target.only.1"
-\             dictionary of the meta-compiler.
-\ ":s"/";s" - Define a word in the system dictionary
-\ ":so"     - The same as ":to", except there is no
-\             corresponding "system.only.1" dictionary and it
-\             works with the system dictionary.
-\ ":r"/";r" - Define a word in the root dictionary.
-\ ":e"/";e" - Define a word in the editor dictionary.
+\ * ":t"/";t":  Define a word in the target dictionary.
+\ * ":to": Define a word in the target dictionary, but
+\ do not make it available directly by putting it in the search
+\ order during meta-compilation, the word is instead put into 
+\ the "target.only.1" dictionary of the meta-compiler.
+\ * ":s"/";s": Define a word in the system dictionary
+\ * ":so": The same as ":to", except there is no
+\ corresponding "system.only.1" dictionary and it
+\ works with the system dictionary.
+\ * ":r"/";r": Define a word in the root dictionary.
+\ * ":e"/";e": Define a word in the editor dictionary.
 \
 \ The words that define new words in the target dictionary
 \ may only be used with the corresponding target dictionary
