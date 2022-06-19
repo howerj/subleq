@@ -11,3 +11,6 @@ clobber: clean
 
 clean:
 	rm -f prog 
+
+data.dec: ioccc.fth
+	gforth $< > $@

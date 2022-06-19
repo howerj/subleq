@@ -2908,19 +2908,22 @@ there 2/ primitive t!
 \ may only be used with the corresponding target dictionary
 \ terminating word, that is ":t" and ":to" can only be used
 \ with ";t" and not with ";s". This is done with a Forth
-\ concept called "compiler" security, which are primitive but
+\ concept called "compiler security", which are primitive but
 \ effective run time checks to make sure control
 \ structures match up, or that there are enough items on the
 \ stack before executing an operation.
 \
 \ An example of this is ":s", it pushes the hexadecimal
 \ constant "F00D" onto the stack, which ";s" checks for, if
-\ it is not present, it prints a message and calls abort.
+\ it is not present, it prints a message and calls abort. It
+\ is unlikely, although possible, that this value will be
+\ produced by accident. It is not an actual security mechanism,
+\ just a way of detecting programming errors.
 \
 \ ":t" does the same thing with a different constant, so a
 \ mismatch can be detected. This also detects situation where
 \ numbers that have meant to compiled are instead left on
-\ the stack, or the incorrect number compiled into a word
+\ the stack, or the incorrect number is compiled into a word
 \ definition by the meta-compiler.
 \
 \ An example of this is "lit", which pulls a value off of the
@@ -2938,22 +2941,23 @@ there 2/ primitive t!
 \
 \        :t example lit 2 lit + . cr ;t
 \
-\ The corresponding correct constant would be given to ";t"
+\ The corresponding correct constant would not be given to ";t"
 \ and an error would be detected. "lit" and how it works will
 \ be defined shortly, as well as its shortcomings and possible
 \ workarounds.
 \
 \ The newly defined defining words all call ":t" (defined much
 \ earlier) to do their job. (or ":to" if they do not want to
-\ put the word name into the meta-compilers dictionary).
+\ put the word name into the meta-compilers target dictionary).
 \ Likewise the words to terminated a word definition all call
 \ ";t". The defining words need to modify the meta-compilers
 \ view of the target dictionaries so the word is put into the
 \ right location.
 \
-\ ":t" creates the word header.
+\ And the other words:
 \
-\ ";t" compiles "opExit" at the end of a word definition.
+\ * ":t" creates the word header.
+\ * ";t" compiles "opExit" at the end of a word definition.
 \
 
 :m ;t BABE <> if abort" unstructured" then
@@ -2978,9 +2982,7 @@ there 2/ primitive t!
 \ normal Forth compilation, but are just running exclusively
 \ in command mode, except when defining new meta-compilation
 \ words with ":m" and ";m". That is ":t" does not change the
-\ state variable. We want to make the Forth code we are
-\ compiling for the target look like normal Forth code, but
-\ the process is not the same.
+\ state variable in the host Forth. 
 \
 
 :m : :t ;m ( -- ???, "name" : start cross-compilation )
@@ -2988,14 +2990,14 @@ there 2/ primitive t!
 
 
 \ "lit" is used to compile a literal into the dictionary, which
-\ will be pushed when run. Note, we are not in command mode
-\ when in between ":t" and ";t", and even if we were, it would
-\ not do the correct action, the Forth we are running this
-\ meta-compiler under would attempt to compile a number given
-\ to it into the dictionary, but into its dictionary, and in
-\ a way that would not work in the target. We cannot modify
+\ will be pushed when run. Note again, we are not in command 
+\ mode when in between ":t" and ";t", and even if we were, it 
+\ would not do the correct action, the Forth we are running 
+\ this meta-compiler under would attempt to compile a number 
+\ given to it into the dictionary, but into its dictionary, and 
+\ in a way that would not work in the target. We cannot modify
 \ the internals of the Forth used to compile this program,
-\ well, not the gforth interpreter and not in a portable way,
+\ (or not the gforth interpreter and not in a portable way)
 \ so we are left with having to call "lit" after each number
 \ we want to compile into a target word.
 \
@@ -3011,7 +3013,10 @@ there 2/ primitive t!
 \ thing, which is to get a single character from the input
 \ stream and compile into the dictionary instructions which
 \ push the number representing that character on to the
-\ variable stack.
+\ variable stack. The reason both are defined is so that they
+\ can be used in the appropriate places where they would be
+\ used in normal Forth code, so as to make the code look more
+\ like normal Forth code.
 \
 \ All of these operations take up two cells in the dictionary
 \ as they are not just a simple call, but a VM instruction and
@@ -3036,13 +3041,11 @@ there 2/ primitive t!
 \ will exist in the target dictionary. It is possible to make
 \ your own control structures, perhaps an "if" that only
 \ executes its clause when negative numbers are encountered,
-\ or one with an inverted test called "unless".
+\ or one with an inverted test called "unless" like in Perl.
 \
 \ Note that none of these definitions of control structures
 \ are immediate words, because the entirety of the meta
-\ compiler runs in command mode. The control structures which
-\ will be defined within the target dictionary will require
-\ their immediate flag to be set in their word headers.
+\ compiler runs in command mode.
 \
 \ The stack effects for these words describe the meta-compiler
 \ behavior and not their runtime one, the runtime behavior
@@ -3068,23 +3071,23 @@ there 2/ primitive t!
 \ been encountered in the Virtual Machine instruction section,
 \ but it decrements and tests that loop counter and jumps
 \ back to instruction after "\>r" if the counter is positive,
-\ if negative it removes the counter from the return stack
-\ and continues on after the "next" statement.
+\ if zero or negative it removes the counter from the return 
+\ stack and continues on after the "next" statement.
 \
-\ These meta-compiler words do not take locations at cross
+\ These meta-compiled words do not take locations at cross
 \ compile time like the assembler versions do, instead taking
 \ variables to test off of the variable stack at run time.
 \
 \ If you understood the assembly versions, you will understand
-\ these versions. Note that these implementations are actually
-\ portable, or have the ability to be ported easy, other
+\ these versions. Note that these implementations are
+\ portable, or have the ability to be ported easy. Other
 \ platforms might not need the "2\/" but they all follow the
 \ same general pattern; compile in a conditional jump or
 \ hole in the dictionary, modify it later on, push locations
 \ on to the stack for a word defined later to act on.
 \
-\ The section on Control Structures has more detail and
-\ diagrams as to how the compilation of these is achieved.
+\ The section on Control Structures has more detail as to how 
+\ the compilation of these is achieved.
 \
 
 :m begin talign there ;m ( -- a )
@@ -3116,11 +3119,12 @@ there 2/ primitive t!
 
 \ To avoid conflicts with meta-compiled words and words
 \ compiled in the target dictionary some instructions have
-\ been given "op" as a prefix. We could have done this with
+\ been given "op" as a prefix. We could have avoided this with
 \ dictionary manipulation, but this is easier. We no longer
 \ need the word "dup" to actually duplicate the top word on
 \ a stack, instead the new "dup" should compile a reference
-\ to "opDup" in newly defined words.
+\ to "opDup" in newly defined words, so we are safe to define
+\ a new "dup". The same goes for the rest of these new words. 
 \
 
 :m dup opDup ;m ( -- : compile opDup into the dictionary )
@@ -3141,7 +3145,7 @@ there 2/ primitive t!
 :m 2/ op2/ ;m ( -- : compile op2/ into the dictionary )
 
 \ This complete most of the meta-compiler words, new
-\ ones will be defined later, but that is most of it. The
+\ words will be defined later, but that is most of it. The
 \ next section we will bring this all together to start to
 \ actually define new Forth words within the target Forth
 \ image.
@@ -3152,7 +3156,7 @@ there 2/ primitive t!
 \ We are now ready to define actual Forth words, everything up
 \ until now has just been to make an environment that is
 \ capable of hosting a Forth system, and about half the size
-\ of the generated image is used to create a those conditions.
+\ of the generated image is used to create those conditions.
 \
 \ The first words will be generic utility functions,
 \ words the embody a virtual machine instruction, and
@@ -3176,10 +3180,11 @@ there 2/ primitive t!
 \ a single virtual machine instruction.
 \
 \ We want to make sure that we use references to the virtual
-\ machine instructions when we call things like "1+" or "xor"
-\ when we use them later in the program, and references to
-\ these words, so we put those words in the "target.only.1"
-\ dictionary to make sure they will not be found.
+\ machine instructions when we call functions such as 
+\ "1+" or "xor" when we use them later in the program, so we 
+\ put those words in the "target.only.1" dictionary to make 
+\ sure they will not be found, but are still accessible if we 
+\ need them.
 \
 \ The definitions looks odd, for example:
 \
@@ -3199,7 +3204,7 @@ there 2/ primitive t!
 \
 \ There is not much else to say about these words. Some of them
 \ go into the system vocabulary, but should also not be
-\ referenced moving on.
+\ referenced later on either. 
 \
 
 :to 1+ 1+ ; ( n -- n : increment a number by one )

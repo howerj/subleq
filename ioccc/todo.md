@@ -8,3 +8,4 @@
 - More obfuscation.
   - Swap memory locations with XOR, then swap it back later.
 - Test on 16/32/64 bit systems and windows.
+- Tidy up build system once a new image has been made.
