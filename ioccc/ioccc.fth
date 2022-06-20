@@ -103,7 +103,7 @@ defined eforth [if]
 :m header >in @ thead >in ! ;m ( --, "name" )
 :m :ht ( "name" -- : forth routine, no header )
   get-current >r target.1 set-current create
-  r> set-current BABE talign there ,
+  r> set-current CAFE talign there ,
   does> @ 2/ t, ;m
 :m :t header :ht ;m ( "name" -- : forth routine )
 :m :to ( "name" -- : forth, target only routine )
@@ -111,7 +111,7 @@ defined eforth [if]
   get-current >r
     target.only.1 set-current create
   r> set-current
-  BABE talign there ,
+  CAFE talign there ,
   does> @ 2/ t, ;m
 :m :a ( "name" -- : assembly routine, no header )
   D00D target.1 +order definitions
@@ -437,17 +437,17 @@ assembler.1 -order
     {sp} w iLOAD w INC \ we're all golden
   then ;a
 there 2/ primitive t!
-:m ;t BABE <> if abort" unstructured" then
+:m ;t CAFE <> if abort" unstructured" then
   talign opExit target.only.1 -order ;m
 :m :s tlast @ {system} t@ tlast ! F00D :t drop 0 ;m
 :m :so  tlast @ {system} t@ tlast ! F00D :to drop 0 ;m
-:m ;s drop BABE ;t F00D <> if abort" unstructured" then
+:m ;s drop CAFE ;t F00D <> if abort" unstructured" then
   tlast @ {system} t! tlast ! ;m
 :m :r tlast @ {root-voc} t@ tlast ! BEEF :t drop 0 ;m
-:m ;r drop BABE ;t BEEF <> if abort" unstructured" then
+:m ;r drop CAFE ;t BEEF <> if abort" unstructured" then
   tlast @ {root-voc} t! tlast ! ;m
 :m :e tlast @ {editor} t@ tlast ! DEAD :t drop 0 ;m
-:m ;e drop BABE ;t DEAD <> if abort" unstructured" then
+:m ;e drop CAFE ;t DEAD <> if abort" unstructured" then
   tlast @ {editor} t! tlast ! ;m
 :m : :t ;m ( -- ???, "name" : start cross-compilation )
 :m ; ;t ;m ( ??? -- : end cross-compilation of a target word )
@@ -878,7 +878,7 @@ there 2/ primitive t!
 :to char bl word ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
 :to ;
-  BABE lit <> if -16 lit throw then ( check compile safety )
+  CAFE lit <> if -16 lit throw then ( check compile safety )
   =unnest lit ,                     ( compile exit )
   postpone [                        ( back to command mode )
   ?dup if                           ( link word in if non 0 )
@@ -891,9 +891,9 @@ there 2/ primitive t!
   last ,                ( point to previous word in header )
   bl word ?nul ?len ?unique ( parse word and do basic checks )
   count + h lit ! align ( skip over packed word and align )
-  BABE lit              ( push constant for compiler safety )
+  CAFE lit              ( push constant for compiler safety )
   postpone ] ;          ( turn compile mode on )
-:to :noname align here #0 BABE lit ] ; ( "name", -- xt )
+:to :noname align here #0 CAFE lit ] ; ( "name", -- xt )
 :to ' bl word find ?found cfa literal ; immediate
 : compile r> dup [@] , 1+ >r ; compile-only ( -- )
 :to recurse {last} lit @ cfa compile, ; immediate compile-only

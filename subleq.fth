@@ -1,5 +1,5 @@
 defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
-\ # Introduction
+\ # Information
 \
 \ * Edition: 1.0.0
 \ * Project: Cross Compiler / eForth for a SUBLEQ CPU
@@ -9,6 +9,14 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ * License: The Unlicense / Public domain for code only, all
 \ rights reserved for comments, the book, diagrams
 \ and pictures.
+\
+\ # Dedication
+\
+\ This book is dedicated to my fiancee Molly Barton, my Moll,
+\ who is carrying my tiny girl and has also introduced me to
+\ her wonderful dog Poppy.
+\
+\ # Introduction
 \
 \ This book contains an assembler for a SUBLEQ CPU, a virtual
 \ machine capable of running Forth built upon that assembler,
@@ -1118,7 +1126,7 @@ defined eforth [if]
 :m header >in @ thead >in ! ;m ( --, "name" )
 :m :ht ( "name" -- : forth routine, no header )
   get-current >r target.1 set-current create
-  r> set-current BABE talign there ,
+  r> set-current CAFE talign there ,
   does> @ 2/ t, ;m
 
 :m :t header :ht ;m ( "name" -- : forth routine )
@@ -1141,7 +1149,7 @@ defined eforth [if]
 \ in assembly.
 \
 \ Notice the compiler security, ":a", for example, pushes the
-\ hexadecimal value "D00D" and "(a);" (which ";a" will call)
+\ hexadecimal value "1234" and "(a);" (which ";a" will call)
 \ throws an exception if that value is not on the stack when
 \ it is called. This catches common errors such as using the
 \ wrong word definitions from the wrong vocabulary, not
@@ -1153,12 +1161,12 @@ defined eforth [if]
   get-current >r
     target.only.1 set-current create
   r> set-current
-  BABE talign there ,
+  CAFE talign there ,
   does> @ 2/ t, ;m
 :m :a ( "name" -- : assembly routine, no header )
-  D00D target.1 +order definitions
+  1234 target.1 +order definitions
   create talign there , assembler.1 +order does> @ 2/ t, ;m
-:m (a); D00D <>
+:m (a); 1234 <>
    if abort" unstructured" then assembler.1 -order ;m
 
 \ We no longer need the system vocabulary, if we are running
@@ -2960,17 +2968,17 @@ there 2/ primitive t!
 \ * ";t" compiles "opExit" at the end of a word definition.
 \
 
-:m ;t BABE <> if abort" unstructured" then
+:m ;t CAFE <> if abort" unstructured" then
   talign opExit target.only.1 -order ;m
 :m :s tlast @ {system} t@ tlast ! F00D :t drop 0 ;m
 :m :so  tlast @ {system} t@ tlast ! F00D :to drop 0 ;m
-:m ;s drop BABE ;t F00D <> if abort" unstructured" then
+:m ;s drop CAFE ;t F00D <> if abort" unstructured" then
   tlast @ {system} t! tlast ! ;m
 :m :r tlast @ {root-voc} t@ tlast ! BEEF :t drop 0 ;m
-:m ;r drop BABE ;t BEEF <> if abort" unstructured" then
+:m ;r drop CAFE ;t BEEF <> if abort" unstructured" then
   tlast @ {root-voc} t! tlast ! ;m
 :m :e tlast @ {editor} t@ tlast ! DEAD :t drop 0 ;m
-:m ;e drop BABE ;t DEAD <> if abort" unstructured" then
+:m ;e drop CAFE ;t DEAD <> if abort" unstructured" then
   tlast @ {editor} t! tlast ! ;m
 
 
@@ -3244,14 +3252,17 @@ there 2/ primitive t!
 \ Notice how "@" and "!" divide the address by two, which drops
 \ the lowest bit that is used to select the upper or lower
 \ byte in a word. Division is expensive to compute, so it is
-\ better to use "\[@\]" and "\[!\]" where possible.
+\ better to use "\[@\]" and "\[!\]" where possible as the calls
+\ to them will faster and use less return stack space.
 \
 \ However, from the point of view of the developer, using
-\ "@" and "!" is easier.
+\ "@" and "!" is easier and more portable.
 \
 : @ 2/ [@] ; ( a -- u : fetch a cell to a memory location )
 : ! 2/ [!] ; ( u a -- : write a cell to a memory location )
 
+\ ### Hook Variables
+\
 \ These words are just used to push the address of a variable
 \ onto the stack. Some of them are local variables (using "up")
 \ and others are global addresses (using "lit").
@@ -3270,7 +3281,16 @@ there 2/ primitive t!
 \        ' prompt <ok> !
 \
 \ Will print a prompt that says "ok\>" after each line is
-\ executed.
+\ executed, regardless of the interpreter state, other prompts
+\ include:
+\
+\        : prompt source type ."  ok" cr ;
+\        : prompt .s ."  ok" cr ;
+\
+\ The first will print out each line that is input which can
+\ be useful for debugging errors when text is redirected into
+\ the interpreter, and the second will print out the variable
+\ stack at the end of each line, another useful debugging aid.
 \
 \ "\<cold\>" is a normal variable and not a USER variable as it
 \ needs to be available before the first thread is set up, it
@@ -3280,7 +3300,9 @@ there 2/ primitive t!
 \ "\<ok\> is in the normal Forth vocabulary despite it being a
 \ non-standard word, this is because we need to silence the ok
 \ prompt at the start of the script to ensure our output is
-\ not corrupted.
+\ not corrupted, gforth does not need this at it detects
+\ whether it is reading from a terminal that a user is typing
+\ into or a file.
 \
 \ It is not a hard rule, but usually hook variables have the
 \ "\<\>" brackets enclosing them, and the functionality is
@@ -3296,7 +3318,8 @@ there 2/ primitive t!
 \ Will not work, this works for setting most execution vectors,
 \ but not this one, "{cold}" needs to be executed by the
 \ Forth Virtual Machine, it cannot divide a number by two
-\ efficiently, so it only operates on cell address. This is
+\ efficiently (or at all, and would slow everything down if
+\ implemented), so it only operates on cell address. This is
 \ a minor quirk of this implementation and should not be the
 \ case on other systems.
 \
@@ -3314,7 +3337,8 @@ there 2/ primitive t!
 :s <error> {error} up ;s ( -- a )
 :s <cold> {cold} lit ;s ( -- a )
 
-
+\ ### Forth Variables
+\
 \ There are a lot of variables in this part of the code,
 \ much like at the beginning of the image, and they will all
 \ be explained again.
@@ -3326,10 +3350,11 @@ there 2/ primitive t!
 \ "forth-wordlist" and "set-order".
 \
 \ "current" contains the vocabulary for which newly defined
-\ words are to be added to. It is used to place words in
-\ the "target.1", "meta.1", "assembler.1" and "target.only.1"
-\ vocabularies. It is not usually used directly however, but
-\ is used by words like "definitions".
+\ words are to be added to. An example usage is in the meta
+\ compiler, It is used to place words in the "target.1", 
+\ "meta.1", "assembler.1" and "target.only.1" vocabularies. 
+\ "current" is not usually used directly however, but is used 
+\ by words like "definitions".
 \
 
 : current {current} lit ; ( -- a : get current vocabulary )
@@ -3337,26 +3362,26 @@ there 2/ primitive t!
 
 \ The word "this" allows us to access the USER task area,
 \ it pushes the pointer to that area onto the stack. The
-\ USER task is a 1024 byte block of memory, as mentioned, that
-\ has multiple stacks, buffers and variables in it.
+\ USER task is a 1024 byte block of memory, mentioned 
+\ previously, that has multiple stacks, buffers and variables 
+\ in it.
 \
-\ It can be use to get the task ID (which is the same as the
-\ tasks address), or for the implementation, which knows that
-\ the "pad area" is located 960 bytes into the task area, which
-\ is used for the word "pad". The pad location is meant to be
-\ a programmers utility, not meant for serious use, that
-\ contains a *small* section of memory used as a temporary
-\ "pad".
+\ "this" can be use to get the task ID (which is the same as
+\ the tasks address), it can also be used for the 
+\ implementation of the word "pad". The pad location is an area 
+\ 960 bytes into the task area which is meant as a programmer
+\ utility that should contain a *small* section of memory for
+\ temporary usage.
 \
 : this 0 up ; ( -- a : address of task thread memory )
 : pad this 3C0 lit + ; ( -- a : index into pad area )
 
-\ More vocabulary words, "#vocs" contains the maximum number
-\ of possible vocabularies in the vocabulary list, whilst
+\ More vocabulary words up next, "#vocs" contains the maximum
+\ number of possible vocabularies in the vocabulary list, while
 \ "context" gets a pointer to the area used to store the
 \ vocabulary array, the first cell will contain the first
 \ vocabulary in the word list (or the wordlist that will get
-\ searched for first).
+\ searched in first).
 \
 : #vocs 8 lit ; ( -- u : number of vocabularies )
 : context {context} lit ; ( -- a )
@@ -3444,25 +3469,27 @@ there 2/ primitive t!
 \ You could use higher bases as a data interchange format,
 \ allowing binary data to be transferred as text with a
 \ processing and storage overhead. Bases 32 and 36 have
-\ advantages, as does base 16. The lower the base the less
-\ dense the resulting string, which means more overhead.
+\ advantages, as does base 16, explained in a little bit. The 
+\ lower the base the less dense the resulting string, which 
+\ means more overhead.
 \
 \ Base-64 is the most common way of encoding binary strings
-\ as text, but base cannot be set that high as there is no
+\ as text, but "base" cannot be set that high as there is no
 \ real sensible encoding that follows from going higher than
 \ the ten digits plus the alphabet, there would be
 \ ambiguities if we did. You could add it as a special case,
 \ if you so desired.
 \
 \ Base-32 has the advantage that it is a power two base, so
-\ a CODEC for it can be more efficiently implemented, Base-36
-\ has the advantage that is the most dense encoding, but
-\ slower to implement a fast CODEC.
+\ a CODEC for it *could* be more efficiently implemented with 
+\ just shifts and masking (no multiplication is required), 
+\ Base-36 has the advantage that is the most dense encoding 
+\ allowed in this scheme, but the CODEC will always be slower.
 \
 \ Base-16 is less dense than Base-32 but is easier to process,
-\ as two sets of 4 bits fit into a byte, so there are no dead
-\ bits as well, but it is much less efficient overall.
-\
+\ as two sets of 4 bits fit into a byte, meaning no dead bits,
+\ but it is much less space efficient overall. It is the least
+\ dense still viable encoding scheme.
 \
 
 : hex  10 lit base ! ; ( -- : change to hexadecimal base )
@@ -3520,17 +3547,20 @@ there 2/ primitive t!
 \ detail about how the interpreter internals work.
 \
 \ Other eForth models instead store execution vectors for
-\ compilation and interpreting, this does make the system more
-\ flexible, but is not done here for simplicities sake.
-\ "\<interpret\>" and "\<compile\>" are two hooks, including
-\ others, that have been cut from this implementation of
-\ eForth. There is a trade-off, you could potentially put a
+\ compilation and interpreting within the "state" variable, 
+\ this does make the system more flexible, but is not done here 
+\ for the sake of size.  "\<interpret\>" and "\<compile\>" are 
+\ two hooks, including others, that have been cut from this 
+\ implementation of eForth. 
+\
+\ There is a trade-off, you could potentially put a
 \ hook in for every single defined word, but that would be too
 \ cumbersome, if we had more room then those two hooks would
 \ be added, along with modifications to "evaluate" so they
 \ are used. -1 and 0 would still need to be stored in the
 \ "state" variable, as that variable is part of the standard
-\ word set.
+\ word set, and must contain only "-1" and "0" depending on the
+\ interpreter state.
 \
 
 : ]
@@ -3595,14 +3625,16 @@ there 2/ primitive t!
 \ As we do not have those facilities we make use of the
 \ comparisons operators we made for the Forth Virtual Machine.
 \ Using the signed comparison operators to do unsigned
-\ comparison is a little more involved, and is doing the
+\ comparison is a little more involved, as is doing the
 \ opposite, however if we stay within one class it is easy
 \ to construct all operators given a signed less than or
 \ a signed greater than using just swapping the arguments
 \ around, or inverting the boolean result.
 \
-\ "=" can be defined with "xor" instead of "-", but "-" is
-\ cheaper on SUBLEQ machines.
+\ "=" can be with "xor" instead of "-", but "-" is
+\ cheaper on SUBLEQ machines. We still need to turn the result
+\ into a boolean with "0=", for some tests "-" or "xor" could
+\ be used without turning the result into a boolean.
 \
 
 : 0<= 0> 0= ; ( n -- f )
@@ -3614,12 +3646,12 @@ there 2/ primitive t!
 : 0>= 0< 0= ; ( u1 u2 -- f )
 
 \ The unsigned words are defined in terms of each other once
-\ of them has been defined, they are a bit awkward as they
+\ one of them has been defined, they are a bit awkward as they
 \ depend on the signed comparison words to do the work, which
-\ is not normal, but necessary given the constraints of the
-\ system. Unsigned comparison is used less than signed, so
-\ speed is not too much of a concern, they are here for
-\ completeness sake.
+\ is not normally how they are implemented, but necessary given 
+\ the constraints of the system. Unsigned comparison is used 
+\ less than signed, so speed is not too much of a concern, they 
+\ are here for completeness sake.
 \
 \ An alternative implementation of "u\<" is as follows:
 \
@@ -3647,14 +3679,16 @@ there 2/ primitive t!
 \ about the more complex arithmetic operators.
 \
 \ "abs" gets the absolute value of a number, note, like most
-\ "abs" functions on twos compliment machines getting the
+\ "abs" functions on twos compliment machines the
 \ function is only properly defined within the range of
 \ Minimum Signed Value + 1 to Maximum Signed Value, if you
 \ entered the Minimum Signed Value ($8000 or -32768) you will
 \ get back the same number. This is common to the majority of
 \ implementations of "abs" and is a consequence of twos
 \ compliment arithmetic having one more negative numbers than
-\ than positive non-zero numbers.
+\ positive non-zero numbers. We could call "throw" in this
+\ condition, but the vast majority of "abs" functions in all
+\ programming languages do not do this.
 \
 \ "2\*" just doubles a number, it should be familiar by now.
 \
@@ -3668,14 +3702,18 @@ there 2/ primitive t!
 \ does have to worry about the number of bytes that are in a
 \ cell on a given architecture. There are words within this
 \ implementation that assume a cell size of 2 for optimization
-\ reasons, which is frowned up, such as "aligned", but they
-\ are kept to a minimum.
+\ reasons such as "aligned" but they are kept to a minimum, 
+\ that assumption is frowned upon because it negatively affects 
+\ portability.
 \
 \ - "cell" just pushes the size of a single cell in bytes.
 \ - "cell+" is used to increment an address to the next cell,
 \ without any care for cell alignment.
 \ - "cells" is used to convert a number of cells into the
 \ number of bytes those cells take up.
+\
+\ The words are trivial, "cell-" is missing because it is not
+\ used but is easy enough to define.
 \
 
 : cell 2 lit ; ( -- u )
@@ -3702,14 +3740,14 @@ there 2/ primitive t!
 : execute 2/ >r ; ( xt -- )
 
 \ "key?" is a word that interfaces with the input channel
-\ an attempts to get a single character, or byte, of input
+\ and attempts to get a single character, or byte, of input
 \ from it. It *attempts* to do so. Depending on the underlying
 \ implementation of the SUBLEQ machine it might block until
 \ a character is available (that is, it will wait until the
 \ user presses a key) and if there is no more input signal
 \ a negative value (all character values are between 0 and
 \ 255, so a negative value is treated as an error) known as
-\ End Of Input, or on a machine with a non-blocking character
+\ End Of Input, or on a machine with a non-blocking
 \ input a negative value will mean that it has not received
 \ a character just yet and calling the get-character function
 \ might succeed later.
@@ -3717,7 +3755,7 @@ there 2/ primitive t!
 \ As there is no way of determining which has occurred
 \ (perhaps they could return different error codes, but they
 \ do not), what the "key?" implementation does is instead
-\ configurable. By default it will assume there is a blocking
+\ configurable. By default it will assume there is blocking
 \ character input, and when a negative value is encountered it
 \ will halt the machine by calling "bye".
 \
@@ -3767,7 +3805,7 @@ there 2/ primitive t!
 \ the key presses can be used as an entropy source.
 \
 \ If we integrated entropy collection into the "key" word,
-\ then we could use this to create a higher quality (but
+\ then we could use this to create a higher quality PRNG (but
 \ still bad, it would still not be suitable as a
 \ source for a Cryptographically Secure Random Number
 \ Generator). Adding entropy collection along with implementing
@@ -3776,7 +3814,6 @@ there 2/ primitive t!
 \ to be added, that returns a random number from zero the
 \ maximum allowed by the machines cell width.
 \
-
 \ "emit" is the counter part to "key", it always blocks until
 \ it succeeds (and it is assumed that outputting a character
 \ is a fast operation that takes little time), it does call
@@ -3785,7 +3822,7 @@ there 2/ primitive t!
 \ "emit" does not get the character itself, it is expected
 \ that the execution vector stored in "\<emit\>" will do that.
 \ It is possible to make the output go to wherever you want,
-\ for example you could duplicate what is send to the
+\ for example you could duplicate what is sent to the
 \ programmer and write it to a section of memory as a temporary
 \ log, or search for strings within the output and process
 \ those.
@@ -5582,7 +5619,7 @@ there 2/ primitive t!
 \ defined*, knowing this, "recurse" can compile a jump to the
 \ correct place.
 \
-\ A little compiler security is added, the constant $BABE is
+\ A little compiler security is added, the constant $CAFE is
 \ pushed to the stack by ":" and checked by ";", if it is not
 \ found then an error is thrown and the word is not linked into
 \ the dictionary.
@@ -5668,7 +5705,7 @@ there 2/ primitive t!
 :to char bl word ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
 :to ;
-  BABE lit <> if -16 lit throw then ( check compile safety )
+  CAFE lit <> if -16 lit throw then ( check compile safety )
   =unnest lit ,                     ( compile exit )
   postpone [                        ( back to command mode )
   ?dup if                           ( link word in if non 0 )
@@ -5681,9 +5718,9 @@ there 2/ primitive t!
   last ,                ( point to previous word in header )
   bl word ?nul ?len ?unique ( parse word and do basic checks )
   count + h lit ! align ( skip over packed word and align )
-  BABE lit              ( push constant for compiler safety )
+  CAFE lit              ( push constant for compiler safety )
   postpone ] ;          ( turn compile mode on )
-:to :noname align here #0 BABE lit ] ; ( "name", -- xt )
+:to :noname align here #0 CAFE lit ] ; ( "name", -- xt )
 
 \ "'" is an immediate word that attempts to
 \ find a word in the dictionary (and throws an error if one

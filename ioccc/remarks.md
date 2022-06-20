@@ -63,8 +63,7 @@ and see how far you get!).
 
 ## Obfuscation techniques
 
-There's nothing too special about the obfuscation techniques
-that have gone into this C program;, just the usual:
+The following obfuscation has been used:
 
 - Replacing common bitwise operators with equivalents based on
 multiplexing, despite the theme multiplexing is my favourite
@@ -80,13 +79,12 @@ and variable naming.
 - Synthesizing constants, and doing so with "\_\_LINE\_\_" and 
 "\_\_func\_\_".
 
-This is all very standard stuff.
-
 But the big one is:
 
 - Obfuscating what is actually a really dead simple program,
-deobfuscating gets you nowhere, you still do not have an
-idea about how anything works.
+deobfuscating gets you nowhere, you still do not have any
+idea about how anything works unless you reverse engineer
+the data as well (which was not trivial to produce!).
 
 I toyed with the idea of filling the screen with a single
 dense blob and going crazy with it, but I think it is better
