@@ -3831,26 +3831,29 @@ there 2/ primitive t!
 : emit pause <emit> @ execute ; ( c -- : output byte )
 
 \ "cr" emits a newline, DOS style newlines are used instead
-\ of Unix style newlines, although that can be configured by
-\ removing the right constant and emit words.
+\ of Unix style newlines, although that can be changed by
+\ removing the right constant and emit words. This could be 
+\ made to be an option, set in the "{options}" field, but is
+\ not at present.
 \
 \ * Unix systems use "lf"
 \ * DOS and Windows uses "cr" then "lf"
 \
-\ There are other systems that use other crazy characters,
-\ but no one cares about them.
+\ There are other systems that use other crazy characters for
+\ newlines, but no one cares about them.
 \
 
 : cr =cr lit emit =lf lit emit ; ( -- : emit new line )
 
 \ There is nothing special about these three words, they are
-\ common, standard, convince words for fetching and storing
+\ common, standard, convenience words for fetching and storing
 \ variables in the system.
 \
 \ "get-current"/"set-current" get the dictionary or vocabulary
 \ that is currently being used to append new word definitions
-\ to, which does not have to be one in the search order. "last"
-\ gets the location of the last defined word in the dictionary.
+\ to, which does not have to be one in the search order, but
+\ usual is. "last" gets the location of the last defined word 
+\ in the dictionary.
 \
 \ See also "definitions".
 \
@@ -3876,7 +3879,7 @@ there 2/ primitive t!
 \         50 40 30 20 10 2 pick . ( prints 30 )
 \
 \ That is, the first element on the stack is at position 0,
-\ the second at position 1, and so on. Not the positions are
+\ the second at position 1, and so on. Note the positions are
 \ calculated before you put the index onto the stack and not
 \ after.
 \
@@ -3889,9 +3892,16 @@ there 2/ primitive t!
 \ Be warned though, this version of "pick" is slower but the
 \ main concern is its high stack usage, especially as systems
 \ with hardware stacks are likely to have small stacks,
-\ perhaps with even as low as eight values. This
-\ version of "pick" will quickly eat through that, overflow,
-\ and give incorrect results.
+\ perhaps with even as low as eight values. The version of 
+\ "pick" above will quickly eat through that, overflow,
+\ and give incorrect results when the index is too high, the
+\ one below does not have that limitation as the stack can be
+\ indexed into and directly accessed.
+\
+\ "roll" is not defined here, but in an ancillary section not
+\ included in the meta-compiled image. It is usually found with
+\ "pick" and likewise discouraged from use. It allows a varying
+\ number of items on the stack to be rotated.
 \
 
 : pick sp@ + [@] ; ( nu...n0 u -- nu )
@@ -3899,8 +3909,8 @@ there 2/ primitive t!
 \ "+!" is a useful utility word, often found with "1+!" and
 \ "1-!", neither of which are defined here as they are not
 \ used, "+!" is however. It is used to add a number to a
-\ value stored at an address, not replace, it stores the new
-\ number back to the address.
+\ value stored at an address, storing the result back to the
+\ same cell.
 \
 \ It is a common enough operation that it deserves its own
 \ word.
@@ -3918,14 +3928,19 @@ there 2/ primitive t!
 
 : +! 2/ tuck [@] + swap [!] ; ( u a -- )
 
-\ "lshift" is much faster to compute than "rshift" as it
-\ "2\*" is faster than "2/". That is why it is done in Forth
-\ as opposed to assembly.
+\ "lshift" is much faster to compute than "rshift" as
+\ "2\*" is faster than "2/". As "2\*" is much faster we can
+\ instead write "lshift" in Forth, instead of assembly, saving
+\ on space.
+\
 
 : lshift begin ?dup while 1- swap 2* swap repeat ; ( n u -- n )
 
+\ ### Character Load / Store
+\
 \ The SUBLEQ machine can only do cell aligned loads and stores,
-\ as such we need to it manually, for speed reasons this would
+\ This means we will have to make words that can perform 
+\ character or byte based access. For speed reasons this would
 \ be better done in assembly, but because of the complexity
 \ these words have been left as pure Forth.
 \
@@ -3938,12 +3953,16 @@ there 2/ primitive t!
 \ index, this sacrifice allows our Forth to behave like a
 \ normal Forth, and for us to easily be able to manipulate
 \ bytes and strings, however it means there are two types of
-\ address, cell address used by the SUBLEQ machine, and Forth
+\ address, cell addresses used by the SUBLEQ machine, and Forth
 \ addresses used by Forth interpreter. We must always be aware
 \ which address types we should use under what circumstances.
 \ If you see a multiplication or division by 2, it is most
 \ likely because the address type needs converting for an
-\ operation.
+\ operation. Other systems sometimes have complications when
+\ it comes to addressing which are more often present in 16-bit
+\ systems of in the embedded software space including near and
+\ far pointers, or separate address spaces for RAM, ROM and
+\ EEPROM.
 \
 \ "c@" is the simpler of the two operations, it performs a load
 \ and then just selects the high or low byte.
@@ -3961,7 +3980,8 @@ there 2/ primitive t!
 \
 \ These words are also partially responsible for the Endianess
 \ of the system, the Endianess of how the meta-compiler writes
-\ values also needs to be the same as the target.
+\ values into the target also needs to be the same as the 
+\ target.
 \
 
 : c@ dup @ swap lsb if 8 lit rshift else FF lit and then ;
@@ -3970,19 +3990,16 @@ there 2/ primitive t!
    >r over xor r> and xor swap ! ;
 
 \ "min" and "max" could have been written with "mux", as
-\ described, but on this Forth this is the fasted way of
-\ implementing them. "min" and "max" operate on *signed*
+\ described earlier, but on this Forth this is the fastest way 
+\ of implementing them. "min" and "max" operate on *signed*
 \ values, given two numbers they leave the minimum or maximum
-\ number on the stack, dropping the other one.
+\ number on the stack, dropping the other one. Some Forth
+\ systems define "umin" and "umax" which operate on unsigned
+\ values.
 \
 \ A non-destructive version that sorts the items on the stack
 \ by ascending or descending might be useful, but I cannot
 \ think of a purpose for them.
-\
-\ Note, that "min" and "max" operate on *signed* values, not
-\ unsigned ones, for unsigned values sometimes "umin" and
-\ "umax" are defined, all you have to do is replace the
-\ relevant comparison operator with its unsigned version.
 \
 
 : max 2dup < if nip else drop then ; ( n1 n2 -- n )
@@ -4022,7 +4039,7 @@ there 2/ primitive t!
 \ As the return stack is used to store the position of
 \ where a function was called from, if we implement as above
 \ we will clobber that position and return not to whence we
-\ came but it will do a fandango on the core instead. The
+\ came but we will do a fandango on the core instead. The
 \ same goes for the word "2r\>".
 \
 \ Note that the flag "compile-only" is set at well, this word
@@ -4039,9 +4056,9 @@ there 2/ primitive t!
 \ whilst "source" gets the contents of what is stored at
 \ "{tib}".
 \
-\ These words are using for parsing, which is done later on.
+\ These words are using for parsing, which is defined later on.
 \
-: tup {tib} up ; ( -- a )
+:s tup {tib} up ;s ( -- a )
 : source tup 2@ ; ( -- a u : get terminal input source )
 
 \ "aligned" is one of those words that has been implemented
@@ -4049,8 +4066,9 @@ there 2/ primitive t!
 \ size did.
 \
 \ It takes an address and aligns that address to the next
-\ address on a two byte boundary (and on a 32-bit system it
-\ would align on a four byte boundary, on 64-bit, 8 bytes).
+\ address on a two byte boundary (and on a 32-bit system this
+\ standard Forth word would align to a four byte boundary, on 
+\ 64-bit, 8 bytes).
 \
 \ For some example mappings:
 \
@@ -4060,10 +4078,10 @@ there 2/ primitive t!
 \        3 aligned -> 4
 \        4 aligned -> 4
 \
-\ "align" does the same for "aligned", but operates on the
+\ "align" does the same as "aligned", but operates on the
 \ dictionary pointer. It is common to want to align the
 \ dictionary pointer after writing a string into the
-\ dictionary.
+\ dictionary or byte oriented data of a varying length.
 \
 
 : aligned dup lsb 0<> #1 and + ; ( u -- u : align up ptr. )
@@ -4097,10 +4115,12 @@ there 2/ primitive t!
 \
 \ On some platforms "," can be used to write an execution token
 \ into a word definition, but that is not portable, an
-\ execution token does not have to be the same as the number
-\ that represents a call to a word within a word definition.
+\ execution token does not have the same representation as the 
+\ number that represents a call to a word that is compiled 
+\ within a word definition.
 \
-\ On this platform, using "," will fail, and will most likely
+\ On this platform, using "," will fail when compiling 
+\ execution tokens into the dictionary, and will most likely
 \ cause a crash or a reset. Instead "compile," is provided,
 \ which can convert in a platform specific way the execution
 \ token into a function call for that platform and reserve
@@ -4124,16 +4144,16 @@ there 2/ primitive t!
 \ for the length of the string, followed by the rest of the
 \ string. That is the traditional mechanism Forth used for
 \ strings, but it limits those strings to only containing
-\ 256 bytes, not a problem on the memory constrained 16-bit
-\ bit microcomputers that Forth grew up on, and not a problem
-\ here either.
+\ 255 bytes plus the length byte, not a problem on the memory 
+\ constrained 16-bit microcomputers that Forth grew up on, 
+\ and not a problem here either.
 \
 \ "count" can be used to extract the length of a string, but
 \ also for moving down that string, or any byte array.
 \
 \ An example for doing a byte-wise memory dump using "count":
 \
-\        : cdump for aft count . then next ;
+\        : cdump for aft count . then next ; ( b u -- )
 \
 \ And a common idiom for printing out counted strings:
 \
@@ -4146,22 +4166,22 @@ there 2/ primitive t!
 : +string #1 over min rot over + rot rot - ; ( b u -- b u )
 
 \ "type" is used to print out a string. It is not complicated,
-\ it does not make an effort to not print out non-graphic
+\ and does not make an effort to not print out non-graphic
 \ ASCII characters, so if you print out binary data you will
 \ get garbage. It is easy enough to make a version of "type"
-\ that did this filter, which would be useful for displaying
+\ that did this filtering, which would be useful for displaying
 \ Forth Blocks with "list".
 \
 
 : type ( a u -- : print out a string )
   begin dup while swap count emit swap 1- repeat 2drop ;
 
-\ "fill" is used to fill a section of memory with a byte,
-\  hence the name. More frequently "erase" is used, which does
-\ a fill but the byte being zero.
+\ "fill" is used to fill a section of memory with a repeated 
+\ byte, hence the name. More frequently "erase" is used, which 
+\ does a fill but the byte being zero.
 \
-\ "cmove" is used to move blocks of memory to another section
-\ of memory.
+\ "cmove" is used to move one section of memory to another 
+\ section of memory.
 \
 \ Both functions operate on bytes, not cells. "cmove" is often
 \ used for strings however, and "fill" (in the form of "blank"
@@ -4193,10 +4213,11 @@ there 2/ primitive t!
 \ * ".\$" is used to make counted strings that are always
 \ printed out.
 \
-\ The two meta-compiler words, use "($)" and ".\$" then call
-\ "\$literal" to grab the string from the input stream. Two
-\ words similar to the meta-compiler versions will be defined
-\ later, after the parsing words have been made.
+\ The two meta-compiler string words '."' and '$"', use 
+\ "($)" and ".\$" then call "\$literal" to grab the string from 
+\ the input stream. Two words similar to the meta-compiler 
+\ versions will be defined later, after the parsing words have 
+\ been made.
 \
 \ How does "do\$" work? Let us see a compiled string:
 \
@@ -4222,7 +4243,7 @@ there 2/ primitive t!
 \
 \ The word ".\$" calls "do\$" which does the finding of the
 \ string and the return address fixed up. However, before that
-\ we the first thing we call is ".\$", when we call something
+\ the first word we call is ".\$", when we call something
 \ we push the address of the next cell onto the return stack
 \ so when we return, we return to the address after the
 \ function just called. In this case when we call ".\$" it will
@@ -4231,7 +4252,7 @@ there 2/ primitive t!
 \ the address of "count" on the return stack (which we will
 \ want to execute) and the address of the string after that.
 \ "do\$" needs to extract the string address from return stack,
-\ copy it as it is meant to leave a copy on the state stack,
+\ copy it as it is meant to leave a copy on the return stack,
 \ calculate the next address after the string, and then
 \ replace the string address on the return stack with the
 \ address of the place after the string (aligned up of course).
@@ -4242,14 +4263,14 @@ there 2/ primitive t!
 \ the string.
 \
 \ It does all this in a short amount of code. It is not
-\ as complex as it sounds, it is more of a trick. "do\$" also
-\ has to convert to and from cell address, with "2*" and "2/",
-\ not difficult.
+\ as complex as it sounds, it is more of a trick that has to
+\ be learned. "do\$" also has to convert to and from cell 
+\ addresses with "2*" and "2/".
 \
 \ "do\$" is not a general purpose word, it should not be used
 \ in any "normal" code, nor is the technique it uses a general
 \ or good one. It does make for some nicely compact code
-\ however, and is one way of doing introspection.
+\ however, and is one example of doing introspection in Forth.
 \
 \ Another example of messing around with the return stack
 \ to achieve greatness is:
@@ -4260,8 +4281,8 @@ there 2/ primitive t!
 \ function, an example usage:
 \
 \        : x ." Executed. " ?exit ." Conditionally Exec." cr ;
-\        0 x
-\        1 x
+\        0 x ( prints "Executed. Conditionally Exec." )
+\        1 x ( prints "Executed. " )
 \
 
 :s do$ r> r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
@@ -4282,8 +4303,8 @@ there 2/ primitive t!
 \ "catch" and "throw", usually the author does not like
 \ exceptions in languages other than Forth (specifically C like
 \ languages, although the higher level the language is, the
-\ more acceptable they are), I instead prefer other mechanisms,
-\ or even just returning error codes.
+\ more acceptable they are), The author instead prefer other 
+\ mechanisms, or even just returning error codes.
 \
 \ As an aside about languages and error handling:
 \
@@ -4304,7 +4325,7 @@ there 2/ primitive t!
 \
 \ Java uses exceptions because it believes programmers are too
 \ lazy to check return codes, which is true, but just leads to
-\ programmers being lazy with exceptions (and catching too
+\ programmers being lazy with exceptions (and catching
 \ ones they should not be).
 \
 \ Adding exceptions to a language does not solve
@@ -4318,14 +4339,14 @@ there 2/ primitive t!
 \ to pass up error codes in Forth programs as everything is
 \ passed via the stack. For truly exceptional circumstances,
 \ where calling "abort" might be appropriate, an exception
-\ can be thrown instead. It does not encourage their use and
+\ can be thrown instead. Forth does not encourage their use and
 \ one does not find themselves asking "what exceptions can this
 \ possibly throw?", and they are usually left uncaught except
 \ by the outer interpreter, which has an exception handler of
 \ last resort.
 \
-\ The appendix contains a list of error codes that are thrown
-\ by this interpreter.
+\ The appendix contains a list of standard error codes some of 
+\ which are thrown by this interpreter.
 \
 \ While it can be tricky to get catch/throw correct, their
 \ operation in Forth is simple due to the execution model
@@ -4354,8 +4375,9 @@ there 2/ primitive t!
 \        <conditional> if <error-code> throw then
 \
 \ "if...then" generates slightly larger code on most Forth
-\ implementations, and branches, than using "and". The source
-\ code is slightly larger, although immediately easier to read.
+\ implementations, and also branches, than if "and" were used. 
+\ The source code is slightly larger, although immediately 
+\ easier to read.
 \
 \ Using "and" works in Forth as conditionals return Forth
 \ booleans where true is all bits set, and zero, or all bits
@@ -4368,8 +4390,8 @@ there 2/ primitive t!
 \
 \ The implementation of "catch" and "throw" are close the
 \ the example implementations in the standards and notes,
-\ such as in the ANS Forth standard
-\ <http://lars.nocrew.org/forth2012/exception/THROW.html> and
+\ such as in the ANS Forth standard (available at 
+\ <http://lars.nocrew.org/forth2012/exception/THROW.html>) and
 \ and the application note "Catch and Throw" by
 \ Michael Milendorf, Sun Microsystems from EuroForth 98.
 \
@@ -4377,7 +4399,7 @@ there 2/ primitive t!
 \ the return stack saving our data stack position, along with
 \ the previous exception handler, we then store the current
 \ return stack position in the handler and then execute the
-\ token given. If the execution token throws an exception
+\ given token. If the execution token throws an exception
 \ then the rest of "catch" after "execute" is not executed,
 \ only when no exception is thrown is it executed, it just
 \ has to restore the variable stack pointer and the previous
@@ -4405,11 +4427,11 @@ there 2/ primitive t!
       sp! drop r>        ( exc# )     \ restore stack
     then ;
 
-\ Now we have "catch" and "throw", we can use them, the next
-\ chapter defines the more advanced arithmetic words and
-\ division will need a way to throw if provided numbers outside
-\ the range for which the function is valid (ie. if we try to
-\ divide by zero).
+\ Now we have "catch" and "throw", we can use them. The next
+\ chapter defines the more advanced arithmetic words of 
+\ division is one such word. Division will need a way to throw 
+\ if provided numbers outside the range for which the function 
+\ is valid (ie. if we try to divide by zero).
 \
 \ But there are short words that we will define first
 \ that are also useful. Those are "abort" and "?depth".
@@ -4417,7 +4439,9 @@ there 2/ primitive t!
 \ "abort" throws -1, which should not be caught by the
 \ exception handler of last resort in the "interpret" word, but
 \ will cause "interpret" to halt the system after printing
-\ " -1?". "(abort)" is used in a similar function later on
+\ -1 followed by a question mark. 
+\ 
+\ "(abort)" is used in a similar function later on
 \ that prints out a string, but is also conditional, only
 \ aborting and printing out the error message if given a non
 \ zero number, that will be defined later, but the previously
