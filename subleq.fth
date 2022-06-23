@@ -5653,7 +5653,7 @@ there 2/ primitive t!
 \ far in this book having not know that. When we call ":" it
 \ does the following things, it parses the next word in the
 \ input stream, creates a header for that word, and then
-\ makes it so that everything we type in (baring "immediate"
+\ makes it so that everything we type in (barring "immediate"
 \ words) is compiled into the dictionary instead of being
 \ executed.
 \
@@ -5671,13 +5671,17 @@ there 2/ primitive t!
 \ be compiled into the dictionary, not the address of the new
 \ word, so the new word definition cannot be visible to the
 \ Forth interpreter until the conclusion of the word
-\ definition. This seems like it would prevent recursion, which
-\ is why the "recurse" word was made. ":" sets a variable
-\ called "{last}" as well, this will be used in "recurse" as
-\ it contains the location of the last defined word, well,
-\ really it points to the word that is *currently being
-\ defined*, knowing this, "recurse" can compile a jump to the
-\ correct place.
+\ definition. This seems like it would prevent recursion and it
+\ does, which is why the "recurse" word was made. ":" sets a 
+\ variable called "{last}" as well, this will be used in 
+\ "recurse" as it contains the location of the last defined 
+\ word, well, really it points to the word that is *currently 
+\ being defined*, knowing this, "recurse" can compile a call 
+\ to the correct place (and it must be a call, not a jump, 
+\ unless certain constraints are met which are not checked for
+\ in this implementation). These problems do not apply to the
+\ meta-compiler, we can define recursive words without the
+\ usual Forth semantics getting in our way.
 \
 \ A little compiler security is added, the constant $CAFE is
 \ pushed to the stack by ":" and checked by ";", if it is not
@@ -5688,18 +5692,19 @@ there 2/ primitive t!
 \ exit instruction into the dictionary following the word
 \ body. Note that it is also a compile only word, in some other
 \ Forth implementations it has been given some command mode
-\ semantics as well, but not in this one.
+\ semantics as well that are not related to its usual function, 
+\ but not in this one.
 \
 \ "?unique", "?nul", "?len" are three words that do some tests,
 \ "?unique" is for a warning (the only one in this Forth
 \ implementation) telling us if a word has been defined already
 \ in the word-list or vocabulary (this guide uses the terms
-\ interchangeably), "?nul" prevents zero length definition
+\ interchangeably). "?nul" prevents zero length definition
 \ words from being made. "?len" checks the length of a word to
 \ make sure it is not too long, the length of a Forth word is
 \ stored in the lower five bits of the first byte in the Name
-\ Field, the other three being used for flags, if it is too
-\ long, an exception is thrown.
+\ Field, the other three being used for flags, if the name is 
+\ too long, an exception is thrown.
 \
 \ Other eForth implementations provided "!csp" and "?csp" but
 \ did not use it within the base system itself, they can be
@@ -5716,9 +5721,9 @@ there 2/ primitive t!
 \ "!csp", which can be used to check whether words consume
 \ and produce the right number of arguments.
 \
-\ With that compiler security and those words, most problems
-\ can be found easily. They are not expensive to check
-\ for.
+\ With that compiler security and potentially the "csp"
+\ words, most problems can be found easily. They are not too
+\ expensive to check for.
 \
 \ "word" is general purpose parsing word that takes a character
 \ to parse as an argument on the stack, and then parses out
@@ -5726,20 +5731,20 @@ there 2/ primitive t!
 \ into a counted string at the current dictionary location and
 \ provides a pointer to it. This is useful for ":" and
 \ other words, but we should be careful using it, it writes
-\ to something that soon will be overwritten if we are not
+\ to a location that soon will be overwritten if we are not
 \ careful.
 \
 \ ":noname" can be used to create anonymous functions,
-\ functions with no-name and can only be referred to by a
+\ functions with no-name, that can only be referred to by an
 \ execution token. ":noname" leaves an execution token on the
 \ stack and it must cooperate with ";" so ";" does not attempt
 \ to link something without a word header into the dictionary,
 \ it does that by making sure ":noname" is given a 0 instead
-\ of a word address which is treats specially and does not
-\ link that into the dictionary. It must also make sure to
-\ push the right constant to the stack as well. It is much
-\ simpler than ":" as it does not have to deal with adding
-\ new words into the dictionary.
+\ of a word address which is treated specially by ';' and does 
+\ not link the zero address into the dictionary. ":noname" must 
+\ also make sure to push the right compiler security constant 
+\ to the stack as well. It is much simpler than ":" as it does 
+\ not have to deal with adding new words into the dictionary.
 \
 \ Two new words which use "word" will also be defined, "char"
 \ and "\[char\]", they both do a similar thing in that they
@@ -8780,7 +8785,7 @@ it being run.
 \              "Word Name", which is a variable length string.
 \        Word Name: The name of the Forth word, it's a variable
 \              length string. The length of which is stored in
-\              the lowest five bits of Cb.
+\              the lowest five bits of "CB".
 \        Code...: A variable length series cells that form the
 \              code portion of the Forth word, usually ending
 \              in an exit/return instruction.
@@ -8806,15 +8811,15 @@ it being run.
 \ are all temporary registers, "NR" should contain negative
 \ one (or all bits set). If the third operand is missing the
 \ jump destination is the next instruction, or in the notation
-\ used here the jump address is "+1" (although the might be
-\ converted to a "+3" by the assembler), the same goes for
-\ "+2"/"-2", they refer to the two instructions forward or
-\ back, and not cell addresses. If only one operand is present
-\ then the third operand is the usual jump to next instruction,
-\ and the first operand is zeroed by subtracting it from
-\ itself, eg. "subleq a" expands to "subleq a a +1". The
-\ JMP instruction is the same as our JMP instruction, ie.
-\ "JMP c" is "subleq Z Z c".
+\ used here the jump address is "+1" (although that "+1" might 
+\ be converted to a "+3" by the assembler to convert to cell
+\ address), the same goes for "+2"/"-2", they refer to the two 
+\ instructions forward or back, and not cell addresses. If only 
+\ one operand is present then the third operand is the usual 
+\ jump to next instruction, and the first operand is zeroed by 
+\ subtracting it from itself, eg. "subleq a" expands to 
+\ "subleq a a +1". The JMP instruction is the same as our JMP 
+\ instruction, ie. "JMP c" is "subleq Z Z c".
 \
 \ ### ADD a b c
 \
