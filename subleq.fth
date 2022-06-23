@@ -4359,7 +4359,7 @@ there 2/ primitive t!
 \ a non-zero number if an exception has been thrown by "throw"
 \ in the token just executed.
 \
-\ A common idiom not used in this Forth, because the bitwise
+\ A common idiom used in this Forth, even though bitwise
 \ operators are expensive and branching is cheap, is to use
 \ the following construct to conditionally throw:
 \
@@ -4458,18 +4458,18 @@ there 2/ primitive t!
 : abort #-1 throw ; ( -- : Time to die. )
 :s (abort) do$ swap if count type abort then drop ;s ( n -- )
 :s depth {sp0} lit @ sp@ - 1- ;s ( -- n )
-:s ?depth depth >= if -4 lit throw then ;s ( ??? n -- )
+:s ?depth depth >= -4 lit and throw ;s ( ??? n -- )
 
 \ # Advanced Arithmetic
 \
 \ The Forth arithmetic word-set attempts to solve the most
 \ complex arithmetic problem, and in doing so make the simpler
 \ problems trivial. This is not usually a viable method to
-\ take, greater complexity just usually leads to greater
+\ take, greater complexity usually just leads to greater
 \ complexity, however here it works well.
 \
 \ A note about Forth, when using the term "double" it does
-\ not refer to the floating point number, it refers to numbers
+\ not refer to floating point numbers, it refers to numbers
 \ which are twice the normal width of a number, so on a 16-bit
 \ system a 32-bit value stored as two integers on the stack
 \ would be a "double". It comes from "double width" or
@@ -4483,12 +4483,12 @@ there 2/ primitive t!
 \ 16-bit system would be slow and take up limited memory
 \ space.
 \
-\ A lot of the decisions that went into
-\ Forth are a consequence of the limited hardware on
-\ microcomputers available in the 1980s. If starting from
-\ scratch software wise, but with modern hardware, you would
-\ not create a language like Forth. It is a product of its
-\ time, which in a way makes it magical.
+\ A lot of the decisions that went into Forth are a consequence 
+\ of the limited hardware on microcomputers available in the 
+\ 1980s and earlier. If starting from scratch software wise, 
+\ but with modern hardware, you would not create a language 
+\ like Forth. It is a product of its time, which in a way makes 
+\ it magical and timeless, but dated.
 \
 \ As the author was not sentient in the 1980s, it makes them
 \ nostalgic for a time that they were not part of, a kind of
@@ -4511,13 +4511,14 @@ there 2/ primitive t!
 \ not, so it has to compute the carry itself, we already have
 \ addition thankfully.
 \
-\ It takes two single cell numbers and adds them together,
+\ "um+" takes two single cell numbers and adds them together,
 \ the result of the addition and then the carry is pushed to
 \ the stack. Using this we can construct some double cell
 \ words, "um+" is a mixed word, it effectively produces a
-\ double cell word, the name of the word closely follows the
-\ naming convention for Forth words of these type, it says
-\ "unsigned mixed addition", in effect.
+\ double cell number given two single cell numbers, the name of 
+\ the word closely follows the naming convention for Forth 
+\ words of these type, "um+" says "unsigned mixed addition", in 
+\ effect.
 \
 \ The double cell words all have "d" in them, for example
 \ "dnegate", or "d+", the double cell words are usually treated
@@ -4560,7 +4561,7 @@ there 2/ primitive t!
   next rot drop ;
 : * um* drop ;
 : um/mod ( ud u -- ur uq : unsigned double cell div/mod )
-  ?dup 0= if -A lit throw then
+  ?dup 0= -A lit and throw
   2dup u<
   if negate F lit
     for >r dup um+ >r >r dup um+ r> + dup
@@ -4596,7 +4597,6 @@ there 2/ primitive t!
 \ But by default they will not be included as they are easy
 \ enough to define if we need them and we want to keep the
 \ interpreter nice and slim.
-\
 
 \ # Terminal Input and Word Parsing
 \
@@ -4608,8 +4608,7 @@ there 2/ primitive t!
 \ interact correctly when typing in commands as a program
 \ running in a virtual terminal. Usually the operating system
 \ handles line discipline, however in case it does not these
-\ words handle it as well, there is no conflict between the
-\ two.
+\ words handle it as well.
 \
 \ The line parsing routines culminate in the construction of
 \ "query", which parses words with "parse", both will
@@ -4641,9 +4640,9 @@ there 2/ primitive t!
 \ given four items on the stack, and return three, which is
 \ a lot for a Forth word. The arguments given are as follows:
 \
-\         bot - Bottom Of Text
-\         eot - End Of Text
-\         cur - Current Text Position
+\         bot - Bottom Of Text.
+\         eot - End Of Text.
+\         cur - Current Text Position, or cursor.
 \         c   - The character to process.
 \
 \ The input buffer and our position in it is represented by
@@ -4651,11 +4650,11 @@ there 2/ primitive t!
 \ given a new character to process and decide on what to do
 \ with.
 \
-\ "accept" is the word that calls these two words and will
-\ finish processing when "cur" is equal to "eot", which would
-\ mean the input buffer is full. "ktap" takes advantage of that
-\ and uses that to force "accept" to exit when it encounters a
-\ newline.
+\ "accept" is the word that calls these two words, "tap" and
+\ "ktap", and will finish processing when "cur" is equal to 
+\ "eot", which would mean the input buffer is full. "ktap" 
+\ takes advantage of that and uses that to force "accept" to 
+\ exit when it encounters a newline.
 \
 \ "bot" is needed because when we delete characters we need to
 \ move the "cur" value backwards, however if we do it too much
@@ -4669,11 +4668,11 @@ there 2/ primitive t!
 \
 \ "ktap" processes control characters, the Delete character,
 \ the backspace and newlines. None of the characters given
-\ to "ktap" should be written to the buffer given to accept
+\ to "ktap" should be written to the buffer given to "accept"
 \ but should trigger different behaviors.
 \
 \ As mentioned, if "c" is a newline character "ktap" causes
-\ "cur" to equal "eot", causing accept to exit.
+\ "cur" to equal "eot", causing "accept" to exit.
 \
 \ The backspace is treated the same as the delete character,
 \ some systems use one or the other. It deletes a single
@@ -4687,7 +4686,8 @@ there 2/ primitive t!
 \ previous character.
 \
 \ The tests could be factored out, and the delete functionality
-\ "=bksp lit dup echo bl echo echo" are sometimes factored out.
+\ "=bksp lit dup echo bl echo echo" is sometimes factored out
+\ into a word called "^h".
 \
 \ If "ktap" does not know what to do with the control character
 \ then it replaces it with a space and calls "tap".
@@ -4725,26 +4725,28 @@ there 2/ primitive t!
 \ and then regurgitates the input string.
 \
 \ We will not use "accept" directly, but use it to make
-\ "query", it does more work though, "query" just calls
-\ "accept" on some internal buffers.
+\ "query", it does more little work though, "query" just calls
+\ "accept" on some internal buffers and sets some variables.
 \
 \ "accept" must make sure it does not overrun the input
 \ buffer, it also must handle control characters. Note that
 \ there is no part of the loop that says "terminate this
-\ function when a newline is occurred", it only stops the
-\ loop when the current cursor position
+\ function when a newline has occurred", it only stops the
+\ loop when the current cursor position exceeds the buffer
+\ length.
 \
-\ "tib" is a convenience word accessing the Terminal Input
-\ buffer. It is immediately used by "query", note that query
-\ also defines what our maximum length of a line is, this
-\ itself could be made into a variable so it can be changed,
-\ but we gain little from that on such a limited system.
+\ "tib" is a convenience word used for accessing the Terminal 
+\ Input Buffer. It is immediately used by "query", note that 
+\ "query" also defines what our maximum length of a line is,
+\ this itself could be made into a variable so it can be 
+\ changed, but we gain little from that on such a limited 
+\ system.
 \
-\ After query is completed it sets the index into the line
+\ After "query" is completed it sets the index into the line
 \ being parsed to zero, so the parser starts from the
 \ beginning, and also sets the length of the line just parsed.
 \
-\ After calling query we can split up the line.
+\ After calling "query" we can then split up the line.
 \
 
 : accept ( b u -- b u : read in a line of user input )
@@ -4759,20 +4761,29 @@ there 2/ primitive t!
 
 \ "-trailing" removes the trailing white-space from an input
 \ string, it does this non-destructively leaving the original
-\ string intact, it just modifies the string length of an
+\ string intact, it just modifies the string length in an
 \ address-length pair. It is used to post process the line
-\ given to us by query, it is not appropriate to call it
-\ in query to make it as reusable as possible.
+\ given to us by "query", it is not appropriate to call it
+\ in "query" to make "query" as reusable as possible.
 \
 : -trailing for aft ( b u -- b u : remove trailing spaces )
      bl over r@ + c@ < if r> 1+ exit then
    then next #0 ;
 
+\ This section will culminate in the word "parse", which will
+\ allow us to split up lines provided by "query" in to
+\ individual words. We will start by describing a component of
+\ "parse" called "look".
+\
 \ "look" is a moderately complex word, it takes a string,
 \ a character to parse until, and an execution token.
 \ The execution token is for a function that takes two
 \ characters and should return a boolean indicating when
-\ to stop looking within a word.
+\ to stop looking within a word. Note that parsing space is
+\ treated as a special case (partially because when splitting
+\ up a word we do not just want to split on the space character
+\ but also on tabs, control characters, NULs and the like,
+\ which should be treated as space).
 \
 \ The character is stored in the topmost return stack position
 \ for easy access with "r@" and dropped before exit.
@@ -4786,13 +4797,14 @@ there 2/ primitive t!
 \ "parse" is more fiddly than complex, it creates the string
 \ variables from which it will work from the Terminal Input
 \ Buffer and the "\>in" variable, then uses two calls to
-\ "look" to find the start and end with "unmatch" and "match"
-\ respectively. It then calculates a delta between the unmatch
-\ and match which it adds to "\>in", meaning subsequent calls
-\ to "parse" will skip over the section we have just parsed.
+\ "look" to find the start and end of a word with "unmatch" and 
+\ "match" respectively. It then calculates a delta between the 
+\ unmatch and match which it adds to "\>in", meaning subsequent 
+\ calls to "parse" will skip over the section we have just 
+\ parsed.
 \
 \ After that it retrieves the beginning of the "unmatch"
-\ where our parsed word resides, it also trims and white-space
+\ where our parsed word resides, it also trims any white-space
 \ from it if we are parsing white-space.
 \
 \ In short "parse" does the following:
@@ -4803,7 +4815,7 @@ there 2/ primitive t!
 \ 4. Calculates the distance between these two in bytes.
 \ 5. Fixes up the results.
 \
-\ It also has to deal with the situation of not finding
+\ "parse" also has to deal with the situation of not finding
 \ anything, in which case the string length it returns will
 \ be zero length.
 \
@@ -4848,13 +4860,13 @@ there 2/ primitive t!
 \
 \ The core of the numeric output system are the words
 \ "\<#", "#" and "#\>", for numeric input the main word
-\ is "\>number", which does a lot, and then the secondary
-\ word "number?" which pre and post processes the results of
-\ "\>number".
+\ is "\>number", which does the heavy lifting, and then the 
+\ secondary word "number?" which pre and post processes the 
+\ results of "\>number".
 \
-\ All of the numbers are affected by the "base" variable,
-\ which controls which bases are allowed in when parsing, and
-\ what base they are printed out as.
+\ All of the numeric I/O is affected by the "base" variable,
+\ which controls which base or radix we are operating in when 
+\ parsing numbers, and what base numbers are printed out in.
 \
 \ The output triplet words, "\<#", "#" and "#\>" operated on
 \ what is known as "hold-space", an area available (one for
@@ -4862,7 +4874,6 @@ there 2/ primitive t!
 \ output strings. Both the hold space and the base variable
 \ make numeric I/O thread safe but not reentrant, a flaw, but
 \ not a big one given the nature of Forth.
-\
 
 \ "banner" is a word I keep defining, but it is not a standard
 \ word so is kept in the system vocabulary, it prints a
@@ -4880,6 +4891,7 @@ there 2/ primitive t!
 \ check that it overflows hold space, so the programmer must be
 \ careful not to do this. As mentioned, hold space is a per
 \ thread area where numeric output strings are formatted.
+\ Characters in hold space are also stored in reverse order!
 
 : hold ( c -- : save character in hold space )
   #-1 hld +! hld @ c! ;
@@ -4894,12 +4906,12 @@ there 2/ primitive t!
 : #> 2drop hld @ this =num lit + over - ; ( u -- b u )
 
 \ "extract" extracts (hence the name) a single number from
-\ a double cell, it should this with the divide/modulo number,
-\ if we divide a number by the base we are operating in then
-\ we can extract a single digit from that number in the
-\ returned remainder argument, the quotient is reused until
-\ it is zero and no more digits can be extracted from the
-\ number.
+\ a double cell, it should do this with the divide/modulo 
+\ number word called "um/mod", if we divide a number by the 
+\ base we are operating in then we can extract a single digit 
+\ from that number in the returned remainder argument, the 
+\ quotient is reused until it is zero and no more digits can be 
+\ extracted from the number.
 \
 :s extract ( ud ud -- ud u : extract digit from number )
   dup >r um/mod r> swap >r um/mod r> rot ;s
@@ -4919,29 +4931,28 @@ there 2/ primitive t!
 \ "\<#" resets hold space for use by "\#" and "#\>".
 \
 \ If you wanted to make a number with N leading zeros, or with
-\ period between each character, or whatever is required for
-\ the output, you can use these set of words to perform that.
+\ a period between each character, or whatever is required for
+\ the output, you can use these set of words to achieve that.
 \
 : #  2 lit ?depth #0 base @ extract digit hold ; ( d -- d )
 : #s begin # 2dup ( d0= -> ) or 0= until ;       ( d -- 0 )
 : <# this =num lit + hld ! ;                     ( -- )
 
-\ "sign" is a adds a "-" character to hold space if the
+\ "sign" adds a "-" character to hold space if the
 \ provided number is negative. It is used by ".".
 \
 : sign 0< if [char] - hold then ;                ( n -- )
 
 \ "u.r" and "u." print out unsigned numbers, "u." prints out an
 \ unsigned number with a single space before it, "u.r" allows
-\ a variable number of spaces to be printed out before the
-\ number to be printed out. This allows for the creation of
-\ aligned numeric output.
+\ a variable number of spaces to be printed out This allows for 
+\ the creation of right aligned numeric output.
 \
 : u.r >r #0 <# #s #>  r> over - bl banner type ; ( u r -- )
 : u.     #0 <# #s #> space type ; ( u -- )
 
 \ "(.)" bypasses all of the standard Forth mechanisms for
-\ formatting Forth words, the reason for doing this is speed,
+\ formatting Forth numbers, the reason for doing this is speed,
 \ complex operations like division, as implemented by "um/mod",
 \ are slow on this SUBLEQ machine, in order to output the
 \ image quickly once meta-compiled we need a fast way to
@@ -4979,9 +4990,9 @@ there 2/ primitive t!
 \ contains a number, or a number and other characters).
 \
 \ The character is converted to a number, for example "A"
-\ becomes the decimal digit 10 in bases higher than ten. The
-\ digit is then accumulated into a double cell, the double
-\ cell is multiplied by the base before the digit is added. By
+\ becomes the decimal number 10 in bases higher than ten. The
+\ number is then accumulated into a double cell, the double
+\ cell is multiplied by the base before the number is added. By
 \ providing the initial double cell the word is made to be
 \ slightly more flexible than if it just pushed a double cell
 \ zero onto the stack itself.
@@ -5013,7 +5024,7 @@ there 2/ primitive t!
 \ interpreters, albeit not this one, "\#" is used to indicate
 \ the number is always decimal. These prefixes seem natural to
 \ use for these purposes that is hard to quantify, much like
-\ using is sometimes used "\$" to indicate something is a
+\ using "\$" is sometimes used to indicate something is a
 \ string, or "/" should be used as a path separator. Perhaps
 \ it just part of the culture of computers and programming, but
 \ it seems using something like "@" to indicate something is
@@ -5079,7 +5090,7 @@ there 2/ primitive t!
 \ It would have been useful to have ".s" and "." when
 \ debugging the bringing up of the Forth virtual machine,
 \ however as we have seen these words both require the Forth
-\ VM to be operation, and a lot of other Forth words to be
+\ VM to be operational, and a lot of other Forth words to be
 \ written before they can be implemented. Having a way to print
 \ out numbers is useful, and in fact basic, necessity in
 \ debugging a platform. One way this was achieved before ".s"
@@ -5107,7 +5118,7 @@ there 2/ primitive t!
 \ A vocabulary is a linked list of words, and a dictionary is
 \ an array containing multiple pointers to those linked lists.
 \
-\ This Forth keeps its word header in the same place at it
+\ This Forth keeps its word header in the same place as it
 \ does the function body, this is not traditional, and limits
 \ us in some ways, but it is easier to implement and more
 \ compact. One advantage of keeping the word header separate
@@ -5124,12 +5135,13 @@ there 2/ primitive t!
 \ header is stored intertwined with the code.
 \
 \ "#vocs" is the constant that tells us the number of
-\ dictionaries we can keep at one time, eight is usually the
-\ minimum, and on this system that is the case, we can have a
-\ total of eight and minimum of zero vocabularies active at any
-\ given period. It might be useful to have zero vocabularies
-\ loaded to prevent the entering of any words whilst executing
-\ a non-interactive program for instance.
+\ dictionaries we can load and search through at one time, 
+\ eight is usually the minimum, and on this system that is the 
+\ case, we can have a total of eight and minimum of zero 
+\ vocabularies active at any given period. It might be useful 
+\ to have zero vocabularies loaded to prevent the entering of 
+\ any words whilst executing a non-interactive program for 
+\ instance.
 \
 \ "(search)" will traverse a vocabulary looking for a word
 \ until one is found, or exiting without finding one, and
@@ -5146,15 +5158,14 @@ there 2/ primitive t!
 \ The word "compare" for testing string equality, required
 \ by "(search)", is also defined here.
 \
-
-\ "compare" exits early if the strings are not equal, otherwise
-\ it compares the strings byte for byte and exits if they are
-\ not equal. To keep the number of items on the stack small
-\ we can use "for" to traverse both strings, given we now know
-\ they are of equal length, and then use "count" to move the
-\ string along and extract a byte. We use subtraction to test
-\ whether the two are equal or not, and return that test value
-\ much like the C "strcmp".
+\ "compare" exits early if the strings are not of equal length, 
+\ otherwise it compares the strings byte for byte and exits if 
+\ they are not equal. To keep the number of items on the stack 
+\ small we can use "for" to traverse both strings, given we now 
+\ know they are of equal length, and then use "count" to move 
+\ the string along and extract a byte. We use subtraction to 
+\ test whether the two are equal or not, and return that test 
+\ value much like the C "strcmp" function.
 \
 
 : compare ( a1 u1 a2 u2 -- n : string equality )
@@ -5197,8 +5208,8 @@ there 2/ primitive t!
 \ on a match, the third on no match. The stack comment shows
 \ the three possible sets of returned values:
 \
-\        PWD PWD   1 : Word found, word is
-\        PWD PWD  -1 : Word found, word is
+\        PWD PWD   1 : Word found, word is immediate
+\        PWD PWD  -1 : Word found, word is not immediate
 \          0   a   0 : Word not found, returns name in "a"
 \
 \ "a", the word passed in, is returned when the word is not
@@ -5213,16 +5224,16 @@ there 2/ primitive t!
 \
 \ The pair of words return two "PWD" fields when a word is
 \ found, the address of the previous word in the linked list
-\ which points to found word and the word that has been found.
+\ which points to the found word and the word that has been 
+\ found.
 \
 \ This can help during decompilation to determine the last
 \ cell in a word, the previous word in the linked list of words
 \ starts (assuming no "allot" happens in between the word
 \ definitions) where the last one ended. As a last resort the
 \ "here" pointer can be used as a maximum value to not
-\ decompile past. In short, it can be used to find the start
-\ an end point of a word definition which is useful for
-\ decompilation.
+\ decompile past. This can be used to find the start an end 
+\ point of a word definition which is useful for decompilation.
 \
 
 :s (search) ( a wid -- PWD PWD 1 | PWD PWD -1 | 0 a 0 )
@@ -5263,29 +5274,29 @@ there 2/ primitive t!
 \ The main word defined in this section is called "interpret",
 \ when given a counted string it will attempt to execute that
 \ string, and throw an error if it cannot. It must deal with
-\ compile only words (not shown the diagram below), immediate
-\ words, numbers, and compile and command mode.
-\
+\ compile only words (not shown in the diagram below), 
+\ immediate words, numbers, and compile and command mode.
 \
 \ ![Interpreter Control Flow](img/flow.png)
 \
 \ (See the Appendix for ASCII Art Version)
 \
 \ Whilst the diagram shows the overall flow of "interpret", it
-\ leaves out a things, the "compile-only" words is one as
-\ mentioned, another is double cell words which are a less
-\ known feature of Forth.
+\ leaves out a few states, the "compile-only" words is one as
+\ mentioned, another is processing double cell words which are 
+\ a less well known feature of Forth.
 \
 \ On to the words themselves.
 \
 \ "(literal)" is to determine whether we should compile a
-\ number or push it on to the stack given the state, we do not
-\ need to make a version of double cell numbers as we can just
-\ call it twice. It is the word that will go into the execution
-\ vector, in "literal", which is what "interpret" actually
-\ uses. "literal" is an immediate word, as it is often used
-\ within word definitions to compile a number computed within
-\ that word definition, like this:
+\ number or push it on to the variable stack given the state of
+\ the interpreter, we do not need to make a version of 
+\ "(literal)" for double cell numbers as we can just call it 
+\ twice. "(literal)" is the word that will go into the 
+\ execution vector in "literal", "literal" is the word that 
+\ "interpret" actually uses. "literal" is an immediate word, as 
+\ it is often used within word definitions to compile a number 
+\ computed within that word definition, like this:
 \
 \        : example [ 2 2 + ] literal . cr ;
 \
@@ -5294,8 +5305,9 @@ there 2/ primitive t!
 \        : example 2 2 + . cr ;
 \
 \ Except that the computation of adding two numbers together is
-\ done in the first during compilation and not during runtime,
-\ making the first more efficient and smaller.
+\ done in the first example during compilation and not during 
+\ runtime, making the first example more efficient and smaller 
+\ than the second example.
 \
 \ The reason that "literal" is vectored is so that when writing
 \ meta-compilers it is useful to be able to replace the systems
@@ -5317,7 +5329,7 @@ there 2/ primitive t!
 
 \ "compile," is a version of "," which can turn an execution
 \ vector into something that will perform a call when compiled
-\ into the word. One some platforms execution vectors and calls
+\ into the word. On some platforms execution vectors and calls
 \ might have the same numeric format, however on this one they
 \ do not, there is a relationship that can be computed (and
 \ reversed) but you cannot directly call an execution vector,
@@ -5336,12 +5348,12 @@ there 2/ primitive t!
 :s ?found if exit then ( b f -- b | ??? )
    space count type [char] ? emit cr -D lit throw ;s
 
-\ The "interpret" diagram above describes the word, with
+\ The "interpret" diagram describes the word, with
 \ some minor details missing that will be describe later, it
 \ would be best to lay out the description in listed form as
 \ well.
 \
-\ 1. Interpret is called for a word, given as a found string.
+\ 1. Interpret is called for a word, given as a counted string.
 \ 2. Interpret attempt to find the string in the dictionary,
 \    if it is found it must be a word, "find" returns a pointer
 \    to the found word. We must then ask, what is the
@@ -5355,7 +5367,7 @@ there 2/ primitive t!
 \ 3. If we could not find the word, we attempt to parse it as
 \    a number, if it is numeric and we are in...
 \    a) Command Mode - We push the number to the stack and
-\       exit interpret.
+\       exit "interpret".
 \    b) Compile Mode - We compile the number into the
 \       dictionary.
 \    For numbers there are two types, single or double cell
@@ -5366,6 +5378,7 @@ there 2/ primitive t!
 \    the double or single cell number depending on the
 \    interpreter state as mentioned.
 \ 4. If it is not a number, or a word, then we throw an error.
+\    It would be ideal if the error could be vectored.
 \
 \ The order of that search matters, as it means that we could
 \ define new words that are also numbers, but they would be
@@ -5381,7 +5394,12 @@ there 2/ primitive t!
 \ vector, or it executes one if neither a number or a word is
 \ found. Either vector would make the interpreter more
 \ flexible, but neither is done, due to limitations on the
-\ image size.
+\ image size. In the newer standards of Forth there is a push
+\ to incorporate something called "recognizers" that would
+\ allow the interpreter to be extended arbitrarily, while a
+\ neat idea, they seem to go against the spirit of Forth by
+\ being too generic and complex, this is a matter of personal
+\ taste however.
 \
 
 : interpret ( b -- )
@@ -5392,7 +5410,7 @@ there 2/ primitive t!
       cfa compile, exit \ <- compiling word are...compiled.
     then
     drop
-    dup nfa c@ 20 lit and if -E lit throw then ( <- ?compile )
+    dup nfa c@ 20 lit and -E lit and throw ( <- ?compile )
     \ if it's not compiling, execute it then exit *interpreter*
     cfa execute exit
   then
@@ -5430,7 +5448,8 @@ there 2/ primitive t!
 \ * "words"
 \ * "eforth" (defined much later)
 \
-\ The other words are needed, but not in the root word-set:
+\ The other words which are needed by the system, but are not 
+\ needed in the root word-set are:
 \
 \ * "get-order"
 \ * ".id"
@@ -5438,16 +5457,16 @@ there 2/ primitive t!
 \
 \ So long as we keep the root word-set in the list of
 \ vocabularies that are active at any one time, we can always
-\ type "only forth definitions" to get the word list into
+\ type "only forth definitions" to get the dictionary into
 \ a good, known, order.
 \
 \ Forth implementations sometimes only have one vocabulary,
 \ especially the more amateur implementations. Vocabularies
 \ are useful (especially for meta-compilation) but are not
-\ necessary, so they are often viewed as unneeded.
+\ necessary, so they are often viewed as superfluous.
 \
-\ When a Forth implementation does have vocabulary, it usually
-\ has the following ones:
+\ When a Forth implementation does have multiple vocabularies, 
+\ it usually has the following ones:
 \
 \ * "root", for the minimal set of Forth words.
 \ * "forth", containing the standard Forth words.
@@ -5462,7 +5481,8 @@ there 2/ primitive t!
 \ approach is the logic that if those words are useful for
 \ the implementation then they will most likely be useful for
 \ the user of the implementation, so they should not be hidden
-\ away.
+\ away. This approach has the feeling of laziness to it and
+\ seems more like an excuse.
 \
 \ The "assembler" word-set is one that is not implemented in
 \ this Forth, it contains a set of system specific words
@@ -5521,19 +5541,29 @@ there 2/ primitive t!
    \ next line finds first empty cell
    #0 >r begin dup @ r@ xor while cell+ repeat rdrop
   dup cell - swap
-  context - 2/ dup >r 1- s>d if -50 lit throw then
+  context - 2/ dup >r 1- s>d -50 lit and throw
   for aft dup @ swap cell - then next @ r> ;
 :r set-order ( widn ... wid1 n -- : set current search order )
   \ NB. Uses recursion, however the meta-compiler does not use
   \ the Forth compilation mechanism, so the current definition
   \ of "set-order" is available immediately.
   dup #-1 = if drop root-voc #1 set-order exit then
-  dup #vocs > if -49 lit throw then
+  dup #vocs > -49 lit and throw
   context swap for aft tuck ! cell+ then next #0 swap ! ;r
 
 \ "forth-wordlist" contains the standard Forth words,
 \ excluding the root Forth words, as mentioned, and "system"
 \ contains non-standard Forth words used in the implementation.
+\
+\ As an aside we could save space by creating a special word
+\ for variables that could be used in the meta-compiler, here
+\ we push a memory location for where the variable is
+\ stored in both "forth-wordlist" and "system", instead we 
+\ could use the cell used to store the address of a variable
+\ as the variable, the new utility word would then need to
+\ push the location of that memory location and exit the word
+\ for this to work, it would be slightly slower but more
+\ memory efficient. The current setup works however.
 \
 
 :r forth-wordlist {forth-wordlist} lit ;r ( -- wid )
@@ -5559,9 +5589,9 @@ there 2/ primitive t!
 
 :r only #-1 set-order ;r ( -- : set minimal search order )
 
-\ ".id", an internal word, is used to print out the word header
-\ in a word definition. We cannot just use "count type" as we
-\ need to mask off special word behavior bits stored in the
+\ ".id", an internal word, is used to print out the name of a
+\ word in a word's header. We cannot just use "count type" as
+\ we need to mask off special word behavior bits stored in the
 \ length byte. We usually only want to search for words, and
 \ thus have the string we want with no need to print it out,
 \ but for error handling and implementing the word "words", we
@@ -5576,7 +5606,13 @@ there 2/ primitive t!
 \ vocabularies, and prints out the words in those vocabularies.
 \
 \ The topmost bit in the length field is used as a "hidden"
-\ flag, so if set we do not show the word.
+\ flag, so if set we do not show the word. It might be better
+\ to use the 6th bit instead (which we use for other purposes
+\ at the moment) to speed up word searching slightly as words
+\ can only be 32 characters in length, if we mask off the
+\ lowest 6-bits and use "compare" a hidden word will always
+\ return false at it will be longer than 32 characters. A
+\ slight efficiency gain.
 \
 \ The word is just one loop within the other, it uses
 \ "get-order" to retrieve each of the vocabularies and the
@@ -5725,11 +5761,11 @@ there 2/ primitive t!
  dup get-current (search) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
 :s ?nul dup c@ if exit then -10 lit throw ;s ( b -- b )
-:s ?len dup c@ 1F lit > if -13 lit throw then ;s ( b -- b )
+:s ?len dup c@ 1F lit > -13 lit and throw ;s ( b -- b )
 :to char bl word ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
 :to ;
-  CAFE lit <> if -16 lit throw then ( check compile safety )
+  CAFE lit <> -16 lit and throw ( check compile safety )
   =unnest lit ,                     ( compile exit )
   postpone [                        ( back to command mode )
   ?dup if                           ( link word in if non 0 )
@@ -6124,7 +6160,7 @@ there 2/ primitive t!
 :s (comp)
   r> {last} lit @ cfa
   ( check we are running does> on a created word )
-  dup @ to' (var) half lit <> if -1F lit throw then
+  dup @ to' (var) half lit <> -1F lit and throw
   ! ;s compile-only
 : does> compile (comp) compile (does) ;
    immediate compile-only

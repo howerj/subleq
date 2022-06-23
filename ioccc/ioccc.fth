@@ -645,7 +645,7 @@ there 2/ primitive t!
 : abort #-1 throw ; ( -- : Time to die. )
 :s (abort) do$ swap if count type abort then drop ;s ( n -- )
 :s depth {sp0} lit @ sp@ - 1- ;s ( -- n )
-:s ?depth depth >= if -4 lit throw then ;s ( ??? n -- )
+:s ?depth depth >= -4 lit and throw ;s ( ??? n -- )
 : um+ 2dup + >r r@ #0 >= >r ( u u -- u carry )
    2dup and 0< r> or >r or 0< r> and invert 1+ r> swap ;
 : dnegate invert >r invert #1 um+ r> + ; ( d -- d )
@@ -658,7 +658,7 @@ there 2/ primitive t!
   next rot drop ;
 : * um* drop ;
 : um/mod ( ud u -- ur uq : unsigned double cell div/mod )
-  ?dup 0= if -A lit throw then
+  ?dup 0= -A lit and throw
   2dup u<
   if negate F lit
     for >r dup um+ >r >r dup um+ r> + dup
@@ -825,7 +825,7 @@ there 2/ primitive t!
       cfa compile, exit \ <- compiling word are...compiled.
     then
     drop
-    dup nfa c@ 20 lit and if -E lit throw then ( <- ?compile )
+    dup nfa c@ 20 lit and -E lit and throw ( <- ?compile )
     \ if it's not compiling, execute it then exit *interpreter*
     cfa execute exit
   then
@@ -846,14 +846,14 @@ there 2/ primitive t!
    \ next line finds first empty cell
    #0 >r begin dup @ r@ xor while cell+ repeat rdrop
   dup cell - swap
-  context - 2/ dup >r 1- s>d if -50 lit throw then
+  context - 2/ dup >r 1- s>d -50 lit and throw
   for aft dup @ swap cell - then next @ r> ;
 :r set-order ( widn ... wid1 n -- : set current search order )
   \ NB. Uses recursion, however the meta-compiler does not use
   \ the Forth compilation mechanism, so the current definition
   \ of "set-order" is available immediately.
   dup #-1 = if drop root-voc #1 set-order exit then
-  dup #vocs > if -49 lit throw then
+  dup #vocs > -49 lit and throw
   context swap for aft tuck ! cell+ then next #0 swap ! ;r
 :r forth-wordlist {forth-wordlist} lit ;r ( -- wid )
 :r system {system} lit ;r ( -- wid )
@@ -874,11 +874,11 @@ there 2/ primitive t!
  dup get-current (search) 0= if exit then space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
 :s ?nul dup c@ if exit then -10 lit throw ;s ( b -- b )
-:s ?len dup c@ 1F lit > if -13 lit throw then ;s ( b -- b )
+:s ?len dup c@ 1F lit > -13 lit and throw ;s ( b -- b )
 :to char bl word ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
 :to ;
-  CAFE lit <> if -16 lit throw then ( check compile safety )
+  CAFE lit <> -16 lit and throw ( check compile safety )
   =unnest lit ,                     ( compile exit )
   postpone [                        ( back to command mode )
   ?dup if                           ( link word in if non 0 )
@@ -926,7 +926,7 @@ there 2/ primitive t!
 :s (comp)
   r> {last} lit @ cfa
   ( check we are running does> on a created word )
-  dup @ to' (var) half lit <> if -1F lit throw then
+  dup @ to' (var) half lit <> -1F lit and throw
   ! ;s compile-only
 : does> compile (comp) compile (does) ;
    immediate compile-only
