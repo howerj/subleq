@@ -6713,8 +6713,8 @@ there 2/ primitive t!
 \ things simple we will not do this. This behavior might be
 \ desired but it most likely is not.
 \
-\ You should be aware of this if you plan on using "ms" for
-\ more serious timing needs.
+\ You should be aware of all the potential problems of "ms"
+\ if you plan on using "ms" for more serious timing needs.
 \
 
 : ms for pause calibration @ for next next ; ( ms -- )
@@ -6751,15 +6751,18 @@ there 2/ primitive t!
 \ This will most likely work under Unix systems, and
 \ likely fail if done under Windows CMD.EXE (although a program
 \ called ANSICON can remedy that), as Windows' terminal program
-\ does not support ANSI escape codes, or it depends on the
-\ version of windows and settings.
+\ does not support ANSI escape codes, or more accurately it 
+\ depends on the version of windows and settings.
 \
 \ Standard Forths contain the words "at-xy" and "page" for
 \ controlling the cursor position and clearing the screen
 \ respectively, so these words are provided. Some interesting
-\ games can be made just these two, limited terminal games,
-\ but games nonetheless. If non-blocking input is implemented
-\ games then a Tetris or Snake clone can be made.
+\ games can be made using just these two, limited terminal 
+\ words, but games nonetheless, games such as Hack, Chess, 
+\ Checkers, Sokoban, Conways Game Of Life, 2048, and 
+\ Minesweeper. If non-blocking input is implemented
+\ games then a Tetris, Space Invaders, Pac-Man, Pong or Snake 
+\ clones can be made.
 \
 \ The first column and row in "at-xy" is "1" and not "0".
 \
@@ -6774,20 +6777,22 @@ there 2/ primitive t!
 \ # Forth Blocks
 \
 \ Forth blocks are a neat concept, they are a minimal way of
-\ giving access to mass storage that any mass storage system
-\ can provide, no file system is required, just the ability
-\ to read and write blocks of data to non-volatile storage.
+\ giving access to mass storage that even the most spartan
+\ system can provide, no file system is required, just the 
+\ ability to read and write blocks of data to non-volatile 
+\ storage.
 \
 \ Apart from in embedded systems, or as a building block for
 \ other words, the Forth block system is an obsolete way of
 \ interacting with mass-storage, as Forth kernels have moved
-\ onto providing a File Access Word set that is similar in
+\ on to providing a File Access Word set that is similar in
 \ design to the C file functions, "fopen", "fread", etcetera.
 \
 \ Unfortunately the SUBLEQ machine in a quest for simplicity
 \ provides no mechanism for saving to non-volatile storage, it
-\ would be easy enough to add and interface with, but that
-\ will not happen, there is little need for it.
+\ would be easy enough to add an interface which provides
+\ for this but that will not happen as there is little need for 
+\ it.
 \
 \ There are some Forth implementations that instead map the
 \ memory available to the implementation to blocks. This is
@@ -6795,7 +6800,9 @@ there 2/ primitive t!
 \ word-set is that the user does not have to worry about the
 \ details of how it works, as far as the code is concerned, it
 \ could be writing to flash, to a hard-drive, or just to
-\ memory like this implementation does.
+\ memory like this implementation does. Some block systems
+\ map contiguous sections of blocks to different types of
+\ memory.
 \
 \ The block word-set has been added because it can be used as
 \ a basis for text editing (see the block editor described
@@ -6805,10 +6812,12 @@ there 2/ primitive t!
 \
 \ It would be interesting to build a simple file system on top
 \ of the Forth Block mechanism, and a set of DOS like utilities
-\ for accessing and executing files on it. But that is a
-\ different story. It could also be used to simulate a simple
-\ DOS like operating system within this Forth system. The
-\ file system would also be portable, but limited.
+\ for accessing and executing files on it.  It could also be 
+\ used to simulate a simple DOS like operating system within 
+\ this Forth system. The file system would also be portable, 
+\ but limited. These possibilities will be described in more
+\ detail in the appendix, along with the possible of adding
+\ peripheral support for mass storage.
 \
 \ It is possible to use the block system to map arbitrary bits
 \ of memory to different things, for example, we could map
@@ -6818,7 +6827,12 @@ there 2/ primitive t!
 \ implementation details whilst providing a high degree of
 \ utility.
 \
-\ Anyway, on to the block word-set. A Block consists of a
+\ Another advantage of the block system is that it allows a
+\ constrained 16-bit system to potentially address much more
+\ memory than a 16-bit address would allow, up to 65536 blocks
+\ of 1024 bytes.
+\
+\ On to the block word-set itself. A Block consists of a
 \ 1024 byte chunk of memory stored in a buffer, for text
 \ editing purposes it is usually treated as 16 lines each of
 \ 64 bytes in length. The block can be transferred in and out
@@ -6830,10 +6844,16 @@ there 2/ primitive t!
 \ "block". If a block is marked as dirty and is to be evicted
 \ from the block buffers it is written back to mass storage
 \ before another block is loaded, otherwise the changes to
-\ that block are discarded. Note that because this
-\ implementation of the block word set just maps 1024 chunks
-\ of memory to each block the changes are always reflected
-\ and there are no block transfers.
+\ that block are discarded. 
+\
+\ Note that because this implementation of the block word set 
+\ just maps 1024 chunks of memory to each block the changes 
+\ are always reflected and there are no block transfers, this 
+\ is one feature of the system that could be changed to make 
+\ the behavior more consistent with other implementations, 
+\ however that this would require memory to store at least one, 
+\ preferably two, block buffers. It would not require any new
+\ peripheral support.
 \
 \ That is the rough description of how things work in a normal
 \ Forth block system. The three main words are "block",
@@ -6852,7 +6872,7 @@ there 2/ primitive t!
 \ loaded then it does nothing but return a pointer to the
 \ already loaded block. This version of "block" also checks
 \ that there is at least one value on the stack and it also
-\ causes "pause", described in the multi-threading chapter.
+\ calls "pause", described in the multi-threading chapter.
 \
 \ The word "update" marks the last loaded block as dirty,
 \ allowing the block system to determine what to write back,
@@ -6904,10 +6924,10 @@ there 2/ primitive t!
 
 \ # The Read-Eval-Loop
 \
-\ While there are more sections of optional material, this
+\ Whilst there are more sections of optional material, this
 \ one finally puts everything together and produces the Forth
-\ interpreter loop, were we read in a line, parse it, execute
-\ it can catch any errors. New support words will be
+\ interpreter loop, where we read in a line, parse it, execute
+\ it and catch any errors. New support words will be
 \ defined, but the main ones are "evaluate", "load",
 \ "task-init", "quit" and "(cold)". It has an odd name, but
 \ traditionally the main interpreter loop is called "quit"
@@ -6935,9 +6955,13 @@ there 2/ primitive t!
 \ option is set to do so, which allows the system to be used
 \ as a pipe in a Unix command line. The "ok" prompt can be
 \ turned off before it outputs a single "ok", with the first
-\ line in this file.
+\ line in this file being the following as we have seen:
 \
 \        defined eforth [if] ' nop <ok> ! [then]
+\
+\ Note on this platform the following would also work:
+\
+\        defined eforth [if] ' ) <ok> ! [then]
 \
 \ "ok" is not called directly, but is stored as an execution
 \ token in "\<ok\>".
@@ -6945,13 +6969,12 @@ there 2/ primitive t!
 
 :s ok state @ 0= if ."  ok" cr then ;s ( -- )
 
-\ Now we are getting somewhere, "eval" goes through each word
-\ in a line until there are no more and executes "interpret"
-\ for each word, it is sure to check the stack depth after
-\ each call to "interpret" in an attempt to provide some kind
-\ of limited error detection.
+\ "eval" goes through each word in a line until there are no 
+\ more and executes "interpret" for each word, it is sure to 
+\ check the stack depth after each call to "interpret" in an 
+\ attempt to provide some kind of limited error detection.
 \
-\ It also prints out "ok", by execution the contents of
+\ It also prints out "ok", by executing the contents of
 \ "\<ok\>", as just mentioned.
 \
 :s eval
@@ -6968,8 +6991,10 @@ there 2/ primitive t!
 \ to always restore that input state. "source-id" will be set
 \ to -1 for the duration of the evaluation.
 \
-\ Now that we have "evaluate" we can use to extend the block
+\ Now that we have "evaluate" we can use it to extend the block
 \ words...
+\ 
+
 : evaluate ( a u -- : evaluate a string )
   get-input 2>r 2>r >r        ( save the current input state )
   #0 #-1 t' nop lit set-input ( set new input )
@@ -6978,7 +7003,7 @@ there 2/ primitive t!
   throw ;                     ( throw on error )
 
 \ "load" is one of the missing words needed by our block
-\ wordlist, it evaluates a forth block, treating each 64 bytes
+\ word set, it evaluates a forth block, treating each 64 bytes
 \ as a single line. That has the consequence that comments
 \ end at those line boundaries.
 \
@@ -6992,7 +7017,8 @@ there 2/ primitive t!
 \ loads and executes a range of blocks inclusively, and "--\>"
 \ when used within a block discards the rest of the block from
 \ being executed and continues execution from the next block,
-\ which can be chained together.
+\ which can be chained together. The next block is the block
+\ with the current block number plus one.
 \
 :s line 6 lit lshift swap block + 40 lit ;s ( k l -- a u )
 :s loadline line evaluate ;s ( k l -- ??? : execute a line! )
@@ -7008,8 +7034,8 @@ there 2/ primitive t!
 \
 \ "info" is optionally printed out at start up, a bit has
 \ to be enabled in the "{options}" variable for that to happen,
-\ it is not necessary, but it means that information about
-\ the project is stored with it.
+\ it is not needed, but it means that information about
+\ the project is stored within it.
 \ 
 \ It might be to refactor "info" into multiple words (if we
 \ had the space) to break down the information provided into
@@ -7038,15 +7064,15 @@ there 2/ primitive t!
 \
 \ "task-init" is a poor Forth function, it really should be
 \ split up into words that deal with the different aspects of
-\ setting up a task.
+\ setting up a task but we lack space.
 \
 \ The word must set up the user variables to point to the
-\ default execution tokens, or to their default values. It
+\ default execution tokens or to their default values. It
 \ also sets the variables for the saved register locations,
 \ and an initial execution token of "bye", which should be
 \ replaced before the task is executed or the system will halt.
 \
-\ Note that this word also handles the "{options}" bit, the
+\ Note that this word also inspects the "{options}" bit, the
 \ first bit, which turns off echoing of the user input if
 \ it is set, turning echoing on or off can be useful depending
 \ on your terminal settings. If your terminal echos back what
@@ -7056,23 +7082,17 @@ there 2/ primitive t!
 \ eerily silent and you will not be able to see what you have
 \ typed in.
 \
-\ The original eForth system factored out setting up with
-\ input/output hooks with different words, some of which were
-\ used for file transfer or for normal input, which could be
-\ replicated, but will not be for now. It also had a word
-\ called "io!" for initializing the I/O channels, which might
-\ be needed on some systems, but not this one.
-\
 \ This word should be treated as a list of things to be
 \ initialized. That list includes:
 \
-\  1. Setting up the task linked list pointer.
+\  1. Setting up the task linked list pointer, linking in
+\     the task to the list of all running tasks.
 \  2. Setting the initial execution token.
-\  3. Setting up empty return and variable stacks.
+\  3. Setting up return and variable stacks.
 \  4. Making the saved top of the stack empty for the task.
 \  5. Setting the default input and output radix (to decimal).
 \  6. Setting up the I/O behavior.
-\  7. Making the input buffer position "\>in" is zero.
+\  7. Making the input buffer position "\>in" zero.
 \  8. Putting default values in variables like "dpl".
 \  9. Making the terminal input buffer point to the right place
 \     within the tasks memory.
@@ -7100,8 +7120,8 @@ there 2/ primitive t!
 \ just calls "console", another word defined slightly later
 \ on.
 \ * "xio", or Exchange I/O, takes three executions tokens and
-\ set the vectors for "\<echo\>", "\<ok\>", "\<tap\>" and
-\ "\<expect\>" (it sets "\<expect\>" to the default words
+\ sets the vectors for "\<echo\>", "\<ok\>", "\<tap\>" and
+\ "\<expect\>" (it sets "\<expect\>" to the default word
 \ "accept". This does not change where the input comes from
 \ or goes to, but terminal (processing backspace characters
 \ or not, for example) behavior, the prompt (usually printing
@@ -7140,16 +7160,17 @@ there 2/ primitive t!
 \ This would in effect make two of the text interpreters the
 \ programmer would use talk to each other in an automated
 \ manner, with little difference between typing the commands
-\ in and executing them, the line input mechanism could be
+\ in and executing them. The line input mechanism could be
 \ extended with a line length and checksum prefix to ensure
 \ data integrity over a potentially unreliable communications
 \ medium (which means "accept" would have to be vectored to a
 \ different word that implemented this), and acknowledgement
-\ of success echoed back with via "ok".
+\ of success echoed back via "ok".
 \
 \ This is all hypothetical, but is one reason for vectoring
 \ I/O, another is so that you can read directly from a file
-\ system without much difficulty.
+\ system without much difficulty given the facilities for file
+\ access.
 \
 :s xio t' accept lit <expect> ! <tap> ! <echo> ! <ok> ! ;s
 :s hand t' ok lit
@@ -7179,7 +7200,7 @@ there 2/ primitive t!
 \ "ini" initializes the current task, the system brings itself
 \ up at boot time, and where "ini" is executed is critical,
 \ before it is called none of the words that rely on the
-\ execution tokens being set can be executed without causes
+\ execution tokens being set can be executed without causing
 \ the system to reboot. It is called from "(cold)", the first
 \ forth word to run.
 \
@@ -7210,18 +7231,18 @@ there 2/ primitive t!
 \ is called.
 \
 \ "(error)" is the default error handling word, it will be
-\ called from via the "\<error\>" execution vector, it
+\ called from via the "\<error\>" execution vector. "(error)"
 \ prints out the error number, then a "?" (inspired by the
 \ wonderful error handling of the text editor "ed", expounded
 \ upon in the article "Ed is the standard text editor"), and
 \ calls "bye" if the error was "-1", which is "abort". If not
 \ it calls "ini", but makes sure it will be called in case of
-\ an error next time instead of "bye". Another candidate for
-\ error handling is the "\<ok\>" vector, instead of having a
-\ separate prompt vector, that could also act as an error
-\ handler, as we never want to print out "ok" when an error
-\ has occurred. To keep things conceptually simple, they are
-\ in separate vectors.
+\ an error next time instead of "bye", as "ini" sets 
+\ "\<error\>" to "bye". Another candidate for error handling is 
+\ the "\<ok\>" vector, instead of having a separate prompt 
+\ vector, that could also act as an error handler, as we never 
+\ want to print out "ok" when an error has occurred. To keep 
+\ things conceptually simple, they are in separate vectors.
 \
 
 :s (error) ( u -- : quit loop error handler )
@@ -7249,8 +7270,9 @@ there 2/ primitive t!
 \       Forth image, it then toggles the 2nd bit making
 \       it so the image is not checked again (as adding
 \       new definitions modifies the image, calling "(cold)"
-\       again would mean the checksum would fail. If the
-\       checksum fails it prints and error messages and halts.
+\       again after defining new words would mean the checksum 
+\       would fail. If the checksum fails it prints an error 
+\       messages and halts.
 \ 4. Calls "quit" to enter into the Forth interpreter loop.
 \
 \ And that completes the Forth boot sequence.
@@ -7275,7 +7297,7 @@ there 2/ primitive t!
 \ Some of the concepts have already been talked about
 \ previously, namely USER variables, the task area, the "pause"
 \ word and "task-init". This section brings everything together
-\ and makes those the multitasking usable. It adds words to
+\ and makes multitasking usable. It adds words to
 \ create new named tasks, to add that task to the list of tasks
 \ to execute, to wait on a "signal" sent from another task,
 \ to send messages between tasks, and to turn multitasking
@@ -7298,7 +7320,7 @@ there 2/ primitive t!
 \
 \ The point of multithreading is to divide up the processor
 \ time so that multiple threads of execution can share the
-\ same processor and pretend they are executing one a single
+\ same processor and pretend they are executing on a single
 \ processor. Imagine if you have a computer that has multiple
 \ users on it, you do not want to have to wait for one user
 \ to log off the server before you can log into it, you both
@@ -7310,9 +7332,10 @@ there 2/ primitive t!
 \ again the network. You do not want the game to halt whilst
 \ you play a sound, nor do you want the graphics subsystem to
 \ stop when it is waiting for a keyboard press, you want
-\ everything to appear so it is being computed all at the same
-\ time, even on single CPU core systems (which are getting are
-\ getting rarer nowadays even in the embedded computer space).
+\ everything to appear as if it is being computed all at the 
+\ same time, even on single CPU core systems (which are getting 
+\ are getting rarer nowadays even in the embedded computer 
+\ space).
 \
 \ Threading and different threading models "solve" this, and
 \ do so in different ways. The cooperative threading model is
@@ -7320,7 +7343,7 @@ there 2/ primitive t!
 \ right. It does have a disadvantage in that a single thread
 \ of execution can hold up and block the entire system from
 \ running, and each thread must manually have "pause" functions
-\ inserted in it for this to work.
+\ inserted in it for it to work.
 \
 \ As we control the virtual machine, it would be possible to
 \ alleviate some of this by making it do the "pause"
@@ -7355,6 +7378,13 @@ there 2/ primitive t!
 \ impossible. Also note, "ms", "emit" all call "pause",
 \ allowing the threads to switch between themselves.
 \
+\ If a thread returns an error condition exists, each thread
+\ should never return. It would be possible to make it so
+\ that by default each thread when initialized pushes a word
+\ onto the return stack that removes the current thread from
+\ execution, calling "bye" when no words are left, but this
+\ is not done.
+\
 \ "multi" and "single" are used in the "rx" thread to
 \ to prevent other I/O operations from interfering with
 \ the output of the output of "rx". Note that ".", "space"
@@ -7370,6 +7400,25 @@ there 2/ primitive t!
 \ mode is entered, and only when everything is setup do we
 \ enter multi mode again, "schedule" is used to keep the
 \ interpreter task busy.
+\
+\ This section itself could be expanded upon greatly, but it
+\ would become a book in of itself, threading and scheduling
+\ are the domain of operating systems. Books that deal with
+\ operating systems such as Unix, or real-time embedded systems
+\ are best consulted to get an understanding of this deep 
+\ topic. Different approaches have different trade-offs, a
+\ scheduler for a real time system is very different from a
+\ preemptive one, likewise for single and multicore systems.
+\ And an operating system that deals with a Memory Management
+\ Unit is also very different to a system that uses real
+\ addresses exclusively like this one.
+\
+\ One type of cooperative multithreading system that I am fond
+\ of using in the embedded realm is to use cooperative 
+\ multithreading and only fire an interrupt to signal an error
+\ if the allotted amount of time given to a task is exceeded,
+\ this cannot be done in this system because there is both no
+\ concept of time nor an interrupt mechanism.
 \
 \ Now for a more detailed description of the words themselves.
 \
