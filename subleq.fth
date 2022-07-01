@@ -9600,4 +9600,11 @@ users -order
 \
 \ Happy hacking.
 \
-
+\ ## Licenses
+\
+\ The project as a whole comes with its own license, for the
+\ code and generated SUBLEQ images they are released under
+\ the public domain and/or the Unlicense. However the book
+\ uses a LaTeX template with its own license, available from:
+\ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
+\
