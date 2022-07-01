@@ -52,9 +52,9 @@ subleq.md: subleq.fth subleq 1.dec convert.fth makefile
 	echo >> $@
 	cat 1.dec | tr '\n' ' ' | fmt -w 48 | sed 's/^/\t/' >> $@
 	echo >> $@
-	#echo "## Source code without (major) comments:" >> $@
-	#echo >> $@
-	#grep '^[^\\]' subleq.fth | sed 's/^/\t/' >> $@
+	echo "## Source code without (major) comments:" >> $@
+	echo >> $@
+	grep '^[^\\]' subleq.fth | sed 's/^/\t/' >> $@
 	echo >> $@
 
 subleq.htm: subleq.md
@@ -63,7 +63,7 @@ subleq.htm: subleq.md
 #META=--metadata=title:"SUBLEQ eForth" --metadata=author:"Richard James Howe" --metadata=lang:"en-US"
 IMAGES=img/flow.png img/dictionary.png
 
-subleq.pdf: subleq.md ${IMAGES}
+subleq.pdf: subleq.md ${IMAGES} eisvogel.tex
 	pandoc ${META} --template eisvogel.tex -V book --toc $< -o $@
 
 %.png: %.dia
