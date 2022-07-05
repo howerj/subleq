@@ -30,19 +30,19 @@ gforth.dec: subleq.fth
 gforth: subleq gforth.dec
 	./subleq gforth.dec
 
-subleq.md: subleq.fth subleq 1.dec convert.fth makefile
+subleq.md: subleq.fth subleq 1.dec convert.fth
 	rm -f $@
 	echo "---" >> $@
-	#echo "title: \"SUBLEQ eForth Meta-Compilation\"" >> $@
-	#echo "author: [Richard James Howe]" >> $@
-	#echo "date: \"2022-03-01\"" >> $@
-	#echo "subject: \"SUBLEQ eForth\"" >> $@
-	#echo "keywords: [SUBLEQ, Forth]" >> $@
-	#echo "subtitle: \"Forth Meta-Compilation for a SUBLEQ machine\"" >> $@
-	#echo "lang: \"en\"" >> $@
+	echo "title: \"SUBLEQ eForth Meta-Compilation\"" >> $@
+	echo "author: [Richard James Howe]" >> $@
+	echo "date: \"2022-03-01\"" >> $@
+	echo "subject: \"SUBLEQ eForth\"" >> $@
+	echo "keywords: [SUBLEQ, Forth]" >> $@
+	echo "subtitle: \"Forth Meta-Compilation for a SUBLEQ machine\"" >> $@
+	echo "lang: \"en\"" >> $@
 	echo "titlepage: true," >> $@
 	echo "titlepage-rule-color: \"360049\"" >> $@
-	echo "titlepage-background: \"img/subleq-ebook.png\"" >> $@
+	#echo "titlepage-background: \"img/subleq-ebook.png\"" >> $@
 	echo "---" >> $@
 	cat convert.fth subleq.fth | ./subleq 1.dec >> $@
 	dos2unix $@
@@ -60,18 +60,19 @@ subleq.md: subleq.fth subleq 1.dec convert.fth makefile
 subleq.htm: subleq.md
 	markdown $< > $@
 
-#META=--metadata=title:"SUBLEQ eForth" --metadata=author:"Richard James Howe" --metadata=lang:"en-US"
 IMAGES=img/flow.png img/dictionary.png
 
 subleq.pdf: subleq.md ${IMAGES} eisvogel.tex
-	pandoc ${META} --template eisvogel.tex -V book --toc $< -o $@
+	pandoc ${META} --template eisvogel.tex -V fontsize=8pt -V book -V code-block-font-size=8pt --toc $< -o $@
 
 %.png: %.dia
 	dia -e $@ $<
 
 
+EPUB=--metadata=title:"SUBLEQ eForth" --metadata=author:"Richard James Howe" --metadata=lang:"en-US"
 subleq.epub: subleq.md ${IMAGES}
-	pandoc --epub-cover-image=img/subleq-ebook.png ${META} --toc $< -o $@
+	#pandoc --epub-cover-image=img/subleq-ebook.png ${EPUB} --toc $< -o $@
+	pandoc --epub-cover-image=img/subleq-ebook.png ${EPUB} --toc $< -o $@
 
 eforth.c: 1.dec
 	rm -f $@
