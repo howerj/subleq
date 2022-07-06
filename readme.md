@@ -5,6 +5,11 @@
 * Repo: <https://github.com/howerj/subleq>
 * License: [The Unlicense](LICENSE) / Public Domain
 
+If you feel like supporting the project you can buy a book from
+Amazon, available [here](https://www.amazon.com/SUBLEQ-EFORTH-Forth-Metacompilation-Machine-ebook/dp/B0B5VZWXPL>)
+that describes how the project works and how to port a Forth to
+a new platform.
+
 This project contains a working (self-hosting) Forth interpreter that runs
 on top of a SUBLEQ 16-bit machine. SUBLEQ machines belong to the class
 of One Instruction Set Computers, they only execute a single instruction
