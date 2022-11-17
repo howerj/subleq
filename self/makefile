@@ -1,6 +1,6 @@
-all: self2.dec
+all: self2.dec self3.dec
 
-%.dec: %.hsq sqasm
+%.dec: %.asq sqasm
 	./sqasm < $< > $@
 
 sqasm: sqasm.cpp

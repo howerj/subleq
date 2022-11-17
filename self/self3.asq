@@ -1,0 +1,33 @@
+a1; pc Z; Z a1; Z
+a; a1:0 Z a2; a2:Z a; Z
+
+b1; OUTV Z; Z b1; Z;
+a1; a Z; Z a1; Z;
+OUTV a1 ?+3
+Z Z ?+3
+a b1 ?+3
+len a
+
+neg1 pc
+b1; pc Z; Z b1; Z
+b; b1:0 Z b2; b2:Z b; Z
+
+a1; OUTV Z; Z a1; Z;
+b1; b Z; Z b1; Z;
+OUTV b1 ?+3
+Z Z ?+3
+b a1 ?+3
+len b
+
+neg1 pc
+c1; pc Z; Z c1; Z
+c; c1:0 Z c2; c2:Z c; Z
+
+a:0 b:0 leqz
+neg1 pc; Z Z 0
+leqz: pc; c Z; Z pc; Z
+neg1 c (-1)
+len pc;
+Z Z 0
+
+. Z:0 pc:len+1 c:0 OUTV:-1 neg1:-1 len:-? 

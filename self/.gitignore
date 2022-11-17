@@ -1,2 +1,4 @@
 sqasm
 *.exe
+*.sq
+hsq
