@@ -1,0 +1,11 @@
+int * i = "aBc";
+int f();
+void main()
+{
+	__out *(i+1);
+
+	int v1='A';
+	void * v2 = &v1;
+	void ** v3 = &v2;
+	__out **v3;
+}

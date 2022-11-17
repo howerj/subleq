@@ -1,0 +1,6 @@
+void main()
+{
+	for( int i=0; i<3; ++i ) __out 48+i;
+	for( int i=0; i<3; ++i ) __out 48+i;
+}
+

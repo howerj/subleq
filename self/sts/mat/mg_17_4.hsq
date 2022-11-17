@@ -1,0 +1,5 @@
+int a=110,b=60;
+void main()
+{
+	__out a%b;
+}

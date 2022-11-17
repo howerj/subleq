@@ -1,0 +1,11 @@
+void f()
+{
+	__out 50;
+}
+
+void main()
+{
+	__out 49;
+	f();
+	__out 10;
+}

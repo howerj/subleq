@@ -1,0 +1,16 @@
+int a=0, b=1;
+
+int f(int a)
+{
+	__out a;
+	return 0;
+}
+
+void main()
+{
+	if( a && b ) __out 48;
+	a=1;
+	if( a && b ) __out 49;
+
+	f(50) && f(51);
+}

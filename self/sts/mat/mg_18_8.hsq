@@ -1,0 +1,7 @@
+void main()
+{
+	int a=1,b=0,c=-1;
+	if( !a ) __out 48;
+	if( !b ) __out 55;
+	if( !c ) __out 56;
+}

@@ -1,0 +1,5 @@
+int a=1,b=0;
+void main()
+{
+	__out a||b ? 50 : a||b;
+}

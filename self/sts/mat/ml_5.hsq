@@ -1,0 +1,8 @@
+int printf();
+int k;
+void main()
+{
+	k = printf("%% %c %s %d",'A',"hi",123);
+	printf(" %d\n",k);
+}
+

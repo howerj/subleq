@@ -1,0 +1,33 @@
+/*
+	"auto",		"enum",		"restrict",		"unsigned",
+	"break",	"extern",	"return",		"void",
+	"case",		"float",	"short",		"volatile",
+	"char",		"for",		"signed",		"while",
+	"const",	"goto",		"sizeof",		"_Bool",
+	"continue",	"if",		"static",		"_Complex",
+	"default",	"inline",	"struct",		"_Imaginary",
+	"do",		"int",		"switch",		"__out",
+	"double",	"long",		"typedef",		"__in",
+	"else",		"register",	"union",		"__asm"
+*/
+
+extern int i;
+
+void main()
+{
+	for(;;){ break; }
+	while(0);
+	goto lab;
+lab:
+	for( i=50; i<55; i++ )
+	{
+		if( i>52 ) break;
+		else continue;
+		i = __in;
+	}
+
+	__out i;
+	return;
+}
+
+int i;

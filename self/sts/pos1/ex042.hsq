@@ -1,0 +1,18 @@
+
+extern int k;
+void main()
+{
+	int x;
+	{
+		__out k;
+		k = 51;
+
+		int k=50;
+		__out k;
+	}
+
+	__out k;
+}
+int k=49;
+
+

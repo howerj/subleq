@@ -1,0 +1,35 @@
+char a[]="Hello, World!\n";
+char * q = a;
+int putchar(int x);
+int main()
+{
+	char * p = a;
+
+	start1:
+	if( *p )
+	{
+		putchar(*p);
+		p = p+1;
+		goto start1;
+	}
+	
+	start2:
+	if( *q )
+	{
+		putchar(*q);
+		q = q+1;
+		goto start2;
+	}
+
+	{
+	int i=0;
+	start3:
+	if( a[i] )
+	{
+		putchar(a[i]);
+		i = i+1;
+		goto start3;
+	}
+	}
+	
+}

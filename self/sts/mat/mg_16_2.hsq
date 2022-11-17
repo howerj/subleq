@@ -1,0 +1,5 @@
+int a=40;
+void main()
+{
+	__out 10+a;
+}

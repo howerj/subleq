@@ -1,0 +1,8 @@
+// this syntactic feature is intentionally omitted
+// contact developer to implement it
+
+int i[] = { 50,51,52,i+1 };
+void main()
+{
+	__out i[2];
+}

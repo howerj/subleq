@@ -1,0 +1,19 @@
+
+int k=50;
+int g()
+{
+	return k+1;
+}
+
+int f()
+{
+	int x;
+	x = 25;
+	return x;
+}
+
+void main()
+{
+	__out f()+f();
+	__out g();
+}

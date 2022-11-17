@@ -1,0 +1,16 @@
+int a=48,b=49,k=1;
+void main()
+{
+	(k?a:b) = 50;
+	__out a;
+	__out b;
+
+	__out k?a:b;
+
+	k=0;	
+	(k?a:b) = 51;
+	__out a;
+	__out b;
+
+	__out k?a:b;
+}

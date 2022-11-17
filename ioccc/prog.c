@@ -12,7 +12,7 @@ I L(I _){r(X(_,_^_,V(1<<(0[f]/5))));}/*multiply*/
 I H(I _,I O){r(O?H(X(X(0,-1,_),_,O),X(_,0,O)*2):_);}/*this does*/
 I A(I _){r(1<<H(_,-1));}
 I M(I _){r(_<32?H(1<<_,-1):-1);}
-/* big oink */
+/*big oink*/
 I S(i ingest,i excrete,I*m/*not feeling well*/,I D,I(*E[])(I)){
 	I volatile a,r,s,e,_=0,O;_:
 	a=m[0[E](_)],O=0[E](1+_)[m];
@@ -37,5 +37,5 @@ I main(I q,char**v){
 	F(fscanf(O,"%d",&s)<=0)G I;r[L(_++)]=X(s,0,M(j));G o;I:
 	F(fclose(O)<0)r(4);
 	F(o-q)G O;
-	r(S(stdin,stdout,r,j,(I(*[])(I)){L,A,M,A}));
+	r(S(stdin,stdout,r,j,(I(*[])(I)){&L,A,M,&A}));
 }

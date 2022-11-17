@@ -1,0 +1,5 @@
+int a=-100,b=-2;
+void main()
+{
+	__out a/b;
+}

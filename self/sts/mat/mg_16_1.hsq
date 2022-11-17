@@ -1,0 +1,5 @@
+int a=25;
+void main()
+{
+	__out 5+a*2;
+}

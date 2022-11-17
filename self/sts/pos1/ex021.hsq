@@ -1,0 +1,9 @@
+int k=1;
+void main()
+{
+	__out 49;
+	__out 50;
+	__out 51;
+	__out 10;
+}
+

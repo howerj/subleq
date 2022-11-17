@@ -1,0 +1,12 @@
+int a,b,c=50;
+
+void main()
+{
+	a=b=c;
+	__out a;
+	a=51;
+	b=52;
+	c=53;
+	(a=b)=c;
+	__out a;
+}

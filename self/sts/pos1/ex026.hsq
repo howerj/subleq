@@ -1,0 +1,8 @@
+int k=&k+1, n=57;
+
+void main()
+{
+	__out *k;
+	__out __out n;
+}
+

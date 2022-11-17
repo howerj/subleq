@@ -1,0 +1,7 @@
+int k;
+void main()
+{
+	__out 48+main;
+	__out 48+&main;
+	__out 48+&k;
+}

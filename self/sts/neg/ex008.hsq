@@ -1,0 +1,5 @@
+int a;
+void main()
+{
+	__out 49+2*b;
+}

@@ -1,0 +1,9 @@
+void main()
+{
+	aaa:;
+	{
+	bbb:ccc:;
+	bb2:{cc2:;}
+	}
+	__out 50;
+}

@@ -1,0 +1,16 @@
+void putchar(int c);
+
+int r;
+
+void main()
+{
+	int q,p="\0\nHello, World!\n";
+	(++p)++;
+	while(*p) putchar(*p++);
+	p--;
+	r = q = p;
+	while( *--p ) putchar(*p); 
+	while( *--r ) putchar(*r); 
+	q--; while( *q ) putchar(*q--); 
+}
+

@@ -1,0 +1,8 @@
+void f(int a)
+{
+	__out a;
+}
+
+void main(){ f(50); }
+
+

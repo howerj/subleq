@@ -1,0 +1,5 @@
+int a=50,b=&a;
+void main()
+{
+	__out *b;
+}

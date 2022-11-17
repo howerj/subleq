@@ -1,0 +1,12 @@
+int x=50, y[1];
+int f()
+{
+	y[0] = 50;
+	return y[0]
+		+ - - - - (x-1);
+}
+
+void main()
+{
+	__out f();
+}

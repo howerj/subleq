@@ -1,0 +1,14 @@
+void _putint(int);
+int putchar(int);
+void main()
+{
+	int a1 = _putint(123);
+	putchar('\n');
+	int a2 = _putint(0);
+	putchar('\n');
+	int a3 = _putint(-321);
+	putchar('\n');
+	_putint(a1); putchar(' ');
+	_putint(a2); putchar(' ');
+	_putint(a3); putchar(' ');
+}

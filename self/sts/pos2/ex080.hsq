@@ -1,0 +1,15 @@
+int puts(int s);
+int getchar();
+int printf();
+
+int k='0';
+void main()
+{
+	if(0) k=getchar();
+	__out k;
+	__out k+puts("hello");
+	__out k+printf("%s","");
+	k=printf("\n%% %c %s %d %d\n",'A',"hi",123,k);
+	printf("%d",k);
+}
+

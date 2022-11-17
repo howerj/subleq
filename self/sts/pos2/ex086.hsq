@@ -1,0 +1,14 @@
+void putchar(int a);
+int printf(int a);
+int puts(char * a);
+
+char *a = "Hello, World!\n";
+
+void main()
+{
+	puts(a);
+	printf(a);
+	for( int i=0; a[i]; i++ ) putchar(a[i]);
+	while(*a) putchar(*a++);
+}
+

@@ -1,0 +1,23 @@
+void g(int a, int, int b);
+void f();
+int k, o=&o, p=&k;
+
+void main()
+{
+	__out 49;
+	f();
+	g(1,2,3);
+	__out 51;
+	__out 10;
+}
+
+void f()
+{
+	__out g(1,2,49);
+}
+void f();
+
+int g(int a,int, int b)
+{
+	return a+b;
+}

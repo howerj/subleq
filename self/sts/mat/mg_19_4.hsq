@@ -1,0 +1,7 @@
+int k=50;
+void main()
+{
+	__out k++;
+	__out k++;
+	__out k;
+}

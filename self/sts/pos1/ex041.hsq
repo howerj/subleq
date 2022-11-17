@@ -1,0 +1,9 @@
+int sp=0;
+void f(int a, int b)
+{
+	__out *(&b+1);
+}
+
+void main(){ f(51,52); }
+
+

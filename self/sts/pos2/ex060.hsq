@@ -1,0 +1,9 @@
+
+void main()
+{
+	int a=0,c=50;
+
+	a = &c;
+
+	__out *a;
+}

@@ -1,0 +1,14 @@
+extern int k;
+void main()
+{
+	k = 50;
+
+	{
+		int k=51;
+		__out k;
+	}
+
+	__out k;
+}
+
+

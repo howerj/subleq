@@ -1,0 +1,8 @@
+void putchar(int a);
+int a="Hello, World!\n";
+
+void main()
+{
+	while(*a) putchar(*a++);
+}
+

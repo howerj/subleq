@@ -1,0 +1,9 @@
+void af();
+void main(){ af(); }
+
+void af()
+{
+	__out 50;
+}
+
+

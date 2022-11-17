@@ -1,0 +1,10 @@
+void main()
+{
+	for(;;){ break; }
+	for(;;) break;
+	for(1;;) break;;
+	for(;2;) break;
+	for(;;3) break;
+	for(1;2;3) break;
+	__out 'a';
+}

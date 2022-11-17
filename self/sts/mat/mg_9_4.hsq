@@ -1,0 +1,8 @@
+void main()
+{
+	if(1) __out 49;
+	else  __out 50;
+	if(0) __out 51;
+	else  __out 52;
+	__out 53;
+}

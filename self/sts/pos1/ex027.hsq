@@ -1,0 +1,53 @@
+// testing l-value
+/*
+		++x	--x	x++	x--	&x	x=
+
+   *expr	1	2	3	4	5	6
+   ident	7	8	9	10	11
+*/
+
+int a, k, n=55;
+
+void main()
+{
+	k = &k+1;	
+	__out *k;	// 7
+			// k points to n
+
+	a = ++*k;	// case 1
+	__out a;	// 8
+	__out n;	// 8
+
+	a = --*k;	// case 2
+	__out a;	// 7
+	__out n;	// 7
+
+	++++n;		// case 7
+	__out n;	// 9
+
+	--------n;	// case 8
+	__out n;	// 5
+
+	a = (*k)++;	// case 3
+	__out a;	// 5
+	__out n;	// 6
+
+	a = (*k)--;	// case 4
+	__out a;	// 6
+	__out n;	// 5
+
+	a = &(*k);	// case 5
+	__out *a;	// 5
+
+	*k = 49; 	// case6
+	__out n;	// 1
+
+	__out n++;	// case 9 // 1
+	__out n;	// 2
+
+	__out n--;	// case 10 // 2
+	__out n;	// 1
+
+	__out **&k;	// case 11 // 1
+}
+

@@ -1,0 +1,5 @@
+int a=1, b='c';
+void main()
+{
+	__out b-a;
+}

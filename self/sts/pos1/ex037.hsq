@@ -1,0 +1,7 @@
+int a='\n';
+int b='0'+50;
+void main()
+{
+	__out b;
+	__out a;
+}

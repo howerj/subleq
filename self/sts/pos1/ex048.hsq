@@ -1,0 +1,31 @@
+// stack watcher 2
+int f()
+{
+	int y[1];
+	y[0] = 48;
+	__out y[0];
+	//__out y[-1]; bp
+	//__out y[-2]; ret
+	//__out y[-3];
+	//__out y[-4];
+	//__out y[-5];
+	//__out y[-6];
+	//__out y[-7];
+	//__out y[-8];
+	//__out y[-9];
+	//__out y[-10];
+}
+
+int g()
+{
+	int a=49,b=50,c=51;
+	f();
+}
+
+void main()
+{
+	g(52,53,54);
+	__out 10;
+}
+
+

@@ -1,0 +1,17 @@
+void f(int a)
+{
+	__out a;
+}
+
+void g(int b)
+{
+	f(b);
+}
+
+void main()
+{
+	g(50);
+	__out 51;
+}
+
+

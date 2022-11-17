@@ -34,6 +34,12 @@ in it.
 that is only (much less than) half the battle in understanding 
 the system, focus instead on the data.
 
+# Puns
+
+* This submission is very risky. In fact, I took the ultimate risk
+in submitting it.
+* When reverse engineering this, don't be too negative.
+
 # Portability and Features
 
 * Running this on a 16-bit machine might not work, it might

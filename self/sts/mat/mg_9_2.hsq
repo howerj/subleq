@@ -1,0 +1,10 @@
+int i=3;
+void main()
+{
+	while( i ) { __out 48+i; i=i-1; }
+
+	i = 48;
+	while( i<58 ) { __out i; i=i+1; }
+}
+
+

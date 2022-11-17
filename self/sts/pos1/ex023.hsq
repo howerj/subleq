@@ -1,0 +1,21 @@
+void g();
+void f();
+int k;
+void main()
+{
+	k=f;
+	k();
+	k=g;
+	k();
+}
+
+void g()
+{
+	__out 49;
+}
+
+void f()
+{
+	__out 50;
+}
+

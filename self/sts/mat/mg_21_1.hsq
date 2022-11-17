@@ -1,0 +1,3 @@
+int a=50;
+void main(){ __out a; }
+

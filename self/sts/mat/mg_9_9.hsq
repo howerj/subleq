@@ -1,0 +1,6 @@
+void main()
+{
+	__out 49;
+	return;
+	__out 50;
+}

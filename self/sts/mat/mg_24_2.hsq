@@ -1,0 +1,7 @@
+int a=0, b=0;
+void main()
+{
+	if( a || b ) __out 50;
+	a=1;
+	if( a || b ) __out 51;
+}

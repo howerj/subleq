@@ -1,0 +1,24 @@
+int x=0, y=1;
+void main()
+{
+	if( y && x ) __out 48;
+	if( y && y && y ) __out 49;
+	if( y || x ) __out 50;
+	if( x || y || x ) __out 51;
+
+	while(x);
+	while(x<0);
+
+	for(;x;);
+	for(;x<0;);
+
+	if(x) __out 52;
+	if(x<0) __out 53;
+	if(y) __out 54;
+
+	if( !x ) __out 55;
+	if( !(x<0) ) __out 56;
+	if( !(x==0) ) __out 57;
+	if( !(x&&x) ) __out 48;
+	if( !(x||x) ) __out 49;
+}

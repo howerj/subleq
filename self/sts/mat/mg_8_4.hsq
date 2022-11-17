@@ -1,0 +1,4 @@
+void main()
+{
+	lab: __out 50;
+}
