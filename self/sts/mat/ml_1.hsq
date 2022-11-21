@@ -1,5 +1,0 @@
-int putchar(int);
-void main()
-{
-	putchar(50);
-}

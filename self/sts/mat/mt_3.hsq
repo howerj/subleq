@@ -1,6 +1,0 @@
-int a='b', b=50;
-void main()
-{
-	__out a-25;
-	__out 20+b;
-}

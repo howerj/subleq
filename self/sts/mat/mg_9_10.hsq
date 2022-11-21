@@ -1,9 +1,0 @@
-int f()
-{
-	return 50;
-}
-
-void main()
-{
-	__out f();
-}

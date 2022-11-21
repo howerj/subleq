@@ -1,5 +1,0 @@
-int a=10,b=4;
-void main()
-{
-	__out a*++b;
-}

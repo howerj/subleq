@@ -1,6 +1,0 @@
-int c = &c;
-int a=3, b;
-void main()
-{
-	__out 49+2*a*c;
-}

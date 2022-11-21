@@ -1,6 +1,0 @@
-int puts(int s);
-void main()
-{
-	puts("hello");
-}
-

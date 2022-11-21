@@ -1,6 +1,0 @@
-int a,b=50;
-int main()
-{
-	*a = b;
-	__out *a;
-}

@@ -1,7 +1,0 @@
-void af()
-{
-	__out 50;
-}
-
-void main(){ af(); }
-

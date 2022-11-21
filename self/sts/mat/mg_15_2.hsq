@@ -1,6 +1,0 @@
-void main()
-{
-	int a=1,b=2;
-	if( a<b ) __out 50;
-	if( b<a ) __out 51;
-}

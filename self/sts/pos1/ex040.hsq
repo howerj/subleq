@@ -1,8 +1,0 @@
-void f(int a, int b)
-{
-	__out 50;
-}
-
-void main(){ f(51,52); }
-
-

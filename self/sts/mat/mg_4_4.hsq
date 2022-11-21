@@ -1,5 +1,0 @@
-int i[] = "abc";
-void main()
-{
-	__out i[2];
-}

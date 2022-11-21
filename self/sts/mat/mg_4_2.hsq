@@ -1,9 +1,0 @@
-int i=+2, j=&j-&i+1;
-int a='a', b="abc";
-void main()
-{
-	__out i+48;
-	__out j+48;
-	__out a;
-	__out b[0];
-}

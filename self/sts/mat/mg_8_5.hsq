@@ -1,6 +1,0 @@
-int k;
-void main()
-{
-	k=50;
-	__out k;
-}

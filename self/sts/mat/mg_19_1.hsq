@@ -1,4 +1,0 @@
-void main()
-{
-	__out "abc"[1];
-}

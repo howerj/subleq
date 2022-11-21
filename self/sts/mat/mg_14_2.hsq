@@ -1,6 +1,0 @@
-int a=48,b=50;
-void main()
-{
-	if( a == b ) __out a;
-	if( a == a ) __out b;
-}

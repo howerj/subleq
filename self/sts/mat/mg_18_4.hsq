@@ -1,5 +1,0 @@
-int a=50,b;
-void main()
-{
-	__out a + &b - &a;
-}

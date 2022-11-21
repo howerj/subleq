@@ -1,9 +1,0 @@
-int k=49;
-void main()
-{
-	__out k;
-	__out 50;
-	__out k+2;
-	__out 10;
-}
-

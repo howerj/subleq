@@ -1,5 +1,0 @@
-int getchar();
-void main()
-{
-	if(0) __out getchar();
-}
