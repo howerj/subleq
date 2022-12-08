@@ -15,6 +15,14 @@
 - Hide my name/email in image
 - Move checksum code to SUBLEQ assembly and not in VM
 - SUBLEQ debugger in C
+  - Hit Escape to bring up debugger
+  - Change I/O mode (raw/cooked)
+  - Break points on memory access and ranges on operands a,b,c
+    - Break on I/O would be a subset of this.
+  - Continue on halt
+  - Tracing, tracing for X cycles
+  - Assembler, disassembler.
+  - MS-DOS like DEBUG.COM/DEBUG.EXE functionality.
 - A full SUBLEQ book loader and system:
   - Options variable for controlling EOF behavior, echoing, etcetera.
   - A eForth image, along with source.

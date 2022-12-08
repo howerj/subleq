@@ -4952,8 +4952,16 @@ there 2/ primitive t!
 \ a variable number of spaces to be printed out This allows for 
 \ the creation of right aligned numeric output.
 \
+\ A version of "u.r" that would allow a custom character to
+\ be passed to it instead of printing "bl" would allow for
+\ more formatting options, such as displaying leading zeros,
+\ useful for the "dump" word defined later.
+\
+\ The ".r" word is missing, this word acts the same as
+\ "u.r" but displays signed values.
+\
 : u.r >r #0 <# #s #>  r> over - bl banner type ; ( u r -- )
-: u.     #0 <# #s #> space type ; ( u -- )
+: u. space #0 u.r ; ( u -- )
 
 \ "(.)" bypasses all of the standard Forth mechanisms for
 \ formatting Forth numbers, the reason for doing this is speed,
@@ -9141,11 +9149,11 @@ variable seed ( NB. Could be mixed with keyboard input )
       swap r@ * swap 1-
     repeat rdrop drop
   else logical 1 and then ;
-: b. base @ swap 2 base ! u. base ! ; ( u -- )
-: h. base @ swap hex u. base ! ;      ( u -- )
-: o. base @ swap 8 base ! u. base ! ; ( u -- )
-: d. base @ swap decimal . base ! ;   ( n -- )
-: @bits swap @ and ;                  ( a u -- u )
+: b. base @ swap 2 base ! . base ! ; ( u -- )
+: h. base @ swap hex . base ! ;      ( u -- )
+: o. base @ swap 8 base ! . base ! ; ( u -- )
+: d. base @ swap decimal . base ! ;  ( n -- )
+: @bits swap @ and ;                 ( a u -- u )
 : ?\ if postpone \ then ; immediate
 : ?( if postpone ( then ; immediate ( )
 : ?if compile dup postpone if ; immediate

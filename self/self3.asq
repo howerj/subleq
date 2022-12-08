@@ -150,19 +150,14 @@ a1; pc Z; Z a1; Z;
 # [a] = [[a1]] (after modification from above)
 a; a1:0 Z a2; a2:Z a; Z;
 
-# XXX/BUG: These two a/b modifiers are buggy / cause problems.
-#
 # Patch up operand 'A' if it is not -1
 #
 # if [a] != -1:
 #    [a] = [a] + [len]
 #
-b1; IOV Z; Z b1; Z; # [b1] = [IOV]
 a1; a Z; Z a1; Z;   # [a1] = [a]
-IOV a1 ?+3;       # If '[a1] is negative, jump to 'a b1 ?+3'
-Z Z ?+3;          # Jump to 'len a', seems unneeded, is not!
-Z Z ?+3; #a b1 ?+3;
-len a;            # [a] = [a] + [len]
+IOV a1 ?+3;         # If [a1] is negative, jump over next line
+len a;              # [a] = [a] + [len] 
 
 neg1 pc; # [pc] = [pc] + 1
 b1; pc Z; Z b1; Z;
@@ -173,11 +168,8 @@ b; b1:0 Z b2; b2:Z b; Z;
 # if [b] != -1:
 #    [b] = [b] + [len]
 #
-a1; IOV Z; Z a1; Z;
 b1; b Z; Z b1; Z;
 IOV b1 ?+3;
-Z Z ?+3;
-Z Z ?+3; #b a1 ?+3;
 len b;
 
 # We need to copy 'pc' into 'c' and not use it directly later
@@ -200,16 +192,22 @@ c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
 # machine width and jumping over the modulo on 16-bit machines,
 # when this is implemented...
 #
+# XXX/BUG: The forth code "0 u." causes this to halt (when
+# run on a normal SUBLEQ machine it does not. It appears to
+# be caused by something in '#s', perhaps it is writing to
+# an invalid address or an address that is too high.
+#
 a:0 b:0 leqz;   # Emulate subtraction / instruction
-neg1 pc; Z Z 0; # Jump back to beginning
-leqz: pc; c Z; Z pc; Z; # [pc] = [c]
-neg1 c (-1);    # Check if [c] is negative, halt if it is.
-len pc;         # [pc] = [pc] - [len]
-Z Z start;      # Jump back to the beginning
+  neg1 pc;      # [pc] = [pc] + 1
+  Z Z 0;        # Jump back to beginning
+leqz: 
+  pc; c Z; Z pc; Z; # [pc] = [c]
+  neg1 c (-1);    # Check if [c] is negative, halt if it is.
+  len pc;         # [pc] = [pc] - [len]
+  Z Z start;      # Jump back to the beginning
 
 # Declare and set some registers, 'len' must be last.
 . Z:0 pc:len+1 c:0 IOV: neg1:-1 len:-? 
-
 
 ## https://eigenratios.blogspot.com/2006/08/self-written-self-modifying-self.html
 ##

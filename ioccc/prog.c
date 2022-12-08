@@ -8,12 +8,12 @@ typedef FILE*i;
 #define f __func__
 I V(I _){r(_-l(f[0]-0120));}
 I X(I _,I O,I o){r((o&_)|V(-(V(-O)|o)));}/*this doesn't do what you think it does*/
-I L(I _){r(X(_,_^_,V(1<<(0[f]/5))));}/*multiply*/
-I H(I _,I O){r(O?H(X(X(0,-1,_),_,O),X(_,0,O)*2):_);}/*this does*/
+I L(I _){r(X(_,_^_,V(1<<(0[f]/5))));}/*this does*/
+I H(I _,I O){r(O?H(X(X(0,-1,_),_,O),X(_,0,O)*2):_);}/*multiply*/
 I A(I _){r(1<<H(_,-1));}
 I M(I _){r(_<32?H(1<<_,-1):-1);}
 /*big oink*/
-I S(i ingest,i excrete,I*m/*not feeling well*/,I D,I(*E[])(I)){
+I S(i ingest,i excrete,I*m/*not feeling well*/,I D,I(*E[static 1])(I)){
 	I volatile a,r,s,e,_=0,O;_:
 	a=m[0[E](_)],O=0[E](1+_)[m];
 	r=X(H(H(m[0[E](O)],X(0,-1,(0[E](a))[m])),1),0,2[E](D));
