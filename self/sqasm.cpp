@@ -13,19 +13,19 @@ using namespace std;
 int error_status = 0;
 
 int str2int(const string &s) {
-	int ret=0;
-	sscanf(s.c_str(),"%d",&ret);
+	int ret = 0;
+	sscanf(s.c_str(), "%d", &ret);
 	return ret;
 }
 
-string int2str(int x, int pr=0) {
+string int2str(int x, int pr = 0) {
 	char buf[40];
-	sprintf(buf,"%d",x);
+	sprintf(buf, "%d", x);
 	if (!pr) 
 		return buf;
 	
 	string s = buf;
-	while ( s.size() < (unsigned)pr) s = string("0")+s;
+	while (s.size() < (unsigned)pr) s = string("0")+s;
 	return s;
 }
 
@@ -45,7 +45,7 @@ struct item {
 	int i;
 	enum { EMPTY, STR, RES } state;
 	item() : state(EMPTY) {}
-	string dump(bool=false);
+	string dump(bool = false);
 };
 
 string item::dump(bool extra) {
@@ -57,30 +57,30 @@ string item::dump(bool extra) {
 
 struct instruction {
 	vector<item> items;
-	string dump(bool=false);
+	string dump(bool = false);
 };
 
 string instruction::dump(bool extra) {
 	string r;
-	for (size_t i=0; i < items.size(); i++) 
+	for (size_t i = 0; i < items.size(); i++) 
 		r += items[i].dump(extra) + ' ';
 	return r;
 }
 
-map<string,int> lab2adr;
+map<string, int> lab2adr;
 string prog;
 typedef string::size_type sint;
 sint pip = 0;
-int line=1;
+int line = 1;
 int addr = 0;
-map<string,int> unres;
+map<string, int> unres;
 
 void eat() { 
-	while ( pip<prog.size() && (isspace(prog[pip]) &&	prog[pip]!='\n')) 
+	while (pip < prog.size() && (isspace(prog[pip]) && prog[pip] != '\n')) 
 		pip++; 
 
 	if (prog[pip] == '#')
-		while ( pip<prog.size() && prog[pip]!='\n')
+		while (pip < prog.size() && prog[pip] != '\n')
 			pip++;
 }
 void eatn() { 
@@ -94,8 +94,8 @@ void eatn() {
 void getid(string &s) {
 	eat();
 	if (isalpha(prog[pip]) || prog[pip] == '_') {
-		s+=prog[pip];
-		while (pip<prog.size() && (isalnum(prog[++pip]) || prog[pip] == '_')) 
+		s += prog[pip];
+		while (pip < prog.size() && (isalnum(prog[++pip]) || prog[pip] == '_')) 
 			s += prog[pip];
 	}
 }
@@ -110,8 +110,8 @@ void getid(item& i) {
 	}
 }
 
-char getChr(int chr=false) {
-		if (prog[++pip]!='\\') {
+char getChr(int chr = false) {
+		if (prog[++pip] != '\\') {
 			return prog[pip];
 		} else { // escape symbol
 			switch (prog[++pip]) {
@@ -124,7 +124,7 @@ char getChr(int chr=false) {
 		}
 
 		cerr << "Warning " << line << " unknown escape char '" << prog[pip] << "'\n";
-		if(!chr) pip--;
+		if (!chr) pip--;
 		return prog[pip];
 }
 
@@ -151,8 +151,8 @@ bool getconst(item& i) {
 
 	if (!isdigit(prog[pip])) 
 		return false;
-	while (pip<prog.size() && isdigit(prog[pip])) 
-		i.s+=prog[pip++];
+	while (pip < prog.size() && isdigit(prog[pip])) 
+		i.s += prog[pip++];
 	i.i = str2int(i.s);
 	i.state = item::RES;
 	return true;
@@ -242,7 +242,7 @@ bool getStr(item &i) {
 	if (j == 0) 
 		j++; // start
 
-	if (pip+j >=prog.size()) {
+	if (pip+j >= prog.size()) {
 		cerr << "Error " << line << " string not closed\n";
 		error_status = __LINE__;
 		pip += j;
@@ -250,8 +250,8 @@ bool getStr(item &i) {
 	}
 
 	if (prog[pip+j] == '"') { // end
-		pip+=j+1;
-		j=0;
+		pip += j + 1;
+		j = 0;
 		return false;
 	}
 
@@ -259,8 +259,8 @@ bool getStr(item &i) {
 		int p0 = pip;
 		pip += j-1;
 		i.i = (unsigned char)getChr();
-		j+=pip-j+1-p0;
-		pip=p0;
+		j += pip-j+1-p0;
+		pip = p0;
 	}
 
 	i.state = item::RES;
@@ -275,7 +275,7 @@ begin:
 	if (prog[pip] == '\n') { pip++; line++; return false; }
 	if (prog[pip] == ';') { pip++; return false; }
 
-	if (pip>=prog.size()) 
+	if (pip >= prog.size()) 
 		return false;
 	
 	string lab;
@@ -310,7 +310,7 @@ bool getinstr(instruction &i){
 	if (prog[pip] == '.') { 
 		data = true; pip++; 
 	}
-	while ( pip<prog.size()) {
+	while (pip < prog.size()) {
 		item t;
 		if (getitem(t)) i.items.push_back(t);
 		else if (i.items.size() == 0) continue;
@@ -382,12 +382,12 @@ void resolve(item &i) {
 }
 
 void resolve(instruction &n) {
-	for (size_t i=0; i<n.items.size(); i++)
+	for (size_t i = 0; i < n.items.size(); i++)
 	resolve(n.items[i]);
 }
 
 void resolve(vector<instruction> &pr) {
-	for (size_t i=0; i<pr.size(); i++) {
+	for (size_t i = 0; i < pr.size(); i++) {
 	resolve(pr[i]);
 	}
 }
@@ -395,7 +395,7 @@ void resolve(vector<instruction> &pr) {
 int main() {
 	while (1) {
 		string s;
-		getline(cin,s);
+		getline(cin, s);
 		prog += s+'\n';
 		if (!cin) 
 			break;
@@ -406,7 +406,7 @@ int main() {
 	if (error_status) 
 		return error_status;
 	
-	for (size_t i=0; i<pr.size(); i++) {
+	for (size_t i = 0; i < pr.size(); i++) {
 		resolve(pr[i]);
 		cout << pr[i].dump() << "\n";
 	}

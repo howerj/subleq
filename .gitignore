@@ -10,4 +10,5 @@
 eforth
 eforth.c
 nbit
+save
 subleq

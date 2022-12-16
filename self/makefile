@@ -1,22 +1,23 @@
 .PHONY: all run run-orig clean
 
-all: self2.dec self3.dec
+all: self.dec
 
-run: self3.dec ../subleq ../subleq.dec
-	make -C .. subleq subleq.dec
-	../subleq self3.dec ../subleq.dec 
+run: self.dec ../subleq ../subleq.dec
+	../subleq self.dec ../subleq.dec 
 
 run-orig: ../subleq ../subleq.dec
 	../subleq ../subleq.dec
+
+double: self.dec ../subleq ../subleq.dec
+	../subleq self.dec self.dec ../subleq.dec
 
 %.dec: %.asq sqasm
 	./sqasm < $< > $@
 
 sqasm: sqasm.cpp
 
-
-../subleq ../subleq.dec:
-	make -C .. subleq subleq.dec
+../subleq.dec ../subleq:
+	make -C ../subleq.dec ../subleq
 
 clean:
 	rm sqasm

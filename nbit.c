@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
-#define SZ     (32768)
+#define SZ     (1<<16)
 #define L(X)   ((X)%SZ)
 #define HI(X)  (1ull << ((X) - 1))
 

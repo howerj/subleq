@@ -62,8 +62,6 @@
 # This version deals with input and output.
 #
 # TODO:
-# 	- Fix bug.
-# 	- Optimize image.
 # 	- Comment everything.
 # 	- Translate to Forth?
 # 	- Remove previous versions.
@@ -74,7 +72,6 @@
 #	modulo operation.
 #	- Add this program to the book, for a second edition?
 #	- Add this program to the IOCCC candidate?
-#
 #
 # ### DIV a b c
 #
@@ -192,11 +189,7 @@ c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
 # machine width and jumping over the modulo on 16-bit machines,
 # when this is implemented...
 #
-# XXX/BUG: The forth code "0 u." causes this to halt (when
-# run on a normal SUBLEQ machine it does not. It appears to
-# be caused by something in '#s', perhaps it is writing to
-# an invalid address or an address that is too high.
-#
+
 a:0 b:0 leqz;   # Emulate subtraction / instruction
   neg1 pc;      # [pc] = [pc] + 1
   Z Z 0;        # Jump back to beginning

@@ -760,7 +760,6 @@ meta.1 +order definitions
 \ want to allocate a cell within the image, we will need to
 \ refer to this constant.
 \
-
    2 constant =cell  \ Target cell size
 4000 constant size   \ Size of image working area
  100 constant =buf   \ Size of text input buffers in target
@@ -878,7 +877,7 @@ defined eforth [if]
 \
 
 defined eforth [if]
-  :m #dec dup 0< if [char] - emit then (.) ;m ( n16 -- )
+  :m #dec s>d if [char] - emit then (.) ;m ( n16 -- )
 [else]
   :m #dec dup 8000 u>= if negate limit -1 >r else 0 >r then
      0 <# #s r> sign #> type ;m ( n16 -- )
@@ -1216,7 +1215,8 @@ defined eforth [if] system -order [then]
 \ * End - 1024/$400 bytes: First thread area.
 \
 \ This is a rough layout only, 'W', 'X', 'Y' and 'Z' refer to
-\ locations that may vary in location and length.
+\ memory blocks that may vary in location and length, but are
+\ in the same order as shown.
 \
 \ Cells 0, 1, and 2 also form the first SUBLEQ instruction,
 \ and the first two cells must be zero, as mentioned
@@ -1562,13 +1562,10 @@ label: entry       \ used to set entry point in next cell
   B tvar {options} \ bit #1=echo off, #2 = checksum on,
                    \ #4=info, #8=die on EOF
   0 tvar primitive \ any address lower must be a VM primitive
-  8000 tvar hbit   \ must contain 8000
-  7FFF tvar imax   \ must contain 7FFF
-  =stksz half tvar stacksz \ must contain 80
-  -2   tvar ntwo   \ must contain -2
-  -1 tvar neg1     \ must contain -1
+  =stksz half tvar stacksz \ must contain $80
+ -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
-  2 tvar two       \ must contain  1
+  2 tvar two       \ must contain  2
  10 tvar bwidth    \ must contain 16
   0 tvar INVREG    \ temporary register used for inversion only
   0 tvar w         \ working pointer
@@ -1577,6 +1574,8 @@ label: entry       \ used to set entry point in next cell
   0 tvar bl1       \ bitwise extra register
   0 tvar bl2       \ bitwise extra register
   0 tvar bt        \ bitwise extra register
+  0 tvar bn        \ bitwise extra register 
+  0 tvar bm        \ bitwise extra register 
 
   0 tvar h         \ dictionary pointer
   =stack-start half tvar {up} \ Current task addr. (Half size)
@@ -1608,7 +1607,6 @@ label: entry       \ used to set entry point in next cell
   0 tvar {single}   \ is multi processing off?
   2F tvar {blk}     \ current loaded block
   2F tvar {scr}     \ last viewed screen
-  0 tvar padding    \ BUG: Getting set during image generation
 
 \ Most of the following are thread local variables, with the 
 \ exception of "ip" and "tos", the stack variables "{rp}" and 
@@ -1729,6 +1727,8 @@ label: entry       \ used to set entry point in next cell
 
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
+:m ONE! dup ZERO INC ; ( a -- : set address to '1' )
+:m NG1! dup ZERO DEC ; ( a -- : set address to '-1' )
 :m INV ( b -- : invert NB. b - a = b + ~a + 1 )
   INVREG ZERO dup INVREG SUB dup INVREG swap MOV DEC ;m
 :m ++sp {sp} DEC ;m ( -- : grow variable stack )
@@ -2002,9 +2002,27 @@ label: die
 label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
 
-  \ check we are running on the right VM width
-  imax x MOV x x ADD x +if die JMP then
-  \ hbit +if die JMP then
+\ This routine doubles "w" until it becomes negative, which
+\ will happen on twos compliment machines upon reaching the
+\ maximum bit-width.
+\ 
+\ This routine really should be much closer to the beginning
+\ of the file, before (many of, but not all of) the variable
+\ declarations as we have a limited number of bytes to work
+\ with (bytes that are addressable that is) when on machines 
+\ with smaller bit widths than 16.
+\ 
+
+  x ONE!
+  w ONE!
+label: chk16
+  w w ADD                        \ w = w * 2
+  x INC                          \ x++
+  w +if chk16 JMP then           \ check if still positive
+  bwidth x SUB x if die JMP then \ x - bwidth should be zero
+
+\ Back to setting up registers
+\
 
   {sp0} {sp} MOV     \ Setup initial variable stack
   {rp0} {rp} MOV     \ Setup initial return stack
@@ -2089,17 +2107,10 @@ assembler.1 -order
 \ implemented as VM instructions as doing so otherwise would
 \ be too tricky or impossible.
 \
-\ We have 42 primitives, more than is ideal, but it is
-\ necessary given the nature of this system. Performance 
+\ We have around forty primitives, more than is ideal, but it
+\ is necessary given the nature of this system. Performance 
 \ critical words have to be implemented as primitives 
 \ otherwise the system would be far too slow. 
-\
-\ For example "lsb" is a primitive that gets the Least 
-\ Significant Bit, an expensive operation on a SUBLEQ machine 
-\ that would *normally* be implemented by the *normally* very 
-\ fast "1 and", but for performance reasons it is implemented 
-\ as a unique instruction. The same goes for the multiplication 
-\ and division routines, as well as "1-" and "1+".
 \
 \ It is partly a matter of philosophy and partly a matter of
 \ engineering concerns as to what goes where. It is best to
@@ -2127,14 +2138,11 @@ assembler.1 -order
 \ optimized, both in terms of size and speed, but they are
 \ current in a "good enough" state.
 \
-\ "bye", "1-", "1+" and "invert" are nothing special, they are
+\ "bye" and  "invert" are nothing special, they are
 \ backed by simple assembly instructions. "bye" halts the
-\ SUBLEQ machine, "1-" decrements the top of the stack, and you
-\ can work out the other two.
+\ SUBLEQ machine, "invert" does a bitwise inversion.
 \
 :a bye HALT ;a       ( -- : HALT system )
-:a 1- tos DEC ;a     ( u -- u : increment tos by one )
-:a 1+ tos INC ;a     ( u -- u : decrement tos by one )
 :a invert tos INV ;a ( u -- u : bitwise invert tos )
 
 \ The following two functions are use to build "@" and "!",
@@ -2401,30 +2409,6 @@ assembler.1 -order
    w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then
    ip INC --rp ;a
 
-\ "lsb" is similar to the expression "1 and", but with an
-\ added "0= 0=", that is it gets the Least Significant Bit and
-\ turns it into a Forth boolean (0 or false, -1 for true).
-\
-\ It is used in functions later on that need to be fast and do
-\ the same operation, for example the "c@", or "c!", which both
-\ need to test the lowest bit.
-\
-\ "lsb" is not usually a Forth word because "1 and" is usually
-\ fast.
-\
-\ The instruction works by repeatedly doubling the input number
-\ until the lowest bit has been shifted into the highest bit
-\ location and then testing whether it is set or not, which
-\ on a twos compliment machine will make the input number 
-\ negative if the top bit is set.
-\
-:a lsb ( u -- f )
-    tos tos ADD tos tos ADD tos tos ADD tos tos ADD
-    tos tos ADD tos tos ADD tos tos ADD tos tos ADD
-    tos tos ADD tos tos ADD tos tos ADD tos tos ADD
-    tos tos ADD tos tos ADD
-    tos w MOV 0 tos MOV w if neg1 tos MOV then ;a
-
 \ "opJump" and "opJumpZ" implement unconditional and
 \ conditional jumps respectively. The actual jump is performed
 \ by "ip ip iLOAD", as "ip" has been incremented before the
@@ -2470,13 +2454,17 @@ assembler.1 -order
 \ interesting, and will be covered in the control statement
 \ chapter.
 \
+\ Note that opJumpZ falls-through to "opJump" (conditionally)
+\ to save on space.
+\
 
-:a opJump ip ip iLOAD ;a ( -- )
 :a opJumpZ ( u -- )
-  tos w MOV 0 t MOV
-  w if neg1 t MOV then w DEC w +if neg1 t MOV then
+  tos w MOV t ZERO
+  w if t NG1! then w DEC w +if t NG1! then
   tos {sp} iLOAD --sp
-  t if ip INC vm JMP then w ip iLOAD w ip MOV ;a
+  t if ip INC vm JMP then (a); 
+( <--- FALL-THROUGH ---> )
+:a opJump ip ip iLOAD ;a ( -- )
 
 \ The comparison operators are tricky to get right,
 \ and are still not completely right, however they do a good
@@ -2511,22 +2499,18 @@ assembler.1 -order
 \ "min" and "max" will not be defined like this later, as
 \ bitwise operators are expensive on the SUBLEQ machine.
 \
-\ NB. There are some bugs with the comparison operators "op\<"
-\ and "op\>" when they deal with extreme values like
-\ "\$8000 1 \<", "\$8002 1 \<" works fine.
+\ NB. There are some bugs with the comparison operators 
+\ when they deal with extreme values like "\$8000 1 \<", 
+\ "\$8002 1 \<" works fine.
 \
 
-:a op0> tos w MOV 0 tos MOV w +if neg1 tos MOV then ;a
 :a op0=
-   tos w MOV neg1 tos MOV
-   w if 0 tos MOV then w DEC w +if 0 tos MOV then ;a
+   tos w MOV tos NG1!
+   w if tos ZERO then w DEC w +if tos ZERO then ;a
+:a op0> tos w MOV tos ZERO w +if tos NG1! then ;a
 :a op0<
-   tos w MOV 0 tos MOV
-   w -if neg1 tos MOV then w INC w -if neg1 tos MOV then ;a
-:a op< w {sp} iLOAD --sp tos w SUB 0 tos MOV
-   w -if neg1 tos MOV then ;a
-:a op> w {sp} iLOAD --sp tos w SUB 0 tos MOV
-   w +if neg1 tos MOV then ;a
+   tos w MOV tos ZERO
+   w -if tos NG1! then w INC w -if tos NG1! then ;a
 
 \ "op2/" is used to implement "2/", it is common for Forth
 \ implementations to implement "2/" incorrectly and this one
@@ -2584,31 +2568,14 @@ assembler.1 -order
 \ As are left and right shifts by "N" places.
 \
 
-:a op2* tos tos ADD ;a
-:a op2/
-  bwidth w MOV
-  x ZERO
-  begin w DEC w while
-    x x ADD
-    tos bt MOV 0 bl1 MOV
-    bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
-    bl1 if x INC then
-    tos tos ADD
-  repeat
-  x tos MOV ;a
-
 \ "rshift" is implemented as a virtual machine instruction,
 \ but "lshift" is not as it can be implemented in Forth
 \ with little performance loss compared to "rshift", division
 \ by even a power of two is slow on a SUBLEQ machine.
 \
-\ It works bit by bit, much like "op2/", but it shifts right
-\ by a variable instead of fixed number of bits, it still
-\ builds up the result by adding in one, and doubling the
-\ "x" and "tos" registers.
-\
-\ It needs to pull the number to shift by off the stack but
-\ there is no real complication.
+\ It works bit by bit, shifting right
+\ by a variable number of bits, building up the results
+\ bit by bit and doubling the "x" and "tos" registers.
 \
 \ A consequence of how this "rshift" works is that it is faster
 \ the more bits it shifts by, it takes the longest to shift by
@@ -2622,8 +2589,8 @@ assembler.1 -order
   x ZERO
   begin w while
     x x ADD
-    tos bt MOV 0 bl1 MOV
-    bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
+    tos bt MOV bl1 ZERO
+    bt -if bl1 NG1! then bt INC bt -if bl1 NG1! then
     bl1 if x INC then
     tos tos ADD
     w DEC
@@ -2631,8 +2598,8 @@ assembler.1 -order
   x tos MOV ;a
 
 \ The logical operators, OR, XOR, and AND, have the same
-\ pattern to how they work, and the borrow from how "op2/" and
-\ "rshift" work. They both work by testing if the highest bit
+\ pattern to how they work, and the borrow from how "rshift"
+\ works. They both work by testing if the highest bit
 \ is set and doubling both inputs and the output in order to
 \ shift bits.
 \
@@ -2694,15 +2661,15 @@ assembler.1 -order
   t {sp} iLOAD
   --sp
   begin w while
-   x x ADD
-   tos bt MOV 0 bl1 MOV
-   bt -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
-   t   bt MOV 0 bl2 MOV
-   bt -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
-   bl1 bl2 ADD bl2 if x INC then
-   t t ADD
-   tos tos ADD
-   w DEC
+    x x ADD
+    tos bt MOV bl1 ZERO
+    bt -if bl1 NG1! then bt INC bt -if bl1 NG1! then
+    t   bt MOV bl2 ZERO
+    bt -if bl2 NG1! then bt INC bt -if bl2 NG1! then
+    bl1 bl2 ADD bl2 if x INC then
+    t t ADD
+    tos tos ADD
+    w DEC
   repeat
   x tos MOV ;a
 :a opXor
@@ -2711,16 +2678,16 @@ assembler.1 -order
   t {sp} iLOAD
   --sp
   begin w while
-   x x ADD
-   tos bt MOV 0 bl1 MOV bt
-   -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
-   t   bt MOV 0 bl2 MOV bt
-   -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
-   bl1 bl2 ADD bl2 INC one bl1 MOV
-   bl2 if 0 bl1 MOV then bl1 x ADD
-   t t ADD
-   tos tos ADD
-   w DEC
+    x x ADD
+    tos bt MOV bl1 ZERO bt
+    -if bl1 NG1! then bt INC bt -if bl1 NG1! then
+    t   bt MOV bl2 ZERO bt
+    -if bl2 NG1! then bt INC bt -if bl2 NG1! then
+    bl1 bl2 ADD bl2 INC bl1 ONE!
+    bl2 if bl1 ZERO then bl1 x ADD
+    t t ADD
+    tos tos ADD
+    w DEC
   repeat
   x tos MOV ;a
 :a opAnd
@@ -2730,17 +2697,51 @@ assembler.1 -order
   --sp
   begin w while
    x x ADD
- tos bt MOV 0 bl1 MOV bt
-   -if neg1 bl1 MOV then bt INC bt -if neg1 bl1 MOV then
-   t   bt MOV 0 bl2 MOV bt
-   -if neg1 bl2 MOV then bt INC bt -if neg1 bl2 MOV then
-   bl1 bl2 ADD two bl2 ADD one bl1 MOV
-   bl2 if 0 bl1 MOV then bl1 x ADD
+   tos bt MOV bl1 ZERO bt
+   -if bl1 NG1! then bt INC bt -if bl1 NG1! then
+   t   bt MOV bl2 ZERO bt
+   -if bl2 NG1! then bt INC bt -if bl2 NG1! then
+   bl1 bl2 ADD two bl2 ADD bl1 ONE!
+   bl2 if bl1 ZERO then bl1 x ADD
    t t ADD
    tos tos ADD
    w DEC
   repeat
   x tos MOV ;a
+
+\ TODO:
+\ - Replace some MOVs with DEC/INC, DEC/INC x directly?
+\ - Replace AND/OR/XOR?
+\ :a opMux
+\   bwidth w MOV
+\   x ZERO
+\   bl1 {sp} iLOAD --sp
+\   bl2 {sp} iLOAD --sp
+\   begin w while
+\     x x ADD
+\ 
+\     tos bt MOV bn ZERO
+\     bt -if bn NG1! then bt INC bt -if bt NG1! then
+\ 
+\     bt -if 
+\       bl2 bm MOV bn ZERO
+\       bm -if bn ONE! then bm INC bm -if bn ONE! then
+\       bn x ADD
+\     then
+\     bt INC
+\     bt +if  
+\       bl1 bm MOV bn ZERO
+\       bm -if bn ONE! then bm INC bm -if bn ONE! then
+\       bn x ADD
+\       \ bm -if x INC then bm INC bm -if x INC then
+\     then
+\ 
+\     tos tos ADD
+\     bl1 bl1 ADD
+\     bl2 bl2 ADD
+\     w DEC
+\   repeat
+\   x tos MOV ;a
 
 \ "opDivMod" is purely here for efficiency reasons, it really
 \ improves the speed at which numbers can be printed, which
@@ -2772,8 +2773,8 @@ assembler.1 -order
   w {sp} iLOAD
   t ZERO
   begin
-    one x MOV
-    w -if 0 x MOV then
+    x ONE!
+    w -if x ZERO then
     x
   while
     t INC
@@ -3145,16 +3146,14 @@ there 2/ primitive t!
 :m swap opSwap ;m ( -- : compile opSwap into the dictionary )
 :m >r opToR ;m ( -- : compile opTorR into the dictionary )
 :m r> opFromR ;m ( -- : compile opFromR into the dictionary )
-:m 0> op0> ;m ( -- : compile op0> into the dictionary )
 :m 0= op0= ;m ( -- : compile op0= into the dictionary )
 :m 0< op0< ;m ( -- : compile op0< into the dictionary )
-:m < op< ;m ( -- : compile op< into the dictionary )
-:m > op> ;m ( -- : compile op> into the dictionary )
+:m 0> op0> ;m ( -- : compile op0> into the dictionary )
 :m or opOr ;m ( -- : compile opOr into the dictionary )
 :m xor opXor ;m ( -- : compile opXor into the dictionary )
 :m and opAnd ;m ( -- : compile opAnd into the dictionary )
+\ :m mux opMux ;m ( -- : compile opMux into the dictionary )
 :m exit opExit ;m ( -- : compile opExit into the dictionary )
-:m 2/ op2/ ;m ( -- : compile op2/ into the dictionary )
 
 \ This complete most of the meta-compiler words, new
 \ words will be defined later, but that is most of it. The
@@ -3188,26 +3187,27 @@ there 2/ primitive t!
 :s #0 0 lit ;s ( -- 0 : push the number zero onto the stack )
 :s #1 1 lit ;s ( -- 1 : push one onto the stack )
 :s #-1 -1 lit ;s ( -- -1 : push negative one onto the stack )
+
 \ The next section adds all the words that are implemented in
 \ a single virtual machine instruction.
 \
 \ We want to make sure that we use references to the virtual
 \ machine instructions when we call functions such as 
-\ "1+" or "xor" when we use them later in the program, so we 
+\ "+" or "xor" when we use them later in the program, so we 
 \ put those words in the "target.only.1" dictionary to make 
 \ sure they will not be found, but are still accessible if we 
 \ need them.
 \
 \ The definitions looks odd, for example:
 \
-\        :to 1+ 1+ ;
+\        :to + + ;
 \
 \ Looks like it would be a recursive function that never
 \ terminates, however due to the way ":to" defines words the
 \ new word definition is not visible when we are filling out
-\ the word body, so the second "1+" refers to the assembly
+\ the word body, so the second "+" refers to the assembly
 \ definition we defined with ":a", or the VM instruction for
-\ "1+".
+\ "+".
 \
 \ The reason they are placed in the "target.only.1" is because
 \ of speed, it is better to call the VM instruction directly
@@ -3219,8 +3219,6 @@ there 2/ primitive t!
 \ referenced later on either. 
 \
 
-:to 1+ 1+ ; ( n -- n : increment a number by one )
-:to 1- 1- ; ( n -- n : decrement a number by one )
 :to + + ; ( n n -- n : addition )
 :to - - ; ( n1 n2 -- n : subtract n2 from n1 )
 :to invert invert ; ( u -- u : bitwise logical negate )
@@ -3232,19 +3230,20 @@ there 2/ primitive t!
 :to rshift rshift ; ( u n -- u : logical right shift by "n" )
 :so [@] [@] ;s ( vma -- : fetch -VM Address- )
 :so [!] [!] ;s ( u vma -- : store to -VM Address- )
-:so lsb lsb ;s ( u -- f : get least significant bit )
 :to sp@ sp@ ; ( -- a : get the variable stack location )
 :to sp! sp! ; ( a -- ??? : set the variable stack location )
-:to 0> op0> ; ( n -- f : signed greater than zero )
 :to 0= op0= ; ( n -- f : equal to zero )
 :to 0< op0< ; ( n -- f : signed less than zero )
-:to < op< ; ( n1 n2 -- f : signed less than )
-:to > op> ; ( n1 n2 -- f : signed greater than )
-:to 2/ op2/ ; ( u -- u : div by two, equivalent to 1 rshift )
+:to 0> op0> ; ( n -- f : signed greater than zero )
 :to or opOr ; ( u u -- u : bitwise or )
 :to xor opXor ; ( u u -- u : bitwise xor )
 :to and opAnd ; ( u u -- u : bitwise and )
+\ :to mux opMux ; ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
+
+\ : mxor >r dup invert swap r> mux ;
+\ : mor  dup mux ;
+\ : mand #0 swap mux ;
 
 \ "nop" stands for 'no-operation', it is useful for some of
 \ the hooks we have. It does nothing. We could have used
@@ -3252,6 +3251,27 @@ there 2/ primitive t!
 \ sometimes it is better to be a little more explicit.
 \
 : nop ; ( -- : do nothing! )
+
+\ "1+" and "1-" do what they say, 
+: 1+ #1 + ; ( n -- n )
+: 1- #1 - ; ( n -- n )
+
+\ "2/", or dividing by two, is a very common operation, so it
+\ useful to have a word that does this. This Forth implements
+\ it by a simple right shift by one, which is not standards
+\ compliant (there is a different between right shift,
+\ arithmetic right shift and division that many do not care
+\ about and get confused between).
+\ 
+\ "2/" is used to convert from a SUBLEQ VM address to an
+\ address understandable in Forth. 
+\ 
+\ "2\*" has a much simpler definition, instead of being defined
+\ in terms of "lshift" (which has not yet been defined) it
+\ just adds the number to be doubled to itself. 
+\ 
+: 2/ #1 rshift ; ( u -- u : div by two )
+: 2* dup + ; ( u -- u )
 
 \ Notice how "@" and "!" divide the address by two, which drops
 \ the lowest bit that is used to select the upper or lower
@@ -3572,18 +3592,6 @@ there 2/ primitive t!
 : [ #0
   state ! ; immediate ( -- : initiate command mode )
 
-\ "many" is an interesting word, it is in the system vocabulary
-\ despite not being used, but I like the word so I have
-\ included it here, it allows a line of code to be executed
-\ an infinite number of times by postfixing it to the end of
-\ the command. That is less interesting compared to the way it
-\ does it, by manipulating the input line to make it so it is
-\ executed again, the line is then re-parsed and executed
-\ again, including "many", which triggers another re-parsing
-\ and so on. It is a neat little word.
-\
-:s many #0 >in ! ;s ( -- : repeat current line )
-
 \ These words should be familiar to any Forth programmer,
 \ they are often defined in assembly for speed reasons, but
 \ most of the time they are not the choke-point in an
@@ -3641,13 +3649,15 @@ there 2/ primitive t!
 \ be used without turning the result into a boolean.
 \
 
-: 0<= 0> 0= ; ( n -- f )
+: > - 0> ;
+: < swap > ; ( n1 n2 -- f : signed less than )
+: = - 0= ;    ( u1 u2 -- f : equality )
+: <> = 0= ;   ( u1 u2 -- f : inequality )
 : 0<> 0= 0= ; ( n -- f : not equal to zero )
-: = - 0= ; ( u1 u2 -- f : equality )
-: <> = 0= ; ( u1 u2 -- f : inequality )
-: >= < 0= ; ( u1 u2 -- f : greater than or equal to )
-: <= > 0= ; ( u1 u2 -- f : less than or equal to )
-: 0>= 0< 0= ; ( u1 u2 -- f )
+: 0<= 0> 0= ; ( n -- f : less than or equal to zero )
+: 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
+: >= < 0= ;   ( n1 n2 -- f : greater than or equal to )
+: <= > 0= ;   ( n1 n2 -- f : less than or equal to )
 
 \ The unsigned words are defined in terms of each other once
 \ one of them has been defined, they are a bit awkward as they
@@ -3664,7 +3674,7 @@ there 2/ primitive t!
 \ However, this uses "xor".
 \
 : u< 2dup 0< 0= swap 0< 0= <> >r < r> <> ; ( u1 u2 -- f )
-: u> swap u< ; ( u1 u2 -- f )
+: u> swap u< ; ( u1 u2 -- f : unsigned greater than )
 : u>= u< 0= ; ( u1 u2 -- f )
 : u<= u> 0= ; ( u1 u2 -- f )
 
@@ -3694,13 +3704,10 @@ there 2/ primitive t!
 \ condition, but the vast majority of "abs" functions in all
 \ programming languages do not do this.
 \
-\ "2\*" just doubles a number, it should be familiar by now.
-\
 
 : negate 1- invert ; ( n -- n )
 : s>d dup 0< ; ( n -- d )
 : abs s>d if negate then ; ( n -- u )
-: 2* op2* ; ( u -- u )
 
 \ The cell word-set allows portable code to be written that
 \ does have to worry about the number of bytes that are in a
@@ -3722,7 +3729,7 @@ there 2/ primitive t!
 
 : cell 2 lit ; ( -- u )
 : cell+ cell + ; ( a -- a )
-: cells op2* ; ( u -- u )
+: cells 2* ; ( u -- u )
 
 \ "execute" takes an "execution token", which is just a fancy
 \ name for an address of a function, and then executes that
@@ -3988,9 +3995,9 @@ there 2/ primitive t!
 \ target.
 \
 
-: c@ dup @ swap lsb if 8 lit rshift else FF lit and then ;
+: c@ dup @ swap #1 and if 8 lit rshift else FF lit and then ;
 : c!  swap FF lit and dup 8 lit lshift or swap ( c a -- )
-   tuck dup @ swap lsb 0= FF lit xor
+   tuck dup @ swap #1 and 0= FF lit xor
    >r over xor r> and xor swap ! ;
 
 \ "min" and "max" could have been written with "mux", as
@@ -4088,7 +4095,7 @@ there 2/ primitive t!
 \ dictionary or byte oriented data of a varying length.
 \
 
-: aligned dup lsb 0<> #1 and + ; ( u -- u : align up ptr. )
+: aligned dup #1 and 0<> #1 and + ; ( u -- u : align up ptr. )
 : align here aligned h lit ! ; ( -- : align up dict. ptr. )
 
 \ "allot" allocates memory in the dictionary, it accepts a
@@ -4983,7 +4990,7 @@ there 2/ primitive t!
 \ "." uses "(.)", it just needs to check if the number to print
 \ is negative, if so, it emits a single "-" character.
 \
-: . space dup 0< if [char] - emit then (.) ;
+: . space s>d if [char] - emit then (.) ;
 
 \ "\>number" is a large but not terribly complex word, it
 \ is however a bit unwieldy to use, it operates on double
@@ -6586,8 +6593,20 @@ there 2/ primitive t!
 \ doable and could save 30% or more on the image size, which
 \ preliminary testing (not part of this document) confirms.
 \
-\ Huffman coding might be an alternate way to achieve this 
-\ similar results.
+\ A better scheme might be to use LZSS with a different
+\ set of instructions, much like:
+\ <https://richg42.blogspot.com/2022/01/lzxor.html>. Which
+\ extends LZSS to include a XOR command (LZSS has a "literal"
+\ and "copy" command). This command XORs a block with another
+\ block which may be either new or in the sliding dictionary
+\ (determined by the location of where to begin XOR'ing), 
+\ allowing partial matches to be encoded, placing a lot
+\ of work on the encoder. Instead of using XOR, which is
+\ expensive to compute on this system, a Subtract could be
+\ used instead.
+\
+\ Huffman coding might be yet another alternate way to achieve 
+\ this similar results.
 \
 \ Image encryption or obfuscation could also be done, as an
 \ anti-tampering measure, which might be useful to do if the
@@ -7183,7 +7202,7 @@ there 2/ primitive t!
 :s xio t' accept lit <expect> ! <tap> ! <echo> ! <ok> ! ;s
 :s hand t' ok lit
     t' (emit) lit ( Default: echo on )
-    {options} lit @ lsb if drop to' drop lit then
+    {options} lit @ #1 and if drop to' drop lit then
     t' ktap lit postpone [ xio ;s ( -- )
 :s pace B lit emit ;s ( -- : emit pacing character )
 :s file t' pace lit to' drop lit t' ktap lit xio ;s ( -- )
@@ -7739,7 +7758,7 @@ save-target                   \ Output target
 \ interpreter, this would look something like this:
 \
 \         .\ #include <stdio.h> /* eForth for 16-bit SUBLEQ */
-\         .\ int main(void){short p=0,m[65536] = {
+\         .\ int main(void){short p=0,m[1<<16] = {
 \        save-target  \ Output target
 \         .\ }; while(p>=0){int
 \         .\ a=m[p++],b=m[p++],c=m[p++];
@@ -7869,7 +7888,7 @@ it being run.
 \
 \        #include <stdint.h>
 \        #include <stdio.h>
-\        #define SZ   (32768)
+\        #define SZ   (1<<16)
 \        #define L(X) ((X)%SZ)
 \        int main(int s, char **v) {
 \                static uint16_t m[SZ];
@@ -7883,7 +7902,7 @@ it being run.
 \                        if (fclose(f) < 0)
 \                                return 2;
 \                }
-\                for (pc = 0; pc < SZ;) {
+\                for (pc = 0; !(pc & 0x8000u);) {
 \                        uint16_t a = m[L(pc++)];
 \                        uint16_t b = m[L(pc++)];
 \                        uint16_t c = m[L(pc++)];
@@ -7921,7 +7940,95 @@ it being run.
 \ This would give us a 16-bit SUBNEG (or Subtract and branch
 \ if Negative) machine, a similar machine to SUBLEQ but one
 \ that would require subtly different algorithms in the base
-\ image. 
+\ image.
+\
+\ Making a ones compliment SUBLEQ machine would not be much 
+\ harder.
+\
+\ The machine can address (almost) 65536 16-bit values, or
+\ 128KiB. The Forth machine however wastes the bottom bit so
+\ character addressing can be used. There is no reason to
+\ limit the SUBLEQ VM for this implementation specifically and
+\ there are a few advantages to using 128KiB instead of 64KiB,
+\ one is that the compiler can eliminate the boundary checks
+\ done with the "L" function when using 128KiB of memory,
+\ another is that a few SUBLEQ programs other than this of the
+\ authors do use this memory.
+\
+\ ## SUBLEQ machine with automatic save feature
+\
+\ This version machine is has a very different flavor compared
+\ to the previous one, this one automatically saves the memory
+\ of the device upon exit. This means interactive Forth 
+\ sessions can be saved and new images prepared. Care has to
+\ be taken not to corrupt the image, because the system will
+\ always save on exit!
+\
+\ Care is taken to try not to save memory that does not need
+\ to be saved because it has not been initialized with the
+\ images given on the command line or that has not been
+\ written to, which is what the variable "max" is for. There
+\ are some changes in the Forth system that could be made to
+\ improve this which have not been undertaken (such as making
+\ system memory be contagious with the Forth image).
+\
+\        #include <stdint.h>
+\        #include <stdio.h>
+\        #define SZ (1<<16)
+\        #define L(X) ((X)%SZ)
+\        #define MAX(X, Y) ((X) < (Y) ? (Y) : (X))
+\        int main(int s, char **v) {
+\        	static uint16_t m[SZ];
+\        	uint16_t pc = 0, max = 0;
+\        	for (int i = 1, d = 0; i < s; i++) {
+\        		FILE *f = fopen(v[i], "r");
+\        		if (!f)
+\        			return 1;
+\        		while (fscanf(f, "%d", &d) > 0)
+\        			m[(pc++)%SZ] = d;
+\        		if (fclose(f) < 0)
+\        			return 2;
+\        	}
+\        	max = pc;
+\        	for (pc = 0; !(pc & 0x8000);) {
+\        		uint16_t a = m[pc++];
+\        		uint16_t b = m[pc++];
+\        		uint16_t c = m[pc++];
+\        		if (a == 65535) {
+\        			m[b] = getchar();
+\        		} else if (b == 65535) {
+\        			if (putchar(m[a]) < 0)
+\        				return 3;
+\        			if (fflush(stdout) < 0)
+\        				return 4;
+\        		} else {
+\        			uint16_t r = m[b] - m[a];
+\        			max = MAX(max, b);
+\        			if (r & 32768 || r == 0)
+\        				pc = c;
+\        			m[b] = r;
+\        		}
+\        	}
+\        	if (s <= 1)
+\        		return 0;
+\        	FILE *f = fopen(v[s - 1], "w");
+\        	if (!f)
+\        		return 5;
+\        	for (int i = 0; i <= max; i++) {
+\        		const int p = (short)m[i];
+\        		if (fprintf(f, "%d\n", p) < 0) {
+\        			(void)fclose(f);
+\        			return 6;
+\        		}
+\        	}
+\        	if (fclose(f) < 0)
+\        		return 7;
+\        	return 0;
+\        }
+\
+\ The last argument given is the one that is written to (it
+\ will also be read from). It would be wise to backup any
+\ images before use.
 \
 \ ## Non-blocking input SUBLEQ machine written in C
 \
@@ -8033,7 +8140,7 @@ it being run.
 \                return ch == DELETE ? BACKSPACE : ch;
 \        }
 \
-\        #define SZ   (32768)
+\        #define SZ   (1<<16)
 \        #define L(X) ((X)%SZ)
 \        int main(int s, char **v)
 \        {
@@ -8091,7 +8198,7 @@ it being run.
 \        #include <stdio.h>
 \        #include <stdlib.h>
 \        #include <inttypes.h>
-\        #define SZ     (32768)
+\        #define SZ     (1<<16)
 \        #define L(X)   ((X)%SZ)
 \        #define HI(X)  (1ull << ((X) - 1))
 \        
@@ -8176,7 +8283,7 @@ it being run.
 \       #include <ctype.h>
 \       #include <inttypes.h>
 \       #include <time.h>
-\       #define SZ   (32768)
+\       #define SZ   (1<<16)
 \       #define L(X) ((X)%SZ)
 \       #define DEPTH (3*64)
 \       enum {
@@ -8980,7 +9087,7 @@ it being run.
 \        subleq a  TA    \ TA = -a
 \        subleq TB TB
 \        subleq TA TB    \ TB = a
-\        subleq b  TB c  \  TB = a - b, if (a - b) <= 0 JMP c
+\        subleq b  TB c  \ TB = a - b, if (a - b) <= 0 JMP c
 \
 \ ### IFGT a b c (if greater than)
 \
@@ -9125,19 +9232,19 @@ variable seed ( NB. Could be mixed with keyboard input )
 : d>= d< invert ;                  ( d -- f )
 : d>  2swap d< ;                   ( d -- f )
 : d<= d> invert ;                  ( d -- f )
-\ : du> 2swap du< ;                  ( d -- f )
+\ : du> 2swap du< ;                ( d -- f )
 : d=  rot = -rot = and ;           ( d d -- f )
 : d- dnegate d+ ;                  ( d d -- d )
 : dabs  s>d if dnegate exit then ; ( d -- ud )
 : d<> d= 0= ;                      ( d d -- f )
 : 2rdrop r> rdrop rdrop >r ; ( R: n n -- )
-: 2. swap . . ;
+: 2. swap . . ; ( n n -- )
 : m* 2dup xor 0< >r abs swap abs um* r> if dnegate then ;
 : */mod  >r m* r> m/mod ;  ( n n n -- r q )
 : */  */mod nip ;          ( n n n -- q )
 : holds begin dup while 1- 2dup + c@ hold repeat 2drop ;
 : roll  dup 0> if swap >r 1- recurse r> swap else drop then ;
-: signum dup 0< swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )
+: signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )
 : >< dup 8 rshift swap 8 lshift or ; ( u -- u : swap bytes )
 : #digits >r dup 0= if 1+ exit then r> log 1+ ; ( u b -- u )
 : ** ( n u -- n )
@@ -9162,17 +9269,29 @@ variable seed ( NB. Could be mixed with keyboard input )
   for
     dup . dup list 1+ key $D = if rdrop drop exit then
   next drop ;
-: thru over - for dup >r load r> 1+ next drop ;
+: thru over - for dup >r load r> 1+ next drop ; ( k1 k2 -- )
 : /string over min rot over + -rot - ; 
 : ndrop for aft drop then next ; ( 0...n n -- )
 : unused $FFFF here - ; ( 65536 bytes available in this VM )
-: char+ 1+ ;
+: char+ 1+ ; ( b -- b )
 : mux dup >r and swap r> invert and or ; ( x1 x2 mask -- x )
 \ You can use "mux" to define "or" and "and" as so:
 \
 \        : or dup mux ;
 \        : and 0 -rot mux ;
 
+\ "many" is an interesting word, it allows a line of code to be 
+\ executed an infinite number of times by postfixing it to the 
+\ end of the command. That is less interesting compared to the 
+\ way it does it, by manipulating the input line to make it so 
+\ it is executed again, the line is then re-parsed and executed
+\ again, including "many", which triggers another re-parsing
+\ and so on. It is a neat little word.
+\
+: many 0 >in ! ; ( -- : repeat current line )
+
+\ Case Statements:
+\
 \ Usage:
 \
 \        : x case
@@ -9242,6 +9361,9 @@ only forth definitions
 \ One possible word-set for structures in Forth (something
 \ which Forth is really lacking in and is its major weakness).
 \
+\ These works could do with some compiler security, both with
+\ minimum stack checks and magic numbers.
+\
 \ Example:
 \ 
 \ struct
@@ -9266,7 +9388,7 @@ only forth definitions
 : long:   4 field: ;
 : union:  0 field: ;
 : unused  +  ;
-: size:  constant  ;
+: size:  constant ;
 : ;struct drop ;
 
 \ Make a word called "mark" which when called erases 
@@ -9345,6 +9467,68 @@ user lana stirling
 users -order
 .( EFORTH ONLINE ) cr
 <ok> ! login
+
+\ ## Simple Bootloader
+\
+\ Calling this facility a bootloader might be overselling it,
+\ the word "ingest" essentially performs the opposite of this
+\ systems version of "dump". It retrieves a series of numbers
+\ represented in the current base and stores them at 
+\ consecutive memory locations until either an error has
+\ occurred or the number of cells it is meant to write has
+\ been reached.
+\
+\ The word-set needed to achieve this is tiny and it leverages
+\ the default Forth I/O mechanisms and the Forth language to
+\ achieve what is needed.
+\
+\ There a few facilities that are missing which one would
+\ expect from a bootloader program, but on second glance are
+\ readily available. If we are boot-loading via the Forth
+\ terminal we can either dump the written memory back out to
+\ verify it is correct, or load a checksum algorithm, execute
+\ it and then get then read the value back (if the checksum
+\ algorithm fails to load due to line noise a UART as an
+\ example, you will not get a valid checksum either way).
+\
+\ Forth code can be executed once loaded with the "execute"
+\ instruction.
+\
+\ The words defined are:
+\
+\ * "nul?", This is used to check if we are at the end of
+\ the current line, which could have either contained numbers
+\ we have processed, or been empty. It accepts a counted
+\ string.
+\ * "grab", Get a word from the input stream, we cannot rely
+\ on "word" to do this directly as we might be at the end of
+\ the line, if we are it refills the line and attempts again,
+\ it will do this until success.
+\ * "integer", gets a space delimited word from the input
+\ stream and then attempts to convert it into a number in the
+\ current input radix and either returns that number and 
+\ signals success or it returns the word (as an address and
+\ length) and a flag indicating failure. "integer" returns a
+\ single cell number.
+\ * "integer?", integer returns a single cell or it throws
+\ an error. It could be extended to look for overflow, and
+\ to check for double cell number entry, but it does not, it
+\ just checks to make sure that input was a number.
+\ * "ingest", what we are building towards, the inverse of
+\ "dump", it takes a memory address and length and attempts
+\ to populate it with a list of integers.
+\
+\ Note however how small the program is, and how much it
+\ *does not* do. It simple, but can be used as a bootloader.
+\
+
+: nul? count nip 0= ; ( a -- f : is counted word empty? )
+: grab ( <word> -- a : get word from input stream  )
+  begin bl word dup nul? 0= if exit then drop query again ;
+: integer grab count number? nip ; ( <num> -- n f : get int. )
+: integer? integer 0= ( dpl @ 0>= or ) -24 and throw ;
+: ingest ( a u -- : opposite of 'dump', load nums into mem )
+  cell / for aft integer? over ! cell+ then next drop ; 
 
 \ ## Future Direction and Additional tasks.
 \

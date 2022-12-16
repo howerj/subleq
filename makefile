@@ -17,6 +17,9 @@ test: 1.dec 2.dec nbit
 	diff -w 1.dec 2.dec
 
 width: gforth.dec nbit 
+	./nbit  8 $<
+	./nbit  9 $<
+	./nbit 15 $<
 	./nbit 17 $<
 	./nbit 18 $<
 	./nbit 32 $<

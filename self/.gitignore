@@ -1,4 +1,6 @@
-sqasm
 *.exe
 *.sq
 hsq
+save
+sqasm
+subleq
