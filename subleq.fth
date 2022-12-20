@@ -2406,7 +2406,7 @@ assembler.1 -order
 \
 
 :a opNext w {rp} iLOAD ( R: n -- | n-1 )
-   w if w DEC w {rp} iSTORE t ip iLOAD t ip MOV vm JMP then
+   w if w DEC w {rp} iSTORE ip ip iLOAD vm JMP then
    ip INC --rp ;a
 
 \ "opJump" and "opJumpZ" implement unconditional and
@@ -2459,12 +2459,14 @@ assembler.1 -order
 \
 
 :a opJumpZ ( u -- )
-  tos w MOV t ZERO
-  w if t NG1! then w DEC w +if t NG1! then
+  t ZERO
+  tos if t NG1! then tos DEC tos +if t NG1! then
   tos {sp} iLOAD --sp
   t if ip INC vm JMP then (a); 
 ( <--- FALL-THROUGH ---> )
 :a opJump ip ip iLOAD ;a ( -- )
+
+\ ================== TODO: Rewrite! ==================
 
 \ The comparison operators are tricky to get right,
 \ and are still not completely right, however they do a good
@@ -2507,10 +2509,13 @@ assembler.1 -order
 :a op0=
    tos w MOV tos NG1!
    w if tos ZERO then w DEC w +if tos ZERO then ;a
-:a op0> tos w MOV tos ZERO w +if tos NG1! then ;a
+:a op0> tos +if tos NG1! vm JMP then tos ZERO ;a
 :a op0<
    tos w MOV tos ZERO
    w -if tos NG1! then w INC w -if tos NG1! then ;a
+
+
+\ ================== TODO: Rewrite! ==================
 
 \ "op2/" is used to implement "2/", it is common for Forth
 \ implementations to implement "2/" incorrectly and this one
@@ -2597,6 +2602,9 @@ assembler.1 -order
   repeat
   x tos MOV ;a
 
+
+\ ================== TODO: Rewrite! ==================
+
 \ The logical operators, OR, XOR, and AND, have the same
 \ pattern to how they work, and the borrow from how "rshift"
 \ works. They both work by testing if the highest bit
@@ -2655,93 +2663,89 @@ assembler.1 -order
 \ These operators take up quite a lot of space, and there is
 \ a lot that could be done to shrink the image.
 \
-:a opOr
-  bwidth w MOV
-  x ZERO
-  t {sp} iLOAD
-  --sp
-  begin w while
-    x x ADD
-    tos bt MOV bl1 ZERO
-    bt -if bl1 NG1! then bt INC bt -if bl1 NG1! then
-    t   bt MOV bl2 ZERO
-    bt -if bl2 NG1! then bt INC bt -if bl2 NG1! then
-    bl1 bl2 ADD bl2 if x INC then
-    t t ADD
-    tos tos ADD
-    w DEC
-  repeat
-  x tos MOV ;a
-:a opXor
-  bwidth w MOV
-  x ZERO
-  t {sp} iLOAD
-  --sp
-  begin w while
-    x x ADD
-    tos bt MOV bl1 ZERO bt
-    -if bl1 NG1! then bt INC bt -if bl1 NG1! then
-    t   bt MOV bl2 ZERO bt
-    -if bl2 NG1! then bt INC bt -if bl2 NG1! then
-    bl1 bl2 ADD bl2 INC bl1 ONE!
-    bl2 if bl1 ZERO then bl1 x ADD
-    t t ADD
-    tos tos ADD
-    w DEC
-  repeat
-  x tos MOV ;a
-:a opAnd
-  bwidth w MOV
-  x ZERO
-  t {sp} iLOAD
-  --sp
-  begin w while
-   x x ADD
-   tos bt MOV bl1 ZERO bt
-   -if bl1 NG1! then bt INC bt -if bl1 NG1! then
-   t   bt MOV bl2 ZERO bt
-   -if bl2 NG1! then bt INC bt -if bl2 NG1! then
-   bl1 bl2 ADD two bl2 ADD bl1 ONE!
-   bl2 if bl1 ZERO then bl1 x ADD
-   t t ADD
-   tos tos ADD
-   w DEC
-  repeat
-  x tos MOV ;a
+  \ :a opOr
+  \   bwidth w MOV
+  \   x ZERO
+  \   t {sp} iLOAD
+  \   --sp
+  \   begin w while
+  \     x x ADD
+  \     tos bt MOV bl1 ZERO
+  \     bt -if bl1 NG1! then bt INC bt -if bl1 NG1! then
+  \     t   bt MOV bl2 ZERO
+  \     bt -if bl2 NG1! then bt INC bt -if bl2 NG1! then
+  \     bl1 bl2 ADD bl2 if x INC then
+  \     t t ADD
+  \     tos tos ADD
+  \     w DEC
+  \   repeat
+  \   x tos MOV ;a
+  \ :a opXor
+  \   bwidth w MOV
+  \   x ZERO
+  \   t {sp} iLOAD
+  \   --sp
+  \   begin w while
+  \     x x ADD
+  \     tos bt MOV bl1 ZERO bt
+  \     -if bl1 NG1! then bt INC bt -if bl1 NG1! then
+  \     t   bt MOV bl2 ZERO bt
+  \     -if bl2 NG1! then bt INC bt -if bl2 NG1! then
+  \     bl1 bl2 ADD bl2 INC bl1 ONE!
+  \     bl2 if bl1 ZERO then bl1 x ADD
+  \     t t ADD
+  \     tos tos ADD
+  \     w DEC
+  \   repeat
+  \   x tos MOV ;a
+  \ :a opAnd
+  \   bwidth w MOV
+  \   x ZERO
+  \   t {sp} iLOAD
+  \   --sp
+  \   begin w while
+  \    x x ADD
+  \    tos bt MOV bl1 ZERO bt
+  \    -if bl1 NG1! then bt INC bt -if bl1 NG1! then
+  \    t   bt MOV bl2 ZERO bt
+  \    -if bl2 NG1! then bt INC bt -if bl2 NG1! then
+  \    bl1 bl2 ADD two bl2 ADD bl1 ONE!
+  \    bl2 if bl1 ZERO then bl1 x ADD
+  \    t t ADD
+  \    tos tos ADD
+  \    w DEC
+  \   repeat
+  \   x tos MOV ;a
 
-\ TODO:
-\ - Replace some MOVs with DEC/INC, DEC/INC x directly?
-\ - Replace AND/OR/XOR?
-\ :a opMux
-\   bwidth w MOV
-\   x ZERO
-\   bl1 {sp} iLOAD --sp
-\   bl2 {sp} iLOAD --sp
-\   begin w while
-\     x x ADD
-\ 
-\     tos bt MOV bn ZERO
-\     bt -if bn NG1! then bt INC bt -if bt NG1! then
-\ 
-\     bt -if 
-\       bl2 bm MOV bn ZERO
-\       bm -if bn ONE! then bm INC bm -if bn ONE! then
-\       bn x ADD
-\     then
-\     bt INC
-\     bt +if  
-\       bl1 bm MOV bn ZERO
-\       bm -if bn ONE! then bm INC bm -if bn ONE! then
-\       bn x ADD
-\       \ bm -if x INC then bm INC bm -if x INC then
-\     then
-\ 
-\     tos tos ADD
-\     bl1 bl1 ADD
-\     bl2 bl2 ADD
-\     w DEC
-\   repeat
-\   x tos MOV ;a
+:a opMux
+  bwidth w MOV
+  x ZERO
+  bl1 {sp} iLOAD --sp
+  bl2 {sp} iLOAD --sp
+  begin w while
+    x x ADD
+
+    tos bt MOV bn ZERO
+    bt -if bn NG1! then bt INC bt -if bn NG1! then
+
+    bn -if 
+      bl2 bm MOV bt ZERO
+      bm -if bt ONE! then bm INC bm -if bt ONE! then
+      bt x ADD
+    then
+    bn INC
+    bn if  
+      bl1 bm MOV bt ZERO
+      bm -if bt ONE! then bm INC bm -if bt ONE! then
+      bt x ADD
+    then
+
+    tos tos ADD
+    bl1 bl1 ADD
+    bl2 bl2 ADD
+    w DEC
+  repeat
+  x tos MOV ;a
 
 \ "opDivMod" is purely here for efficiency reasons, it really
 \ improves the speed at which numbers can be printed, which
@@ -3149,10 +3153,7 @@ there 2/ primitive t!
 :m 0= op0= ;m ( -- : compile op0= into the dictionary )
 :m 0< op0< ;m ( -- : compile op0< into the dictionary )
 :m 0> op0> ;m ( -- : compile op0> into the dictionary )
-:m or opOr ;m ( -- : compile opOr into the dictionary )
-:m xor opXor ;m ( -- : compile opXor into the dictionary )
-:m and opAnd ;m ( -- : compile opAnd into the dictionary )
-\ :m mux opMux ;m ( -- : compile opMux into the dictionary )
+:m mux opMux ;m ( -- : compile opMux into the dictionary )
 :m exit opExit ;m ( -- : compile opExit into the dictionary )
 
 \ This complete most of the meta-compiler words, new
@@ -3235,15 +3236,12 @@ there 2/ primitive t!
 :to 0= op0= ; ( n -- f : equal to zero )
 :to 0< op0< ; ( n -- f : signed less than zero )
 :to 0> op0> ; ( n -- f : signed greater than zero )
-:to or opOr ; ( u u -- u : bitwise or )
-:to xor opXor ; ( u u -- u : bitwise xor )
-:to and opAnd ; ( u u -- u : bitwise and )
-\ :to mux opMux ; ( u1 u2 sel -- u : bitwise multiplex op. )
+:so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
 
-\ : mxor >r dup invert swap r> mux ;
-\ : mor  dup mux ;
-\ : mand #0 swap mux ;
+: xor >r dup invert swap r> mux ;
+: or  over mux ;
+: and #0 swap mux ;
 
 \ "nop" stands for 'no-operation', it is useful for some of
 \ the hooks we have. It does nothing. We could have used
@@ -4000,21 +3998,29 @@ there 2/ primitive t!
    tuck dup @ swap #1 and 0= FF lit xor
    >r over xor r> and xor swap ! ;
 
-\ "min" and "max" could have been written with "mux", as
-\ described earlier, but on this Forth this is the fastest way 
-\ of implementing them. "min" and "max" operate on *signed*
-\ values, given two numbers they leave the minimum or maximum
-\ number on the stack, dropping the other one. Some Forth
-\ systems define "umin" and "umax" which operate on unsigned
-\ values.
+\ "min" and "max" are more traditionally written as:
+\
+\        : max 2dup < if nip else drop then ; ( n1 n2 -- n )
+\        : min 2dup > if nip else drop then ; ( n1 n2 -- n )
+\
+\ And that is the fastest way of writing them in this system,
+\ it is not the smallest, instead we can use the multiplexing
+\ word "mux" and a property of Forth booleans (false being zero
+\ and true being all bits set) to implement them. Speed is not
+\ of too much of a concern here as the two words should not be
+\ on critical path when it comes to performance.
+\
+\ Note that these version of "min" and "max" return the minimum
+\ and maximum of two *signed* values respectively, dropping the
+\ other value. "umin" and "umax" operate on unsigned values,
+\ but they are not needed.
 \
 \ A non-destructive version that sorts the items on the stack
 \ by ascending or descending might be useful, but I cannot
-\ think of a purpose for them.
-\
+\ think of a purpose for them in this Forth.
 
-: max 2dup < if nip else drop then ; ( n1 n2 -- n )
-: min 2dup > if nip else drop then ; ( n1 n2 -- n )
+: max 2dup > mux ;
+: min 2dup < mux ;
 
 \ "source-id" allows us to determine what the current input
 \ source is. If it is 0 we are reading input from the terminal,
@@ -9274,11 +9280,19 @@ variable seed ( NB. Could be mixed with keyboard input )
 : ndrop for aft drop then next ; ( 0...n n -- )
 : unused $FFFF here - ; ( 65536 bytes available in this VM )
 : char+ 1+ ; ( b -- b )
-: mux dup >r and swap r> invert and or ; ( x1 x2 mask -- x )
+
+\ This version of Forth defines "mux" in SUBLEQ assembly, 
+\ previous versions did not and coded the bitwise routines in 
+\ assembly instead of using "mux", here "mux" is defined in 
+\ Forth. Note that the mask here is inverted from the built in
+\ one.
+\
 \ You can use "mux" to define "or" and "and" as so:
 \
 \        : or dup mux ;
 \        : and 0 -rot mux ;
+\
+: mux dup >r and swap r> invert and or ; ( x1 x2 mask -- x )
 
 \ "many" is an interesting word, it allows a line of code to be 
 \ executed an infinite number of times by postfixing it to the 

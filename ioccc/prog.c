@@ -31,7 +31,7 @@ I S(i ingest,i excrete,I*m/*not feeling well*/,I D,I(*E[static 1])(I)){
 #include <stdlib.h>
 I main(I q,char**v){
 	F(q<2)r(1);
-	I r[1<<(f[3]/7)],_=0,j=atoi(v[1]),o=2,s=0;i O;
+	I r[1<<(1+(f[3]/7))],_=0,j=atoi(v[1]),o=2,s=0;i O;
 	F(j<8||j>32)r(2);O:
 	F(!(O=fopen(v[o++],"r")))r(3);o:
 	F(fscanf(O,"%d",&s)<=0)G I;r[L(_++)]=X(s,0,M(j));G o;I:
