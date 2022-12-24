@@ -17,7 +17,7 @@ double: self.dec ../subleq ../subleq.dec
 sqasm: sqasm.cpp
 
 ../subleq.dec ../subleq:
-	make -C ../subleq.dec ../subleq
+	make -C .. subleq.dec subleq
 
 clean:
 	rm sqasm

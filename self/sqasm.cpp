@@ -304,7 +304,7 @@ begin:
 	return true;
 }
 
-bool getinstr(instruction &i){
+bool getinstr(instruction &i) {
 	eatn();
 	bool data = false;
 	if (prog[pip] == '.') { 

@@ -1,6 +1,6 @@
 # 16-bit SUBLEQ eForth
 
-* Edition: 1.0.0
+* Edition: 1.1.0
 * Author: Richard James Howe
 * Email: <mailto:howe.r.j.89@gmail.com>
 * Repo: <https://github.com/howerj/subleq>
@@ -58,4 +58,5 @@ do something useful with this project!
 * <https://stackoverflow.com/questions/2982729>
 * <https://stackoverflow.com/questions/34120161>
 * <https://web.ece.ucsb.edu/~parhami/pubs_folder/parh88-ijeee-ultimate-risc.pdf>
+* <https://eigenratios.blogspot.com/2006/09/mark-ii-oisc-self-interpreter.html>
 

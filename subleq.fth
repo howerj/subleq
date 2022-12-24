@@ -1,7 +1,7 @@
 defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ # Information
 \
-\ * Edition: 1.0.0
+\ * Edition: 1.1.0
 \ * Project: Cross Compiler / eForth for a SUBLEQ CPU
 \ * Author:  Richard James Howe
 \ * Email:   howe.r.j.89@gmail.com
@@ -12,8 +12,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ # Dedication and Foreword
 \
-\ This book is dedicated to my fiancee Molly Barton, my Moll,
-\ who is carrying my tiny girl and has also introduced me to
+\ This book is dedicated to my wife Molly Barton, my Moll,
+\ my tiny girl Persephone and has also introduced me to
 \ her wonderful dog Poppy.
 \
 \ Please feel free to contact the author about thoughts,
@@ -486,7 +486,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \
 \ You can see that this CPU architecture is barren and spartan,
 \ it does not offer what we usually expect from a processor. It
-\ has no native way to left shift, multiply, divide, it has
+\ has no native way to shift, multiply, divide, it has
 \ no interrupts, traps, nor a memory management unit, it cannot
 \ load or store without doing a subtraction. The instruction it
 \ can do will have to be manipulated so it can do just a store,
@@ -501,7 +501,7 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ it would have a new jump location), at least in most SUBLEQ
 \ specifications.
 \
-\ An example of this are the following, an unconditional Jump
+\ On to defining our first instruction, an unconditional Jump
 \ instruction, or "JMP", can be made in the following fashion,
 \ using "A", "B", and "C" for the operands as we did before:
 \
@@ -583,9 +583,10 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ system could be accommodated for.
 \
 \ A system that used bignums would be yet another difficulty,
-\ arbitrary precision numbers do not overflow, the fact that
-\ integers overflow is used by this implementation to implement
-\ a fast (for SUBLEQ machines) bitwise operations. Instead
+\ arbitrary precision numbers do not overflow, and the fact 
+\ that integer overflow is used by this implementation to 
+\ implement a fast (for SUBLEQ machines) bitwise operations 
+\ causes problems for those bignum machine. Instead
 \ the bitwise operations would have to be re-engineered around
 \ multiplication and division instead of bit by bit testing
 \ of the topmost bit (which indicates a number is negative,
@@ -593,7 +594,8 @@ defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
 \ easier to simulate a 16-bit SUBLEQ machine on an N-bit
 \ architecture, where N is greater than 16, falling back to
 \ direct evaluation if we detect we are running on a 16-bit
-\ machine (and thus do not need the simulator).
+\ machine (and thus do not need the simulator), something 
+\ similar could be done for machines that used bignums.
 \
 \ ## Meta-compilation (Cross compilation with Forth)
 \
@@ -755,20 +757,51 @@ wordlist constant target.only.1 ( target only word set )
 defined eforth [if] system +order [then]
 meta.1 +order definitions
 
-\ Some system constants are defined, "=cell" is the size of
-\ a cell in bytes, for our 16-bit machine it is "2", if we
-\ want to allocate a cell within the image, we will need to
-\ refer to this constant.
+\ Some system constants are defined: 
+
+\ * "=cell" is the size of a cell in bytes, for our 16-bit
+\  machine it is "2", if we want to allocate a cell within the
+\ image, we will need to refer to this constant.
+\ * "size" is the maximum size that our image we are generating
+\ can be, which is plenty of room for a Forth image.
+\ * "=buf" is the size of the textual input buffer used for
+\ storing a line, this like the return and variable stacks are
+\ stored within a threads memory area. Do not increase this
+\ value without adjusting the rest of memory areas.
+\ * "=stksz", each of the stacks, the variable and return 
+\ stacks are this size. It is stored within thread memory, one
+\ of the stacks grows upwards and the other downwards and they
+\ are arranged so it one of the stacks overflows it will end
+\ up in the other stacks memory, this gives a little more stack
+\ space to work with if one stack is consuming more than the
+\ other, but both are quite small.
+\ * "=thread", this contains the location of the first thread
+\ we setup, there must always be at least one thread running.
+\ Each thread is a 1024 byte block and is aligned (although it
+\ does not have to be) on a 1024 block boundary. The first 
+\ thread is located at the end of main memory, which is a good
+\ place to put it, but it interacts poorly with the SUBLEQ
+\ machine in the appendix that saves the image after running
+\ (it still works). A consequence of the thread size being
+\ 1024 bytes and 1024 byte aligned is that if we had a block 
+\ system that could swap out to mass storage we could 
+\ potentially swap out unused threads. This goes for any
+\ data structure with the same properties, the block system
+\ is like the poor-mans Memory Management Unit (MMU).
+\ * "=bksp", "=lf", "=cr", and "=del" contain the values for
+\ the characters backspace, line feed, character return and
+\ delete respectively.
 \
-   2 constant =cell  \ Target cell size
-4000 constant size   \ Size of image working area
- 100 constant =buf   \ Size of text input buffers in target
- 100 constant =stksz \ Size of return and variable stacks
-0008 constant =bksp  \ Backspace character value
-000A constant =lf    \ Line feed character value
-000D constant =cr    \ Carriage Return character value
-007F constant =del   \ Delete character
-FC00 constant =stack-start \ Initial start of stack
+\
+   2 constant =cell   \ Target cell size
+4000 constant size    \ Size of image working area
+ 100 constant =buf    \ Size of text input buffers in target
+ 100 constant =stksz  \ Size of return and variable stacks
+FC00 constant =thread \ Initial start of thread area
+0008 constant =bksp   \ Backspace character value
+000A constant =lf     \ Line feed character value
+000D constant =cr     \ Carriage Return character value
+007F constant =del    \ Delete character
 
 \ Now we need to create an area to store the new image in, 
 \ called "tflash", and clear it. The image generated is not 
@@ -1169,8 +1202,9 @@ defined eforth [if]
 :m :a ( "name" -- : assembly routine, no header )
   1234 target.1 +order definitions
   create talign there , assembler.1 +order does> @ 2/ t, ;m
-:m (a); 1234 <>
+:m (fall-through); 1234 <>
    if abort" unstructured" then assembler.1 -order ;m
+:m (a); (fall-through); ;m
 
 \ We no longer need the system vocabulary, if we are running
 \ the cross-compiler on the eForth image (we never did if
@@ -1568,17 +1602,17 @@ label: entry       \ used to set entry point in next cell
   2 tvar two       \ must contain  2
  10 tvar bwidth    \ must contain 16
   0 tvar INVREG    \ temporary register used for inversion only
-  0 tvar w         \ working pointer
-  0 tvar x         \ working pointer
-  0 tvar t         \ temporary register for Virtual Machine
-  0 tvar bl1       \ bitwise extra register
-  0 tvar bl2       \ bitwise extra register
-  0 tvar bt        \ bitwise extra register
-  0 tvar bn        \ bitwise extra register 
-  0 tvar bm        \ bitwise extra register 
+  0 tvar w         \ working pointer 1 (register r0)
+  0 tvar r1        \ register 1
+  0 tvar r2        \ register 2
+  0 tvar r3        \ register 3
+  0 tvar r4        \ register 4
+  0 tvar r5        \ register 5
+  0 tvar r6        \ register 6
+  0 tvar r7        \ register 7
 
   0 tvar h         \ dictionary pointer
-  =stack-start half tvar {up} \ Current task addr. (Half size)
+  =thread half tvar {up} \ Current task addr. (Half size)
   F00 tvar {ms}    \ delay loop calibration variable
   0 tvar check     \ used for system checksum
 
@@ -1632,8 +1666,8 @@ label: entry       \ used to set entry point in next cell
   \ Thread variables, not all of which are user variables
   0 tvar ip        \ instruction pointer
   0 tvar tos       \ top of stack
-  =stack-start =stksz        + half dup tvar {rp0} tvar {rp}
-  =stack-start =stksz double + half dup tvar {sp0} tvar {sp}
+  =thread =stksz        + half dup tvar {rp0} tvar {rp}
+  =thread =stksz double + half dup tvar {sp0} tvar {sp}
   200 constant =tib \ Start of terminal input buffer
   380 constant =num \ Start of numeric input buffer
   tuser {next-task} \ next task in task list
@@ -1973,16 +2007,16 @@ err-str 2/ tvar err-str-addr
 
 assembler.1 +order
 label: die
-   err-str-addr x MOV
+   err-str-addr r1 MOV
    w ZERO
    err-str w MOV
    begin
      w
    while
      w DEC
-     x INC
-     bl2 x iLOAD
-     bl2 PUT
+     r1 INC
+     r4 r1 iLOAD
+     r4 PUT
    repeat
    HALT
 
@@ -2013,13 +2047,13 @@ label: start         \ System Entry Point
 \ with smaller bit widths than 16.
 \ 
 
-  x ONE!
+  r1 ONE!
   w ONE!
 label: chk16
-  w w ADD                        \ w = w * 2
-  x INC                          \ x++
-  w +if chk16 JMP then           \ check if still positive
-  bwidth x SUB x if die JMP then \ x - bwidth should be zero
+  w w ADD                          \ w = w * 2
+  r1 INC                           \ r1++
+  w +if chk16 JMP then             \ check if still positive
+  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be zero
 
 \ Back to setting up registers
 \
@@ -2037,10 +2071,10 @@ label: chk16
 label: vm ( Forth Inner Interpreter )
   ip w MOV           \ Move Instruction Pointer To Working Ptr.
   ip INC             \ IP now points to next instruction!
-  t w iLOAD          \ Get actual instruction to execute
-  t w MOV            \ Copy it, as SUB is destructive
-  primitive t SUB    \ Check if it is a primitive
-  t -if w iJMP then  \ Jump straight to VM functions if it is
+  r1 w iLOAD         \ Get actual instruction to execute
+  r1 w MOV           \ Copy it, as SUB is destructive
+  primitive r1 SUB   \ Check if it is a primitive
+  r1 -if w iJMP then  \ Jump straight to VM functions if it is
   ++rp               \ If it wasn't a VM instruction, inc {rp}
   ip {rp} iSTORE     \ and store ip to return stack
   w ip MOV vm a-optim \ "w" becomes our next instruction
@@ -2056,7 +2090,7 @@ assembler.1 -order
 \ possible).
 \
 
-:m ;a (a); vm a-optim vm JMP ;m
+:m ;a (fall-through); vm a-optim vm JMP ;m
 
 \ # Forth Virtual Machine Instructions
 \
@@ -2142,58 +2176,8 @@ assembler.1 -order
 \ backed by simple assembly instructions. "bye" halts the
 \ SUBLEQ machine, "invert" does a bitwise inversion.
 \
-:a bye HALT ;a       ( -- : HALT system )
+:a bye HALT (a);    ( -- : HALT system )
 :a invert tos INV ;a ( u -- u : bitwise invert tos )
-
-\ The following two functions are use to build "@" and "!",
-\ however they deal with cell addresses and not with byte
-\ addresses. The SUBLEQ machine labels the first 16-bits as
-\ cell 0, and the next 16-bits as cell 1, however "@" and
-\ "!" require byte addressing, that is, address 0 should refer
-\ to the first 8-bits and not the first 16-bit, address 1
-\ to the next 8-bits, and so on.
-\
-\ That will be corrected later, but these two form the core
-\ of those words. It does mean that the Forth implementation
-\ can address less memory than is potentially available to the 
-\ SUBLEQ machine. The SUBLEQ machine can address approximately
-\ 65536 cells, or 128kiB, however the Forth can address
-\ 65536 bytes, or 64kiB. Note the word "approximately", some
-\ addresses (such as "-1") are treated specially and are not
-\ available as memory locations.
-\
-:a [@] tos tos iLOAD ;a
-:a [!] w {sp} iLOAD w tos iSTORE --sp tos {sp} iLOAD --sp ;a
-
-\ "opEmit" and "opKey" perform the I/O functions, of which
-\ there are only two, there are Forth functions which wrap
-\ these primitives but the basic I/O is done by these two. They
-\ both operate on cells pulled or pushed to the stack, with
-\ only the lowest 8-bits used by those I/O functions.
-\
-\ "opEmit", called by "emit", outputs a single byte. It is
-\ always blocking. "opKey" accepts a single byte of input
-\ and returns negative on error. Depending on the
-\ implementation the negative can mean "no byte has been
-\ received yet" (it is non-blocking) or it can mean "End Of
-\ Input". There are option bits in the "{options}" variable
-\ for controlling the behavior of "key", defined later on,
-\ which uses the instruction "opKey".
-\
-\ A non-blocking version of "opEmit" would require a virtual
-\ machine change, not a radical one, but just information on
-\ whether the operation succeeded. The change in the virtual
-\ machine necessary to do this is present in the appendix
-\ containing the virtual machine (at the end of the
-\ non-blocking input version). This would also require
-\ a change in "opEmit" and would render this SUBLEQ machine
-\ different to the majority of SUBLEQ machines out there.
-\
-\ These two instructions provide the only real interaction
-\ with the outside world, and you can do a lot with just that.
-\
-:a opEmit tos PUT tos {sp} iLOAD --sp ;a ( c -- )
-:a opKey ++sp tos {sp} iSTORE tos GET ;a ( -- n )
 
 \ We need a way of pushing a literal value, a number, onto
 \ the variable stack, "opPush" does that.
@@ -2257,10 +2241,9 @@ assembler.1 -order
 \
 \        opSwap  -> swap ( x y -- y x )
 \        opDup   -> dup  ( x -- x x )
-\        opOver  -> over ( x y -- x y x )
-\        opDrop  -> drop ( x -- )
 \        opToR   -> >r   ( x --, R: -- x )
 \        opFromR -> r>   ( -- x, R: x -- )
+\        opDrop  -> drop ( x -- )
 \
 \ There is nothing much to say about them, but see if you can
 \ understand how they work. The stack effect comments describe
@@ -2268,10 +2251,70 @@ assembler.1 -order
 \
 :a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
-:a opOver w {sp} iLOAD ++sp tos {sp} iSTORE w tos MOV ;a
-:a opDrop tos {sp} iLOAD --sp ;a ( n -- )
-:a opToR ++rp tos {rp} iSTORE tos {sp} iLOAD --sp ;a
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
+:a opToR ++rp tos {rp} iSTORE (fall-through);
+:a opDrop tos {sp} iLOAD --sp ;a ( n -- )
+
+\ The following two functions are use to build "@" and "!",
+\ however they deal with cell addresses and not with byte
+\ addresses. The SUBLEQ machine labels the first 16-bits as
+\ cell 0, and the next 16-bits as cell 1, however "@" and
+\ "!" require byte addressing, that is, address 0 should refer
+\ to the first 8-bits and not the first 16-bit, address 1
+\ to the next 8-bits, and so on.
+\
+\ That will be corrected later, but these two form the core
+\ of those words. It does mean that the Forth implementation
+\ can address less memory than is potentially available to the 
+\ SUBLEQ machine. The SUBLEQ machine can address approximately
+\ 65536 cells, or 128kiB, however the Forth can address
+\ 65536 bytes, or 64kiB. Note the word "approximately", some
+\ addresses (such as "-1") are treated specially and are not
+\ available as memory locations.
+\
+:a [@] tos tos iLOAD ;a
+:a [!] w {sp} iLOAD w tos iSTORE --sp t' opDrop JMP (a);
+
+\ "opEmit" and "opKey" perform the I/O functions, of which
+\ there are only two, there are Forth functions which wrap
+\ these primitives but the basic I/O is done by these two. They
+\ both operate on cells pulled or pushed to the stack, with
+\ only the lowest 8-bits used by those I/O functions.
+\
+\ "opEmit", called by "emit", outputs a single byte. It is
+\ always blocking. "opKey" accepts a single byte of input
+\ and returns negative on error. Depending on the
+\ implementation the negative can mean "no byte has been
+\ received yet" (it is non-blocking) or it can mean "End Of
+\ Input". There are option bits in the "{options}" variable
+\ for controlling the behavior of "key", defined later on,
+\ which uses the instruction "opKey".
+\
+\ A non-blocking version of "opEmit" would require a virtual
+\ machine change, not a radical one, but just information on
+\ whether the operation succeeded. The change in the virtual
+\ machine necessary to do this is present in the appendix
+\ containing the virtual machine (at the end of the
+\ non-blocking input version). This would also require
+\ a change in "opEmit" and would render this SUBLEQ machine
+\ different to the majority of SUBLEQ machines out there.
+\
+\ These two instructions provide the only real interaction
+\ with the outside world, and you can do a lot with just that.
+\
+\ Note that "opDrop" is used by "opEmit" to save on some space
+\ with an unconditional jump, "(a);" is used instead of ";a"
+\ as ";a" writes in another unconditional jump which is no
+\ longer needed.
+\
+:a opEmit tos PUT t' opDrop JMP (a);
+:a opKey ++sp tos {sp} iSTORE tos GET ;a ( -- n )
+
+\ Subtraction and addition need no real explanation, just note
+\ that they are relatively fast to execute in this machine.
+\
+:a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a ( n n -- n )
+:a + w {sp} iLOAD w tos ADD --sp ;a ( n n -- n )
 
 \ "opExit", which is used to make "exit", deserves some
 \ explanation, it implements a "return", as part of the
@@ -2280,8 +2323,7 @@ assembler.1 -order
 \ what "{rp}" points to into "ip" and then decrementing the
 \ return stack pointer for the next return or call.
 \
-\ Some aliases for this word include "unnest", "exit",
-\ "return".
+\ Aliases for this word include "unnest", "exit", "return".
 \
 \ Some Forth implementations also do some optimizations when
 \ compiling an exit into the dictionary (this one does not).
@@ -2316,19 +2358,10 @@ assembler.1 -order
 \ selectively apply the optimization themselves which is
 \ error prone.
 \
-
-:a opExit ip {rp} iLOAD --rp ;a ( R: a -- )
-
-\ Subtraction and addition need no real explanation, just note
-\ that they are relatively fast to execute in this machine.
-\
-:a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a ( n n -- n )
-:a + w {sp} iLOAD w tos ADD --sp ;a ( n n -- n )
-
-\ These next words are for stack manipulation words that 
-\ warrant more explanation than the implementations of 
-\ instructions like "swap", mainly due to what they are used 
-\ for.
+\ These next words are for stack manipulation, mainly return
+\ stack manipulation like "opExit", words that warrant more 
+\ explanation than the implementations of instructions like 
+\ "swap", mainly due to what they are used for.
 \
 \ "r@" is especially useful, it is used often in "for...next"
 \ loops to fetch the loop counter (stored on the return stack),
@@ -2347,11 +2380,14 @@ assembler.1 -order
 \ directly, they are most useful for the throw/catch mechanism
 \ described later on.
 \
+\ Note: "opExit" falls-through into "rdrop" to save on space.
+\
 
-:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a ( R: u --, -- u )
+:a opExit ip {rp} iLOAD (fall-through); ( R: a -- )
 :a rdrop --rp ;a ( R: u -- )
+:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a ( R: u --, -- u )
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a ( R: ???, -- u )
-:a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a ( u -- R: ??? )
+:a rp! tos {rp} MOV t' opDrop JMP (a); ( u -- R: ??? )
 
 \ "sp@" and "sp!" do for the variable stack what "rp@" and
 \ "rp!" do for the return stack, they can set them to arbitrary
@@ -2367,47 +2403,6 @@ assembler.1 -order
 
 :a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a ( -- u )
 :a sp! tos {sp} MOV ;a ( u u -- )
-
-\ "opNext" is the only other control structure instruction
-\ that is needed, apart from "opJump" and "opJumpZ". It should
-\ be noted that the exception mechanism of throw/catch does
-\ not need to be implemented as an instruction, which is also
-\ part of the control structure word set even if it is not
-\ thought as being so. For the sake of efficiency "opNext" 
-\ is implemented as an instruction. It could actually be 
-\ implemented in higher level Forth using return stack 
-\ manipulation. 
-\
-\ It is used as part of the definite looping mechanism 
-\ available in eForth, which is the "for...next" construct, it 
-\ is odd construct, but easy to implement and fast. Much like 
-\ "opJump" a jump destination follows the "opNext" instruction.
-\
-\ The "for...next" loop if given N will run for N + 1 times,
-\ counting backwards from N until 0 is reached on the final
-\ loop.
-\
-\ "for" does little, "next" does all of the work, it jumps
-\ back to after the "for".
-\
-\ As an example:
-\
-\        : example for r@ . next ;
-\
-\ Would compile to something like this:
-\
-\        0: opToR
-\        1: r@ instruction
-\        2: address of .
-\        3: opNext 1
-\
-\ And if run with 2, such as "2 example", would produce the 
-\ output "2 1 0".
-\
-
-:a opNext w {rp} iLOAD ( R: n -- | n-1 )
-   w if w DEC w {rp} iSTORE ip ip iLOAD vm JMP then
-   ip INC --rp ;a
 
 \ "opJump" and "opJumpZ" implement unconditional and
 \ conditional jumps respectively. The actual jump is performed
@@ -2455,18 +2450,59 @@ assembler.1 -order
 \ chapter.
 \
 \ Note that opJumpZ falls-through to "opJump" (conditionally)
-\ to save on space.
+\ to save on space. "opNext" also uses "opJump", which will
+\ be defined next.
 \
 
 :a opJumpZ ( u -- )
-  t ZERO
-  tos if t NG1! then tos DEC tos +if t NG1! then
+  r2 ZERO
+  tos if r2 NG1! then tos DEC tos +if r2 NG1! then
   tos {sp} iLOAD --sp
-  t if ip INC vm JMP then (a); 
-( <--- FALL-THROUGH ---> )
+  r2 if ip INC vm JMP then (fall-through); 
 :a opJump ip ip iLOAD ;a ( -- )
 
-\ ================== TODO: Rewrite! ==================
+\ "opNext" is the only other control structure instruction
+\ that is needed, apart from "opJump" and "opJumpZ". It should
+\ be noted that the exception mechanism of throw/catch does
+\ not need to be implemented as an instruction, which is also
+\ part of the control structure word set even if it is not
+\ thought as being so. For the sake of efficiency "opNext" 
+\ is implemented as an instruction. It could actually be 
+\ implemented in higher level Forth using return stack 
+\ manipulation. 
+\
+\ It is used as part of the definite looping mechanism 
+\ available in eForth, which is the "for...next" construct, it 
+\ is odd construct, but easy to implement and fast. Much like 
+\ "opJump" a jump destination follows the "opNext" instruction.
+\
+\ The "for...next" loop if given N will run for N + 1 times,
+\ counting backwards from N until 0 is reached on the final
+\ loop.
+\
+\ "for" does little, "next" does all of the work, it jumps
+\ back to after the "for".
+\
+\ As an example:
+\
+\        : example for r@ . next ;
+\
+\ Would compile to something like this:
+\
+\        0: opToR
+\        1: r@ instruction
+\        2: address of .
+\        3: opNext 1
+\
+\ And if run with 2, such as "2 example", would produce the 
+\ output "2 1 0".
+\
+\ "opJump" is reused by "opNext" to save space.
+\
+
+:a opNext w {rp} iLOAD ( R: n -- | n-1 )
+   w if w DEC w {rp} iSTORE t' opJump JMP then
+   ip INC --rp ;a
 
 \ The comparison operators are tricky to get right,
 \ and are still not completely right, however they do a good
@@ -2482,24 +2518,8 @@ assembler.1 -order
 \ "all bits set", and allows the boolean to be used with
 \ the bitwise logical operators as a mask.
 \
-\ "op0\>" is used to make the Forth word "0\>", and "op\>" the
-\ Forth word "\>", and so on. They could also be defined in
-\ terms of each other, however for efficiencies sake they are
-\ not.
-\
-\ An example of this is the "mux" word, this can be used to
-\ select the bits from either "x1" or "x2" depending on a
-\ mask. It could be used in the expression "2dup > mux" to 
-\ perform the functionality of "max", or "2dup < mux" to 
-\ perform the functionality of "min", both of which are 
-\ contingent on the comparison operators returning a Forth, and
-\ not a C, boolean.
-\
-\        : mux ( x1 x2 mask -- x )
-\                dup >r and swap r> invert and or ;
-\
-\ "min" and "max" will not be defined like this later, as
-\ bitwise operators are expensive on the SUBLEQ machine.
+\ "op0\>" is used to make the Forth word "0\>", and "op0=" the
+\ Forth word "0=", and so on. 
 \
 \ NB. There are some bugs with the comparison operators 
 \ when they deal with extreme values like "\$8000 1 \<", 
@@ -2514,35 +2534,28 @@ assembler.1 -order
    tos w MOV tos ZERO
    w -if tos NG1! then w INC w -if tos NG1! then ;a
 
-
-\ ================== TODO: Rewrite! ==================
-
-\ "op2/" is used to implement "2/", it is common for Forth
-\ implementations to implement "2/" incorrectly and this one
-\ is no exception, it is however done deliberately.
+\ "rshift" is implemented as a virtual machine instruction,
+\ but "lshift" is not as it can be implemented in Forth
+\ with little performance loss compared to "rshift", division
+\ by even a power of two is slow on a SUBLEQ machine.
 \
-\ It is meant to be a fast division by two, which is not the
-\ same as a right shift by one which is what we want. It can 
-\ also differ subtly from an arithmetic right shift by one, 
-\ which it is also sometimes implemented as. Either way, we 
-\ will need a fast logical right shift, and left shift, by one,
-\ to convert from different types of addresses understood by 
-\ the Forth interpreter and the underlying SUBLEQ machine.
+\ It works bit by bit, shifting right by a variable number of 
+\ bits, building up the results one bit at a time and doubling
+\ the "x" and "tos" registers.
 \
-\ "op2/" is more complex than "op2\*", as "op2\*" just adds the
-\ "tos" register to itself, a doubling is equivalent to a
-\ left shift by one. On some platforms that might not be
-\ the case as the carry flag might be affected, not on this
-\ one however.
+\ A consequence of how this "rshift" works is that it is faster
+\ the more bits it shifts by, it takes the longest to shift by
+\ a single bit as the result is produced in reverse order.
 \
 \ As is common for all bitwise operations on the SUBLEQ
 \ machine barring "invert", they are expensive to compute. If 
 \ the SUBLEQ machine could have any extra instructions a 
-\ bitwise "AND" and left and right shifts would be them. You 
-\ could gain back a lot in terms of efficiency just from those 
-\ three extra additions.
+\ bitwise multiplexor and left and right shifts would be them. 
+\ You could gain back a lot in terms of efficiency just from 
+\ those three extra additions (although another contender would
+\ be load and store instructions).
 \
-\ "op2/" works by looping for each bit in a 16-bit value less 
+\ "rshift" works by looping for each bit in a 16-bit value less 
 \ one bit, and it tests whether the topmost bit is set (a
 \ cheap operation on twos compliment SUBLEQ machines, as the
 \ top bit is set when the value is negative). 
@@ -2570,182 +2583,149 @@ assembler.1 -order
 \ doubled, until completion.
 \
 \ The algorithms for "AND", "OR", and "XOR" are similar.
-\ As are left and right shifts by "N" places.
-\
-
-\ "rshift" is implemented as a virtual machine instruction,
-\ but "lshift" is not as it can be implemented in Forth
-\ with little performance loss compared to "rshift", division
-\ by even a power of two is slow on a SUBLEQ machine.
-\
-\ It works bit by bit, shifting right
-\ by a variable number of bits, building up the results
-\ bit by bit and doubling the "x" and "tos" registers.
-\
-\ A consequence of how this "rshift" works is that it is faster
-\ the more bits it shifts by, it takes the longest to shift by
-\ a single bit as the result is produced in reverse order.
+\ As are left and right shifts by "N" places, although they are
+\ now included in the appendix, "opMux" however uses the same
+\ tricks.
 \
 
 :a rshift
   bwidth w MOV
   tos w SUB
   tos {sp} iLOAD --sp
-  x ZERO
+  r1 ZERO
   begin w while
-    x x ADD
-    tos bt MOV bl1 ZERO
-    bt -if bl1 NG1! then bt INC bt -if bl1 NG1! then
-    bl1 if x INC then
+    r1 r1 ADD
+    tos r2 MOV r3 ZERO
+    r2 -if r3 NG1! then r2 INC r2 -if r3 NG1! then
+    r3 if r1 INC then
     tos tos ADD
     w DEC
   repeat
-  x tos MOV ;a
+  r1 tos MOV ;a
 
-
-\ ================== TODO: Rewrite! ==================
-
-\ The logical operators, OR, XOR, and AND, have the same
-\ pattern to how they work, and the borrow from how "rshift"
-\ works. They both work by testing if the highest bit
-\ is set and doubling both inputs and the output in order to
-\ shift bits.
+\ This single primitive, "opMux", implements bitwise 
+\ multiplexing, also known as "mux". It is a Universal Gate,
+\ much like NAND and NOR are (well, it is universal if we have
+\ access to the constants zero and one).
 \
-\ If we have the following table of bits, if we add those
-\ bits together we can then use the comparison operators to
-\ determine what the new bit should be in the output.
+\ Previous iterations of this project implement the bitwise
+\ operators in full, in SUBLEQ assembly, and those 
+\ implementations along with the description are still 
+\ available in the appendix.
 \
-\       0 + 0 = 0
-\       0 + 1 = 1
-\       1 + 0 = 1
-\       1 + 1 = 2
+\ However implementing "and", "or" and "xor" takes up a lot
+\ of space. We could implement all the other logical operators
+\ in terms of "and" or "or" in combination with "invert", but
+\ a more elegant way (in the authors opinion) is to use "mux".
 \
-\ None of the operators output should be one when the result is
-\ zero, XOR should output one when the result is equal to one, 
-\ OR when it is greater or equal to one, and AND should only be 
-\ one when the output is two. Otherwise the output should be 
-\ zero for the new bit.
+\ The Forth code that implements those operators using "mux"
+\ is shown later on, this section will describe how "mux" is
+\ implement, and what it does. Unlike the normal boolean 
+\ operators multiplex takes three arguments, which we will
+\ call "a", "b" and "sel" ("sel" being short for select).
 \
-\ The following Stack Overflow question goes over this in more
-\ detail <https://stackoverflow.com/questions/34120161>.
+\ The "mux" operator is applied to each bit, much like the
+\ bitwise operators.
 \
-\ Making these operators fast is especially important, in all
-\ other Forth systems there is the reasonable expectation that
-\ these operators are fast, and that they operate in a
-\ single clock cycle, not so for the system. Subtraction and 
-\ addition are fast as usual, so some words later on have be 
-\ rewritten to use arithmetic instead.
+\ The following truth table describes the "mux" operator:
 \
-\ It is possible to do all kinds of optimizations with what
-\ are usually fast bitwise operations, for example, SWAR 
-\ operations or SIMD With A Register (SIMD stands for Single 
-\ Instruction Multiple Data). 
+\      +-----+-----+-----+-----+
+\      |  A  |  B  | SEL | OUT |
+\      +-----+-----+-----+-----+
+\      |  0  |  0  |  0  |  0  |
+\      |  0  |  1  |  0  |  1  |
+\      |  1  |  0  |  0  |  0  |
+\      |  1  |  1  |  0  |  1  |
+\      |  0  |  0  |  1  |  0  |
+\      |  0  |  1  |  1  |  0  |
+\      |  1  |  0  |  1  |  1  |
+\      |  1  |  1  |  1  |  1  |
+\      +-----+-----+-----+-----+
 \
-\ The idea of SWAR optimizations is that you can process 
-\ multiple N-bit operations (say 8-bit) on a machine capable of
-\ doing k*N bit arithmetic (k = 2 for a 16-bit machine). 
+\ It is possible to describe a "mux" where "sel" is inverted:
 \
-\ Unfortunately,
-\ these optimizations tend to be bit-wise heavy and more 
-\ suitable for larger cell width systems anyway, but such
-\ optimizations are worth knowing about. We can do a very
-\ limited version of SWAR potentially in comparing Forth
-\ strings (comparing them cell by cell instead of byte by
-\ byte) if the strings are aligned (which they will be for
-\ Forth words) and there is no junk at the end of the string.
+\      +-----+-----+-----+-----+
+\      |  A  |  B  | SEL | OUT |
+\      +-----+-----+-----+-----+
+\      |  0  |  0  |  0  |  0  |
+\      |  0  |  1  |  0  |  0  |
+\      |  1  |  0  |  0  |  1  |
+\      |  1  |  1  |  0  |  1  |
+\      |  0  |  0  |  1  |  0  |
+\      |  0  |  1  |  1  |  1  |
+\      |  1  |  0  |  1  |  0  |
+\      |  1  |  1  |  1  |  1  |
+\      +-----+-----+-----+-----+
 \
-\ *SWAR* operations, whilst well worth knowing about, are
-\ not worth doing on this machine.
+\ It behaves much the same.
 \
-\ All of these operators could be replaced with a single
-\ bitwise operator known as "mux", already shown. This could be
-\ done to save on space without sacrificing speed too much.
-\ These operators take up quite a lot of space, and there is
-\ a lot that could be done to shrink the image.
+\ "opMux" is used to build "mux", which is a non-standard Forth
+\ word and thus is put in the "system" vocabulary, you must
+\ load the "system" vocabulary before using the "mux" word.
 \
-  \ :a opOr
-  \   bwidth w MOV
-  \   x ZERO
-  \   t {sp} iLOAD
-  \   --sp
-  \   begin w while
-  \     x x ADD
-  \     tos bt MOV bl1 ZERO
-  \     bt -if bl1 NG1! then bt INC bt -if bl1 NG1! then
-  \     t   bt MOV bl2 ZERO
-  \     bt -if bl2 NG1! then bt INC bt -if bl2 NG1! then
-  \     bl1 bl2 ADD bl2 if x INC then
-  \     t t ADD
-  \     tos tos ADD
-  \     w DEC
-  \   repeat
-  \   x tos MOV ;a
-  \ :a opXor
-  \   bwidth w MOV
-  \   x ZERO
-  \   t {sp} iLOAD
-  \   --sp
-  \   begin w while
-  \     x x ADD
-  \     tos bt MOV bl1 ZERO bt
-  \     -if bl1 NG1! then bt INC bt -if bl1 NG1! then
-  \     t   bt MOV bl2 ZERO bt
-  \     -if bl2 NG1! then bt INC bt -if bl2 NG1! then
-  \     bl1 bl2 ADD bl2 INC bl1 ONE!
-  \     bl2 if bl1 ZERO then bl1 x ADD
-  \     t t ADD
-  \     tos tos ADD
-  \     w DEC
-  \   repeat
-  \   x tos MOV ;a
-  \ :a opAnd
-  \   bwidth w MOV
-  \   x ZERO
-  \   t {sp} iLOAD
-  \   --sp
-  \   begin w while
-  \    x x ADD
-  \    tos bt MOV bl1 ZERO bt
-  \    -if bl1 NG1! then bt INC bt -if bl1 NG1! then
-  \    t   bt MOV bl2 ZERO bt
-  \    -if bl2 NG1! then bt INC bt -if bl2 NG1! then
-  \    bl1 bl2 ADD two bl2 ADD bl1 ONE!
-  \    bl2 if bl1 ZERO then bl1 x ADD
-  \    t t ADD
-  \    tos tos ADD
-  \    w DEC
-  \   repeat
-  \   x tos MOV ;a
+\ Some examples of the word:
+\
+\        hex
+\        5 A F mux ( returns 5 )
+\        5 A 0 mux ( returns A )
+\
+\ You can see that the operator is quite simple, and it is
+\ descriptive, it multiplexes between two values. 
+\
+\ Multiplexors are more familiar to electronic engineers than
+\ to programmers, and especially those familiar with the
+\ primitive 7400 series logic devices or FPGAs.
+\
+\ You can implement the other logical operators as mentioned,
+\ for example you can implement "or" by setting the "sel"
+\ input to be a duplicate of one of the inputs, this is all
+\ shown later.
+\
+\ On to how the code works, much like "rshift", it operates
+\ bit by bit, checking the topmost bit, if the value is 
+\ negative then we known that the top bit is set (or the
+\ entire value is zero, which we must account and correct for).
+\
+\ We can shift bits to the left by adding the value we want to
+\ shift to itself, which doubles it.
+\ 
+\ Using the topmost bit check and the doubling technique we
+\ have a way accomplish what we need to do. Although this will
+\ only work on SUBLEQ machines that implements twos compliment
+\ arithmetic (it may fail on other signed arithmetic machines,
+\ and it will fail on machines with arbitrary precision
+\ arithmetic).
+\
 
 :a opMux
   bwidth w MOV
-  x ZERO
-  bl1 {sp} iLOAD --sp
-  bl2 {sp} iLOAD --sp
+  r1 ZERO
+  r3 {sp} iLOAD --sp
+  r4 {sp} iLOAD --sp
   begin w while
-    x x ADD
+    r1 r1 ADD
 
-    tos bt MOV bn ZERO
-    bt -if bn NG1! then bt INC bt -if bn NG1! then
+    tos r5 MOV r6 ZERO
+    r5 -if r6 NG1! then r5 INC r5 -if r6 NG1! then
 
-    bn -if 
-      bl2 bm MOV bt ZERO
-      bm -if bt ONE! then bm INC bm -if bt ONE! then
-      bt x ADD
+    r6 -if 
+      r4 r7 MOV r5 ZERO
+      r7 -if r5 ONE! then r7 INC r7 -if r5 ONE! then
+      r5 r1 ADD
     then
-    bn INC
-    bn if  
-      bl1 bm MOV bt ZERO
-      bm -if bt ONE! then bm INC bm -if bt ONE! then
-      bt x ADD
+    r6 INC
+    r6 if  
+      r3 r7 MOV r5 ZERO
+      r7 -if r5 ONE! then r7 INC r7 -if r5 ONE! then
+      r5 r1 ADD
     then
 
     tos tos ADD
-    bl1 bl1 ADD
-    bl2 bl2 ADD
+    r3 r3 ADD
+    r4 r4 ADD
     w DEC
   repeat
-  x tos MOV ;a
+  r1 tos MOV ;a
 
 \ "opDivMod" is purely here for efficiency reasons, it really
 \ improves the speed at which numbers can be printed, which
@@ -2775,18 +2755,18 @@ assembler.1 -order
 
 :a opDivMod
   w {sp} iLOAD
-  t ZERO
+  r2 ZERO
   begin
-    x ONE!
-    w -if x ZERO then
-    x
+    r1 ONE!
+    w -if r1 ZERO then
+    r1 
   while
-    t INC
+    r2 INC
     tos w SUB
   repeat
   tos w ADD
-  t DEC
-  t tos MOV
+  r2 DEC
+  r2 tos MOV
   w {sp} iSTORE ;a
 
 \ ### PAUSE
@@ -2861,18 +2841,18 @@ assembler.1 -order
 \
 
 :a pause
-  {single} if vm JMP then
+  {single} if vm JMP then \ Do nothing if single-threaded mode
   w {up} iLOAD \ load next task pointer from user storage
   w if
     {cycles} INC        \ increment "pause" count
-    {up} t MOV  t INC   \ load TASK pointer, skip next task loc
-      ip t iSTORE t INC \ save registers to current task
-     tos t iSTORE t INC
-    {rp} t iSTORE t INC
-    {sp} t iSTORE t INC
-        w {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
-    {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
-     w {up} MOV w INC  \ set next task
+    {up} r2 MOV  r2 INC \ load TASK pointer, skip next task loc
+      ip r2 iSTORE r2 INC \ save registers to current task
+     tos r2 iSTORE r2 INC
+    {rp} r2 iSTORE r2 INC
+    {sp} r2 iSTORE r2 INC
+       w {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
+   {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
+       w {up} MOV w INC  \ set next task
       ip w iLOAD w INC \ reverse of save registers
      tos w iLOAD w INC
     {rp} w iLOAD w INC
@@ -3146,7 +3126,6 @@ there 2/ primitive t!
 
 :m dup opDup ;m ( -- : compile opDup into the dictionary )
 :m drop opDrop ;m ( -- : compile opDrop into the dictionary )
-:m over opOver ;m ( -- : compile opOver into the dictionary )
 :m swap opSwap ;m ( -- : compile opSwap into the dictionary )
 :m >r opToR ;m ( -- : compile opTorR into the dictionary )
 :m r> opFromR ;m ( -- : compile opFromR into the dictionary )
@@ -3226,7 +3205,6 @@ there 2/ primitive t!
 :to bye bye ; ( -- : halt the system )
 :to dup dup ; ( n -- n n : duplicate top of variable stack )
 :to drop opDrop ; ( n -- : drop top of variable stack )
-:to over opOver ; ( x y -- x y x : get over it! )
 :to swap opSwap ; ( x y -- y x : swap two variables on stack )
 :to rshift rshift ; ( u n -- u : logical right shift by "n" )
 :so [@] [@] ;s ( vma -- : fetch -VM Address- )
@@ -3239,16 +3217,25 @@ there 2/ primitive t!
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
 
+: nop ;
+
+\ We need "over" (formerly a VM instruction) to implement
+\ some of the logical operators using "mux".
+\
+
+: over swap dup >r swap r> ; ( n1 n2 -- n1 n2 n1 )
+
+\ All three binary logical operators, excluding "invert",
+\ are implementing using "mux" ("invert" could be implemented
+\ with "mux" if we needed it to be to save space). This is
+\ done by duplicating inputs, inverting them, swapping them,
+\ and then feeding them into "mux", it is a very versatile
+\ instruction.
+\
+
 : xor >r dup invert swap r> mux ;
 : or  over mux ;
 : and #0 swap mux ;
-
-\ "nop" stands for 'no-operation', it is useful for some of
-\ the hooks we have. It does nothing. We could have used
-\ ")" for this, another Forth word that does nothing, but
-\ sometimes it is better to be a little more explicit.
-\
-: nop ; ( -- : do nothing! )
 
 \ "1+" and "1-" do what they say, 
 : 1+ #1 + ; ( n -- n )
@@ -3324,7 +3311,8 @@ there 2/ primitive t!
 \ prompt at the start of the script to ensure our output is
 \ not corrupted, gforth does not need this at it detects
 \ whether it is reading from a terminal that a user is typing
-\ into or a file.
+\ into or a file (such cleverness is not necessarily a good
+\ thing).
 \
 \ It is not a hard rule, but usually hook variables have the
 \ "\<\>" brackets enclosing them, and the functionality is
@@ -3349,15 +3337,15 @@ there 2/ primitive t!
 \
 \        ' (cold) 2/ <cold> !
 \
-: <ok> {ok} up ; ( -- a )
-:s <emit> {emit} up ;s ( -- a )
-:s <key>  {key} up ;s ( -- a )
-:s <echo> {echo} up ;s ( -- a )
-:s <literal> {literal} up ;s ( -- a )
-:s <tap> {tap} up ;s ( -- a )
-:s <expect> {expect} up ;s ( -- a )
-:s <error> {error} up ;s ( -- a )
-:s <cold> {cold} lit ;s ( -- a )
+: <ok> {ok} up ;             ( -- a : okay prompt xt loc. )
+:s <emit> {emit} up ;s       ( -- a : emit xt loc. )
+:s <key>  {key} up ;s        ( -- a : key xt loc. )
+:s <echo> {echo} up ;s       ( -- a : echo xt loc. )
+:s <literal> {literal} up ;s ( -- a : literal xt loc. )
+:s <tap> {tap} up ;s         ( -- a : tap xt loc. )
+:s <expect> {expect} up ;s   ( -- a : expect xt loc. )
+:s <error> {error} up ;s     ( -- a : <error> xt container. )
+:s <cold> {cold} lit ;s      ( -- a : cold xt loc. )
 
 \ ### Forth Variables
 \
@@ -3611,8 +3599,8 @@ there 2/ primitive t!
 \ effect describes them perfectly.
 \
 
-: nip swap drop ; ( x y -- y : remove second item on stack )
-: tuck swap over ; ( x y -- y x y : save item for rainy day )
+: nip swap drop ;   ( x y -- y : remove second item on stack )
+: tuck swap over ;  ( x y -- y x y : save item for rainy day )
 : ?dup dup if dup then ; ( x -- x x | 0 : conditional dup )
 : rot >r swap r> swap ; ( x y z -- y z x : "rotate" stack )
 : -rot rot rot ; ( x y z -- z x y : "rotate" stack backwards )
@@ -3641,14 +3629,16 @@ there 2/ primitive t!
 \ a signed greater than using just swapping the arguments
 \ around, or inverting the boolean result.
 \
-\ "=" can be with "xor" instead of "-", but "-" is
+\ "=" can be implemented with "xor" instead of "-", but "-" is
 \ cheaper on SUBLEQ machines. We still need to turn the result
 \ into a boolean with "0=", for some tests "-" or "xor" could
-\ be used without turning the result into a boolean.
+\ be used without turning the result into a boolean. Many CPUs
+\ implement various comparisons by checking flags set after
+\ subtraction.
 \
 
-: > - 0> ;
-: < swap > ; ( n1 n2 -- f : signed less than )
+: > - 0> ;    ( n1 n2 -- f : signed greater than )
+: < swap > ;  ( n1 n2 -- f : signed less than )
 : = - 0= ;    ( u1 u2 -- f : equality )
 : <> = 0= ;   ( u1 u2 -- f : inequality )
 : 0<> 0= 0= ; ( n -- f : not equal to zero )
@@ -3667,11 +3657,11 @@ there 2/ primitive t!
 \
 \ An alternative implementation of "u\<" is as follows:
 \
-\        : u< 2dup xor 0< if swap drop 0< exit then - 0< ;
+\        : u< 2dup xor 0< if nip 0< exit then - 0< ;
 \
 \ However, this uses "xor".
 \
-: u< 2dup 0< 0= swap 0< 0= <> >r < r> <> ; ( u1 u2 -- f )
+: u< 2dup 0>= swap 0>= <> >r < r> <> ; ( u1 u2 -- f )
 : u> swap u< ; ( u1 u2 -- f : unsigned greater than )
 : u>= u< 0= ; ( u1 u2 -- f )
 : u<= u> 0= ; ( u1 u2 -- f )
@@ -3725,9 +3715,9 @@ there 2/ primitive t!
 \ used but is easy enough to define.
 \
 
-: cell 2 lit ; ( -- u )
+: cell 2 lit ;   ( -- u )
 : cell+ cell + ; ( a -- a )
-: cells 2* ; ( u -- u )
+: cells 2* ;     ( u -- u )
 
 \ "execute" takes an "execution token", which is just a fancy
 \ name for an address of a function, and then executes that
@@ -3942,7 +3932,13 @@ there 2/ primitive t!
 \ instead write "lshift" in Forth, instead of assembly, saving
 \ on space.
 \
-
+\ "rshift" can be defined like so:
+\
+\         : rshift begin ?dup while 1- swap 2/ swap repeat ; 
+\
+\ However in this Forth we implement "2/" with "rshift", and
+\ as you know we have implemented "rshift" in assembly instead.
+\
 : lshift begin ?dup while 1- swap 2* swap repeat ; ( n u -- n )
 
 \ ### Character Load / Store
@@ -3993,7 +3989,7 @@ there 2/ primitive t!
 \ target.
 \
 
-: c@ dup @ swap #1 and if 8 lit rshift else FF lit and then ;
+: c@ dup @ swap #1 and if 8 lit rshift exit then FF lit and ;
 : c!  swap FF lit and dup 8 lit lshift or swap ( c a -- )
    tuck dup @ swap #1 and 0= FF lit xor
    >r over xor r> and xor swap ! ;
@@ -4180,7 +4176,7 @@ there 2/ primitive t!
 \
 
 : count dup 1+ swap c@ ; ( b -- b c )
-: +string #1 over min rot over + rot rot - ; ( b u -- b u )
+: +string #1 over min rot over + -rot - ; ( b u -- b u )
 
 \ "type" is used to print out a string. It is not complicated,
 \ and does not make an effort to not print out non-graphic
@@ -4640,7 +4636,7 @@ there 2/ primitive t!
 \
 \ All "(emit)" has to do is called "opEmit", if we want to
 \ replace the execution vector with something that does nothing
-\ then we cannot use "nop", as that would leave an item on the
+\ then we cannot use ")" as that would leave an item on the
 \ stack where one should not be, it will be replaced with a
 \ "drop" instead.
 \
@@ -4844,7 +4840,7 @@ there 2/ primitive t!
 \
 
 :s look ( b u c xt -- b u : skip until *xt* test succeeds )
-  swap >r rot rot
+  swap >r -rot
   begin
     dup
   while
@@ -5025,16 +5021,16 @@ there 2/ primitive t!
 
 : >number ( ud b u -- ud b u : convert string to number )
   begin
-    2dup >r >r drop c@ base @        ( get next character )
+    2dup 2>r drop c@ base @        ( get next character )
     ( digit? -> ) >r [char] 0 - 9 lit over <
     if 7 lit - dup A lit < or then dup r> u< ( c base -- u f )
     0= if                            ( d char )
       drop                           ( d char -- d )
-      r> r>                          ( restore string )
+      2r>                            ( restore string )
       exit                           ( finished...exit )
     then                             ( d char )
     swap base @ um* drop rot base @ um* d+ ( accumulate digit )
-    r> r>                            ( restore string )
+    2r>                              ( restore string )
     +string dup 0=                   ( advance, test for end )
   until ;
 
@@ -5099,7 +5095,7 @@ there 2/ primitive t!
   base @ >r
   over c@ [char] - = dup >r if     +string then
   over c@ [char] $ =        if hex +string then
-  >r >r #0 dup r> r>
+  2>r #0 dup 2r>
   begin
     >number dup
   while over c@ [char] . <>
@@ -6278,6 +6274,8 @@ there 2/ primitive t!
 \              meta-compiler ":to" word is used.
 \        (2) : Points to the Forth Virtual Machine instruction,
 \              which has the following definition;
+\              ":a rp! tos {rp} MOV t' opDrop JMP (a);"
+\              (equivalent to):
 \              ":a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a"
 \
 \ As we have discussed how each of these instructions work
@@ -6353,7 +6351,7 @@ there 2/ primitive t!
 \ an error instead).
 \
 \ The word ")" does nothing, it is not even meant to be a
-\ "nop", or No-Operation, it is meant to be compiled out,
+\ No-Operation, it is meant to be compiled out,
 \ this is because sometimes comments are used to comment out
 \ code that is added back in for quick testing, for example:
 \
@@ -6368,11 +6366,10 @@ there 2/ primitive t!
 \ want to add the "(" back in after testing, but there is no
 \ need to remove the ")" even temporarily as it does nothing
 \ and is not compiled into the word "example" as it is an
-\ immediate word that does nothing. We could use ")" as a nop
-\ and save space with by using quote to get a handle on it,
-\ sometimes this might be done to set an execution vector to
-\ do nothing, however an explicit, non-immediate "nop" function
-\ is made for this.
+\ immediate word that does nothing. The word ")" does actually
+\ have a use, as a "no operation" word, which is sometimes
+\ useful if we want to set an execution vector (that takes
+\ and returns no arguments) to do nothing.
 \
 \ "\\" works differently, it is meant to discard all the
 \ input until the end of the line, and does this by
@@ -6992,10 +6989,6 @@ there 2/ primitive t!
 \
 \        defined eforth [if] ' nop <ok> ! [then]
 \
-\ Note on this platform the following would also work:
-\
-\        defined eforth [if] ' ) <ok> ! [then]
-\
 \ "ok" is not called directly, but is stored as an execution
 \ token in "\<ok\>".
 \
@@ -7030,7 +7023,7 @@ there 2/ primitive t!
 
 : evaluate ( a u -- : evaluate a string )
   get-input 2>r 2>r >r        ( save the current input state )
-  #0 #-1 t' nop lit set-input ( set new input )
+  #0 #-1 t' nop lit set-input   ( set new input )
   t' eval lit catch           ( evaluate the string )
   r> 2r> 2r> set-input        ( restore input state )
   throw ;                     ( throw on error )
@@ -7084,6 +7077,9 @@ there 2/ primitive t!
 \           repo line license line ;s
 \
 \ Which makes the word more Forth-like.
+\
+\ Also note that the license applies to the Forth image and
+\ not the book!
 \
 :r eforth 0108 lit ;r ( --, version )
 :s info cr ( --, print system info )
@@ -7191,7 +7187,7 @@ there 2/ primitive t!
 \ block editor does.
 \
 \ This would in effect make two of the text interpreters the
-\ programmer would use talk to each other in an automated
+\ programmer normally uses talk to each other in an automated
 \ manner, with little difference between typing the commands
 \ in and executing them. The line input mechanism could be
 \ extended with a line length and checksum prefix to ensure
@@ -8277,10 +8273,35 @@ it being run.
 \ it works perfectly on the "eforth.dec" image that is 
 \ generated but it will fail on arbitrary SUBLEQ programs.
 \
+\ It is meant to match on these instruction macros:
+\
+\        :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
+\        :m NADDR there 2/ 1+ t, ;m 
+\        :m HALT 0 t, 0 t, -1 t, ;m 
+\        :m JMP 2/ Z Z t, ;m ( a --, Jump to location )
+\        :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
+\        :m SUB swap 2/ t, 2/ t, NADDR ;m ( a a -- : subtract )
+\        :m NOOP Z Z NADDR ;m ( -- : No operation )
+\        :m ZERO dup 2/ t, 2/ t, NADDR ;m 
+\        :m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
+\        :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
+\        :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR 
+\           r> Z  t, NADDR Z Z NADDR ;m
+\        :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m 
+\        :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m 
+\        :m iSTORE ( a a -- )
+\           swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 
+\           7 + 2* MOV r> 0 MOV ;m
+\
+\ If the above section differs in your version of the assembler
+\ it is quite likely the reason it is failing. This may have
+\ happened because those macros have been optimized and this
+\ program not updated.
+\
 \ On some systems this speeds execution up, on others it seems
 \ to slow it down. There is a lot in this program that could
 \ itself be optimized, it was written to demonstrate the 
-\ concept and not for efficiency and speeds sake in itself.
+\ concept and not for efficiency and speeds sake in of itself.
 \
 \
 \       #include <stdint.h>
@@ -8712,8 +8733,8 @@ it being run.
 \       
 \ ## Error Code list
 \
-\ This is a list of Error codes, not all of which are used by
-\ the application.
+\ This is a list of Standard Forth Error Codes, not all of 
+\ which are used by the application.
 \
 \         | Hex  | Dec  | Message                             |
 \         | ---- | ---- | ----------------------------------- |
@@ -9153,6 +9174,125 @@ it being run.
 \        subleq TC TB +2
 \        subleq ZR ZR -2 \ loop back
 \
+\ ## Obsolete Assembly Routines
+\
+\ This section contains old assembly routines that are useful
+\ but have been replaced for various reasons.
+\
+\ ### Logical Operators in SUBLEQ
+\
+\ The logical operators, OR, XOR, and AND, have the same
+\ pattern to how they work, and the borrow from how "rshift"
+\ works. They both work by testing if the highest bit
+\ is set and doubling both inputs and the output in order to
+\ shift bits.
+\
+\ If we have the following table of bits, if we add those
+\ bits together we can then use the comparison operators to
+\ determine what the new bit should be in the output.
+\
+\       0 + 0 = 0
+\       0 + 1 = 1
+\       1 + 0 = 1
+\       1 + 1 = 2
+\
+\ None of the operators output should be one when the result is
+\ zero, XOR should output one when the result is equal to one, 
+\ OR when it is greater or equal to one, and AND should only be 
+\ one when the output is two. Otherwise the output should be 
+\ zero for the new bit.
+\
+\ The following Stack Overflow question goes over this in more
+\ detail <https://stackoverflow.com/questions/34120161>.
+\
+\ Making these operators fast is especially important, in all
+\ other Forth systems there is the reasonable expectation that
+\ these operators are fast, and that they operate in a
+\ single clock cycle, not so for the system. Subtraction and 
+\ addition are fast as usual, so some words later on have be 
+\ rewritten to use arithmetic instead.
+\
+\ It is possible to do all kinds of optimizations with what
+\ are usually fast bitwise operations, for example, SWAR 
+\ operations or SIMD With A Register (SIMD stands for Single 
+\ Instruction Multiple Data). 
+\
+\ The idea of SWAR optimizations is that you can process 
+\ multiple N-bit operations (say 8-bit) on a machine capable of
+\ doing k*N bit arithmetic (k = 2 for a 16-bit machine). 
+\
+\ Unfortunately,
+\ these optimizations tend to be bit-wise heavy and more 
+\ suitable for larger cell width systems anyway, but such
+\ optimizations are worth knowing about. We can do a very
+\ limited version of SWAR potentially in comparing Forth
+\ strings (comparing them cell by cell instead of byte by
+\ byte) if the strings are aligned (which they will be for
+\ Forth words) and there is no junk at the end of the string.
+\
+\ *SWAR* operations, whilst well worth knowing about, are
+\ not worth doing on this machine.
+\
+\ All of these operators could be replaced with a single
+\ bitwise operator known as "mux", already shown. This could be
+\ done to save on space without sacrificing speed too much.
+\ These operators take up quite a lot of space, and there is
+\ a lot that could be done to shrink the image.
+\
+:a opOr
+  bwidth w MOV
+  x ZERO
+  r2 {sp} iLOAD
+  --sp
+  begin w while
+    x x ADD
+    tos r5 MOV r3 ZERO
+    r5 -if r3 NG1! then r5 INC r5 -if r3 NG1! then
+    r2   r5 MOV r4 ZERO
+    r5 -if r4 NG1! then r5 INC r5 -if r4 NG1! then
+    r3 r4 ADD r4 if x INC then
+    r2 r2 ADD
+    tos tos ADD
+    w DEC
+  repeat
+  x tos MOV ;a
+:a opXor
+  bwidth w MOV
+  x ZERO
+  r2 {sp} iLOAD
+  --sp
+  begin w while
+    x x ADD
+    tos r5 MOV r3 ZERO r5
+    -if r3 NG1! then r5 INC r5 -if r3 NG1! then
+    r2   r5 MOV r4 ZERO r5
+    -if r4 NG1! then r5 INC r5 -if r4 NG1! then
+    r3 r4 ADD r4 INC r3 ONE!
+    r4 if r3 ZERO then r3 x ADD
+    r2 r2 ADD
+    tos tos ADD
+    w DEC
+  repeat
+  x tos MOV ;a
+:a opAnd
+  bwidth w MOV
+  x ZERO
+  r2 {sp} iLOAD
+  --sp
+  begin w while
+   x x ADD
+   tos r5 MOV r3 ZERO r5
+   -if r3 NG1! then r5 INC r5 -if r3 NG1! then
+   r2   r5 MOV r4 ZERO r5
+   -if r4 NG1! then r5 INC r5 -if r4 NG1! then
+   r3 r4 ADD two r4 ADD r3 ONE!
+   r4 if r3 ZERO then r3 x ADD
+   r2 r2 ADD
+   tos tos ADD
+   w DEC
+  repeat
+  x tos MOV ;a
+
 \ ## Extra Code
 \
 \ This section of code can be fed to the interpreter with the
@@ -9204,7 +9344,7 @@ variable seed ( NB. Could be mixed with keyboard input )
 : .base base @ dup decimal . base ! ; ( -- )
 : only -1 set-order ; ( -- )
 : also get-order over swap 1+ set-order ; ( -- )
-: previous get-order swap drop 1- set-order ; ( -- )
+: previous get-order nip 1- set-order ; ( -- )
 : buffer block ; ( k -- a )
 : enum dup constant 1+ ; ( n --, <string> )
 : logical 0= 0= ; ( n -- f )
@@ -9469,7 +9609,7 @@ forth-wordlist +order definitions
 : user 
   create pass ,
   does> ask @ pass = if restore success exit then fail ;
-: login secure message ' ) <ok> ! ;
+: login secure message ' nop <ok> ! ;
 : .users get-order secure words set-order ;
 
 users +order definitions

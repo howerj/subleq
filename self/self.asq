@@ -192,7 +192,7 @@ c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
 
 a:0 b:0 leqz;   # Emulate subtraction / instruction
   neg1 pc;      # [pc] = [pc] + 1
-  Z Z 0;        # Jump back to beginning
+  Z Z start;    # Jump back to beginning
 leqz: 
   pc; c Z; Z pc; Z; # [pc] = [c]
   neg1 c (-1);    # Check if [c] is negative, halt if it is.
