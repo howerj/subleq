@@ -2,11 +2,11 @@
 #include <stdio.h>
 #define SZ   (1<<16)
 #define L(X) ((X)%SZ)
-int main(int s, char **v) {
+int main(int argc, char **argv) {
 	static uint16_t m[SZ];
 	uint16_t pc = 0;
-	for (int i = 1, d = 0; i < s; i++) {
-		FILE *f = fopen(v[i], "r");
+	for (int i = 1, d = 0; i < argc; i++) {
+		FILE *f = fopen(argv[i], "r");
 		if (!f)
 			return 1;
 		while (fscanf(f, "%d", &d) > 0)

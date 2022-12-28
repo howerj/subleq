@@ -1,4 +1,4 @@
-defined eforth [if] ' nop <ok> ! [then] ( Turn off ok prompt )
+defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ # Information
 \
 \ * Edition: 1.1.0
@@ -3217,7 +3217,10 @@ there 2/ primitive t!
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
 
-: nop ;
+\ ")" is defined here, it can be used as a "no-operation"
+\ instruction. This word will be better described later on.
+
+:to ) ; immediate
 
 \ We need "over" (formerly a VM instruction) to implement
 \ some of the logical operators using "mux".
@@ -6397,11 +6400,13 @@ there 2/ primitive t!
 \        1 ?\ .( BRAVO )
 \         ( Only "BRAVO" is printed )
 \
+\ NB. ")" is defined earlier so it can be used as a 
+\ "no-operation" word.
 \
 
+  
 :to ( [char] ) parse 2drop ; immediate ( c"xxx" -- )
 :to .( [char] ) parse type ; immediate ( c"xxx" -- )
-:to ) ; immediate ( -- )
 :to \ tib @ >in ! ; immediate ( c"xxx" -- )
 
 \ "postpone" is a word that can be confusing, we have been
@@ -6987,7 +6992,7 @@ there 2/ primitive t!
 \ turned off before it outputs a single "ok", with the first
 \ line in this file being the following as we have seen:
 \
-\        defined eforth [if] ' nop <ok> ! [then]
+\        defined eforth [if] ' ) <ok> ! [then]
 \
 \ "ok" is not called directly, but is stored as an execution
 \ token in "\<ok\>".
@@ -7023,7 +7028,7 @@ there 2/ primitive t!
 
 : evaluate ( a u -- : evaluate a string )
   get-input 2>r 2>r >r        ( save the current input state )
-  #0 #-1 t' nop lit set-input   ( set new input )
+  #0 #-1 to' ) lit set-input  ( set new input )
   t' eval lit catch           ( evaluate the string )
   r> 2r> 2r> set-input        ( restore input state )
   throw ;                     ( throw on error )
@@ -9305,7 +9310,7 @@ it being run.
 \ things that are missing - do loops and case.
 \
 \
-<ok> @ ' nop <ok> !
+<ok> @ ' ) <ok> !
 : debug source type ."  ok" cr ; ' debug <ok> !
 
  0 constant false
@@ -9551,7 +9556,7 @@ only forth definitions
   $" defined (mark) [if] (mark) [then] marker (mark) " 
   count evaluate ;
 mark
-' nop <ok> !
+' ) <ok> !
 .( LOADED EFORTH. ) cr
 .( DICTIONARY: ) here . cr
 .( EFORTH:     ) ' 1- u. cr
@@ -9609,7 +9614,7 @@ forth-wordlist +order definitions
 : user 
   create pass ,
   does> ask @ pass = if restore success exit then fail ;
-: login secure message ' nop <ok> ! ;
+: login secure message ' ) <ok> ! ;
 : .users get-order secure words set-order ;
 
 users +order definitions
