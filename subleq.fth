@@ -2859,6 +2859,34 @@ assembler.1 -order
     {sp} w iLOAD w INC \ we're all golden
   then ;a
 
+\ The following assembly routine is one way adding support for
+\ assembly routines callable from within the Forth interpreter
+\ and without relying on hacks. This is the absolute bare
+\ minimum, but it would help if the meta-compilation assembly
+\ words such as "iLOAD", "ADD", and the like, along with the
+\ assembly control structures like "-if", were placed in an
+\ assembly vocabulary in the target system. One thing that you
+\ see in Forth systems from the 1980s is the liberal use of
+\ assembly (usually for the 6502 or Z80 processors) for 
+\ routines that needed speed, usually control structures or
+\ arithmetic operations such as division.
+\
+\        :a opAsm
+\          tos w MOV
+\          tos {sp} iLOAD --sp
+\          w iJMP (a);
+\
+\ The way the VM instruction works is to pull an address off
+\ of the stack and perform an indirect jump to it. We cannot
+\ directly call assembly routines in our Forth code because
+\ of how the Forth VM works, if we compiled an assembly
+\ routine into the Forth dictionary the Forth VM would attempt
+\ to execute the assembly as a list of addresses of Forth
+\ functions and VM routines to jump to, with disastrous
+\ results.
+\
+
+
 \ And to finish off this section, and the Forth Virtual
 \ Machine, is this line, setting the "primitive" value to
 \ the current address in the image, allowing the VM to
@@ -3216,6 +3244,17 @@ there 2/ primitive t!
 :to 0> op0> ; ( n -- f : signed greater than zero )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
+
+\ If "opAsm" is defined, so should this:
+\
+\        :so asm opAsm ;s
+\
+\ However, if that is defined, then an entire assembly wordset
+\ should be as well, along with easily accessible constants
+\ such as the value of "opExit", and the locations of registers
+\ should as "tos", "ip", and ways of accessing the stack 
+\ pointers from assembly.
+\
 
 \ ")" is defined here, it can be used as a "no-operation"
 \ instruction. This word will be better described later on.
