@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #define SZ   (1<<16)
 #define L(X) ((X)%SZ)
@@ -80,11 +81,116 @@ static int subleq_getopt(subleq_getopt_t *opt, const int argc, char *const argv[
 	return opt->option; /* dump back option letter */
 }
 
+typedef struct {
+	uint16_t *m, *bps;
+	size_t mlen;
+	uint16_t pc;
+	FILE *in;
+	FILE *out;
+	int argc;
+	char **argv;
+
+	int cont;
+} cmd_args_t;
+
+int cmd_continue(cmd_args_t *a) {
+	assert(a);
+	a->cont = 1;
+	return 0;
+}
+
+int cmd_dump(cmd_args_t *a) {
+	assert(a);
+	assert(a->argc > 0);
+	if (a->argc != 3) {
+		if (fprintf(a->out, "Usage: %s location range\n", a->argv[0]) < 0)
+			return -1;
+		return 1;
+	}
+	const uint16_t addr = atol(a->argv[1]), len = atol(a->argv[2]);
+	for (uint32_t i = 0; i < len; i++) {
+		uint16_t d = a->m[(addr + i) % a->mlen];
+		if (fprintf(a->out, "%02x ", (int)d) < 0)
+			return -1;
+	}
+	return 0;
+}
+
+int cmd_breakp(cmd_args_t *a) {
+	assert(a);
+	if (a->argc != 3) {
+		
+	}
+	return 0;
+}
+
+int command(uint16_t *m, uint16_t *bps, size_t size, uint16_t pc, FILE *in, FILE *out) {
+	assert(m);
+	assert(in);
+	assert(out);
+	static const char *prompt = "sq> ";
+	char buffer[512] = { 0, };
+	char *argv[sizeof buffer] = { NULL, };
+	int argc = 0; 
+	cmd_args_t args = { 
+		.m = m, .bps = bps, .mlen = size, .pc = pc, .in = in, .out = out, .argc = 0, .argv = NULL, 
+	};
+again:
+	argc = 0;
+	args.argc = 0;
+	args.argv = NULL;
+	memset(argv, 0, sizeof (argv));
+	memset(buffer, 0, sizeof (buffer));
+	if (fprintf(out, "%s", prompt) < 0)
+		return -1;
+	if (!fgets(buffer, sizeof buffer, in))
+		return -1;
+	for (char *p = buffer; *p; p++) {
+		while (isspace(*p))
+			p++;
+		if (*p)
+			argv[argc++] = p;
+		while (*p && !isspace(*p))
+			p++;
+		*p = 0;
+	}
+	if (argc == 0)
+		goto again;
+	args.argc = argc;
+	args.argv = argv;
+
+	/* NB. subleq_getopt could be reused for the command processing... */
+
+	struct {
+		const char *name;
+		int (*fn)(cmd_args_t *args);
+	} cmds[] = { 
+		{ .name = "c", .fn = cmd_continue, },
+		{ .name = "d", .fn = cmd_dump, },
+		{ .name = "b", .fn = cmd_breakp, },
+		{ .fn = NULL }, 
+	};
+
+	for (int i = 0; cmds[i].fn; i++) {
+		if (!strcmp(argv[0], cmds[i].name)) {
+			if (cmds[i].fn(&args) < 0)
+				return -1;
+			if (args.cont)
+				return 0;
+			goto again;
+		}
+	}
+	if (fprintf(out, "Command '%s' not found\n", argv[0]) < 0)
+		return -1;
+	goto again;
+	return 0;
+}
+
 int main(int argc, char **argv) {
 	FILE *trace = stderr, *in = stdin, *out = stdout;
 	static uint16_t m[SZ], bp[SZ];
 	uint16_t pc = 0, max = 0;
-	int i = 1, tron = 0;
+	int i = 1, tron = 0, debug = 0;
 	long cycles = 0, cnt = 0;
 	char *save = NULL;
 	subleq_getopt_t opt = { .init = 0, };
@@ -103,16 +209,18 @@ int main(int argc, char **argv) {
 	 * c               | continue
 	 * C <cycles>      | continue to run for X cycles, then break
 	 */
-	for (int ch = 0; (ch = subleq_getopt(&opt, argc, argv, "tc:s:")) != -1; i++) {
+	for (int ch = 0; (ch = subleq_getopt(&opt, argc, argv, "tc:s:b:d")) != -1; i++) {
 		switch (ch) {
 		case 'c': cycles = atol(opt.arg); i++; break;
 		case 't': tron++; break;
 		case 'b': bp[L(atol(opt.arg))] = 1; i++; break;
 		case 's': save = opt.arg; i++; break;
+		case 'd': debug = 1; break;
 		default:
 			return EN;
 		}
 	}
+
 
 	for (int d = 0; i < argc; i++) {
 		FILE *f = fopen(argv[i], "r");
@@ -124,6 +232,9 @@ int main(int argc, char **argv) {
 			return EN;
 	}
 	max = pc;
+	if (debug)
+		if (command(m, bp, SZ, pc, stdin, stdout) < 0)
+			return 0;
 
 	for (pc = 0; !(pc & 0x8000u); cnt++) {
 		if (tron > 0)
@@ -138,7 +249,8 @@ int main(int argc, char **argv) {
 		uint16_t c = m[L(pc++)];
 
 		if (bp[L(pc)] || bp[L(pc + 1)] || bp[L(pc + 2)]) {
-			/* TODO: Breakpoints on I/O, [a], [b], c, and pc */
+			if (command(m, bp, SZ, pc, stdin, stdout) < 0)
+				return 0;
 		}
 
 		if (tron > 0)
