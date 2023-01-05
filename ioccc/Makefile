@@ -4,8 +4,8 @@ CFLAGS=-Wall -Wextra -std=c11 -pedantic -O3
 
 all: prog
 
-try: prog data.dec
-	./prog 16 data.dec
+try: prog ../subleq.dec
+	./prog 16 ../subleq.dec
 
 run: try
 
@@ -14,13 +14,4 @@ clobber: clean
 clean:
 	rm -f prog 
 
-data.dec: ioccc.fth
-	gforth $< > $@
 
-1.dec: prog data.dec ioccc.fth
-	./prog 16 data.dec < ioccc.fth > $@
-
-2.dec: prog 1.dec ioccc.fth
-	./prog 16 1.dec < ioccc.fth > $@
-
-test: 2.dec

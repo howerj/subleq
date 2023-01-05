@@ -25,7 +25,7 @@ I S(i ingest,i excrete,I*m/*not feeling well*/,I D,I(*E[static 1])(I)){
 	!X(X(0,-!!V(D),O),O,(f[0]^'Q')[E](D))?
 		a=fputc((E-E)[E](a)[m],excrete):(0[E](O)[m]=r,s)?_=e:0;
 	F(a<0)r(5);
-	F(-!X(V(-_),_,L(_)))G _;
+	/*F(-!X(V(-_),_,L(_)))G _;*/F(_<32768&&M(_))G _;
 	r(0);
 }
 #include <stdlib.h>
@@ -34,7 +34,7 @@ I main(I q,char**v){
 	I r[1<<(1+(f[3]/7))],_=0,j=atoi(v[1]),o=2,s=0;i O;
 	F(j<8||j>32)r(2);O:
 	F(!(O=fopen(v[o++],"r")))r(3);o:
-	F(fscanf(O,"%d",&s)<=0)G I;r[L(_++)]=X(s,0,M(j));G o;I:
+	F(fscanf(O,"%d,",&s)<=0)G I;r[L(_++)]=X(s,0,M(j));G o;I:
 	F(fclose(O)<0)r(4);
 	F(o-q)G O;
 	r(S(stdin,stdout,r,j,(I(*[])(I)){&L,A,M,&A}));

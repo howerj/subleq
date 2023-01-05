@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
 		FILE *f = fopen(argv[i], "r");
 		if (!f)
 			return 3;
-		while (fscanf(f, "%ld", &d) > 0)
+		while (fscanf(f, "%ld,", &d) > 0)
 			m[L(pc++)] = ((int64_t)d) & msk(N);
 		if (fclose(f) < 0)
 			return 4;

@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
 		FILE *f = fopen(argv[i], "r");
 		if (!f)
 			return 1;
-		while (fscanf(f, "%d", &d) > 0)
+		while (fscanf(f, "%d,", &d) > 0)
 			m[L(pc++)] = d;
 		if (fclose(f) < 0)
 			return 2;

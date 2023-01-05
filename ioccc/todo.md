@@ -6,9 +6,8 @@
 - Separate Self-interpreter program that can be prepended.
 - LZ\_XOR / LZ\_SUB to compress image?
 - Make a simple bootloader and embed it here to replace atoi()?
-- More obfuscation.
-  - Swap memory locations with XOR, then swap it back later.
 - Test on 16/32/64 bit systems and windows.
+- Replace some program logic with small SUBLEQ programs?
 - Tidy up build system once a new image has been made.
 - Callbacks to prior IOCCC entries, like the previous
   Forth interpreter?

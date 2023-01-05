@@ -1,3 +1,4 @@
+*.bin
 *.dec
 *.epub
 *.exe
@@ -12,3 +13,4 @@ eforth.c
 nbit
 save
 subleq
+debug

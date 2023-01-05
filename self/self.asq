@@ -57,21 +57,27 @@
 #
 # However it does not deal with I/O.
 #
-# An improved version deals with output, but not input. 
+# An improved version deals with output, but not input is
+# available from:
+#
+# <http://mazonka.com/subleq/>
+#
+# Which is a deal link as of 03/01/2023, an archived version
+# is available at:
+#
+# <https://archive.ph/8EYZv> 
 # 
-# This version deals with input and output.
+# This version deals with input and output and has fewer
+# superfluous instructions.
 #
 # TODO:
 # 	- Comment everything.
 # 	- Translate to Forth?
-# 	- Remove previous versions.
-# 	- Put in proper references to prior self-interpreters
 # 	- Make an inline version, which would not subtract 
 # 	the length of the program from the operands.
 #	- Make a 16-bit only version, this requires a signed
 #	modulo operation.
 #	- Add this program to the book, for a second edition?
-#	- Add this program to the IOCCC candidate?
 #
 # ### DIV a b c
 #

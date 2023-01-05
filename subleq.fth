@@ -454,7 +454,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \        int main(int x, char **v) {
 \                FILE *f=fopen(v[1], "r");
 \                short p=0, m[1<<16], *i=m;
-\                while (fscanf(f, "%hd", i++) > 0) ;
+\                while (fscanf(f, "%hd,", i++) > 0) ;
 \                for (; p>=0;) {
 \                        int a=m[p++],b=m[p++],c=m[p++];
 \                        a<0 ? m[b]=getchar() :
@@ -1374,7 +1374,12 @@ defined eforth [if] system -order [then]
 \ "iJMP" is simpler than "iLOAD", it just has to modify a
 \ "NOOP" instruction to point to a different location, changing
 \ the final cell in the "NOOP", turning it in effect into a
-\ unconditional jump.
+\ unconditional jump. Note that the final "Z Z NADDR" must come
+\ after the "MOV", which also contains a "Z Z NADDR", both
+\ must be present, the first to clear the "Z" register (which
+\ may or may not perform the jump depending on what was in "Z")
+\ and the second which will always jump, as the "Z" register 
+\ has been previously zeroed.
 \
 \ "iSTORE" is the most complex of all of these single
 \ instruction macros, as mentioned, it contains four "MOV"
@@ -1601,7 +1606,6 @@ label: entry       \ used to set entry point in next cell
   1 tvar one       \ must contain  1
   2 tvar two       \ must contain  2
  10 tvar bwidth    \ must contain 16
-  0 tvar INVREG    \ temporary register used for inversion only
   0 tvar w         \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
@@ -1664,8 +1668,8 @@ label: entry       \ used to set entry point in next cell
 \
 
   \ Thread variables, not all of which are user variables
-  0 tvar ip        \ instruction pointer
-  0 tvar tos       \ top of stack
+  0 tvar ip         \ instruction pointer
+  0 tvar tos        \ top of stack
   =thread =stksz        + half dup tvar {rp0} tvar {rp}
   =thread =stksz double + half dup tvar {sp0} tvar {sp}
   200 constant =tib \ Start of terminal input buffer
@@ -1741,30 +1745,10 @@ label: entry       \ used to set entry point in next cell
 \ always will. It is a minor optimization that is easy to
 \ implement, so it might as well be done.
 \
-\ The word "INV" assembles a bitwise invert, the only bitwise
-\ operation we can perform easily. It uses the fact that
-\ a subtraction using twos-compliment arithmetic is equivalent
-\ to the following:
-\
-\        b - a = b + ~a + 1
-\
-\ If we would like to invert "a", we must get rid of "b" and
-\ the +1 terms. We perform the subtraction, zeroing "b" first
-\ (which is "INVREG" in the code), then just subtract one.
-\
-\ The other bitwise operations will be much more difficult
-\ to implement. When making the system for the first time,
-\ getting those bitwise operators correct was the most onerous 
-\ task of bringing the system up, as a bug in those operators 
-\ makes everything else more difficult to debug.
-\
-
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
 :m ONE! dup ZERO INC ; ( a -- : set address to '1' )
 :m NG1! dup ZERO DEC ; ( a -- : set address to '-1' )
-:m INV ( b -- : invert NB. b - a = b + ~a + 1 )
-  INVREG ZERO dup INVREG SUB dup INVREG swap MOV DEC ;m
 :m ++sp {sp} DEC ;m ( -- : grow variable stack )
 :m --sp {sp} INC ;m ( -- : shrink variable stack )
 :m --rp {rp} DEC ;m ( -- : shrink return stack )
@@ -1981,8 +1965,8 @@ label: entry       \ used to set entry point in next cell
 \ are far less common so it is not a worry.
 \
 \ Tests to determine if we are on a ones-compliment, sign
-\ magnitude, or arbitrary precision machine are not tested
-\ for either, so this detection system might give false
+\ magnitude, or arbitrary precision machine are not performed
+\ either, so this detection system might give false
 \ positives (only twos-compliment is supported). These could
 \ be tested for. To support those machines whilst keeping the
 \ system mostly the same an emulator for a 16-bit twos
@@ -1994,10 +1978,11 @@ label: entry       \ used to set entry point in next cell
 
 ( Error message string "Error: Not a 16-bit SUBLEQ VM" )
 1F tvar err-str
- 45 t, 72 t, 72 t, 6F t, 72 t, 3A t, 20 t, 4E t,
- 6F t, 74 t, 20 t, 61 t, 20 t, 31 t, 36 t, 2D t,
- 62 t, 69 t, 74 t, 20 t, 53 t, 55 t, 42 t, 4C t,
- 45 t, 51 t, 20 t, 56 t, 4D t, 0D t, 0A t, 00 t,
+  45 t, 72 t, 72 t, 6F t, 72 t, 3A t, 20 t, 4E t,
+  6F t, 74 t, 20 t, 61 t, 20 t, 31 t, 36 t, 2D t,
+  62 t, 69 t, 74 t, 20 t, 53 t, 55 t, 42 t, 4C t,
+  45 t, 51 t, 20 t, 56 t, 4D t, 0D t, 0A t,
+
 err-str 2/ tvar err-str-addr
 
 \ This prints the error message if we are not on the 
@@ -2172,12 +2157,29 @@ assembler.1 -order
 \ optimized, both in terms of size and speed, but they are
 \ current in a "good enough" state.
 \
-\ "bye" and  "invert" are nothing special, they are
-\ backed by simple assembly instructions. "bye" halts the
-\ SUBLEQ machine, "invert" does a bitwise inversion.
+\ "bye" is nothing special, it just calls "HALT".
 \
 :a bye HALT (a);    ( -- : HALT system )
-:a invert tos INV ;a ( u -- u : bitwise invert tos )
+
+\ The operation "invert" performs a bitwise invert, the only 
+\ bitwise operation we can perform easily. It uses the fact 
+\ that a subtraction using twos-compliment arithmetic is 
+\ equivalent to the following:
+\
+\        b - a = b + ~a + 1
+\
+\ If we would like to invert "a", we must get rid of "b" and
+\ the "+1" terms. We perform the subtraction, zeroing "b" first
+\ (which is "r1" in the code), then we just subtract one.
+\
+\ The other bitwise operations will be much more difficult
+\ to implement. When making the system for the first time,
+\ getting those bitwise operators correct was the most onerous 
+\ task of bringing the system up, as a bug in those operators 
+\ makes everything else more difficult to debug.
+\
+:a invert
+   r1 ZERO tos r1 SUB r1 tos MOV tos DEC ;a
 
 \ We need a way of pushing a literal value, a number, onto
 \ the variable stack, "opPush" does that.
@@ -2885,8 +2887,9 @@ assembler.1 -order
 \ functions and VM routines to jump to, with disastrous
 \ results.
 \
-
-
+\ We may want to add some house-keeping to the routine, but as
+\ it stands "opAsm" is usable.
+\
 \ And to finish off this section, and the Forth Virtual
 \ Machine, is this line, setting the "primitive" value to
 \ the current address in the image, allowing the VM to
@@ -3297,8 +3300,8 @@ there 2/ primitive t!
 \ in terms of "lshift" (which has not yet been defined) it
 \ just adds the number to be doubled to itself. 
 \ 
-: 2/ #1 rshift ; ( u -- u : div by two )
-: 2* dup + ; ( u -- u )
+: 2/ #1 rshift ; ( u -- u : divide by two )
+: 2* dup + ; ( u -- u : multiply by two )
 
 \ Notice how "@" and "!" divide the address by two, which drops
 \ the lowest bit that is used to select the upper or lower
@@ -3544,8 +3547,8 @@ there 2/ primitive t!
 \ dense still viable encoding scheme.
 \
 
-: hex  10 lit base ! ; ( -- : change to hexadecimal base )
-: decimal A lit base ! ; ( -- : change to decimal base )
+: hex  $10 lit base ! ; ( -- : change to hexadecimal base )
+: decimal $A lit base ! ; ( -- : change to decimal base )
 
 \ ## Command and Compile with "\[" and "\]"
 \
@@ -3757,9 +3760,9 @@ there 2/ primitive t!
 \ used but is easy enough to define.
 \
 
-: cell 2 lit ;   ( -- u )
-: cell+ cell + ; ( a -- a )
-: cells 2* ;     ( u -- u )
+: cell 2 lit ;   ( -- u : push bytes in cells to stack )
+: cell+ cell + ; ( a -- a : increment address by cell width )
+: cells 2* ;     ( u -- u : multiply # of cells to get bytes )
 
 \ "execute" takes an "execution token", which is just a fancy
 \ name for an address of a function, and then executes that
@@ -3778,7 +3781,7 @@ there 2/ primitive t!
 \ to the execution vector.
 \
 
-: execute 2/ >r ; ( xt -- )
+: execute 2/ >r ; ( xt -- : execute an execution token )
 
 \ "key?" is a word that interfaces with the input channel
 \ and attempts to get a single character, or byte, of input
@@ -4057,8 +4060,8 @@ there 2/ primitive t!
 \ by ascending or descending might be useful, but I cannot
 \ think of a purpose for them in this Forth.
 
-: max 2dup > mux ;
-: min 2dup < mux ;
+: max 2dup > mux ; ( n1 n2 -- n : highest of two numbers )
+: min 2dup < mux ; ( n1 n2 -- n : lowest of two numbers )
 
 \ "source-id" allows us to determine what the current input
 \ source is. If it is 0 we are reading input from the terminal,
@@ -4190,8 +4193,8 @@ there 2/ primitive t!
 \ The function "x" will work, but "y" will not. "compile,"
 \ is defined later.
 \
-: allot h lit +! ; ( n -- : take dictionary space )
-: , align here ! cell allot ;
+: allot h lit +! ; ( n -- : allocate space in dictionary )
+: , align here ! cell allot ; ( u -- : write value into dict. )
 
 \ "count" and "+string" are two words used for string
 \ manipulation. "count" is named because it is often used with
@@ -4246,12 +4249,18 @@ there 2/ primitive t!
 \ "fill" is equivalent to the C standard library function
 \ "memset", and "cmove" to "memcpy".
 \
+\ "blank", if needed, can be defined as:
+\
+\        : blank bl fill ; ( b u -- : write spaces to buffer )
+\
+\ "blank" is sometimes used in Forth block editors.
+\
 
 : cmove ( b1 b2 u -- )
    for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;
-: fill ( b u c -- )
+: fill ( b u c -- : write byte 'c' to array 'b' of 'u' length )
    swap for swap aft 2dup c! 1+ then next 2drop ;
-: erase #0 fill ; ( NB. blank is bl fill )
+: erase #0 fill ; ( b u -- : write zeros to array )
 
 \ The following words, and two new meta-compiler words, allow
 \ us to define two types of counted strings, and use them
@@ -5769,9 +5778,7 @@ there 2/ primitive t!
 \ Field, the other three being used for flags, if the name is 
 \ too long, an exception is thrown.
 \
-\ Other eForth implementations provided "!csp" and "?csp" but
-\ did not use it within the base system itself, they can be
-\ defined as:
+\ Other eForth implementations provided "!csp" and "?csp":
 \
 \        variable csp
 \        : !csp sp@ csp ! ;
@@ -5779,7 +5786,7 @@ there 2/ primitive t!
 \
 \ They are useful for testing new words but not for embedding
 \ in word definitions as there is only one "csp" location
-\ available. The word "?csp" call abort if there is a mismatch
+\ available. The word "?csp" calls abort if there is a mismatch
 \ in the current stack pointer and the pointer stored by
 \ "!csp", which can be used to check whether words consume
 \ and produce the right number of arguments.
@@ -7037,7 +7044,7 @@ there 2/ primitive t!
 \ token in "\<ok\>".
 \
 
-:s ok state @ 0= if ."  ok" cr then ;s ( -- )
+:s ok state @ 0= if ."  ok" cr then ;s ( -- : okay prompt )
 
 \ "eval" goes through each word in a line until there are no 
 \ more and executes "interpret" for each word, it is sure to 
@@ -7047,10 +7054,10 @@ there 2/ primitive t!
 \ It also prints out "ok", by executing the contents of
 \ "\<ok\>", as just mentioned.
 \
-:s eval
+:s eval ( "word" -- )
    begin bl word dup c@ while
      interpret #0 ?depth
-   repeat drop <ok> @ execute ;s ( "word" -- )
+   repeat drop <ok> @ execute ;s 
 
 \ ## Evaluate
 \
@@ -7510,7 +7517,7 @@ there 2/ primitive t!
 \ launching.
 \
 
-:s task: ( create a named task )
+:s task: ( "name" -- : create a named task )
   create here 400 lit allot 2/ task-init ;s
 :s activate ( xt task-address -- : start task executing xt )
   dup task-init
@@ -7652,7 +7659,7 @@ there 2/ primitive t!
 \ * "d", delete a line, it takes a number as an argument
 \
 \ Missing are words to perform searching, replacing, and 
-\ swapping lines. 
+\ swapping lines. A rudimentary help message might be useful.
 \
 \ They are all easy to add, but are not necessary. The
 \ fact that execute, "e", calls "q" might cause problems when
@@ -7691,9 +7698,9 @@ there 2/ primitive t!
 \ to what you prefer, or add new ones.
 \
 \ The only complex word is "ia", which also forms the basis
-\ for "i", it inserts a line of text into a line at a location,
-\ after making sure there are at least two items on the stack,
-\ it does not do range checking on those variables
+\ for "i", it inserts a line of text into a line at a location
+\ after making sure there are at least two items on the stack.
+\ The word "ia" does not do range checking on those variables
 \ unfortunately, a common "feature" of Forth. 
 \
 \ It looks at the Terminal Input Buffer, with "\>in" and "tib", 
@@ -7711,7 +7718,11 @@ there 2/ primitive t!
 \
 \ A lot of the words call "l", to list the current screen,
 \ so after modification or changing of the screen variable
-\ "scr" the user does not have to type "l" themselves.
+\ "scr" the user does not have to type "l" themselves. On
+\ slow connections (imagine you are talking to this Forth over
+\ a 300 baud modem) "l" should be removed, and it would be
+\ worth rewriting the code to draw and redraw only what is 
+\ necessary, complications which are not needed.
 \
 
 : editor {editor} lit #1 set-order ; ( Micro BLOCK editor )
@@ -7943,7 +7954,7 @@ it being run.
 \                        FILE *f = fopen(v[i], "r");
 \                        if (!f)
 \                                return 1;
-\                        while (fscanf(f, "%d", &d) > 0)
+\                        while (fscanf(f, "%d,", &d) > 0)
 \                                m[L(pc++)] = d;
 \                        if (fclose(f) < 0)
 \                                return 2;
@@ -8001,6 +8012,95 @@ it being run.
 \ another is that a few SUBLEQ programs other than this of the
 \ authors do use this memory.
 \
+\ ### SUBLEQ VM File Format
+\
+\ The arguments passed to the program are meant to be file 
+\ names containing space delimited decimal values, one value
+\ for each cell. Multiple programs can be concatenated into
+\ one image which is then run, or programs and data. This
+\ behavior has some utility, but the implementation is this
+\ way as it is easy to extend the program to do this than any
+\ other reason. 
+\
+\ We could complicate the program by adding in command line
+\ parsing so options and file input and output could be
+\ selected. Potentially useful options include:
+\
+\ * A file to save the image to.
+\ * Whether to enter a debug mode and command line.
+\ * How many cycles to run for.
+\ * A help message and program version number.
+\ * The bit-width of the SUBLEQ machine (actually covered in
+\ a program displayed further on).
+\ * How much memory to allocate to the SUBLEQ machine, which
+\ is currently fixed.
+\ * The format of the input file.
+\ * Whether to enable variations on the SUBLEQ machine (such
+\ as SUBNEG).
+\
+\ All of these options *could* be implemented but would more
+\ than double the size of the simple C program that currently
+\ implements the SUBLEQ VM, in fact it would be many multiples
+\ of its current size. All for something that is *potentially*
+\ useful. It is better to keep things simple.
+\
+\ As mentioned, the file format consists of space delimited
+\ decimal values, each value being placed sequentially in each
+\ cell, with no checking for overflow.
+\
+\ The following program, shown before, prints "Hi" and then
+\ exits:
+\
+\        9 -1 3 10 -1 6 0 0 -1 72 105 0
+\
+\ The spaces can be replaced with new lines and it will
+\ still work:
+\
+\        9
+\        -1
+\        3
+\        10
+\        -1
+\        6
+\        0
+\        0
+\        -1
+\        72
+\        105
+\        0
+\        
+\ This has one advantage that if the program is modified and
+\ stored in version control many of the lines are likely to
+\ be the same, most version control systems calculate
+\ differences line by line, and not within lines, so the
+\ "diffs" will be smaller.
+\
+\ Most SUBLEQ systems load their values with a "fscanf"
+\ format string, or language equivalent, of the following
+\ statement:
+\
+\       fscanf(f, "%d", &d)
+\
+\ With the addition of a single character we can parse both
+\ the white-space delimited format, and formats that contain 
+\ numbers separated white space and commas:
+\
+\       fscanf(f, "%d,", &d)
+\
+\ This helps when generating SUBLEQ programs that are to be
+\ embedded in other languages as an array.
+\
+\ The file format is quite inefficient but the main reason
+\ that this format is chosen by many implementations is that
+\ most SUBLEQ programs are quite short, featuring just tens
+\ of instructions, and are shared on websites as part of a
+\ page viewed by a human. For this purpose the format is
+\ adequate.
+\
+\ Using hexadecimal would have on space, as would using a
+\ binary format, but it would make sharing more difficult and
+\ tie the program to this implementation.
+\
 \ ## SUBLEQ machine with automatic save feature
 \
 \ This version machine is has a very different flavor compared
@@ -8030,7 +8130,7 @@ it being run.
 \        		FILE *f = fopen(v[i], "r");
 \        		if (!f)
 \        			return 1;
-\        		while (fscanf(f, "%d", &d) > 0)
+\        		while (fscanf(f, "%d,", &d) > 0)
 \        			m[(pc++)%SZ] = d;
 \        		if (fclose(f) < 0)
 \        			return 2;
@@ -8188,15 +8288,14 @@ it being run.
 \
 \        #define SZ   (1<<16)
 \        #define L(X) ((X)%SZ)
-\        int main(int s, char **v)
-\        {
+\        int main(int s, char **v) {
 \                static uint16_t m[SZ];
 \                uint16_t pc = 0;
 \                for (int i = 1, d = 0; i < s; i++) {
 \                        FILE *f = fopen(v[i], "r");
 \                        if (!f)
 \                                return 1;
-\                        while (fscanf(f, "%d", &d) > 0)
+\                        while (fscanf(f, "%d,", &d) > 0)
 \                                m[L(pc++)] = d;
 \                        if (fclose(f) < 0)
 \                                return 2;
@@ -8265,7 +8364,7 @@ it being run.
 \            FILE *f = fopen(v[i], "r");
 \            if (!f)
 \              return 3;
-\            while (fscanf(f, "%ld", &d) > 0)
+\            while (fscanf(f, "%ld,", &d) > 0)
 \              m[L(pc++)] = ((int64_t)d) & msk(N);
 \            if (fclose(f) < 0)
 \              return 4;
@@ -8688,7 +8787,7 @@ it being run.
 \           FILE *f = fopen(v[i], "r");
 \           if (!f)
 \             return 1;
-\           while (fscanf(f, "%d", &d) > 0)
+\           while (fscanf(f, "%d,", &d) > 0)
 \             m[L(pc++)].m = d;
 \           if (fclose(f) < 0)
 \             return 2;

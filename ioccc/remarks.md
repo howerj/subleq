@@ -5,13 +5,10 @@ To run:
 	./prog 16 data.dec
 
 The second argument may be between 8 and 32 inclusive, but
-you'll only get a useful system when it is 16 (and error
-message is printed out if higher than 16, and nothing useful
-is done for when it is lower (mainly due to memory limitations).
+you'll only get a useful system when it is 16 (a error
+message is printed out if it is not 16).
 
-Once it is running, type "words". Depending which compiler
-you use and its optimization settings, it might take a while
-for it to do anything.
+Once it is running, type "words". 
 
 This:
 
@@ -24,21 +21,11 @@ Works as well.
 
 * It should work fine without optimizations, but it helps
 to have them on.
-* If you had an operator, which would be your favourite?
-* This program contains misleading allusions to VXLHAMS (or
-Very eXtra Large HAMS, as it is known in the industry), despite
-this I assure you that it this is a valid C program and not
-a pork based product, no matter how much mystery meat is
-in it.
+* If you had to chose an arithmetic operator, which would be your 
+favorite?
 * What the program does it actually *really* simple, however
 that is only (much less than) half the battle in understanding 
 the system, focus instead on the data.
-
-# Puns
-
-* This submission is very risky. In fact, I took the ultimate risk
-in submitting it.
-* When reverse engineering this, don't be too negative.
 
 # Portability and Features
 
@@ -72,7 +59,7 @@ and see how far you get!).
 The following obfuscation has been used:
 
 - Replacing common bitwise operators with equivalents based on
-multiplexing, despite the theme multiplexing is my favourite
+multiplexing, despite the theme multiplexing is my favorite
 operator.
 - Using alternative methods for addition.
 - Misleading comments (Someone wouldn't do that would they?
@@ -134,8 +121,3 @@ The source code for the interpreter can be produced on
 request, but I think the entry is nicer without it as it
 preserves an air of mystery and simplicity to it.
 
-# **NOTE TO JUDGES**
-
-* Which sections do you think should be kept / should
-source for the image be included? The system is self-hosting
-when the source is included.

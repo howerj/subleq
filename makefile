@@ -27,6 +27,9 @@ width: gforth.dec nbit
 	./nbit 64 $<
 	echo ".( Ahoy, World! ) cr bye " | ./nbit 16 $<
 
+subleq.bin: subleq subleq.dec
+	echo "0 here : ddd 1- for dup c@ emit 1+ next drop ; ddd bye " | ./subleq subleq.dec > $@
+
 gforth.dec: subleq.fth
 	gforth $< > $@
 
