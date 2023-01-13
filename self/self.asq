@@ -78,6 +78,13 @@
 #	- Make a 16-bit only version, this requires a signed
 #	modulo operation.
 #	- Add this program to the book, for a second edition?
+#	- Could use this to make a debugger within SUBLEQ
+#	instead of as a separate program, which might be useful
+#	in an MS-DOS like SUBLEQ environment.
+#       - If the inline version is used within the main Forth
+#       image, it could be made into an instruction for the VM
+#       as well, allowing (relatively) fast emulation from 
+#       within the Forth environment.
 #
 # ### DIV a b c
 #

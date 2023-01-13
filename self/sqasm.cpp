@@ -383,12 +383,12 @@ void resolve(item &i) {
 
 void resolve(instruction &n) {
 	for (size_t i = 0; i < n.items.size(); i++)
-	resolve(n.items[i]);
+		resolve(n.items[i]);
 }
 
 void resolve(vector<instruction> &pr) {
 	for (size_t i = 0; i < pr.size(); i++) {
-	resolve(pr[i]);
+		resolve(pr[i]);
 	}
 }
 

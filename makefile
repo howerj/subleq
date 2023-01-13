@@ -89,6 +89,14 @@ eforth.c: 1.dec
 	echo "a<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])" >> $@
 	echo "<=0?p=c:0;}}" >> $@
 
+%.cma: %.dec
+	sed 's/$$/,/' $^ | fmt -w 80 | sed 's/ //g' >> $@
+
+debug.o: debug.c subleq.cma
+	${CC} -std=gnu99 -Wall -Wextra $< -c -o $@
+
+debug: debug.o
+
 clean:
 	git clean -dffx
 
