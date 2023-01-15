@@ -1,0 +1,30 @@
+# This program counts, up to a maximum, the
+# number of bits the SUBLEQ VM uses for each cell,
+# as that might be uncapped (on a SUBLEQ machine that
+# uses arbitrary precision numbers) the maximum exists.
+#
+# Otherwise, assuming a twos compliment machine is used,
+# if you double the value "1" enough times it will eventually
+# turn negative, counting the number of times you have to
+# double the value gives you the bit-width.
+#
+
+start:
+
+count:
+  zr
+  nr bits;
+  tr zr;
+  zr tr;
+  zr;
+  zr tr (counted);
+  max zr
+  bits zr (counted);
+  zr zr (count);
+counted:
+  zr;
+
+bits (-1);
+0 0 (-1);
+
+. zr:0 tr:1 bits:1 max:-16 nr:-1

@@ -86,30 +86,6 @@
 #       as well, allowing (relatively) fast emulation from 
 #       within the Forth environment.
 #
-# ### DIV a b c
-#
-# Division code...
-#
-#        \ DIV a b c: m(c) = m(a) / m(b)
-#        subleq TA
-#        subleq TB
-#        subleq TC
-#
-#        subleq b  TA
-#        subleq TA TB    \ TB = b
-#
-#        subleq TA TA
-#        subleq a  TA
-#        subleq TA TC    \ TC = a
-#
-#        subleq c c
-#
-#        subleq NR c     \ c++
-#        subleq TC TB +2 \ b -= a, if b <= 0 JMP 2
-#        subleq ZR ZR -2 \ loop back to c++
-#
-# This will need modification to provide a remainder.
-#
 ## Notes on the SUBLEQ assembler:
 #
 # * Statements are terminated by ';' or new lines.
