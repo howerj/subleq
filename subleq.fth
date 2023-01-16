@@ -17,8 +17,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ her wonderful dog Poppy.
 \
 \ Please feel free to contact the author about thoughts,
-\ feedback, and any corrections you wish to offer found in this
-\ book.
+\ feedback, and for any corrections.
 \
 \ # Introduction
 \
@@ -1055,6 +1054,10 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ to an address, so at run time the address of a function is
 \ pushed to the stack instead of being run.
 \
+\ "tcompile" forces compilation of the target version of
+\ the Forth into the dictionary as an executable token, it
+\ should be used within a new target word definition.
+\
 
 defined eforth [if]
 :m (') bl word find ?found cfa ;m
@@ -1064,6 +1067,7 @@ defined eforth [if]
 :m t' ' >body @ ;m ( --, "name" )
 :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 [then]
+:m tcompile to' half t, ;m
 
 \ "tcksum" is used to calculate the checksum over the part of
 \ the image that is checked. At the end of the meta-compilation
@@ -3783,6 +3787,16 @@ there 2/ primitive t!
 
 : execute 2/ >r ; ( xt -- : execute an execution token )
 
+\ "?exit" will conditionally return from the *caller* of the
+\ function, an example usage:
+\
+\        : x ." Executed. " ?exit ." Conditionally Exec." cr ;
+\        0 x ( prints "Executed. Conditionally Exec." )
+\        1 x ( prints "Executed. " )
+\
+
+: ?exit if rdrop then ; compile-only
+
 \ "key?" is a word that interfaces with the input channel
 \ and attempts to get a single character, or byte, of input
 \ from it. It *attempts* to do so. Depending on the underlying
@@ -4337,18 +4351,8 @@ there 2/ primitive t!
 \ however, and is one example of doing introspection in Forth.
 \
 \ Another example of messing around with the return stack
-\ to achieve greatness is:
+\ to achieve greatness is "?exit", previously defined.
 \
-\        : ?exit if rdrop then ; compile-only
-\
-\ Which will conditionally return from the *caller* of the
-\ function, an example usage:
-\
-\        : x ." Executed. " ?exit ." Conditionally Exec." cr ;
-\        0 x ( prints "Executed. Conditionally Exec." )
-\        1 x ( prints "Executed. " )
-\
-
 :s do$ r> r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
 :s ($) do$ ;s           ( -- a : do string NB. )
 :s .$ do$ count type ;s ( -- : print string in next cells )
@@ -5417,7 +5421,7 @@ there 2/ primitive t!
 \ or it throws an error.
 \
 
-:s ?found if exit then ( b f -- b | ??? )
+:s ?found ?exit ( b f -- b | ??? )
    space count type [char] ? emit cr -D lit throw ;s
 
 \ The "interpret" diagram describes the word, with
@@ -5482,7 +5486,7 @@ there 2/ primitive t!
       cfa compile, exit \ <- compiling word are...compiled.
     then
     drop
-    dup nfa c@ 20 lit and -E lit and throw ( <- ?compile )
+    dup nfa c@ 20 lit and 0<> -E lit and throw ( <- ?compile )
     \ if it's not compiling, execute it then exit *interpreter*
     cfa execute exit
   then
@@ -5833,9 +5837,9 @@ there 2/ primitive t!
 : word ( -- b )
   #1 ?depth parse here aligned dup >r 2dup ! 1+ swap cmove r> ;
 :s ?unique ( a -- a : warn if word definition is not unique )
- dup get-current (search) 0= if exit then space
+ dup get-current (search) 0= ?exit space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
-:s ?nul dup c@ if exit then -10 lit throw ;s ( b -- b )
+:s ?nul dup c@ ?exit -10 lit throw ;s ( b -- b )
 :s ?len dup c@ 1F lit > -13 lit and throw ;s ( b -- b )
 :to char bl word ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
@@ -6370,13 +6374,38 @@ there 2/ primitive t!
 \ compile time from the input stream and compile a word into
 \ the dictionary.
 \
+\ "(s)" is common to all of these words, it is similar to
+\ "$literal", both non-standard Forth words. As the word might
+\ be useful it placed within the system vocabulary, but not
+\ the main Forth vocabulary. "(s)" parses a string from the
+\ input string, which is stored in the correct dictionary
+\ location already by "word", so all it needs to do is allocate
+\ the length of the newly parsed string.
+\
+\ Most languages allow for escape sequences within strings,
+\ Forth being the exception. Escape strings are useful (as
+\ are "printf" format string present in most languages, also
+\ missing from Forth) and would simplify some code within the
+\ meta-compiler (although to remain portable we would not be
+\ able to use them). For example with the ANSI terminal
+\ escape words being able to enter an Escape character into
+\ a string by specifying its numeric value, like so:
+\ 
+\        :s csi ." \x1B\x5B" ;s 
+\
+\ Would shorten the definition (skip ahead to see it). Adding
+\ this capability in would complicate the implementation for
+\ little gain however.
+\
+\ Other de facto standard characters for new-lines, return
+\ characters and so-forth would be useful as well. De Facto
+\ not for Forth but for nearly every single post-C language.
+\
 
-:to ." compile .$
-  [char] " word count + h lit ! align ; immediate compile-only
-:to $" compile ($)
-  [char] " word count + h lit ! align ; immediate compile-only
-:to abort" compile (abort)
-  [char] " word count + h lit ! align ; immediate compile-only
+:s (s) [char] " word count nip allot align ;s
+:to ." compile .$ (s)  ; immediate compile-only
+:to $" compile ($) (s)  ; immediate compile-only
+:to abort" compile (abort) (s) ; immediate compile-only
 
 \ # Comments
 \
@@ -6538,8 +6567,27 @@ there 2/ primitive t!
 \ "compile-only" works in the same way, except it sets a
 \ different bit. The flag is tested in "interpret".
 \
-:to immediate last nfa @ 40 lit or last nfa ! ; ( -- )
-:to compile-only last nfa @ 20 lit or last nfa ! ; ( -- )
+\ "(nfa)" allows one to toggle any of the Name-Field-Address
+\ bits, it should be "set" and not "toggle" (that is, a 
+\ version of "toggle" that uses "or" and not "xor"), but
+\ we should never call "immediate" or "compile-only" on a
+\ word twice anyway.
+\
+\ Note, that in order to save space we could have used the
+\ definition:
+\
+\        :to compile-only bl (nfa) ;
+\
+\ To save two bytes, as "bl" has the hexadecimal value 20,
+\ or 32 in decimal, but that is confusing, anyone reading the
+\ code by itself may think to themselves "why has the space
+\ character got anything to do with the word header?". So
+\ we have not done this.
+\
+
+:s (nfa) last nfa toggle ;s ( u -- )
+:to immediate 40 lit (nfa) ; ( -- )
+:to compile-only 20 lit (nfa) ; ( -- )
 
 \ # Some Programmer Utilities (Decompilation and Dump)
 \
@@ -6740,8 +6788,8 @@ there 2/ primitive t!
  begin
   begin bl word dup c@ while
    find drop cfa dup to' [else] lit = swap to' [then] lit = or
-    if exit then repeat query drop again ; immediate
-:to [if] if exit then postpone [else] ; immediate
+    ?exit repeat query drop again ; immediate
+:to [if] ?exit postpone [else] ; immediate
 
 \ # Time and Hacks
 \
@@ -6846,6 +6894,17 @@ there 2/ primitive t!
 \ clones can be made.
 \
 \ The first column and row in "at-xy" is "1" and not "0".
+\ Although in this case "0" is equivalent to "1".
+\
+\ This is the alternative definition of "csi", it is slightly
+\ shorter than the one given but less portable and more
+\ difficult to understand.
+\
+\        :s csi .$ 2 tc, 1B tc, 5B tc, 0 tc, ;s
+\
+\ So instead of shaving bytes off of the current implementation
+\ (which can be done elsewhere), the simpler version is kept
+\ in.
 \
 
 : bell 7 lit emit ; ( -- : emit ASCII BEL character )
@@ -9475,7 +9534,6 @@ variable seed ( NB. Could be mixed with keyboard input )
 : umax 2dup      u< if swap then drop ; ( u u -- u )
 : off false swap ! ; ( a -- )
 : on true swap ! ; ( a -- )
-: ?exit if rdrop then ;
 : tab 9 emit ; ( -- )
 : spaces ( n -- : equiv. bl banner  )
     ?dup 0> if for aft space then next then ;
@@ -9563,6 +9621,9 @@ variable seed ( NB. Could be mixed with keyboard input )
 : ndrop for aft drop then next ; ( 0...n n -- )
 : unused $FFFF here - ; ( 65536 bytes available in this VM )
 : char+ 1+ ; ( b -- b )
+: str= compare 0= ;
+: str< compare 0< ;
+: under over swap ; ( n1 n2 -- n1 n1 n2 )
 
 \ This version of Forth defines "mux" in SUBLEQ assembly, 
 \ previous versions did not and coded the bitwise routines in 
@@ -9821,7 +9882,7 @@ users -order
 
 : nul? count nip 0= ; ( a -- f : is counted word empty? )
 : grab ( <word> -- a : get word from input stream  )
-  begin bl word dup nul? 0= if exit then drop query again ;
+  begin bl word dup nul? 0= ?exit drop query again ;
 : integer grab count number? nip ; ( <num> -- n f : get int. )
 : integer? integer 0= ( dpl @ 0>= or ) -24 and throw ;
 : ingest ( a u -- : opposite of 'dump', load nums into mem )

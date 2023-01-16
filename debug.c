@@ -5,19 +5,7 @@
 #define LICENSE "Public Domain / Unlicense for code only"
 #define VERSION "1.0"
 /* TODO: SUBNEG and other variants, changeable memory size,
- * primitive assembler, disassembler, Hitting escape should 
- * trigger debug mode as well, optional non-blocking I/O, 
- * include Forth interpreter within image along with self
- * interpreter and other examples....
- *
- * TODO: Experiment with subleq_getopt, extending it to
- * parse lines in a similar way as is done in the command
- * line here, to extract numbers from arguments / specify
- * more and handle errors. It could be used as the basis of
- * a small TCL like language. Handling strings ("ab c") and
- * escaping would help as well. This could be turned into
- * no so much as a library as some code that can be copied
- * around.
+ * primitive assembler, disassembler, 
  *
  * This version could replace "nbit.c"... 
  *
@@ -219,6 +207,7 @@ static int subleq_getopt(subleq_getopt_t *opt, const int argc, char *const argv[
 enum { 
 	META_BPS = 1ull << 0,
 	META_WRT = 1ull << 1,
+	META_PRN = 1ull << 2,
 };
 
 typedef struct {
@@ -522,7 +511,8 @@ Options:\n\n\
 \t-c num\n\t\tRun for 'num' cycles before halting into debugger.\n\
 \t-b break-point\n\t\tAdd break point.\n\
 \t-s file.dec\n\t\tSave to file after running.\n\
-\t-n num (8-64)\n\t\tSet SUBLEQ VM to bit-width, inclusive,\n\
+\t-n num (8-64)\n\t\tSet SUBLEQ VM to bit-width, inclusive.\n\
+\t-p num\n\t\tPrint out cell contents after exiting VM.\n\
 \t-x forth,hi,echo,halt,self\n\t\tLoad example image from internal storage.\n";
 
 	if (fprintf(out, help, PROJECT, AUTHOR, EMAIL, REPO, VERSION) < 0)
@@ -1111,7 +1101,7 @@ again:
 		{ .name = "write",      .alt = "w", .fn = cmd_save, },
 		{ .name = "load",       .alt = "l", .fn = cmd_load, },
 		{ .name = "help",       .alt = "h", .fn = cmd_help, },
-		{ .name = "prompt",               .fn = cmd_prompt, },
+		{ .name = "prompt",                 .fn = cmd_prompt, },
 		{ .name = "fill",       .alt = "f", .fn = cmd_fill, },
 		{ .name = "quit",       .alt = "q", .fn = cmd_quit, },
 		{ .name = "move",       .alt = "m", .fn = cmd_move, },
@@ -1289,7 +1279,7 @@ int main(int argc, char **argv) {
 	terminal.out = stdout;
 	atexit(restore);
 
-	for (int ch = 0; (ch = subleq_getopt(&opt, argc, argv, "zhtdkc:s:b:x:n:")) != -1; i++) {
+	for (int ch = 0; (ch = subleq_getopt(&opt, argc, argv, "zhtdkc:s:b:x:n:p:")) != -1; i++) {
 		switch (ch) {
 		case 'h': cli_help(stderr); return 0;
 		case 'k': s.non_blocking = 1; break;
@@ -1301,6 +1291,7 @@ int main(int argc, char **argv) {
 		case 'n': s.N = atoi(opt.arg); i++; break;
 		case 'x': if (subleq_examples(&s, opt.arg) < 0) return 1; i++; break;
 		case 'z': recompile = 1; break;
+		case 'p': s.meta[L(&s, atol(opt.arg))] |= META_PRN; i++; break;
 		default: return 1;
 		}
 	}
@@ -1313,9 +1304,14 @@ int main(int argc, char **argv) {
 	s.max = s.load;
 	const int r = recompile ? subleq_recompiler(&s, &terminal) : subleq(&s, &terminal);
 
+	for (size_t i = 0; i < s.sz; i++)
+		if (s.meta[i] & META_PRN)
+			printer(&s, "%02lx:%02lx\n", (long)i, (long)s.m[i]);
+
 	if (save)
 		if (subleq_save(&s, 0, s.max, save) < 0)
 			return 4;
+
 	return r < 0 ? 5 : 0;
 }
 
