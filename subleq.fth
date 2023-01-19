@@ -909,7 +909,12 @@ defined eforth [if]
 \
 
 defined eforth [if]
-  :m #dec s>d if [char] - emit then (.) ;m ( n16 -- )
+\ If not using "(.)" and "opDivMod", then this can be used:
+\
+\        :m #dec dup >r abs 0 <# #s r> sign #> type ;
+\
+\ Otherwise:
+:m #dec s>d if [char] - emit then (.) ;m ( n16 -- )
 [else]
   :m #dec dup 8000 u>= if negate limit -1 >r else 0 >r then
      0 <# #s r> sign #> type ;m ( n16 -- )
@@ -2758,6 +2763,12 @@ assembler.1 -order
 \ algorithm itself is slow, the assembly version is much
 \ faster than "um/mod".
 \
+\ Removing "opDivMod" does save on some space, as would
+\ removing "rshift", and implementing their functionality in
+\ pure Forth, but there is a significant slow down, it might
+\ be best to allow them to be compiled out with a meta-compile
+\ time flag.
+\
 
 :a opDivMod
   w {sp} iLOAD
@@ -3126,12 +3137,12 @@ there 2/ primitive t!
 :m until talign opJumpZ 2/ t, ;m  ( a -- )
 :m again talign opJump  2/ t, ;m ( a -- )
 :m if opJumpZ there 0 t, ;m ( -- a )
-:m mark opJump there 0 t, ;m ( -- a )
+:m tmark opJump there 0 t, ;m ( -- a )
 :m then there 2/ swap t! ;m ( a -- )
-:m else mark swap then ;m ( a -- a )
+:m else tmark swap then ;m ( a -- a )
 :m while if ;m ( -- a )
 :m repeat swap again then ;m
-:m aft drop mark begin swap ;m ( a -- a a )
+:m aft drop tmark begin swap ;m ( a -- a a )
 :m next talign opNext 2/ t, ;m ( a -- )
 :m for opToR begin ;m ( -- a )
 
@@ -3274,6 +3285,23 @@ there 2/ primitive t!
 
 : over swap dup >r swap r> ; ( n1 n2 -- n1 n2 n1 )
 
+\ A common expression I find myself typing is "dup \>r",
+\ we could define a word that does this using "over" and
+\ some return stack manipulation, or with some of the other 
+\ stack words, however it is more clear (but results in a 
+\ slightly larger image) to type out the expression in its 
+\ entirety. There is an element of style into what gets turned
+\ into its own word and what does not. As the author cannot
+\ think of a good name for the non-standard word 
+\ ("dupr", or "dup\>r", both of which are not clear) the word
+\ will be left out. The names of many of the Forth words
+\ could have the same things said against them, it is not
+\ clear what they do from their name, however they are standard
+\ and only have to be learned once, the same cannot be said
+\ for non-standard words meant only for compressing the size
+\ of the dictionary, they impose a cognitive burden that may
+\ not be worth the trade-off in size.
+\
 \ All three binary logical operators, excluding "invert",
 \ are implementing using "mux" ("invert" could be implemented
 \ with "mux" if we needed it to be to save space). This is
@@ -3282,13 +3310,15 @@ there 2/ primitive t!
 \ instruction.
 \
 
-: xor >r dup invert swap r> mux ;
-: or  over mux ;
-: and #0 swap mux ;
+: xor >r dup invert swap r> mux ; ( u u -- u : bitwise xor )
+: or  over mux ;                  ( u u -- u : bitwise or )
+: and #0 swap mux ;               ( u u -- u : bitwise and )
 
-\ "1+" and "1-" do what they say, 
-: 1+ #1 + ; ( n -- n )
-: 1- #1 - ; ( n -- n )
+\ "1+" and "1-" do what they say, increment and decrement
+\ respectively.
+\
+: 1+ #1 + ; ( n -- n : increment )
+: 1- #1 - ; ( n -- n : decrement )
 
 \ "2/", or dividing by two, is a very common operation, so it
 \ useful to have a word that does this. This Forth implements
@@ -3622,10 +3652,8 @@ there 2/ primitive t!
 \ interpreter state.
 \
 
-: ]
-  #-1 state ! ; ( -- : return to compile mode )
-: [ #0
-  state ! ; immediate ( -- : initiate command mode )
+: ] #-1 state ! ; ( -- : return to compile mode )
+: [  #0 state ! ; immediate ( -- : initiate command mode )
 
 \ These words should be familiar to any Forth programmer,
 \ they are often defined in assembly for speed reasons, but
@@ -4485,7 +4513,7 @@ there 2/ primitive t!
    execute               ( )      \ execute returns if no throw
    r> {handler} up !     ( )      \ restore previous handler
    rdrop                 ( )      \ discard saved stack ptr
-   #0 ;                 ( 0 )     \ normal completion
+   #0 ;                  ( 0 )    \ normal completion
 
 : throw ( ??? exception# -- ??? exception# )
     ?dup if              ( exc# )     \ 0 throw is no-op
@@ -5009,7 +5037,7 @@ there 2/ primitive t!
 \ "sign" adds a "-" character to hold space if the
 \ provided number is negative. It is used by ".".
 \
-: sign 0< if [char] - hold then ;                ( n -- )
+: sign 0>= ?exit [char] - hold ; ( n -- )
 
 \ "u.r" and "u." print out unsigned numbers, "u." prints out an
 \ unsigned number with a single space before it, "u.r" allows
@@ -5047,7 +5075,13 @@ there 2/ primitive t!
 \ "." uses "(.)", it just needs to check if the number to print
 \ is negative, if so, it emits a single "-" character.
 \
+\ The normal definition of ".", without using "(.)", is:
+\
+\        : . space dup >r abs #0 <# #s r> sign #> type ;
+\
+\
 : . space s>d if [char] - emit then (.) ;
+
 
 \ "\>number" is a large but not terribly complex word, it
 \ is however a bit unwieldy to use, it operates on double
@@ -6130,18 +6164,19 @@ there 2/ primitive t!
 \ VM instructions.
 \
 
-:to begin align here ; immediate compile-only
-:to until =jumpz lit , 2/ , ; immediate compile-only
-:to again =jump  lit , 2/ , ; immediate compile-only
-:to if =jumpz lit , here #0 , ; immediate compile-only
-:to then align here 2/ swap ! ; immediate compile-only
+:s mark here #0 , ;s compile-only
+:to begin here ; immediate compile-only
+:to if =jumpz lit , mark ; immediate compile-only
+:to until 2/ postpone if ! ; immediate compile-only
+:to again =jump lit , 2/ , ; immediate compile-only
+:to then here 2/ swap ! ; immediate compile-only
 :to while postpone if ; immediate compile-only
 :to repeat swap postpone again postpone then ;
     immediate compile-only
-:to else =jump lit , here #0 , swap postpone then ;
+:to else =jump lit , mark swap postpone then ;
     immediate compile-only
 :to for =>r lit , here ; immediate compile-only
-:to aft drop =jump lit , here #0 , here swap ;
+:to aft drop =jump lit , mark here swap ;
     immediate compile-only
 :to next =next lit , 2/ , ; immediate compile-only
 
@@ -6803,7 +6838,7 @@ there 2/ primitive t!
 \ will not cover. Saying "this function will sleep for X 
 \ milliseconds" does not fully answer questions around sleep. 
 \ There are also problems of jitter and drift, "sleep" is 
-\ actually quite complex topic.
+\ actually quite a complex topic.
 \
 \ However, given that the underlying SUBLEQ machine does not
 \ have a method for determining the actual time (ie. A hardware
@@ -10158,3 +10193,4 @@ users -order
 \ uses a LaTeX template with its own license, available from:
 \ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
 \
+

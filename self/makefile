@@ -19,5 +19,9 @@ sqasm: sqasm.cpp
 ../subleq.dec ../subleq:
 	make -C .. subleq.dec subleq
 
+asm-run: asm self.asq
+	./asm < self.asq > self.dec
+
+
 clean:
 	rm sqasm
