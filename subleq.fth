@@ -7087,7 +7087,7 @@ there 2/ primitive t!
 : b/buf 400 lit ; ( -- u )
 : block #1 ?depth dup blk ! A lit lshift pause ; ( k -- u )
 : flush ( save-buffers empty-buffers ) ; ( -- )
-: update #-1 {dirty} lit ! ; ( -- )
+: update #-1 {dirty} lit ! ; ( -- : mark current buf as dirty )
 : blank bl fill ; ( a u -- : blank an area of memory )
 : list ( k -- : list a block )
    page cr         ( clean the screen )
@@ -7227,12 +7227,12 @@ there 2/ primitive t!
 \ not the book!
 \
 :r eforth 0108 lit ;r ( --, version )
+
 :s info cr ( --, print system info )
-  ." Project: eForth v1.8"  here . check lit @ . cr
-  ." Author:  Richard James Howe" cr
-  ." Email:   howe.r.j.89@gmail.com" cr
-  ." Repo:    https://github.com/howerj/subleq" cr
-  ." License: The Unlicense / Public Domain" cr ;s
+  ." eForth v1.8"  here . cr
+  ." Richard James Howe (howe.r.j.89@gmail.com)" cr
+  ." https://github.com/howerj/subleq" cr
+  ." Public Domain" cr ;s
 
 \ ## Task Initialization
 \

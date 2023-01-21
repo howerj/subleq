@@ -4,18 +4,10 @@
 #define EMAIL   "howe.r.j.89@gmail.com"
 #define LICENSE "Public Domain / Unlicense for code only"
 #define VERSION "1.0"
-/* TODO: SUBNEG and other variants, changeable memory size,
- * primitive assemble
- *
- * This version could replace "nbit.c"... 
- *
- * TODO: There are some useful string processing and command
- * line stuff in here, it should be packaged into a different
- * library perhaps?
- *
- * TODO: Add simple subleq vm to help message
- *
- * TODO:
+/* TODO:
+ * - Changeable memory size
+ * - SUBNEQ and other variants
+ * - This version could replace "nbit.c", ...
  * - I/O better escape handling, terminal options via CLI, retry
  *   option, retry if not Escape
  * - Integrate assembler
@@ -142,10 +134,14 @@ typedef struct {
 	char *place; /* internal use: scanner position */
 	int  init;   /* internal use: initialized or not */
 	FILE *error; /* turn error report on if not NULL */
-} subleq_getopt_t;   /* getopt clone; with a few modifications */
+} sys_getopt_t;   /* getopt clone; with a few modifications */
 
-/* Adapted from: <https://stackoverflow.com/questions/10404448> */
-static int subleq_getopt(subleq_getopt_t *opt, const int argc, char *const argv[], const char *fmt) {
+/* Adapted from: <https://stackoverflow.com/questions/10404448>,
+ * NB. Parsing and checking for numeric input could be added
+ * to this easily, as could other more advance argument processing.
+ * This function could also be added to <https://github.com/howerj/pickle>,
+ * it would make a good addition to a TCL like language. */
+static int sys_getopt(sys_getopt_t *opt, const int argc, char *const argv[], const char *fmt) {
 	assert(opt);
 	assert(fmt);
 	assert(argv);
@@ -263,6 +259,9 @@ typedef struct {
 	optimizer_t o;
 	instruction_t im[SZ];
 	unsigned debug: 1, 
+		 debug_on_io: 1,
+		 debug_on_halt: 1,
+		 debug_on_jump: 1,
 		 exit_on_cycles :1, 
 		 non_blocking :1,
 		 exit_on_escape :1,
@@ -313,8 +312,14 @@ static uint64_t L(subleq_t *s, uint64_t a) {
 	return a % s->sz;
 }
 
-static int cmd_continue(subleq_t *s, int argc, char **argv) {
+static void asserts_for_cmd(subleq_t *s, int argc, char **argv) {
 	assert(s);
+	assert(argc >= 1);
+	assert(argv);
+}
+
+static int cmd_continue(subleq_t *s, int argc, char **argv) {
+	asserts_for_cmd(s, argc, argv);
 	if (argc > 1)
 		s->pc = atol(argv[1]);
 	s->debug = 0;
@@ -322,12 +327,7 @@ static int cmd_continue(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_dump(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	assert(argc > 0);
-	if (argc != 3) {
-		printer(s, "Usage: %s location range\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	const uint64_t addr = atol(argv[1]), len = atol(argv[2]);
 	const size_t width = 4;
 	size_t bytes = 8;
@@ -360,11 +360,7 @@ static int cmd_dump(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_breakp(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	if (argc < 2) {
-		printer(s, "Usage: %s locations\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	for (int i = 1; i < argc; i++) {
 		const uint64_t addr = atol(argv[i]);
 		s->meta[L(s, addr)] |= META_BPS;
@@ -373,9 +369,7 @@ static int cmd_breakp(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_breakp_clear(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	UNUSED(argc);
-	UNUSED(argv);
+	asserts_for_cmd(s, argc, argv);
 	for (size_t i = 0; i < s->sz; i++) {
 		s->meta[i] &= ~META_BPS;
 	}
@@ -383,9 +377,7 @@ static int cmd_breakp_clear(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_breakp_list(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	UNUSED(argc);
-	UNUSED(argv);
+	asserts_for_cmd(s, argc, argv);
 	printer(s, "pc=%lx cycles=%ld bps: ", (long)s->pc, (long)s->count);
 	for (size_t i = 0; i < s->sz; i++)
 		if (s->meta[i] & META_BPS)
@@ -396,21 +388,14 @@ static int cmd_breakp_list(subleq_t *s, int argc, char **argv) {
 
 
 static int cmd_store(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	if (argc != 3) {
-		printer(s, "Usage: %s location value\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	const uint64_t loc = atol(argv[1]), val = atol(argv[2]);
 	s->m[L(s, loc)] = val & msk(s->N);
 	return 0;
 }
 
 static int cmd_read(subleq_t *s, int argc, char **argv) {
-	if (argc != 2) {
-		printer(s, "Usage: %s location\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	const uint64_t loc = atol(argv[1]);
 	printer(s, "%ld\n", (long)s->m[L(s, loc)]);
 	return 0;
@@ -445,10 +430,7 @@ static int subleq_load(subleq_t *s, uint64_t start, const char *file) {
 }
 
 static int cmd_save(subleq_t *s, int argc, char **argv) {
-	if (argc < 2) {
-		printer(s, "Usage: %s location\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	/* NB. Could offer to save to different formats */
 	const long start  = argc > 2 ? atol(argv[2]) : 0;
 	const long length = argc > 3 ? atol(argv[3]) : (long)s->max;
@@ -460,11 +442,7 @@ static int cmd_save(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_prompt(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	if (argc != 2) {
-		printer(s, "Usage: %s new-prompt\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	const size_t len = strlen(argv[1]) + 1;
 	assert(sizeof (s->prompt) >= len);
 	memcpy(s->prompt, argv[1], len);
@@ -472,11 +450,7 @@ static int cmd_prompt(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_fill(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	if (argc < 3) {
-		printer(s, "Usage: %s addr length string?\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	const size_t start = atol(argv[1]);
 	const size_t length = atol(argv[2]);
 	if (argc < 4) {
@@ -494,19 +468,13 @@ static int cmd_fill(subleq_t *s, int argc, char **argv) {
 
 
 static int cmd_quit(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	UNUSED(argc);
-	UNUSED(argv);
+	asserts_for_cmd(s, argc, argv);
 	exit(0);
 	return 0;
 }
 
 static int cmd_move(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	if (argc < 4) {
-		printer(s, "Usage: %s location length location\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	const size_t start = atol(argv[1]);
 	const size_t length = atol(argv[2]);
 	const size_t dest = atol(argv[3]);
@@ -516,11 +484,7 @@ static int cmd_move(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_compare(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	if (argc < 4) {
-		printer(s, "Usage: %s location length location\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	const size_t start = atol(argv[1]);
 	const size_t length = atol(argv[2]);
 	const size_t dest = atol(argv[3]);
@@ -537,11 +501,7 @@ static int cmd_compare(subleq_t *s, int argc, char **argv) {
 
 
 static int cmd_load(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	if (argc < 3) {
-		printer(s, "Usage: %s address file", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	s->load = 0;
 	const long addr = atol(argv[1]);
 	if (subleq_load(s, addr, argv[2]) < 0) {
@@ -552,9 +512,7 @@ static int cmd_load(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_register(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	UNUSED(argc);
-	UNUSED(argv);
+	asserts_for_cmd(s, argc, argv);
 	const long pc = s->pc;
 	const long a = s->m[L(s, pc + 0)];
 	const long b = s->m[L(s, pc + 1)];
@@ -564,11 +522,7 @@ static int cmd_register(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_search(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	if (argc < 4) {
-		printer(s, "Usage: %s location length values...\n", argv[0]);
-		return 1;
-	}
+	asserts_for_cmd(s, argc, argv);
 	const size_t start = atol(argv[1]);
 	const size_t length = atol(argv[2]);
 
@@ -586,9 +540,7 @@ static int cmd_search(subleq_t *s, int argc, char **argv) {
 }
 
 static int cmd_assemble(subleq_t *s, int argc, char **argv) {
-	assert(s);
-	UNUSED(argc);
-	UNUSED(argv);
+	asserts_for_cmd(s, argc, argv);
 	return 0;
 }
 
@@ -883,10 +835,7 @@ static int report(subleq_t *s) {
 
 static int cmd_disassemble(subleq_t *s, int argc, char **argv) {
 	assert(s);
-	if (argc < 3) {
-		printer(s, "Usage: %s location count\n", argv[0]);
-		return 1;
-	}
+	UNUSED(argc);
 
 	/* We could add more options here, to better control
 	 * disassembly, one useful one would be to round down
@@ -923,22 +872,39 @@ static int cmd_disassemble(subleq_t *s, int argc, char **argv) {
 	return 0;
 }
 
+static int cmd_tron(subleq_t *s, int argc, char **argv) {
+	s->debug = 0;
+	s->tron = 1;
+	s->count = 0;
+	s->cycles = argc > 1 ? atol(argv[1]) : 0;
+	return 0;
+}
+
+
+static int cmd_trace(subleq_t *s, int argc, char **argv) {
+	s->debug_on_io = 0;
+	s->debug_on_halt = 0;
+	s->debug_on_jump = 0;
+	return cmd_tron(s, argc, argv);
+}
+
+static int cmd_proceed(subleq_t *s, int argc, char **argv) {
+	s->debug_on_io = 1;
+	s->debug_on_halt = 1;
+	s->debug_on_jump = 1;
+	return cmd_tron(s, argc, argv);
+}
+
 static int cmd_input(subleq_t *s, int argc, char **argv) {
 	assert(s);
-	if (argc < 2) {
-		printer(s, "Usage: %s location\n", argv[0]);
-		return 1;
-	}
+	UNUSED(argc);
 	s->m[L(s, atol(argv[1]))] = fgetc(s->in);
 	return 0;
 }
 
 static int cmd_output(subleq_t *s, int argc, char **argv) {
 	assert(s);
-	if (argc < 2) {
-		printer(s, "Usage: %s location\n", argv[0]);
-		return 1;
-	}
+	UNUSED(argc);
 	if (fputc(s->m[L(s, atol(argv[1]))], s->out) < 0)
 		return 1;
 	return 0;
@@ -958,12 +924,20 @@ This program contains an entire tool-chain and virtual\n\
 machine for a SUBLEQ One Instruction Set Computer, the\n\
 utility is similar to the MS-DOS DEBUG.COM / DEBUG.EXE\n\
 program, featuring similar commands.\n\n\
-Program returns non-zero on failure, zero on success.\n\
+Program returns non-zero on failure, zero on success.\n\n\
+This debugging program is much more complex than the simple\n\
+SUBLEQ architecture, as an example of the simplicity of SUBLEQ\n\
+the following program will run SUBLEQ programs:\n\n\
+\t#include <stdio.h>\n\
+\tint main(int x,char**v){FILE*f=fopen(v[1],\"r\");short p=0,m[1<<16],*i=m;\n\
+\twhile(fscanf(f,\"%hd\",i++)>0);for(;p>=0;){int a=m[p++],b=m[p++],c=m[p++];\n\
+\ta<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])<=0?p=c:0;}}\n\
 \n\n\
 Options:\n\n\
 \t-h\n\t\tDisplay this help message and exit.\n\
 \t-k\n\t\tTurn non-blocking terminal input on.\n\
 \t-t\n\t\tTurn tracing on.\n\
+\t-r\n\t\tPrint report after execution.\n\
 \t-z\n\t\tRecompile SUBLEQ code for speed, might break program\n\
 \t-d\n\t\tRun debugger first before execution.\n\
 \t-c num\n\t\tRun for 'num' cycles before halting into debugger.\n\
@@ -977,6 +951,7 @@ Options:\n\n\
 		return -1;
 	return 0;
 }
+
 
 static int debug_help(subleq_t *s);
 
@@ -996,34 +971,36 @@ static int cmd_help(subleq_t *s, int argc, char **argv) {
  * a string. This first argument, the command name, would always be
  * a string. */
 typedef struct {
-	const char *name, *alt, *help;
+	const char *name, *alt, *help, *fmt;
 	int (*fn)(subleq_t *s, int argc, char **argv);
 } subleq_debug_command_t;
 
-static subleq_debug_command_t cmds[] = { 
-	{ .name = "continue",               .fn = cmd_continue,    .help = "Continue execution", },
-	{ .name = "go",         .alt = "g", .fn = cmd_continue,    .help = "Continue execution, optionally starting from address", },
-	//{ .name = "hex",      .alt = "h", .fn = cmd_hex,         .help = "", },
-	{ .name = "dump",       .alt = "d", .fn = cmd_dump,        .help = "Hex-dump an area of memory", },
-	{ .name = "break",      .alt = "b", .fn = cmd_breakp,      .help = "Add a break-point", },
-	{ .name = "clear",                  .fn = cmd_breakp_clear, .help = "Clear all break-points", },
-	{ .name = "list",       .alt = "?", .fn = cmd_breakp_list, .help = "List all break-points", },
-	{ .name = "enter",      .alt = "e", .fn = cmd_store,       .help = "Store a value at an address", },
-	{ .name = "read",       .alt = "@", .fn = cmd_read,        .help = "Read a value from an address", },
-	{ .name = "write",      .alt = "w", .fn = cmd_save,        .help = "Write section of memory to disk", },
-	{ .name = "load",       .alt = "l", .fn = cmd_load,        .help = "Load from disk to memory", },
-	{ .name = "help",       .alt = "h", .fn = cmd_help,        .help = "Print this help", },
-	{ .name = "prompt",                 .fn = cmd_prompt,      .help = "Change the command prompt", },
-	{ .name = "fill",       .alt = "f", .fn = cmd_fill,        .help = "Fill section of memory with value", },
-	{ .name = "quit",       .alt = "q", .fn = cmd_quit,        .help = "Quit", },
-	{ .name = "move",       .alt = "m", .fn = cmd_move,        .help = "Move one section of memory to another", },
-	{ .name = "compare",    .alt = "c", .fn = cmd_compare,     .help = "Compare two sections of memory", },
-	{ .name = "register",   .alt = "r", .fn = cmd_register,    .help = "Display registers", },
-	{ .name = "search",     .alt = "s", .fn = cmd_search,      .help = "Search through memory for a pattern", },
-	{ .name = "assemble",   .alt = "a", .fn = cmd_assemble,    .help = "Assemble SUBLEQ program at location", },
-	{ .name = "input",      .alt = "i", .fn = cmd_input,       .help = "Get a byte of input and place it at address", },
-	{ .name = "output",     .alt = "o", .fn = cmd_output,      .help = "Get a byte from an address and output it", },
-	{ .name = "unassemble", .alt = "u", .fn = cmd_disassemble, .help = "Disassemble/Unassemble a section of memory", },
+static subleq_debug_command_t cmds[] = {
+	{ .name = "continue",               .fn = cmd_continue,     .fmt = "s",    .help = "Continue execution", },
+	{ .name = "go",         .alt = "g", .fn = cmd_continue,     .fmt = "sn|s", .help = "Continue execution, optionally starting from address", },
+	//{ .name = "hex",      .alt = "h", .fn = cmd_hex,          .fmt = "",     .help = "", },
+	{ .name = "dump",       .alt = "d", .fn = cmd_dump,         .fmt = "snn",  .help = "Hex-dump an area of memory", },
+	{ .name = "break",      .alt = "b", .fn = cmd_breakp,       .fmt = "s+",   .help = "Add a break-point", },
+	{ .name = "clear",                  .fn = cmd_breakp_clear, .fmt = "s",    .help = "Clear all break-points", },
+	{ .name = "list",       .alt = "?", .fn = cmd_breakp_list,  .fmt = "s",    .help = "List all break-points", },
+	{ .name = "enter",      .alt = "e", .fn = cmd_store,        .fmt = "snn",  .help = "Store a value at an address", },
+	{ .name = "read",       .alt = "@", .fn = cmd_read,         .fmt = "sn",   .help = "Read a value from an address", },
+	{ .name = "write",      .alt = "w", .fn = cmd_save,         .fmt = "ssn|ssnn", .help = "Write section of memory to disk", },
+	{ .name = "load",       .alt = "l", .fn = cmd_load,         .fmt = "sns",  .help = "Load from disk to memory", },
+	{ .name = "help",       .alt = "h", .fn = cmd_help,         .fmt = "s",    .help = "Print this help", },
+	{ .name = "prompt",                 .fn = cmd_prompt,       .fmt = "ss",   .help = "Change the command prompt", },
+	{ .name = "fill",       .alt = "f", .fn = cmd_fill,         .fmt = "snns", .help = "Fill section of memory with value", },
+	{ .name = "quit",       .alt = "q", .fn = cmd_quit,         .fmt = "s",    .help = "Quit", },
+	{ .name = "move",       .alt = "m", .fn = cmd_move,         .fmt = "snnn", .help = "Move one section of memory to another", },
+	{ .name = "compare",    .alt = "c", .fn = cmd_compare,      .fmt = "snnn", .help = "Compare two sections of memory", },
+	{ .name = "register",   .alt = "r", .fn = cmd_register,     .fmt = "s",    .help = "Display registers", },
+	{ .name = "search",     .alt = "s", .fn = cmd_search,       .fmt = "snn+", .help = "Search through memory for a pattern", },
+	{ .name = "assemble",   .alt = "a", .fn = cmd_assemble,     .fmt = "sn",   .help = "Assemble SUBLEQ program at location", },
+	{ .name = "input",      .alt = "i", .fn = cmd_input,        .fmt = "sn",   .help = "Get a byte of input and place it at address", },
+	{ .name = "output",     .alt = "o", .fn = cmd_output,       .fmt = "sn",   .help = "Get a byte from an address and output it", },
+	{ .name = "unassemble", .alt = "u", .fn = cmd_disassemble,  .fmt = "snn",  .help = "Disassemble/Unassemble a section of memory", },
+	{ .name = "trace",      .alt = "t", .fn = cmd_trace,        .fmt = "s|sn", .help = "Turn tracing on, or turn it on for X instructions", },
+	{ .name = "proceed",    .alt = "p", .fn = cmd_proceed,      .fmt = "s|sn", .help = "Turn tracing on, or turn it on for X instructions", },
 	{ .fn = NULL }, 
 };
 
@@ -1047,19 +1024,13 @@ static int debug_help(subleq_t *s) {
   - *move        M  range       address
   - name        N  [pathname]  [arglist]
   - *output      O  port        byte
-  - proceed     P  [=address]  [number]
+  - *proceed     P  [=address]  [number]
   - *quit        Q
   - *register    R  [register]
-  - search      S  range       list
-  - trace       T  [=address]  [number]
+  - *search      S  range       list
+  - *trace       T  [=address]  [number]
   - *unassemble  U  [range]
   - *write       W  [address]   [drive]      [firstsector]  [number] */
-	/*const char *help = "";
-
-	if (fprintf(out, "%s", help) < 0)
-		return -1;*/
-
-
 	printer(s, "      name alt -- description\n");
 	subleq_debug_command_t *d = NULL;
 	for (int i = 0; (d = &cmds[i])->fn; i++) {
@@ -1090,39 +1061,58 @@ static int number(const char *num, int is_unsigned, int base) {
 	return 0;
 }
 
-/* TODO: Simple validation of command line arguments.
- * TODO: Printing out help derived from these arguments.
- * TODO: More complex arguments (modifiers, string lengths, isalpha,
- * isalphanum, floats with scanf, range check numbers, ...
- * TODO: Add similar command to https://github.com/howerj/pickle? */
+/* NB. We could extend these routines to deal with format specifiers
+ * and more options (such as floating point values, ranges of values,
+ * etcetera). This would add more complexity. It might also be
+ * worth adding something like this to the 
+ * <https://github.com/howerj/pickle> project, a TCL like programming
+ * language interpreter which could use something like this in validating
+ * functions, along with the function for explaining those format specifier
+ * strings. It might also be possible to make a simpler TCL like language
+ * from the functions in here, there is a lot of short command line
+ * processing functions. 
+ *
+ * This function could probably be simplified, as well as extended. 
+ *
+ * Possible improvements:
+ *
+ * - Argument annotations (instead of "decimal" expected, we could print
+ *   "address" expected in the error reporting).
+ * - Range checking (bytes, shorts, specific ranges, ...)
+ * - More format types (floats, enums, ...) */
 static int args_validate(const char *fmt, int argc, char **argv) {
 	assert(fmt);
+	int i = -1;
 	enum { BAD_ARGC = -'A', BAD_ARGV = -'V', BAD_NUM = -'#', BAD_FMT = -'F', };
 	if (argc < 1 || !argv)
 		return BAD_ARGV;
-	int i = 0;
 retry:
-	if (i != 0) {
+	if (i != -1) {
 		char *n = strchr(fmt, '|');
 		if (!n)
-			return -1;
-		fmt = n;
+			return BAD_ARGC;
+		fmt = n + 1;
 	}
-	i = 1;
+alternative:
+	i = 0;
 	for (int ch = 0; (ch = *fmt++); i++) {
-		if (i >= argc) return BAD_ARGC; 
+		if (ch == '|') { if (i == argc) return 0; goto alternative; }
+		if (ch == '*') { if (*fmt != '\0' && *fmt != '|') return BAD_FMT; return 0; }
+		if (i >= argc) goto retry;
 		switch (ch) {
 		case 's': break;
 		case 'c': if (strlen(argv[i]) != 1) goto retry; break;
 		case 'u': if (number(argv[i], 1, 0) != 0) goto retry; break;
 		case 'n': if (number(argv[i], 0, 0) != 0) goto retry; break;
-		case '|': goto retry; break;
+		/* TODO: Check remaining arguments are same format as previous, also add '*' */
+		case '+': if (*fmt != '\0' && *fmt != '|') return BAD_FMT; return 0;
 		default: return BAD_FMT;
 		}
 	}
+	if (i != argc)
+		return BAD_ARGC;
 	return 0;
 }
-
 
 static int args_explain(FILE *out, const char *fmt, int argc, char **argv) {
 	assert(out);
@@ -1140,10 +1130,15 @@ static int args_explain(FILE *out, const char *fmt, int argc, char **argv) {
 		case 'c': print = "character"; break;
 		case 'u': print = "unsigned"; break;
 		case 'n': print = "decimal"; break;
-		case '|': print = " *OR*"; break;
+		case '|': print = " *OR*"; if (*fmt++ != 's') return -1; break;
+		case '+': print = "arg..."; break;
+		case '*': print = "[arg]..."; break;
 		}
 		if (fprintf(out, "%s ", print) < 0)
 			return -1;
+		if (ch == '|')
+			if (fprintf(out, "%s ", argv[0]) < 0)
+				return -1;
 	}
 	if (fputc('\n', out) < 0)
 		return -1;
@@ -1156,6 +1151,8 @@ static int command(subleq_t *s) {
 	char buffer[MAX_LINE] = { 0, };
 	char *argv[(MAX_LINE / 2) - 1] = { NULL, };
 	int argc = 0;
+	s->debug_on_jump = 0;
+	s->debug_on_io = 0;
 	if (s->prompt[0] == 0) {
 		static const char *prompt = "sq> ";
 		const size_t len = strlen(prompt) + 1;
@@ -1187,11 +1184,21 @@ again:
 	if (argc == 0)
 		goto again;
 
-	/* NB. subleq_getopt could be reused for the command processing... */
+	/* NB. sys_getopt could be reused for the command processing... */
 
-	for (int i = 0; cmds[i].fn; i++) {
-		if (!strcmp(argv[0], cmds[i].name) || (cmds[i].alt && !strcmp(argv[0], cmds[i].alt))) {
-			if (cmds[i].fn(s, argc, argv) < 0) {
+	subleq_debug_command_t *d = NULL;
+	for (int i = 0; (d = &cmds[i])->fn; i++) {
+		if (!strcmp(argv[0], d->name) || (d->alt && !strcmp(argv[0], d->alt))) {
+			if (d->fmt && d->fmt[0]) {
+				if (args_validate(d->fmt, argc, argv) < 0) {
+					if (args_explain(s->out, d->fmt, argc, argv) < 0) {
+						s->error = -1;
+						return -1;
+					}
+					goto again;
+				}
+			}
+			if (d->fn(s, argc, argv) < 0) {
 				s->error = -1;
 				return -1;
 			}
@@ -1206,7 +1213,7 @@ again:
 	return 0;
 }
 
-static int subleq_break(subleq_t *s) {
+static int subleq_break(subleq_t *s, int instruction) {
 	assert(s);
 	if (s->meta[L(s, s->pc + 0)] & META_BPS)
 		return 1;
@@ -1216,6 +1223,14 @@ static int subleq_break(subleq_t *s) {
 		return 1;
 	if (s->debug)
 		return 1;
+	if (s->debug_on_io) {
+		if (instruction == PUT || instruction == GET)
+			return 1;
+		if (instruction == SUBLEQ) {
+			/*if (a == -1 || b == -1) {
+			}*/
+		}
+	}
 	return 0;
 }
 
@@ -1236,12 +1251,22 @@ static int subleq(subleq_t *s, terminal_t *t) {
 	s->o.start = clock();
 	uint64_t *m = s->m;
 	instruction_t *im = s->im;
-	for (; s->pc < SZ && (s->pc != msk(s->N)) && !(s->error); s->count++) {
+	for (; !(s->error) ; s->count++) {
+
+		if (s->pc >= SZ || (s->pc == msk(s->N))) {
+			if (s->debug_on_halt) {
+				if (command(s) < 0)
+					return 0;
+				s->pc = L(s, s->pc);
+			} else {
+				break;
+			}
+		}
+
 		const int instruction = s->optimize ? im[s->pc].instruction : SUBLEQ;
 		const int inc = instruction_increment[instruction];
 		const uint64_t src = im[s->pc].s, d = im[s->pc].d;
 
-		tracer(s, "pc:%04lx: ", (long)s->pc);
 		if (s->cycles) {
 			if (s->count >= s->cycles) {
 				if (s->exit_on_cycles)
@@ -1249,23 +1274,23 @@ static int subleq(subleq_t *s, terminal_t *t) {
 				if (command(s) < 0)
 					return 0;
 			}
-		} else if (subleq_break(s)) {
+		} else if (subleq_break(s, instruction)) {
 			if (command(s) < 0)
 				return 0;
 		}
 
 		s->o.cnt[instruction/*% MAX*/]++;
 
-		if (instruction != SUBLEQ) {
-			tracer(s, "i=%s src=%04lx dst=%04lx ", instruction_names[instruction], (long)src, (long)d);
-		}
+		tracer(s, "pc:%04lx: ", (long)s->pc);
 
+		if (instruction != SUBLEQ)
+			tracer(s, "i=%s src=%04lx dst=%04lx ", instruction_names[instruction], (long)src, (long)d);
 
 		switch (instruction) {
 		case SUBLEQ: { /* OG Instruction */
-			uint64_t a = s->m[L(s, s->pc++)];
-			uint64_t b = s->m[L(s, s->pc++)];
-			uint64_t c = s->m[L(s, s->pc++)];
+			const uint64_t a = s->m[L(s, s->pc++)];
+			const uint64_t b = s->m[L(s, s->pc++)];
+			const uint64_t c = s->m[L(s, s->pc++)];
 			const size_t la = L(s, a), lb = L(s, b);
 
 			tracer(s, "a=%04lx b=%04lx c=%04lx ", (long)a, (long)b, (long)c);
@@ -1288,6 +1313,8 @@ static int subleq(subleq_t *s, terminal_t *t) {
 				tracer(s, "[a]=%04lx [b]=%04lx r=%04lx ", (long)s->m[la], (long)s->m[lb], (long)r);
 				if (r & HI(s->N) || r == 0) {
 					tracer(s, "%c ", s->pc == c ? '=' : '!');
+					if (s->pc != c)
+						s->debug = s->debug_on_jump;
 					s->pc = c;
 				}
 				s->max = MAX(lb, s->max);
@@ -1300,14 +1327,14 @@ static int subleq(subleq_t *s, terminal_t *t) {
 			* a write occurs within the bounds of an
 			* instruction macro, this would slow things down
 			* however. */
-		case JMP: s->pc = d; m[src] = 0; break;
+		case JMP: s->pc = d; m[src] = 0; s->debug = s->debug_on_jump; break;
 		case MOV: m[d]	= m[src]; s->pc += inc; break;
 		case ADD: m[d] += m[src]; s->pc += inc; break;
 		case DOUBLE: m[d] <<= 1; s->pc += inc; break;
 		case LSHIFT: m[d] <<= src; s->pc += inc * src; break;
 		case SUB: m[d] -= m[src]; s->pc += inc; break;
 		case ZERO: m[d] = 0; s->pc += inc; break;
-		case IJMP: s->pc = m[d];	break;
+		case IJMP: s->pc = m[d]; s->debug = s->debug_on_jump; break;
 		case ILOAD: m[d] = m[L(s, m[src])]; s->pc += inc;
 			break;
 		case ISTORE: m[L(s, m[d])] = m[src]; s->pc += inc;
@@ -1318,7 +1345,7 @@ static int subleq(subleq_t *s, terminal_t *t) {
 			s->pc += inc;
 			break;
 		case GET: m[im[s->pc].d] = subleq_getch(s, t) & msk(s->N); s->pc += inc; break;
-		case HALT: s->pc += inc; goto done;
+		case HALT: s->pc |= msk(s->N); break;
 		case INC: m[d]++; s->pc += inc; break;
 		case DEC: m[d]--; s->pc += inc; break;
 		case INV: m[d] = ~m[d]; s->pc += inc; break;
@@ -1327,7 +1354,6 @@ static int subleq(subleq_t *s, terminal_t *t) {
 		}
 		tracer(s, "\n");
 	}
-done:
 	s->o.end = clock();
 	if (s->stats)
 		if (report(s) < 0)
@@ -1399,8 +1425,7 @@ static int subleq_examples(subleq_t *s, const char *name) {
 }
 
 int main(int argc, char **argv) {
-	subleq_getopt_t opt = { .init = 0, .error = stdout, };
-	int i = 1;
+	sys_getopt_t opt = { .init = 0, .error = stdout, };
 	char *save = NULL;
 	subleq_t s = { 
 		.N = 16, .sz = SZ,
@@ -1413,19 +1438,19 @@ int main(int argc, char **argv) {
 	terminal.out = stdout;
 	atexit(restore);
 
-	for (int ch = 0; (ch = subleq_getopt(&opt, argc, argv, "rzhtdkc:s:b:x:n:p:")) != -1; i++) {
+	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhtdkc:s:b:x:n:p:")) != -1;) {
 		switch (ch) {
 		case 'h': cli_help(stderr); return 0;
 		case 'k': s.non_blocking = 1; break;
 		case 't': s.tron++; break;
-		case 'd': s.debug = 1; break;
-		case 'c': s.cycles = atol(opt.arg); i++; break;
-		case 'b': s.meta[L(&s, atol(opt.arg))] |= META_BPS; i++; break;
-		case 's': save = opt.arg; i++; break;
-		case 'n': s.N = atoi(opt.arg); i++; break;
-		case 'x': if (subleq_examples(&s, opt.arg) < 0) return 1; i++; break;
+		case 'd': s.debug = 1; s.debug_on_halt = 1; break;
+		case 'c': s.cycles = atol(opt.arg); break;
+		case 'b': s.meta[L(&s, atol(opt.arg))] |= META_BPS; break;
+		case 's': save = opt.arg; break;
+		case 'n': s.N = atoi(opt.arg); break;
+		case 'x': if (subleq_examples(&s, opt.arg) < 0) return 1; break;
 		case 'z': s.optimize = 1; break;
-		case 'p': s.meta[L(&s, atol(opt.arg))] |= META_PRN; i++; break;
+		case 'p': s.meta[L(&s, atol(opt.arg))] |= META_PRN; break;
 		case 'r': s.stats = 1; break;
 		default: return 1;
 		}
@@ -1433,7 +1458,7 @@ int main(int argc, char **argv) {
 	if (s.N < 8 || s.N > 64)
 		return EN;
 
-	for (; i < argc; i++)
+	for (int i = opt.index; i < argc; i++)
 		if (subleq_load(&s, s.load, argv[i]) < 0)
 			return 1;
 	s.max = s.load;
