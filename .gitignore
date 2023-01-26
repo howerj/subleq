@@ -13,6 +13,7 @@
 debug
 eforth
 eforth.c
+eforth.fth
 nbit
 save
 subleq

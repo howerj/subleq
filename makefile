@@ -1,4 +1,5 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O3
+FORTH=subleq.fth
 
 .PHONY: all clean test run gforth width extra
 
@@ -7,14 +8,17 @@ all: subleq
 run: subleq subleq.dec
 	./subleq subleq.dec
 
-1.dec: subleq subleq.dec subleq.fth
-	./subleq subleq.dec < subleq.fth > $@
+1.dec: subleq subleq.dec ${FORTH}
+	./subleq subleq.dec < ${FORTH} > $@
 
-2.dec: subleq 1.dec subleq.fth
-	./subleq 1.dec < subleq.fth > $@
+2.dec: subleq 1.dec ${FORTH}
+	./subleq 1.dec < ${FORTH} > $@
 
 test: 1.dec 2.dec nbit
 	diff -w 1.dec 2.dec
+
+eforth.fth: subleq.fth
+	sed -e 's/^\\.*//' -e '/^$$/d' < $< > $@
 
 width: gforth.dec nbit 
 	./nbit  8 $<
@@ -92,7 +96,13 @@ eforth.c: 1.dec
 %.cma: %.dec
 	sed 's/$$/,/' $^ | fmt -w 80 | sed 's/ //g' >> $@
 
-debug.o: debug.c subleq.cma
+self.dec:
+	make -C self self.dec
+	cp self/self.dec .
+	sed -i 's/ /\n/g' $@
+	sed -i '/^$$/d' $@
+
+debug.o: debug.c subleq.cma self.cma
 	${CC} -std=gnu99 -Wall -Wextra $< -c -o $@
 
 debug: debug.o

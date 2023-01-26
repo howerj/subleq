@@ -61,7 +61,6 @@ static int cmd(asm_t *a) {
 			i = 0;
 			// TODO: Output instruction
 		} else if (ch == ':') {
-
 		} else if (ch == '.') {
 		} else if (ch == '#') {
 			while ((ch = fgetc(a->in)))

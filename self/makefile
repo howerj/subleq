@@ -22,6 +22,8 @@ sqasm: sqasm.cpp
 asm-run: asm self.asq
 	./asm < self.asq > self.dec
 
+all-run: ../subleq all.dec
+	../subleq all.dec ../subleq.dec
 
 clean:
 	rm sqasm

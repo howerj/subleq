@@ -1024,6 +1024,9 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ when making the words that create functions in the target
 \ image such as ":" and "create".
 \
+\ There is a minor bug in that only meta-compiled words in the
+\ main dictionary can have these attributes applied to them.
+\
 
 :m compile-only tlast @ tnfa t@ 20 or tlast @ tnfa t! ;m 
 :m immediate    tlast @ tnfa t@ 40 or tlast @ tnfa t! ;m 
@@ -1087,7 +1090,6 @@ defined eforth [if]
    while swap dup t@ r> + FFFF and >r =cell + swap =cell -
    repeat drop r> ;m ( a u -- u : compute a checksum )
 :m mkck dup there swap - tcksum ;m ( -- u : checksum of image )
-
 
 \ "postpone" is used much like the normal Forth version of
 \ "postpone", but within the context of the cross-compilation
@@ -1615,7 +1617,7 @@ label: entry       \ used to set entry point in next cell
   1 tvar one       \ must contain  1
   2 tvar two       \ must contain  2
  10 tvar bwidth    \ must contain 16
-  0 tvar w         \ working pointer 1 (register r0)
+  0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
   0 tvar r3        \ register 3
@@ -1635,7 +1637,7 @@ label: entry       \ used to set entry point in next cell
 \ brackets, so for example the word "cold", defined later on,
 \ is defined as:
 \
-\        : cold {cold} lit @ execute ;
+\        : cold {cold} lit @execute ;
 \
 \ It just refers to "{cold}", what "cold" does will be
 \ described later at a more appropriate juncture.
@@ -2002,12 +2004,12 @@ err-str 2/ tvar err-str-addr
 assembler.1 +order
 label: die
    err-str-addr r1 MOV
-   w ZERO
-   err-str w MOV
+   r0 ZERO
+   err-str r0 MOV
    begin
-     w
+     r0
    while
-     w DEC
+     r0 DEC
      r1 INC
      r4 r1 iLOAD
      r4 PUT
@@ -2042,11 +2044,11 @@ label: start         \ System Entry Point
 \ 
 
   r1 ONE!
-  w ONE!
+  r0 ONE!
 label: chk16
-  w w ADD                          \ w = w * 2
+  r0 r0 ADD                        \ r0 = r0 * 2
   r1 INC                           \ r1++
-  w +if chk16 JMP then             \ check if still positive
+  r0 +if chk16 JMP then            \ check if still positive
   bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be zero
 
 \ Back to setting up registers
@@ -2063,15 +2065,15 @@ label: chk16
 \
 
 label: vm ( Forth Inner Interpreter )
-  ip w MOV           \ Move Instruction Pointer To Working Ptr.
+  ip r0 MOV          \ Move Instruction Pointer To Working Ptr.
   ip INC             \ IP now points to next instruction!
-  r1 w iLOAD         \ Get actual instruction to execute
-  r1 w MOV           \ Copy it, as SUB is destructive
+  r1 r0 iLOAD        \ Get actual instruction to execute
+  r1 r0 MOV          \ Copy it, as SUB is destructive
   primitive r1 SUB   \ Check if it is a primitive
-  r1 -if w iJMP then  \ Jump straight to VM functions if it is
+  r1 -if r0 iJMP then \ Jump straight to VM functions if it is
   ++rp               \ If it wasn't a VM instruction, inc {rp}
   ip {rp} iSTORE     \ and store ip to return stack
-  w ip MOV vm a-optim \ "w" becomes our next instruction
+  r0 ip MOV vm a-optim \ "w" becomes our next instruction
   vm JMP             \ Ad infinitum...
 
 assembler.1 -order
@@ -2260,7 +2262,7 @@ assembler.1 -order
 \ understand how they work. The stack effect comments describe
 \ them in their entirety.
 \
-:a opSwap tos w MOV tos {sp} iLOAD w {sp} iSTORE ;a
+:a opSwap tos r0 MOV tos {sp} iLOAD r0 {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
 :a opToR ++rp tos {rp} iSTORE (fall-through);
@@ -2284,7 +2286,7 @@ assembler.1 -order
 \ available as memory locations.
 \
 :a [@] tos tos iLOAD ;a
-:a [!] w {sp} iLOAD w tos iSTORE --sp t' opDrop JMP (a);
+:a [!] r0 {sp} iLOAD r0 tos iSTORE --sp t' opDrop JMP (a);
 
 \ "opEmit" and "opKey" perform the I/O functions, of which
 \ there are only two, there are Forth functions which wrap
@@ -2324,8 +2326,8 @@ assembler.1 -order
 \ Subtraction and addition need no real explanation, just note
 \ that they are relatively fast to execute in this machine.
 \
-:a - w {sp} iLOAD tos w SUB w tos MOV --sp ;a ( n n -- n )
-:a + w {sp} iLOAD w tos ADD --sp ;a ( n n -- n )
+:a - r0 {sp} iLOAD tos r0 SUB r0 tos MOV --sp ;a ( n n -- n )
+:a + r0 {sp} iLOAD r0 tos ADD --sp ;a ( n n -- n )
 
 \ "opExit", which is used to make "exit", deserves some
 \ explanation, it implements a "return", as part of the
@@ -2465,12 +2467,12 @@ assembler.1 -order
 \ be defined next.
 \
 
-:a opJumpZ ( u -- )
+:a opJumpZ ( u -- : Conditional jump on zero )
   r2 ZERO
   tos if r2 NG1! then tos DEC tos +if r2 NG1! then
   tos {sp} iLOAD --sp
   r2 if ip INC vm JMP then (fall-through); 
-:a opJump ip ip iLOAD ;a ( -- )
+:a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
 
 \ "opNext" is the only other control structure instruction
 \ that is needed, apart from "opJump" and "opJumpZ". It should
@@ -2511,8 +2513,8 @@ assembler.1 -order
 \ "opJump" is reused by "opNext" to save space.
 \
 
-:a opNext w {rp} iLOAD ( R: n -- | n-1 )
-   w if w DEC w {rp} iSTORE t' opJump JMP then
+:a opNext r0 {rp} iLOAD ( R: n -- | n-1 )
+   r0 if r0 DEC r0 {rp} iSTORE t' opJump JMP then
    ip INC --rp ;a
 
 \ The comparison operators are tricky to get right,
@@ -2538,12 +2540,12 @@ assembler.1 -order
 \
 
 :a op0=
-   tos w MOV tos NG1!
-   w if tos ZERO then w DEC w +if tos ZERO then ;a
+   tos r0 MOV tos NG1!
+   r0 if tos ZERO then r0 DEC r0 +if tos ZERO then ;a
 :a op0> tos +if tos NG1! vm JMP then tos ZERO ;a
 :a op0<
-   tos w MOV tos ZERO
-   w -if tos NG1! then w INC w -if tos NG1! then ;a
+   tos r0 MOV tos ZERO
+   r0 -if tos NG1! then r0 INC r0 -if tos NG1! then ;a
 
 \ "rshift" is implemented as a virtual machine instruction,
 \ but "lshift" is not as it can be implemented in Forth
@@ -2600,17 +2602,17 @@ assembler.1 -order
 \
 
 :a rshift
-  bwidth w MOV
-  tos w SUB
+  bwidth r0 MOV
+  tos r0 SUB
   tos {sp} iLOAD --sp
   r1 ZERO
-  begin w while
+  begin r0 while
     r1 r1 ADD
     tos r2 MOV r3 ZERO
     r2 -if r3 NG1! then r2 INC r2 -if r3 NG1! then
     r3 if r1 INC then
     tos tos ADD
-    w DEC
+    r0 DEC
   repeat
   r1 tos MOV ;a
 
@@ -2709,11 +2711,11 @@ assembler.1 -order
 \
 
 :a opMux
-  bwidth w MOV
+  bwidth r0 MOV
   r1 ZERO
   r3 {sp} iLOAD --sp
   r4 {sp} iLOAD --sp
-  begin w while
+  begin r0 while
     r1 r1 ADD
 
     tos r5 MOV r6 ZERO
@@ -2734,7 +2736,7 @@ assembler.1 -order
     tos tos ADD
     r3 r3 ADD
     r4 r4 ADD
-    w DEC
+    r0 DEC
   repeat
   r1 tos MOV ;a
 
@@ -2771,20 +2773,20 @@ assembler.1 -order
 \
 
 :a opDivMod
-  w {sp} iLOAD
+  r0 {sp} iLOAD
   r2 ZERO
   begin
     r1 ONE!
-    w -if r1 ZERO then
+    r0 -if r1 ZERO then
     r1 
   while
     r2 INC
-    tos w SUB
+    tos r0 SUB
   repeat
-  tos w ADD
+  tos r0 ADD
   r2 DEC
   r2 tos MOV
-  w {sp} iSTORE ;a
+  r0 {sp} iSTORE ;a
 
 \ ### PAUSE
 \
@@ -2859,21 +2861,21 @@ assembler.1 -order
 
 :a pause
   {single} if vm JMP then \ Do nothing if single-threaded mode
-  w {up} iLOAD \ load next task pointer from user storage
-  w if
+  r0 {up} iLOAD \ load next task pointer from user storage
+  r0 if
     {cycles} INC        \ increment "pause" count
     {up} r2 MOV  r2 INC \ load TASK pointer, skip next task loc
       ip r2 iSTORE r2 INC \ save registers to current task
      tos r2 iSTORE r2 INC
     {rp} r2 iSTORE r2 INC
     {sp} r2 iSTORE r2 INC
-       w {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
+       r0 {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
    {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
-       w {up} MOV w INC  \ set next task
-      ip w iLOAD w INC \ reverse of save registers
-     tos w iLOAD w INC
-    {rp} w iLOAD w INC
-    {sp} w iLOAD w INC \ we're all golden
+       r0 {up} MOV r0 INC  \ set next task
+      ip r0 iLOAD r0 INC \ reverse of save registers
+     tos r0 iLOAD r0 INC
+    {rp} r0 iLOAD r0 INC
+    {sp} r0 iLOAD r0 INC \ we're all golden
   then ;a
 
 \ The following assembly routine is one way adding support for
@@ -2889,9 +2891,9 @@ assembler.1 -order
 \ arithmetic operations such as division.
 \
 \        :a opAsm
-\          tos w MOV
+\          tos r0 MOV
 \          tos {sp} iLOAD --sp
-\          w iJMP (a);
+\          r0 iJMP (a);
 \
 \ The way the VM instruction works is to pull an address off
 \ of the stack and perform an indirect jump to it. We cannot
@@ -3213,6 +3215,7 @@ there 2/ primitive t!
 :s #0 0 lit ;s ( -- 0 : push the number zero onto the stack )
 :s #1 1 lit ;s ( -- 1 : push one onto the stack )
 :s #-1 -1 lit ;s ( -- -1 : push negative one onto the stack )
+:s #2 2 lit ;s ( -- 2 : push two onto the stack )
 
 \ The next section adds all the words that are implemented in
 \ a single virtual machine instruction.
@@ -3267,7 +3270,7 @@ there 2/ primitive t!
 \
 \        :so asm opAsm ;s
 \
-\ However, if that is defined, then an entire assembly wordset
+\ However, if that is defined, then an entire assembly word-set
 \ should be as well, along with easily accessible constants
 \ such as the value of "opExit", and the locations of registers
 \ should as "tos", "ip", and ways of accessing the stack 
@@ -3348,6 +3351,13 @@ there 2/ primitive t!
 \
 : @ 2/ [@] ; ( a -- u : fetch a cell to a memory location )
 : ! 2/ [!] ; ( u a -- : write a cell to a memory location )
+
+\ A non-destructive version of '@', it preserves the address
+\ it uses. Many Forth words would benefit from having non
+\ destructive analogues that keep their input arguments intact,
+\ such as "if".
+\
+:s @+ dup @ ;s ( a -- a u )
 
 \ ### Hook Variables
 \
@@ -3516,7 +3526,8 @@ there 2/ primitive t!
 \ number printing.
 \
 
-: here h lit @ ; ( -- u : push the dictionary pointer )
+:s h? h lit ;s ( -- a : push the location of dict. ptr )
+: here h? @ ; ( -- u : push the dictionary pointer )
 : base {base} up ; ( -- a : push the radix for numeric I/O )
 : dpl {dpl} up ; ( -- a : decimal point variable )
 : hld {hld} up ; ( -- a : index to hold space for num. I/O)
@@ -3792,7 +3803,7 @@ there 2/ primitive t!
 \ used but is easy enough to define.
 \
 
-: cell 2 lit ;   ( -- u : push bytes in cells to stack )
+: cell #2 ;   ( -- u : push bytes in cells to stack )
 : cell+ cell + ; ( a -- a : increment address by cell width )
 : cells 2* ;     ( u -- u : multiply # of cells to get bytes )
 
@@ -3812,8 +3823,21 @@ there 2/ primitive t!
 \ (compiled into the definition by ";t") it will cause a jump
 \ to the execution vector.
 \
+\ "@execute" is a merger of the common expression "@ execute"
+\ into one word, it saves a little space. In the original
+\ eForth it would perform the tests which are currently 
+\ commented out, that is "@execute" would check if the 
+\ execution token was not null before executing the token. This
+\ is useful for some execution tokens, but is just as liable
+\ to cause problems with others, consider execution tokens
+\ that expect or produce values, the checks would not help
+\ there. It would be better to throw an error if the execution 
+\ token is zero, a check which could be added in (and would
+\ involve moving the definition of "@execute" to after "throw".
+\
 
 : execute 2/ >r ; ( xt -- : execute an execution token )
+:s @execute ( ?dup 0= ?exit ) @ execute ;s ( xt -- )
 
 \ "?exit" will conditionally return from the *caller* of the
 \ function, an example usage:
@@ -3877,7 +3901,7 @@ there 2/ primitive t!
 \ to the SUBLEQ machine.
 \
 
-: key begin pause <key> @ execute until ; ( -- c )
+: key begin pause <key> @execute until ; ( -- c )
 
 \ A side note about randomness, we lack sources of entropy
 \ within the virtual machine, we have two possible sources,
@@ -3914,19 +3938,22 @@ there 2/ primitive t!
 \ those.
 \
 
-: emit pause <emit> @ execute ; ( c -- : output byte )
+: emit pause <emit> @execute ; ( c -- : output byte )
 
 \ "cr" emits a newline, DOS style newlines are used instead
 \ of Unix style newlines, although that can be changed by
 \ removing the right constant and emit words. This could be 
 \ made to be an option, set in the "{options}" field, but is
-\ not at present.
+\ not at present as there is little need.
 \
-\ * Unix systems use "lf"
-\ * DOS and Windows uses "cr" then "lf"
+\ * Unix systems use "lf".
+\ * DOS and Windows uses "cr" then "lf".
 \
 \ There are other systems that use other crazy characters for
 \ newlines, but no one cares about them.
+\
+\ "cr" would be slightly smaller if we stored the output
+\ characters as a string. A minor optimization.
 \
 
 : cr =cr lit emit =lf lit emit ; ( -- : emit new line )
@@ -4076,9 +4103,9 @@ there 2/ primitive t!
 \ target.
 \
 
-: c@ dup @ swap #1 and if 8 lit rshift exit then FF lit and ;
+: c@ @+ swap #1 and if 8 lit rshift exit then FF lit and ;
 : c!  swap FF lit and dup 8 lit lshift or swap ( c a -- )
-   tuck dup @ swap #1 and 0= FF lit xor
+   tuck @+ swap #1 and 0= FF lit xor
    >r over xor r> and xor swap ! ;
 
 \ "min" and "max" are more traditionally written as:
@@ -4185,7 +4212,7 @@ there 2/ primitive t!
 \
 
 : aligned dup #1 and 0<> #1 and + ; ( u -- u : align up ptr. )
-: align here aligned h lit ! ; ( -- : align up dict. ptr. )
+: align here aligned h? ! ; ( -- : align up dict. ptr. )
 
 \ "allot" allocates memory in the dictionary, it accepts a
 \ signed number of bytes to allocate, so it is possible to
@@ -4235,7 +4262,7 @@ there 2/ primitive t!
 \ The function "x" will work, but "y" will not. "compile,"
 \ is defined later.
 \
-: allot h lit +! ; ( n -- : allocate space in dictionary )
+: allot h? +! ; ( n -- : allocate space in dictionary )
 : , align here ! cell allot ; ( u -- : write value into dict. )
 
 \ "count" and "+string" are two words used for string
@@ -4271,6 +4298,16 @@ there 2/ primitive t!
 \ get garbage. It is easy enough to make a version of "type"
 \ that did this filtering, which would be useful for displaying
 \ Forth Blocks with "list".
+\
+\ Another way of dealing with this would be to replace the
+\ execution vector in "emit" with one that pre-processes the
+\ character, replacing non-graphic characters with ".", for
+\ example.
+\
+\ As with the numeric output words, it may be useful to call
+\ "single" and "multi" at the start and end of this procedure,
+\ to help prevent garbled output in a multithreading 
+\ environment.
 \
 
 : type ( a u -- : print out a string )
@@ -4645,8 +4682,8 @@ there 2/ primitive t!
 \ should be made to be as fast as possible.
 \
 
-: um+ 2dup + >r r@ #0 >= >r ( u u -- u carry )
-   2dup and 0< r> or >r or 0< r> and invert 1+ r> swap ;
+: um+ 2dup + >r r@ 0>= >r ( u u -- u carry )
+  2dup and 0< r> or >r or 0< r> and negate r> swap ;
 : dnegate invert >r invert #1 um+ r> + ; ( d -- d )
 : d+ >r swap >r um+ r> + r> + ;         ( d d -- d )
 : um* ( u u -- ud : double cell width multiply )
@@ -4668,11 +4705,9 @@ there 2/ primitive t!
   then 2drop drop #-1 dup ;
 : m/mod ( d n -- r q : floored division )
   s>d dup >r
-  if
-    negate >r dnegate r>
-  then
+  if negate >r dnegate r> then
   >r s>d if r@ + then r> um/mod r>
-  if swap negate swap exit then ;
+  if swap negate swap then ;
 : /mod over 0< swap m/mod ; ( u1 u2 -- u1%u2 u1/u2 )
 : mod  /mod drop ; ( u1 u2 -- u1%u2 )
 : /    /mod nip ; ( u1 u2 -- u1/u2 )
@@ -4688,7 +4723,7 @@ there 2/ primitive t!
 \        : du> 2swap du< ;                  ( d -- t )
 \        : d=  rot = -rot = and ;           ( d d -- t )
 \        : d- dnegate d+ ;                  ( d d -- d )
-\        : dabs  s>d if dnegate exit then ; ( d -- ud )
+\        : dabs  s>d if dnegate then ;      ( d -- ud )
 \
 \ But by default they will not be included as they are easy
 \ enough to define if we need them and we want to keep the
@@ -4730,7 +4765,7 @@ there 2/ primitive t!
 \
 
 :s (emit) opEmit ;s ( c -- : output byte to terminal )
-: echo <echo> @ execute ; ( c -- : emit a single character )
+: echo <echo> @execute ; ( c -- : emit a single character )
 
 \ "tap" and "ktap" are both used by "accept", they are both
 \ given four items on the stack, and return three, which is
@@ -4849,11 +4884,11 @@ there 2/ primitive t!
   over + over begin
     2dup <>
   while
-    key dup bl - 5F lit u< if tap else <tap> @ execute then
+    key dup bl - 5F lit u< if tap else <tap> @execute then
   repeat drop over - ;
-: expect <expect> @ execute span ! drop ; ( a u -- )
+: expect <expect> @execute span ! drop ; ( a u -- )
 : tib source drop ; ( -- b )
-: query tib =buf lit <expect> @ execute tup ! drop #0 >in ! ;
+: query tib =buf lit <expect> @execute tup ! drop #0 >in ! ;
 
 \ "-trailing" removes the trailing white-space from an input
 \ string, it does this non-destructively leaving the original
@@ -4935,7 +4970,7 @@ there 2/ primitive t!
 :s match unmatch invert ;s        ( c1 c2 -- t )
 : parse ( c -- b u ; <string> )
   >r tib >in @ + tup @ >in @ - r@ ( get memory to parse )
-  >r over r> swap >r >r
+  >r over r> swap 2>r
   r@ t' unmatch lit look 2dup ( look for start of match )
   r> t' match   lit look swap ( look for end of match )
     r> - >r - r> 1+ ( b u c -- b u delta : compute match len )
@@ -4970,7 +5005,7 @@ there 2/ primitive t!
 \ output strings. Both the hold space and the base variable
 \ make numeric I/O thread safe but not reentrant, a flaw, but
 \ not a big one given the nature of Forth.
-
+\
 \ "banner" is a word I keep defining, but it is not a standard
 \ word so is kept in the system vocabulary, it prints a
 \ character "n" number of times, it accepts a signed number,
@@ -4979,6 +5014,12 @@ there 2/ primitive t!
 \ It is included as it is a factor of "u.r". It was used
 \ for a more fancy version of "list", but the complexity of
 \ that word has been reduced.
+\
+\ For the I/O words it might be worth calling the 
+\ multithreading words "single" and "multi" to disable
+\ multithreading and re-enable it after the output is complete,
+\ which could also be done for "type", to help prevent mangled
+\ output. This is not done however.
 \
 :s banner ( +n c -- )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ;s
@@ -4989,8 +5030,7 @@ there 2/ primitive t!
 \ thread area where numeric output strings are formatted.
 \ Characters in hold space are also stored in reverse order!
 
-: hold ( c -- : save character in hold space )
-  #-1 hld +! hld @ c! ;
+: hold #-1 hld +! hld @ c! ; ( c -- : save char in hold space )
 
 \ "#\>" is the last of the three (four including "\#s") words
 \ that form the core of the numeric output words, although it
@@ -5030,7 +5070,7 @@ there 2/ primitive t!
 \ a period between each character, or whatever is required for
 \ the output, you can use these set of words to achieve that.
 \
-: #  2 lit ?depth #0 base @ extract digit hold ; ( d -- d )
+: #  #2 ?depth #0 base @ extract digit hold ; ( d -- d )
 : #s begin # 2dup ( d0= -> ) or 0= until ;       ( d -- 0 )
 : <# this =num lit + hld ! ;                     ( -- )
 
@@ -5359,16 +5399,16 @@ there 2/ primitive t!
       dup ( immediate? -> ) nfa 40 lit swap @ and 0<>
       #1 or negate exit
     then
-    nip dup @
+    nip @+
   repeat
   rdrop 2drop #0 ;s
 :s (find) ( a -- pwd pwd 1 | pwd pwd -1 | 0 a 0 : find a word )
   >r
   context
   begin
-    dup @
+    @+
   while
-    dup @ @ r@ swap (search) ?dup
+    @+ @ r@ swap (search) ?dup
     if
       >r rot drop r> rdrop exit
     then
@@ -5435,7 +5475,7 @@ there 2/ primitive t!
 \ not world ending.
 \
 :s (literal) state @ if =push lit , , then ;s
-: literal <literal> @ execute ; immediate ( u -- )
+: literal <literal> @execute ; immediate ( u -- )
 
 \ "compile," is a version of "," which can turn an execution
 \ vector into something that will perform a call when compiled
@@ -5446,7 +5486,7 @@ there 2/ primitive t!
 \ it must be converted first before it can be compiled into the
 \ words body.
 \
-: compile, 2/ align , ;  ( xt -- )
+: compile, align 2/ , ;  ( xt -- )
 
 \ "?found" is called at the end of "interpret" if a word has
 \ not be found in the dictionary or is not a number, it prints
@@ -5649,10 +5689,10 @@ there 2/ primitive t!
 : get-order ( -- widn...wid1 n : get current search order )
   context
    \ next line finds first empty cell
-   #0 >r begin dup @ r@ xor while cell+ repeat rdrop
+   #0 >r begin @+ r@ xor while cell+ repeat rdrop
   dup cell - swap
   context - 2/ dup >r 1- s>d -50 lit and throw
-  for aft dup @ swap cell - then next @ r> ;
+  for aft @+ swap cell - then next @ r> ;
 :r set-order ( widn ... wid1 n -- : set current search order )
   \ NB. Uses recursion, however the meta-compiler does not use
   \ the Forth compilation mechanism, so the current definition
@@ -5679,11 +5719,11 @@ there 2/ primitive t!
 :r forth-wordlist {forth-wordlist} lit ;r ( -- wid )
 :r system {system} lit ;r ( -- wid )
 
-\ "forth" sets the search order to only include the root
+\ "forth" sets the search order to include both the root
 \ and Forth vocabularies.
 \
 
-:r forth root-voc forth-wordlist 2 lit set-order ;r ( -- )
+:r forth root-voc forth-wordlist #2 set-order ;r ( -- )
 
 \ This version of "only" is implemented as "-1 set-order",
 \ but it could be implemented other ways, such as
@@ -5731,10 +5771,11 @@ there 2/ primitive t!
 \
 
 :r words ( -- )
-  cr get-order begin ?dup while swap ( dup u. ." : " ) @
-  begin ?dup
-  while dup nfa c@ 80 lit and 0= if dup .id then @
-  repeat ( cr )
+  cr get-order 
+  begin ?dup while swap ( dup u. ." : " ) @
+    begin ?dup
+    while dup nfa c@ 80 lit and 0= if dup .id then @
+    repeat ( cr )
   1- repeat ;r
 
 \ "definitions" make the first vocabulary in the search order
@@ -5863,6 +5904,9 @@ there 2/ primitive t!
 \ immediate, and intended to be used from within a word
 \ definition.
 \
+\ "token" takes care of the most common use of "word", the
+\ short phrase "bl word".
+\
 \ This short word-set gives us the power to define new words,
 \ it took a fair amount to get us to this point, but this
 \ is another milestone in making a Forth interpreter.
@@ -5870,27 +5914,28 @@ there 2/ primitive t!
 
 : word ( -- b )
   #1 ?depth parse here aligned dup >r 2dup ! 1+ swap cmove r> ;
+:s token bl word ;s ( -- b )
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= ?exit space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
 :s ?nul dup c@ ?exit -10 lit throw ;s ( b -- b )
 :s ?len dup c@ 1F lit > -13 lit and throw ;s ( b -- b )
-:to char bl word ?nul count drop c@ ; ( "name", -- c )
+:to char token ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
 :to ;
   CAFE lit <> -16 lit and throw ( check compile safety )
   =unnest lit ,                     ( compile exit )
   postpone [                        ( back to command mode )
   ?dup if                           ( link word in if non 0 )
-    get-current ! exit              ( this inks the word in )
+    get-current !                   ( this inks the word in )
   then ; immediate compile-only
 :to :   ( "name", -- colon-sys )
   align                 ( must be aligned before hand )
   here dup              ( push location for ";" )
   {last} lit !          ( set last defined word )
   last ,                ( point to previous word in header )
-  bl word ?nul ?len ?unique ( parse word and do basic checks )
-  count + h lit ! align ( skip over packed word and align )
+  token ?nul ?len ?unique ( parse word and do basic checks )
+  count + h? ! align    ( skip over packed word and align )
   CAFE lit              ( push constant for compiler safety )
   postpone ] ;          ( turn compile mode on )
 :to :noname align here #0 CAFE lit ] ; ( "name", -- xt )
@@ -5993,11 +6038,11 @@ there 2/ primitive t!
 \ differently.
 \
 
-:to ' bl word find ?found cfa literal ; immediate
+:to ' token find ?found cfa literal ; immediate
 : compile r> dup [@] , 1+ >r ; compile-only ( -- )
 :to recurse {last} lit @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
-:s hide bl word find ?found nfa 80 lit swap toggle ;s
+:s hide token find ?found nfa 80 lit swap toggle ;s
 
 \ # Control Structures
 \
@@ -6164,11 +6209,11 @@ there 2/ primitive t!
 \ VM instructions.
 \
 
-:s mark here #0 , ;s compile-only
+:s mark here #0 , ;s ( compile-only )
 :to begin here ; immediate compile-only
 :to if =jumpz lit , mark ; immediate compile-only
 :to until 2/ postpone if ! ; immediate compile-only
-:to again =jump lit , 2/ , ; immediate compile-only
+:to again =jump lit , compile, ; immediate compile-only
 :to then here 2/ swap ! ; immediate compile-only
 :to while postpone if ; immediate compile-only
 :to repeat swap postpone again postpone then ;
@@ -6178,7 +6223,7 @@ there 2/ primitive t!
 :to for =>r lit , here ; immediate compile-only
 :to aft drop =jump lit , mark here swap ;
     immediate compile-only
-:to next =next lit , 2/ , ; immediate compile-only
+:to next =next lit , compile, ; immediate compile-only
 
 \ # Create, DOES>, and other special Forth words
 \
@@ -6270,9 +6315,9 @@ there 2/ primitive t!
 \ it yourself.
 \
 
-:s (var) r> 2* ;s compile-only ( R: a --, -- a )
-:s (const) r> [@] ;s compile-only ( R: a --, -- u )
-:s (marker) r> 2* dup @ h lit ! cell+ @ get-current ! ;s
+:s (var) r> 2* ;s ( compile-only ) ( R: a --, -- a )
+:s (const) r> [@] ;s ( compile-only ) ( R: a --, -- u )
+:s (marker) r> 2* @+ h? ! cell+ @ get-current ! ;s
    compile-only
 : create postpone : drop postpone [ compile (var)
    get-current ! ;
@@ -6280,12 +6325,12 @@ there 2/ primitive t!
 :to constant create cell negate allot compile (const) , ;
 
 : >body cell+ ; ( a -- a : move to a create words body )
-:s (does) r> r> 2* swap >r ;s compile-only
+:s (does) r> r> 2* swap >r ;s ( compile-only )
 :s (comp)
   r> {last} lit @ cfa
   ( check we are running does> on a created word )
-  dup @ to' (var) half lit <> -1F lit and throw
-  ! ;s compile-only
+  @+ to' (var) half lit <> -1F lit and throw
+  ! ;s ( compile-only )
 : does> compile (comp) compile (does) ;
    immediate compile-only
 
@@ -6436,8 +6481,11 @@ there 2/ primitive t!
 \ characters and so-forth would be useful as well. De Facto
 \ not for Forth but for nearly every single post-C language.
 \
+\ A word which printed out a string followed by a new-line
+\ would be useful, but would be non-standard.
+\
 
-:s (s) [char] " word count nip allot align ;s
+:s (s) align [char] " word count nip 1+ allot align ;s
 :to ." compile .$ (s)  ; immediate compile-only
 :to $" compile ($) (s)  ; immediate compile-only
 :to abort" compile (abort) (s) ; immediate compile-only
@@ -6576,7 +6624,7 @@ there 2/ primitive t!
 \ this platform, but we can reuse it to do what we want.
 \
 
-:to postpone bl word find ?found cfa compile, ; immediate
+:to postpone token find ?found cfa compile, ; immediate
 
 \ "immediate" is a word that makes the last defined word
 \ immediate, that is it will execute when in compile mode
@@ -6621,7 +6669,7 @@ there 2/ primitive t!
 \
 
 :s (nfa) last nfa toggle ;s ( u -- )
-:to immediate 40 lit (nfa) ; ( -- )
+:to immediate 40 lit (nfa) ; ( -- : mark prev word as immed. )
 :to compile-only 20 lit (nfa) ; ( -- )
 
 \ # Some Programmer Utilities (Decompilation and Dump)
@@ -6658,9 +6706,9 @@ there 2/ primitive t!
 \ the ideas described here are dealt with in more detail.
 \
 
-:to see bl word find ?found cr ( --, "name" : decompile  word )
-  begin dup @ =unnest lit <>
-  while dup @ . cell+ here over < if drop exit then
+:to see token find ?found cr ( --, "name" : decompile  word )
+  begin @+ =unnest lit <>
+  while @+ . cell+ here over < if drop exit then
   repeat @ u. ;
 
 \ "dump" is another utility, it dumps out a section of memory
@@ -6704,7 +6752,7 @@ there 2/ primitive t!
 
 :to dump aligned ( a u -- : display section of memory )
   begin ?dup
-  while swap dup @ . cell+ swap cell -
+  while swap @+ . cell+ swap cell -
   repeat drop ;
 
 \ ## Check sums over the image
@@ -6756,7 +6804,7 @@ there 2/ primitive t!
 
 :s cksum aligned dup C0DE lit - >r ( a u -- u )
   begin ?dup
-  while swap dup @ r> + >r cell+ swap cell -
+  while swap @+ r> + >r cell+ swap cell -
   repeat drop r> ;s
 
 \ # Conditional Evaluation
@@ -6816,12 +6864,23 @@ there 2/ primitive t!
 \ Will not throw an error and the CODE section will not be
 \ executed. 
 \
+\ Instead of defining these words it would have been possible
+\ to extend "if...else...then" to have run-time behavior
+\ outside of compilation that performed the same as
+\ "\[if\]...\[else\]...\[then\]". There are very good reason
+\ for not doing so however. Changing the behavior of a word
+\ depending on the compiler state, whilst sometimes necessary,
+\ is in the general case *bad*. It limits the use of the word
+\ and can complicate understanding the word and code that uses
+\ that word, what seems like something quite elegant at first 
+\ creates complications.
+\
 
-: defined bl word find nip 0<> ; ( -- f )
+: defined token find nip 0<> ; ( -- f )
 :to [then] ; immediate ( -- )
 :to [else]
  begin
-  begin bl word dup c@ while
+  begin token dup c@ while
    find drop cfa dup to' [else] lit = swap to' [then] lit = or
     ?exit repeat query drop again ; immediate
 :to [if] ?exit postpone [else] ; immediate
@@ -6946,8 +7005,7 @@ there 2/ primitive t!
 :s csi 1B lit emit 5B lit emit ;s ( -- : ANSI Term. Esc. Seq. )
 : page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;
 : at-xy base @ decimal ( x y -- : set cursor position )
-   >r csi #0 u.r ." ;" #0 u.r ." H" r>
-   base ! ;
+   >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;
 
 \ # Forth Blocks
 \
@@ -7138,7 +7196,7 @@ there 2/ primitive t!
 \ token in "\<ok\>".
 \
 
-:s ok state @ 0= if ."  ok" cr then ;s ( -- : okay prompt )
+:s ok state @ ?exit ."  ok" cr ;s ( -- : okay prompt )
 
 \ "eval" goes through each word in a line until there are no 
 \ more and executes "interpret" for each word, it is sure to 
@@ -7149,9 +7207,9 @@ there 2/ primitive t!
 \ "\<ok\>", as just mentioned.
 \
 :s eval ( "word" -- )
-   begin bl word dup c@ while
+   begin token dup c@ while
      interpret #0 ?depth
-   repeat drop <ok> @ execute ;s 
+   repeat drop <ok> @execute ;s 
 
 \ ## Evaluate
 \
@@ -7356,6 +7414,8 @@ there 2/ primitive t!
 :s console t' key? lit <key> ! t' (emit) lit <emit> ! hand ;s
 :s io! console ;s ( -- : setup system I/O )
 
+\ NB. It might be slightly more efficient to copy a block of
+\ constants into the new task, patching things up after.
 :s task-init ( task-addr -- : initialize USER task )
   {up} lit @ swap {up} lit !
   this 2/ {next-task} up !
@@ -7427,14 +7487,14 @@ there 2/ primitive t!
   t' (error) lit <error> !         ( set error handler )
   begin                            ( infinite loop start... )
    query t' eval lit catch         ( evaluate a line )
-   ?dup if <error> @ execute then  ( error? )
+   ?dup if <error> @execute then   ( error? )
   again ;                          ( do it all again... )
 
 \ "(cold)" is the first word that gets executed, it performs
 \ the task of continuing to setup the environment before
 \ normal running. It must:
 \
-\ 1. Setup which word lists are used ("only forth definitions")
+\ 1. Setup which word lists are used ("forth definitions")
 \ 2. Initialize the current task with "ini".
 \ 3. Check the boot options in the "{options}" variable
 \    a. The first bit is checked within "ini", the 4th within
@@ -7452,13 +7512,13 @@ there 2/ primitive t!
 \ And that completes the Forth boot sequence.
 \
 :s (cold) ( -- : Forth boot sequence )
-  only forth definitions ( un-mess-up dictionary / set it )
+  forth definitions ( un-mess-up dictionary / set it )
   ini ( initialize the current thread correctly )
   {options} lit @ 4 lit and if info then ( display info? )
-  {options} lit @ 2 lit and if ( checksum on? )
+  {options} lit @ #2 and if ( checksum on? )
     primitive lit @ 2* dup here swap - cksum  ( calc. cksum )
-    check lit @ <> if ." cksum fail" bye then ( oops... )
-    {options} lit @ 2 lit xor {options} lit ! ( disable cksum )
+    check lit @ <> if ." bad cksum" bye then ( oops... )
+    {options} lit @ #2 xor {options} lit ! ( disable cksum )
   then quit ;s ( call the interpreter loop AKA "quit" )
 
 \ # Cooperative Multitasking
@@ -7612,7 +7672,7 @@ there 2/ primitive t!
 \
 
 :s task: ( "name" -- : create a named task )
-  create here 400 lit allot 2/ task-init ;s
+  create here b/buf allot 2/ task-init ;s
 :s activate ( xt task-address -- : start task executing xt )
   dup task-init
   dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
@@ -7637,7 +7697,7 @@ there 2/ primitive t!
 \
 
 :s wait ( addr -- : wait for signal )
-  begin pause dup @ until #0 swap ! ;s
+  begin pause @+ until #0 swap ! ;s
 :s signal this swap ! ;s ( addr -- : signal to wait )
 
 \ "single" and "multi" turn off and on multitasking. This
@@ -7666,7 +7726,7 @@ there 2/ primitive t!
 
 :s send ( msg task-addr -- : send message to task )
   this over {sender} lit +
-  begin pause dup @ 0= until
+  begin pause @+ 0= until
   ! {message} lit + ! ;s
 :s receive ( -- msg task-addr : block until message )
   begin pause {sender} up @ until
@@ -7824,7 +7884,7 @@ there 2/ primitive t!
 :e ? scr @ . ;e ( -- : print block number of current block )
 :e l scr @ list ;e ( -- : list current block )
 :e e q scr @ load editor ;e ( -- : evaluate current block )
-:e ia 2 lit ?depth 6 lit lshift + scr @ block + tib >in @ +
+:e ia #2 ?depth 6 lit lshift + scr @ block + tib >in @ +
    swap source nip >in @ - cmove tib @ >in ! update l ;e
 :e i #0 swap ia ;e ( line --, "line" : insert line at )
 :e w words ;e ( -- : display block editor commands )
@@ -7866,7 +7926,7 @@ there 2/ primitive t!
 \ "primitive" are treated as jump locations by the VM).
 \
 
-: cold {cold} lit 2* @ execute ; ( -- )
+: cold {cold} lit 2* @execute ; ( -- )
 
 \ # Image Generation
 \
@@ -7899,7 +7959,7 @@ t' (cold) half {cold} t!      \ Set starting Forth word
 atlast {forth-wordlist} t!    \ Make wordlist work
 {forth-wordlist} {current} t! \ Set "current" dictionary
 there h t!                    \ Assign dictionary pointer
-primitive t@ double mkck check t! \ Set checksum over VM
+primitive t@ double mkck check t! \ Set checksum over Forth
 atlast {last} t!              \ Set last defined word
 save-target                   \ Output target
 
@@ -8105,6 +8165,11 @@ it being run.
 \ done with the "L" function when using 128KiB of memory,
 \ another is that a few SUBLEQ programs other than this of the
 \ authors do use this memory.
+\
+\ Another limitation is that SUBLEQ code can only be executed
+\ in the lower half of the address space, as the machine will
+\ exit for the high bit of the program counter is set. This is
+\ not much of a limitation, but it should be mentioned.
 \
 \ ### SUBLEQ VM File Format
 \
@@ -9178,7 +9243,7 @@ it being run.
 \ We could improve the stop conditions by using "(find)"
 \ as it gives us a better range for the likely positions of
 \ when a word starts and ends.
-:to see bl word dup ." : " count type cr find ?found
+:to see token dup ." : " count type cr find ?found
   dup >r cfa
   begin dup @ =unnest lit <>
   while dup @ decompile cr cell+ here over < if drop exit then
@@ -9456,7 +9521,7 @@ it being run.
 \
 \ The idea of SWAR optimizations is that you can process 
 \ multiple N-bit operations (say 8-bit) on a machine capable of
-\ doing k*N bit arithmetic (k = 2 for a 16-bit machine). 
+\ doing k\*N bit arithmetic (k = 2 for a 16-bit machine). 
 \
 \ Unfortunately,
 \ these optimizations tend to be bit-wise heavy and more 
@@ -9477,11 +9542,11 @@ it being run.
 \ a lot that could be done to shrink the image.
 \
 :a opOr
-  bwidth w MOV
+  bwidth r0 MOV
   x ZERO
   r2 {sp} iLOAD
   --sp
-  begin w while
+  begin r0 while
     x x ADD
     tos r5 MOV r3 ZERO
     r5 -if r3 NG1! then r5 INC r5 -if r3 NG1! then
@@ -9490,15 +9555,15 @@ it being run.
     r3 r4 ADD r4 if x INC then
     r2 r2 ADD
     tos tos ADD
-    w DEC
+    r0 DEC
   repeat
   x tos MOV ;a
 :a opXor
-  bwidth w MOV
+  bwidth r0 MOV
   x ZERO
   r2 {sp} iLOAD
   --sp
-  begin w while
+  begin r0 while
     x x ADD
     tos r5 MOV r3 ZERO r5
     -if r3 NG1! then r5 INC r5 -if r3 NG1! then
@@ -9508,15 +9573,15 @@ it being run.
     r4 if r3 ZERO then r3 x ADD
     r2 r2 ADD
     tos tos ADD
-    w DEC
+    r0 DEC
   repeat
   x tos MOV ;a
 :a opAnd
-  bwidth w MOV
+  bwidth r0 MOV
   x ZERO
   r2 {sp} iLOAD
   --sp
-  begin w while
+  begin r0 while
    x x ADD
    tos r5 MOV r3 ZERO r5
    -if r3 NG1! then r5 INC r5 -if r3 NG1! then
@@ -9526,7 +9591,7 @@ it being run.
    r4 if r3 ZERO then r3 x ADD
    r2 r2 ADD
    tos tos ADD
-   w DEC
+   r0 DEC
   repeat
   x tos MOV ;a
 
@@ -9617,7 +9682,7 @@ variable seed ( NB. Could be mixed with keyboard input )
 \ : du> 2swap du< ;                ( d -- f )
 : d=  rot = -rot = and ;           ( d d -- f )
 : d- dnegate d+ ;                  ( d d -- d )
-: dabs  s>d if dnegate exit then ; ( d -- ud )
+: dabs  s>d if dnegate then ;      ( d -- ud )
 : d<> d= 0= ;                      ( d d -- f )
 : 2rdrop r> rdrop rdrop >r ; ( R: n n -- )
 : 2. swap . . ; ( n n -- )
@@ -9840,7 +9905,7 @@ dup constant (prompt)
 : message ." user: " ;
 : fail ." Invalid username or password" cr message ;
 : success ." logged in." ;
-: pass bl word count crc ; ( super-super-secure <_< )
+: pass token count crc ; ( super-super-secure <_< )
 : ask ." pass: " conceal query reveal ;
 
 forth-wordlist +order definitions
@@ -9917,7 +9982,7 @@ users -order
 
 : nul? count nip 0= ; ( a -- f : is counted word empty? )
 : grab ( <word> -- a : get word from input stream  )
-  begin bl word dup nul? 0= ?exit drop query again ;
+  begin token dup nul? 0= ?exit drop query again ;
 : integer grab count number? nip ; ( <num> -- n f : get int. )
 : integer? integer 0= ( dpl @ 0>= or ) -24 and throw ;
 : ingest ( a u -- : opposite of 'dump', load nums into mem )

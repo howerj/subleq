@@ -40,50 +40,46 @@ counted:
 #
 # TODO: Restore if negated
 
-tw; tx; ty; td; zr;
-
-x tw;
-tw tx;
-
-tw;
-w tw;
-tw ty;
-
-# if (tx <= 0) { tx = -tx; }
-zr tx (negate);
-zr zr (noneg);
-negate:
-  tx zr; zr td; tx; td tx;
-noneg:
-
-y;
-
-div:
-  nr y;         # y++
-  ty tx (dend); # x -= w, if x <= 0 JMP 'dend'
-  zr zr (div);  # jump back to 'div', unconditionally
-dend:
-
-tw; tx tw; # tw = -tx;
-
-td;
-tx td;
-td ty; 
-
-td;
-or tw;         # tw--
-tw td (fix);   # if (td-tw <= 0) jump to fix
-ty ty (nofix); # else jump to no fix
-fix:
-  or y;        # y--
-nofix:
-
-
-# Output values and halt
-y (-1);
-ty (-1);
-0 0 (-1);
-
+## tw; tx; ty; td; zr;
+## 
+## x tw;
+## tw tx;
+## 
+## tw;
+## w tw;
+## tw ty;
+## 
+## # if (tx <= 0) { tx = -tx; }
+## zr tx (negate);
+## zr zr (noneg);
+## negate:
+##   tx zr; zr td; tx; td tx;
+## noneg:
+## 
+## y;
+## 
+## div:
+##   nr y;         # y++
+##   ty tx (dend); # x -= w, if x <= 0 JMP 'dend'
+##   zr zr (div);  # jump back to 'div', unconditionally
+## dend:
+## 
+## tw; tx tw; # tw = -tx;
+## 
+## td;
+## tx td;
+## td ty; 
+## 
+## td;
+## or tw;         # tw--
+## tw td (fix);   # if (td-tw <= 0) jump to fix
+## ty ty (nofix); # else jump to no fix
+## fix:
+##   or y;        # y--
+## nofix:
+## 
+## 
+## 
 
 
 
