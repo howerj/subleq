@@ -15,8 +15,6 @@
 #define LICENSE "Public Domain / Unlicense for code only"
 #define VERSION "1.0"
 /* TODO:
- * - Changeable memory size
- * - This version could replace "nbit.c", ...
  * - I/O better escape handling, terminal options via CLI, retry option, retry if not Escape
  * - Integrate assembler
  * - Gather more information about running environment (which cells are modified, etc). */
@@ -49,6 +47,8 @@ static void binary(FILE *f) { _setmode(_fileno(f), _O_BINARY); }
 static inline void binary(FILE *f) { UNUSED(f); }
 #endif
 
+/* A small, portable, terminal library would be nice, not something
+ * as heavy as the standard ones, perhaps something like linenoise. */
 #define ESCAPE    (27)
 #define DELETE    (127)
 #define BACKSPACE (8)
@@ -70,7 +70,9 @@ static void term_restore(terminal_t *t) {
 	}
 }
 
-/* TODO: Remove setup and restore code, instead calling it around the read? */
+/* Instead of the setup code, which is reliant on a global structure, we
+ * could instead set and then restore the terminal surrounding calls to the
+ * get character function... */
 
 static int setup(terminal_t *t) {
 	assert(t);
@@ -113,7 +115,6 @@ static void term_sleep_ms(unsigned ms) {
 }
 #else
 #ifdef _WIN32
-/* TODO: isatty, notes */
 typedef struct { FILE *in, *out; } terminal_t;
 extern int getch(void);
 extern int putch(int c);
@@ -1086,7 +1087,7 @@ SUBLEQ architecture, as an example of the simplicity of SUBLEQ\n\
 the following program will run SUBLEQ programs:\n\n\
 \t#include <stdio.h>\n\
 \tint main(int x,char**v){FILE*f=fopen(v[1],\"r\");short p=0,m[1<<16],*i=m;\n\
-\twhile(fscanf(f,\"%hd\",i++)>0);for(;p>=0;){int a=m[p++],b=m[p++],c=m[p++];\n\
+\twhile(fscanf(f,\"%%hd\",i++)>0);for(;p>=0;){int a=m[p++],b=m[p++],c=m[p++];\n\
 \ta<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])<=0?p=c:0;}}\n\
 \n\n\
 Options:\n\n\
@@ -1101,9 +1102,10 @@ Options:\n\n\
 \t-s file.dec\n\t\tSave to file after running.\n\
 \t-n num (8-64)\n\t\tSet SUBLEQ VM to bit-width, inclusive.\n\
 \t-p num\n\t\tPrint out cell contents after exiting VM.\n\
+\t-S num\n\t\tChange memory size, max size is %ld.\n\
 \t-x forth,hi,echo,halt,self\n\t\tLoad example image from internal storage.\n";
 
-	if (fprintf(out, help_string, PROJECT, AUTHOR, EMAIL, REPO, VERSION) < 0)
+	if (fprintf(out, help_string, PROJECT, AUTHOR, EMAIL, REPO, VERSION, (long)SZ) < 0)
 		return -1;
 	return 0;
 }
@@ -1493,8 +1495,8 @@ int main(int argc, char **argv) {
 		case 'x': if (subleq_examples(&s, opt.arg) < 0) return 1; break;
 		case 'z': s.optimize = 1; break;
 		case 'p': s.meta[L(&s, number(opt.arg))] |= META_PRN; break;
-		/*case 'S': { long sz = number(opt.arg); if (sz <= 0 || sz > SZ) return 1; s.sz = sz; } break;*/
 		case 'r': s.stats = 1; break;
+		case 'S': { long sz = number(opt.arg); if (sz <= 0 || sz > SZ) { (void)fprintf(stderr, "Incorrect size: %ld\n", sz); return 1; } s.sz = sz; } break;
 		default: return 1;
 		}
 	}
@@ -1502,8 +1504,10 @@ int main(int argc, char **argv) {
 		return 2;
 
 	for (int i = opt.index; i < argc; i++)
-		if (subleq_load(&s, s.load, argv[i]) < 0)
+		if (subleq_load(&s, s.load, argv[i]) < 0) {
+			(void)fprintf(stderr, "Load '%s' failed\n", argv[i]);
 			return 3;
+		}
 	/* We could implement SUBNEG and other variants, if we wanted */
 	s.max = s.load;
 	const int r = subleq(&s, &terminal);
@@ -1514,9 +1518,10 @@ int main(int argc, char **argv) {
 				return 4;
 
 	if (save)
-		if (subleq_save(&s, 0, s.max, save) < 0)
+		if (subleq_save(&s, 0, s.max, save) < 0) {
+			(void)fprintf(stderr, "Save '%s' failed\n", save);
 			return 5;
-
+		}
 	return r < 0 ? 6 : 0;
 }
 
