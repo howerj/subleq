@@ -1764,7 +1764,7 @@ label: entry       \ used to set entry point in next cell
 :m --sp {sp} INC ;m ( -- : shrink variable stack )
 :m --rp {rp} DEC ;m ( -- : shrink return stack )
 :m ++rp {rp} INC ;m ( -- : grow return stack )
-:m a-optim ;m \ >r there =cell - r> 2/ t! ;m ( a -- )
+:m a-optim drop ;m \ >r there =cell - r> 2/ t! ;m ( a -- )
 
 \ # The Core Forth Virtual Machine
 \
@@ -2404,9 +2404,8 @@ assembler.1 -order
 
 \ "sp@" and "sp!" do for the variable stack what "rp@" and
 \ "rp!" do for the return stack, they can set them to arbitrary
-\ locations, a minor complication is that "sp@" must push
-\ the location of the stack before it is called, but that
-\ is not much of a problem.
+\ locations. "sp@" can be defined in Forth, and is defined
+\ later, "sp!" must be defined in assembly.
 \
 \ "sp@" is more useful of the two, they are both used in
 \ throw/catch, but "sp@" is also used for words like "pick"
@@ -2414,8 +2413,7 @@ assembler.1 -order
 \ also useful for error checking and debugging purposes.
 \
 
-:a sp@ ++sp tos {sp} iSTORE {sp} tos MOV tos INC ;a ( -- u )
-:a sp! tos {sp} MOV ;a ( u u -- )
+:a sp! tos {sp} MOV ;a ( u -- ??? )
 
 \ "opJump" and "opJumpZ" implement unconditional and
 \ conditional jumps respectively. The actual jump is performed
@@ -3258,7 +3256,6 @@ there 2/ primitive t!
 :to rshift rshift ; ( u n -- u : logical right shift by "n" )
 :so [@] [@] ;s ( vma -- : fetch -VM Address- )
 :so [!] [!] ;s ( u vma -- : store to -VM Address- )
-:to sp@ sp@ ; ( -- a : get the variable stack location )
 :to sp! sp! ; ( a -- ??? : set the variable stack location )
 :to 0= op0= ; ( n -- f : equal to zero )
 :to 0< op0< ; ( n -- f : signed less than zero )
@@ -3529,6 +3526,7 @@ there 2/ primitive t!
 :s h? h lit ;s ( -- a : push the location of dict. ptr )
 : here h? @ ; ( -- u : push the dictionary pointer )
 : base {base} up ; ( -- a : push the radix for numeric I/O )
+:s radix base @ ;s ( -- u : retrieve base )
 : dpl {dpl} up ; ( -- a : decimal point variable )
 : hld {hld} up ; ( -- a : index to hold space for num. I/O)
 : state {state} up ; ( -- f : interpreter state )
@@ -3538,7 +3536,14 @@ there 2/ primitive t!
 : >in {in} up ; ( -- a : input buffer position var )
 : span {span} up ; ( -- u : number of chars saved by expect )
 : bl 20 lit ; ( -- 32 : push space character )
-: cycles {cycles} lit ; ( -- a : number of "cycles" ran for )
+:s cycles {cycles} lit ;s ( -- a : number of "cycles" ran for )
+:s sp {sp} lit ;s ( -- a : address of v.stk ptr. )
+
+\ As mentioned, "sp@" is defined in Forth, and it is defined
+\ here. It retrieves the variable stack position, and pushes
+\ it on to the variable stack. 
+\
+: sp@ sp @ 1+ ; ( -- a )
 
 \ To make switching bases easier the words "hex" and "decimal"
 \ are made available, which set the numeric input and output
@@ -4104,7 +4109,7 @@ there 2/ primitive t!
 \
 
 : c@ @+ swap #1 and if 8 lit rshift exit then FF lit and ;
-: c!  swap FF lit and dup 8 lit lshift or swap ( c a -- )
+: c! swap FF lit and dup 8 lit lshift or swap ( c a -- )
    tuck @+ swap #1 and 0= FF lit xor
    >r over xor r> and xor swap ! ;
 
@@ -5070,9 +5075,9 @@ there 2/ primitive t!
 \ a period between each character, or whatever is required for
 \ the output, you can use these set of words to achieve that.
 \
-: #  #2 ?depth #0 base @ extract digit hold ; ( d -- d )
-: #s begin # 2dup ( d0= -> ) or 0= until ;       ( d -- 0 )
-: <# this =num lit + hld ! ;                     ( -- )
+: #  #2 ?depth #0 radix extract digit hold ; ( d -- d )
+: #s begin # 2dup ( d0= -> ) or 0= until ;   ( d -- 0 )
+: <# this =num lit + hld ! ;                 ( -- )
 
 \ "sign" adds a "-" character to hold space if the
 \ provided number is negative. It is used by ".".
@@ -5110,7 +5115,7 @@ there 2/ primitive t!
 \ host, and the host doing the meta-compilation is still in
 \ command mode.
 \
-:s (.) abs base @ opDivMod ?dup if (.) then digit emit ;s
+:s (.) abs radix opDivMod ?dup if (.) then digit emit ;s
 
 \ "." uses "(.)", it just needs to check if the number to print
 \ is negative, if so, it emits a single "-" character.
@@ -5150,7 +5155,7 @@ there 2/ primitive t!
 
 : >number ( ud b u -- ud b u : convert string to number )
   begin
-    2dup 2>r drop c@ base @        ( get next character )
+    2dup 2>r drop c@ radix           ( get next character )
     ( digit? -> ) >r [char] 0 - 9 lit over <
     if 7 lit - dup A lit < or then dup r> u< ( c base -- u f )
     0= if                            ( d char )
@@ -5158,7 +5163,7 @@ there 2/ primitive t!
       2r>                            ( restore string )
       exit                           ( finished...exit )
     then                             ( d char )
-    swap base @ um* drop rot base @ um* d+ ( accumulate digit )
+    swap radix um* drop rot radix um* d+ ( accumulate digit )
     2r>                              ( restore string )
     +string dup 0=                   ( advance, test for end )
   until ;
@@ -5221,9 +5226,10 @@ there 2/ primitive t!
 \
 : number? ( a u -- d -1 | a u 0 : easier to use than >number )
   #-1 dpl !
-  base @ >r
-  over c@ [char] - = dup >r if     +string then
-  over c@ [char] $ =        if hex +string then
+  radix >r
+  over c@ [char] - = dup >r if         +string then
+  over c@ [char] $ =        if hex     +string then
+( over c@ [char] # =        if decimal +string then )
   2>r #0 dup 2r>
   begin
     >number dup
@@ -6562,7 +6568,6 @@ there 2/ primitive t!
 \ "no-operation" word.
 \
 
-  
 :to ( [char] ) parse 2drop ; immediate ( c"xxx" -- )
 :to .( [char] ) parse type ; immediate ( c"xxx" -- )
 :to \ tib @ >in ! ; immediate ( c"xxx" -- )
@@ -7004,7 +7009,7 @@ there 2/ primitive t!
 : bell 7 lit emit ; ( -- : emit ASCII BEL character )
 :s csi 1B lit emit 5B lit emit ;s ( -- : ANSI Term. Esc. Seq. )
 : page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;
-: at-xy base @ decimal ( x y -- : set cursor position )
+: at-xy radix decimal ( x y -- : set cursor position )
    >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;
 
 \ # Forth Blocks
@@ -7142,17 +7147,30 @@ there 2/ primitive t!
 \
 \ If we wanted to format block "47" for editing.
 \
+\ Replacing "emit" with ".emit" in "list":
+\
+\         : within over - >r - r> u< ; ( u lo hi -- f )
+\         : .emit ( c -- ) 
+\           dup bl 7F lit within 0= if drop [char] . then 
+\           emit ;
+\
+\ Renders "list" a little more forgiving when printing
+\ binary data. You will need to add back in the line with
+\ "emit" and remove the line with "type".
+\
+
 : b/buf 400 lit ; ( -- u )
 : block #1 ?depth dup blk ! A lit lshift pause ; ( k -- u )
 : flush ( save-buffers empty-buffers ) ; ( -- )
 : update #-1 {dirty} lit ! ; ( -- : mark current buf as dirty )
 : blank bl fill ; ( a u -- : blank an area of memory )
-: list ( k -- : list a block )
+: list ( k -- : display a block )
    page cr         ( clean the screen )
    dup scr ! block ( update "scr" and load block )
    F lit for       ( for each line in the block )
      F lit r@ - 3 lit u.r space    ( print the line number )
-     3F lit for count emit next cr ( print line )
+     40 lit 2dup type cr +         ( print line )
+   ( 3F lit for count emit next cr \ print line )
    next drop ;
 
 \ # The Read-Eval-Loop
@@ -7287,10 +7305,9 @@ there 2/ primitive t!
 :r eforth 0108 lit ;r ( --, version )
 
 :s info cr ( --, print system info )
-  ." eForth v1.8"  here . cr
-  ." Richard James Howe (howe.r.j.89@gmail.com)" cr
-  ." https://github.com/howerj/subleq" cr
-  ." Public Domain" cr ;s
+  ." eForth v1.8, Public Domain,"  here . cr
+  ." Richard James Howe, howe.r.j.89@gmail.com" cr
+  ." https://github.com/howerj/subleq" cr ;s
 
 \ ## Task Initialization
 \
