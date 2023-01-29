@@ -696,6 +696,11 @@ only forth definitions hex
 \ a Forth word-list to the search order easily, "+order" adds
 \ a word-list so long as it has not already been added.
 \
+\ If "(order)" is not defined then we assume "+order" and
+\ "-order" are also not defined.
+\
+
+defined (order) 0= [if]
 : (order) ( w wid*n n -- wid*n w n )
   dup if
     1- swap >r recurse over r@ xor
@@ -703,6 +708,7 @@ only forth definitions hex
   then ;
 : -order get-order (order) nip set-order ; ( wid -- )
 : +order dup >r -order get-order r> swap 1+ set-order ;
+[then]
 
 \ You will notice some code is only executed for gforth,
 \ which does not by default have the word "eforth" defined,
@@ -860,6 +866,7 @@ variable tlocal 0 tlocal ! ( local variable allocator )
 :m tc, there tc! 1 tdp +! ;m ( c -- : write char to targ. dic.)
 :m t, there t! 2 tdp +! ;m ( u -- : write cell to target dic. )
 :m tallot tdp +! ;m ( u -- : allocate bytes in target dic. )
+:m mdrop drop ;m ( u -- : always call drop )
 
 \ "tpack" is used to copy a string into the target image.
 \ Useful if we want to define strings in the target, which we
@@ -977,6 +984,8 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ instance of a USER variable for each thread that has been
 \ created.
 \
+\ "local?" fetches the local value. 
+\
 \ "tvar" is a more conventional variable, however, much like
 \ "tuser" the name is not copied into the target dictionary.
 \ It creates a global variable instead of a thread local one.
@@ -996,6 +1005,7 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ used during meta-compilation.
 \
 
+:m local? tlocal @ ;m
 :m lallot >r tlocal @ r> + tlocal ! ;m ( u -- allot in target )
 :m tuser ( --, "name", Created-Word: -- u )
   get-current >r meta.1 set-current create r>
@@ -1654,8 +1664,6 @@ label: entry       \ used to set entry point in next cell
   0 tvar {last}     \ last defined word
   0 tvar {cycles}   \ number of times we have switched tasks
   0 tvar {single}   \ is multi processing off?
-  2F tvar {blk}     \ current loaded block
-  2F tvar {scr}     \ last viewed screen
 
 \ Most of the following are thread local variables, with the 
 \ exception of "ip" and "tos", the stack variables "{rp}" and 
@@ -1690,24 +1698,10 @@ label: entry       \ used to set entry point in next cell
   tuser {tos-save}  \ saved top of variable stack
   tuser {rp-save}   \ saved return stack pointer
   tuser {sp-save}   \ saved variable stack pointer
-  tuser {base}      \ input/output radix
-  tuser {dpl}       \ number of places after fraction
-  tuser {hld}       \ hold space pointer
-  tuser {in}        \ position in query string
-  tuser {key}       \ execution vector for key?
-  tuser {emit}      \ execution vector for emit
-  tuser {literal}   \ execution vector for literal
-  tuser {ok}        \ execution vector for .ok
-  tuser {echo}      \ execution vector for echo
-  tuser {tap}       \ execution vector for ktap
-  tuser {expect}    \ execution vector for expect
-  tuser {error}     \ execution vector for error handling
-  tuser {state}     \ compiler state
   tuser {handler}   \ throw/catch handler
   tuser {sender}    \ multitasking; msg. send, 0 = no message
   tuser {message}   \ multitasking; the message itself
   tuser {id}        \ executing from block or terminal?
-  tuser {span}      \ used by "expect" to store char count
   tuser {tib}       \ terminal input buffer: cell 1,
   =cell lallot      \ terminal input buffer: cell 2
 
@@ -2189,8 +2183,7 @@ assembler.1 -order
 \ task of bringing the system up, as a bug in those operators 
 \ makes everything else more difficult to debug.
 \
-:a invert
-   r1 ZERO tos r1 SUB r1 tos MOV tos DEC ;a
+:a invert r1 ZERO tos r1 SUB r1 tos MOV tos DEC ;a
 
 \ We need a way of pushing a literal value, a number, onto
 \ the variable stack, "opPush" does that.
@@ -2216,6 +2209,10 @@ assembler.1 -order
 \                opPush
 \                3
 \                exit
+\
+\ "opPush" does not have to be defined as a SUBLEQ instruction,
+\ it could be defined by using "@" and some introspection of
+\ the return stack as an ordinary Forth word.
 \
 \ "opPush" is defined as:
 \
@@ -2856,6 +2853,11 @@ assembler.1 -order
 \ threading model. Making this preemptive would require
 \ hardware support and greatly complicate the system.
 \
+\ To save on space it might be worth rewriting this VM
+\ instruction to only do the bare minimum that *has* to be
+\ done as a VM instruction, instead performing as many loads
+\ and stores in Forth code (which is far more compact) instead.
+\
 
 :a pause
   {single} if vm JMP then \ Do nothing if single-threaded mode
@@ -2946,6 +2948,9 @@ there 2/ primitive t!
 \ works with the system dictionary.
 \ * ":r"/";r": Define a word in the root dictionary.
 \ * ":e"/";e": Define a word in the editor dictionary.
+\ * "system\[/\]system": Put a group of words within the
+\ system vocabulary.
+\
 \
 \ The words that define new words in the target dictionary
 \ may only be used with the corresponding target dictionary
@@ -3003,8 +3008,11 @@ there 2/ primitive t!
 \ * ";t" compiles "opExit" at the end of a word definition.
 \
 
-:m ;t CAFE <> if abort" unstructured" then
-  talign opExit target.only.1 -order ;m
+:m munorder target.only.1 -order talign ;m
+:m (;t) 
+   CAFE <> if abort" Unstructured" then 
+   munorder ;m
+:m ;t (;t) opExit ;m
 :m :s tlast @ {system} t@ tlast ! F00D :t drop 0 ;m
 :m :so  tlast @ {system} t@ tlast ! F00D :to drop 0 ;m
 :m ;s drop CAFE ;t F00D <> if abort" unstructured" then
@@ -3015,7 +3023,9 @@ there 2/ primitive t!
 :m :e tlast @ {editor} t@ tlast ! DEAD :t drop 0 ;m
 :m ;e drop CAFE ;t DEAD <> if abort" unstructured" then
   tlast @ {editor} t! tlast ! ;m
-
+:m system[ tlast @ {system} t@ tlast ! BABE ;m
+:m ]system BABE <> if abort" unstructured" then
+   tlast @ {system} t! tlast ! ;m
 
 \ As ":t" and ";t" are the default actions we want when we
 \ are defining new words in the target dictionary, we can make
@@ -3199,22 +3209,6 @@ there 2/ primitive t!
 \ words the embody a virtual machine instruction, and
 \ other miscellaneous things.
 \
-\ To both save space, and because using "lit" as a postfix is
-\ annoying, for the most common constants; 0, 1, and -1, we
-\ will define words for them and place them in the system
-\ vocabulary with ":s".
-\
-\ Compiling a number into a word definition takes up two
-\ cells, one for "opPush" and another for the value. A
-\ reference to a word only takes up one cell, hence the saving.
-\ The trade off is that it takes longer to execute and space
-\ must be reserved for the words that push those constants.
-\
-:s #0 0 lit ;s ( -- 0 : push the number zero onto the stack )
-:s #1 1 lit ;s ( -- 1 : push one onto the stack )
-:s #-1 -1 lit ;s ( -- -1 : push negative one onto the stack )
-:s #2 2 lit ;s ( -- 2 : push two onto the stack )
-
 \ The next section adds all the words that are implemented in
 \ a single virtual machine instruction.
 \
@@ -3262,6 +3256,50 @@ there 2/ primitive t!
 :to 0> op0> ; ( n -- f : signed greater than zero )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
+
+\ One of the earliest tricks I remember being taught when
+\ learning to program is doubling a number by adding that
+\ number to itself, "2\*" does this, "2\/" will be defined
+\ later, it is slightly more complex.
+\
+: 2* dup + ; ( u -- u : multiply by two )
+
+\ Some important meta-compiler words can now be defined, ones
+\ for making constants, variables and thread-local variables
+\ (called user variables) can now be defined. We will fist
+\ define three words that will be used by the meta-compiler 
+\ words we will define (they will also be used much later
+\ by the equivalent words defined in the target. Those words
+\ are "(var)", "(const)" and "(user)", which are used by
+\ "variable", "constant" and "user" respectively.
+\
+
+:s (var) r> 2* ;s ( compile-only ) ( R: a --, -- a )
+:s (const) r> [@] ;s ( compile-only ) ( R: a --, -- u )
+:s (user) r> [@] {up} half lit [@] + 2* ;s ( compile-only ) 
+  ( R: a --, -- u )
+
+:m variable :t mdrop (var) 0 t, munorder ;m
+:m constant :t mdrop (const) t, munorder  ;m
+:m user :t mdrop (user) local? =cell lallot t, munorder ;m
+
+\ To both save space, and because using "lit" as a postfix is
+\ annoying, for the most common constants; 0, 1, and -1, we
+\ will define words for them and place them in the system
+\ vocabulary with ":s".
+\
+\ Compiling a number into a word definition takes up two
+\ cells, one for "opPush" and another for the value. A
+\ reference to a word only takes up one cell, hence the saving.
+\ The trade off is that it takes longer to execute and space
+\ must be reserved for the words that push those constants.
+\
+system[
+ 0 constant #0  ( --  0 : push the number zero onto the stack )
+ 1 constant #1  ( --  1 : push one onto the stack )
+-1 constant #-1 ( -- -1 : push negative one onto the stack )
+ 2 constant #2  ( --  2 : push two onto the stack )
+]system
 
 \ If "opAsm" is defined, so should this:
 \
@@ -3332,10 +3370,10 @@ there 2/ primitive t!
 \ 
 \ "2\*" has a much simpler definition, instead of being defined
 \ in terms of "lshift" (which has not yet been defined) it
-\ just adds the number to be doubled to itself. 
+\ just adds the number to be doubled to itself, as previously
+\ shown.
 \ 
 : 2/ #1 rshift ; ( u -- u : divide by two )
-: 2* dup + ; ( u -- u : multiply by two )
 
 \ Notice how "@" and "!" divide the address by two, which drops
 \ the lowest bit that is used to select the upper or lower
@@ -3405,7 +3443,8 @@ there 2/ primitive t!
 \ provided by a word with a name like "(name)", the word that
 \ executes the hook will be called just "name".
 \
-\ NB. "{cold}" contains a cell address, not a Forth address!
+\ NB. "{cold}" should contain a cell address, not a Forth 
+\ address!
 \
 \ That is,
 \
@@ -3423,15 +3462,20 @@ there 2/ primitive t!
 \
 \        ' (cold) 2/ <cold> !
 \
-: <ok> {ok} up ;             ( -- a : okay prompt xt loc. )
-:s <emit> {emit} up ;s       ( -- a : emit xt loc. )
-:s <key>  {key} up ;s        ( -- a : key xt loc. )
-:s <echo> {echo} up ;s       ( -- a : echo xt loc. )
-:s <literal> {literal} up ;s ( -- a : literal xt loc. )
-:s <tap> {tap} up ;s         ( -- a : tap xt loc. )
-:s <expect> {expect} up ;s   ( -- a : expect xt loc. )
-:s <error> {error} up ;s     ( -- a : <error> xt container. )
-:s <cold> {cold} lit ;s      ( -- a : cold xt loc. )
+
+user <ok> ( -- a : okay prompt xt loc. )
+
+system[
+  user <emit>     ( -- a : emit xt loc. )
+  user <key>      ( -- a : key xt loc. )
+  user <echo>     ( -- a : echo xt loc. )
+  user <literal>  ( -- a : literal xt loc. )
+  user <tap>      ( -- a : tap xt loc. )
+  user <expect>   ( -- a : expect xt loc. )
+  user <error>    ( -- a : <error> xt container. )
+]system
+  
+:s <cold> {cold} lit ;s ( -- a : cold xt loc. )
 
 \ ### Forth Variables
 \
@@ -3522,22 +3566,29 @@ there 2/ primitive t!
 \ "r\> base !" in Forth words definitions that deal with
 \ number printing.
 \
+\
 
-:s h? h lit ;s ( -- a : push the location of dict. ptr )
-: here h? @ ; ( -- u : push the dictionary pointer )
-: base {base} up ; ( -- a : push the radix for numeric I/O )
+variable blk ( -- a : latest loaded block )
+variable scr ( -- a : latest listed block )
+
+user base ( -- a : push the radix for numeric I/O )
+user dpl ( -- a : decimal point variable )
+user hld ( -- a : index to hold space for num. I/O)
+user state ( -- f : interpreter state )
+user >in ( -- a : input buffer position var )
+user span ( -- a : number of chars saved by expect )
+
+$20 constant bl ( -- 32 : push space character )
+
+system[
+       h constant h?  ( -- a : push the location of dict. ptr )
+    {ms} constant calibration ( -- a : "ms" calibration var )
+{cycles} constant cycles ( -- a : number of "cycles" ran for )
+    {sp} constant sp ( -- a : address of v.stk ptr. )
+]system
+
 :s radix base @ ;s ( -- u : retrieve base )
-: dpl {dpl} up ; ( -- a : decimal point variable )
-: hld {hld} up ; ( -- a : index to hold space for num. I/O)
-: state {state} up ; ( -- f : interpreter state )
-:s calibration {ms} lit ;s ( -- a : "ms" calibration var )
-: blk {blk} lit ; ( -- a : latest loaded block )
-: scr {scr} lit ; ( -- a : last view block )
-: >in {in} up ; ( -- a : input buffer position var )
-: span {span} up ; ( -- u : number of chars saved by expect )
-: bl 20 lit ; ( -- 32 : push space character )
-:s cycles {cycles} lit ;s ( -- a : number of "cycles" ran for )
-:s sp {sp} lit ;s ( -- a : address of v.stk ptr. )
+: here h? @ ; ( -- u : push the dictionary pointer )
 
 \ As mentioned, "sp@" is defined in Forth, and it is defined
 \ here. It retrieves the variable stack position, and pushes
@@ -5697,14 +5748,14 @@ there 2/ primitive t!
    \ next line finds first empty cell
    #0 >r begin @+ r@ xor while cell+ repeat rdrop
   dup cell - swap
-  context - 2/ dup >r 1- s>d -50 lit and throw
+  context - 2/ dup >r 1- s>d -$32 lit and throw
   for aft @+ swap cell - then next @ r> ;
 :r set-order ( widn ... wid1 n -- : set current search order )
   \ NB. Uses recursion, however the meta-compiler does not use
   \ the Forth compilation mechanism, so the current definition
   \ of "set-order" is available immediately.
   dup #-1 = if drop root-voc #1 set-order exit then
-  dup #vocs > -49 lit and throw
+  dup #vocs > -$31 lit and throw
   context swap for aft tuck ! cell+ then next #0 swap ! ;r
 
 \ "forth-wordlist" contains the standard Forth words,
@@ -5924,12 +5975,12 @@ there 2/ primitive t!
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= ?exit space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
-:s ?nul dup c@ ?exit -10 lit throw ;s ( b -- b )
-:s ?len dup c@ 1F lit > -13 lit and throw ;s ( b -- b )
+:s ?nul dup c@ ?exit -$10 lit throw ;s ( b -- b )
+:s ?len dup c@ 1F lit > -$13 lit and throw ;s ( b -- b )
 :to char token ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
 :to ;
-  CAFE lit <> -16 lit and throw ( check compile safety )
+  CAFE lit <> -$16 lit and throw ( check compile safety )
   =unnest lit ,                     ( compile exit )
   postpone [                        ( back to command mode )
   ?dup if                           ( link word in if non 0 )
@@ -6321,21 +6372,20 @@ there 2/ primitive t!
 \ it yourself.
 \
 
-:s (var) r> 2* ;s ( compile-only ) ( R: a --, -- a )
-:s (const) r> [@] ;s ( compile-only ) ( R: a --, -- u )
 :s (marker) r> 2* @+ h? ! cell+ @ get-current ! ;s
-   compile-only
+  ( compile-only )
 : create postpone : drop postpone [ compile (var)
    get-current ! ;
 :to variable create #0 , ;
 :to constant create cell negate allot compile (const) , ;
+\ :to user create compile (user) uhere , uallot ;
 
 : >body cell+ ; ( a -- a : move to a create words body )
 :s (does) r> r> 2* swap >r ;s ( compile-only )
 :s (comp)
   r> {last} lit @ cfa
   ( check we are running does> on a created word )
-  @+ to' (var) half lit <> -1F lit and throw
+  @+ to' (var) half lit <> -$1F lit and throw
   ! ;s ( compile-only )
 : does> compile (comp) compile (does) ;
    immediate compile-only
@@ -7091,7 +7141,11 @@ there 2/ primitive t!
 \ the behavior more consistent with other implementations, 
 \ however that this would require memory to store at least one, 
 \ preferably two, block buffers. It would not require any new
-\ peripheral support.
+\ peripheral support. We could also use the block system to
+\ access the full 65536 cells that are available to the SUBLEQ
+\ VM, using "\[@\]", transferring the block from memory not
+\ normally accessible to the Forth implementation with "@"
+\ alone.
 \
 \ That is the rough description of how things work in a normal
 \ Forth block system. The three main words are "block",
@@ -7159,7 +7213,7 @@ there 2/ primitive t!
 \ "emit" and remove the line with "type".
 \
 
-: b/buf 400 lit ; ( -- u )
+: b/buf 400 lit ; ( -- u : size of the block buffer )
 : block #1 ?depth dup blk ! A lit lshift pause ; ( k -- u )
 : flush ( save-buffers empty-buffers ) ; ( -- )
 : update #-1 {dirty} lit ! ; ( -- : mark current buf as dirty )
@@ -7172,6 +7226,9 @@ there 2/ primitive t!
      40 lit 2dup type cr +         ( print line )
    ( 3F lit for count emit next cr \ print line )
    next drop ;
+
+\ Remember, the definition of "block" above is one of the
+\ simplest, but not necessarily the best.
 
 \ # The Read-Eval-Loop
 \
@@ -9158,7 +9215,6 @@ it being run.
 \ for determining whether a variable is within a certain range.
 \
 :s ndrop for aft drop then next ;s ( x0...xn n -- )
-: within over - >r - r> u< ; ( u lo hi -- f )
 
 \ "validate" takes a pointer to a prospective match, the "pwd"
 \ *could* be a pointer to the word that CFA belongs to, if
@@ -10001,7 +10057,7 @@ users -order
 : grab ( <word> -- a : get word from input stream  )
   begin token dup nul? 0= ?exit drop query again ;
 : integer grab count number? nip ; ( <num> -- n f : get int. )
-: integer? integer 0= ( dpl @ 0>= or ) -24 and throw ;
+: integer? integer 0= ( dpl @ 0>= or ) -$18 and throw ;
 : ingest ( a u -- : opposite of 'dump', load nums into mem )
   cell / for aft integer? over ! cell+ then next drop ; 
 

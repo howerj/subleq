@@ -84,7 +84,6 @@ static int assemble(asm_t *a) {
 	assert(a->in);
 	for (char line[512]={0,};fgets(line, sizeof (line), a->in);) {
 	}
-
 	return 0;
 }
 

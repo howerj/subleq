@@ -8,15 +8,16 @@
 # - Get this working
 # - Add back in documentation/References
 # - Implement my own assembler in "debug.c"
-#
-#
+# - Restore if negated, in mod code
+# - Skip mod code if bit-width == 16
+# - Fail if bit-width < 16
 
 
 start:
 0 0 (begin); # Jump over variables
 
 . Z: zr: 0 tr:1 bits:1 max:-16 IOV: nr:-1
-. tw:0 tx:0 ty:0 td:0 x:65536 y:1024 w:0 or:1 c:0
+. tw:0 tx:0 ty:0 td:0 x:65536 y:1024 w:0 or:1 c:0 negated:0
 
 begin:
 
@@ -34,54 +35,7 @@ counted:
   zr;
 
 
-# Division code...
-#
-# DIV/MOD w x y: m(y) = abs(m(x)) / m(w), m(tz) = abs(m(x)) % m(w), w > 0
-#
-# TODO: Restore if negated
-
-## tw; tx; ty; td; zr;
-## 
-## x tw;
-## tw tx;
-## 
-## tw;
-## w tw;
-## tw ty;
-## 
-## # if (tx <= 0) { tx = -tx; }
-## zr tx (negate);
-## zr zr (noneg);
-## negate:
-##   tx zr; zr td; tx; td tx;
-## noneg:
-## 
-## y;
-## 
-## div:
-##   nr y;         # y++
-##   ty tx (dend); # x -= w, if x <= 0 JMP 'dend'
-##   zr zr (div);  # jump back to 'div', unconditionally
-## dend:
-## 
-## tw; tx tw; # tw = -tx;
-## 
-## td;
-## tx td;
-## td ty; 
-## 
-## td;
-## or tw;         # tw--
-## tw td (fix);   # if (td-tw <= 0) jump to fix
-## ty ty (nofix); # else jump to no fix
-## fix:
-##   or y;        # y--
-## nofix:
-## 
-## 
-## 
-
-
+## Self-interpreter
 
 a1; pc Z; Z a1; Z;
 
@@ -117,6 +71,48 @@ len b;
 nr pc;                 # [pc] = [pc] + 1
 c1; pc Z; Z c1; Z;       # [c1] = [pc]
 c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
+
+
+  # Division/Mod code...
+  #
+  # DIV/MOD w x y: m(y) = abs(m(x)) / m(w), m(tz) = abs(m(x)) % m(w), w > 0
+  #
+  tw; tx; ty; td; zr;
+  x tw; tw tx;
+  tw; w tw; tw ty;
+  negated;
+
+  # if (tx <= 0) { tx = -tx; }
+  zr tx (negate);
+  zr zr (noneg);
+  negate:
+    tx zr; zr td; tx; td tx;
+    or negated;
+  noneg:
+
+  y;
+
+  div:
+    nr y;         # y++
+    ty tx (dend); # x -= w, if x <= 0 JMP 'dend'
+    zr zr (div);  # jump back to 'div', unconditionally
+  dend:
+
+  tw; tx tw; # tw = -tx;
+
+  td;
+  tx td;
+  td ty; 
+
+  td;
+  or tw;         # tw--
+  tw td (fix);   # if (td-tw <= 0) jump to fix
+  ty ty (nofix); # else jump to no fix
+  fix:
+    or y;        # y--
+  nofix:
+
+
 
 # Execute the SUBLEQ instruction.
 #
