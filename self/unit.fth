@@ -1,3 +1,5 @@
+: debug source type ."  ok" cr ; ' debug <ok> !
+
 \ This is a Forth test bench for: <https://github.com/howerj/embed>, it also
 \ contains extensions to the base interpreter, such as floating point support.
 \
@@ -91,17 +93,23 @@ undefined? 1+!  ?\ : 1+! 1 swap +! ;
 : @bits swap @ and ; ( a u -- u )
 : ascii state @ if postpone [char] else char then ; immediate
 
-\ @warning This version of *marker* comes with caveats, if you are going
-\ to use it do not change the change the vocabulary list or use *definitions*
-\ if you do not know what you are doing. This version of marker is 
-\ non-compliant with the Forth DPANs standard, but it is still useful. It
-\ does not restore all the loaded word-lists at the time marker is set, or
-\ other word-lists that might exist.
-\
-\ : marker ( "name", -- : create an eraser )
-\  here >r current @ dup @ r> 
-\  create , 2, 
-\  does> dup cell+ 2@ swap ! @ here - allot ;
+: /string over min rot over + -rot - ;  ( b u1 u2 -- b u : advance string u2 )
+: +string 1 /string ;
+
+: ccitt ( crc c -- crc : crc polynomial $1021 AKA "x16 + x12 + x5 + 1" )
+  over $8 rshift xor   ( crc x )
+  dup  $4 rshift xor   ( crc x )
+  dup  $5 lshift xor   ( crc x )
+  dup  $C lshift xor   ( crc x )
+  swap $8 lshift xor ; ( crc )
+
+: crc ( b u -- u : calculate ccitt-ffff CRC )
+  $FFFF ( -1 = 0xffff ) >r
+  begin
+    ?dup
+  while
+   string c@ r> swap ccitt >r +string
+  repeat r> nip ;
 
 : sm/rem ( dl dh nn -- rem quo: symmetric division )
   over >r >r          ( dl dh nn -- dl dh,      R: -- dh nn )
@@ -131,12 +139,11 @@ undefined? 1+!  ?\ : 1+! 1 swap +! ;
 \ preserving when modifying it.
 \
 
-: >@ $3FFF and ;     ( a -- a : address with attribute bits masked off )
-: >attr $C000 and ;  ( a -- u : get attribute bits from an address )
-: link! dup @ >attr rot >@ or swap ! ; ( u a -- ) 
-: link >@ @ >@ ;
-: merge swap @ swap begin link dup link 0= until link! ; ( wid1 wid2 -- )
-hide >@ hide link hide >attr hide link!
+\ : >@ $3FFF and ;     ( a -- a : address with attribute bits masked off )
+\ : >attr $C000 and ;  ( a -- u : get attribute bits from an address )
+\ : link! dup @ >attr rot >@ or swap ! ; ( u a -- ) 
+\ : link >@ @ >@ ;
+\ : merge swap @ swap begin link dup link 0= until link! ; ( wid1 wid2 -- )
 
 \ This virtual machine has no concept of time, however with some manual input 
 \ from the user and the awesome power of a busy waiting loop it is possible
@@ -548,8 +555,8 @@ only forth definitions
 \ 
 
 system +order
-hide norm hide zero hide tens hide ralign hide lalign
-hide   -+ hide  one hide fix  hide shifts 
+\ hide norm hide zero hide tens hide ralign hide lalign
+\ hide   -+ hide  one hide fix  hide shifts 
 system -order
 
 \ ========================= FLOATING POINT CODE ===============================
@@ -693,15 +700,13 @@ only forth definitions system +order test +order
 : statistics total @ passed @ ;
 : throws? postpone ' catch >r empty-stacks r> ; ( "name" -- n  )
 
-: logger( verbose @ 1 > if .( cr exit then postpone (  ;
+: logger( verbose @ 1 > if postpone .( cr exit then postpone (  ;
 : logger\ verbose @ 1 > if exit then postpone \ ;
-
-system +order
-hide test hide n
-only forth definitions
 
 \ ========================= UNIT TEST FRAMEWORK ===============================
 
+system +order
+test +order
 .( BEGIN FORTH TEST SUITE ) cr
 logger( DECIMAL BASE )
 decimal
@@ -1009,7 +1014,7 @@ T{ char ghijk -> $67 }T
 
 \ T{ #vocs 8 min -> 8 }T     \ minimum number of vocabularies is 8
 T{ b/buf       -> $400 }T  \ b/buf should always be 1024
-defined? sp@ ?\ T{ sp@ 2 3 4 sp@ nip nip nip - abs chars -> 4 }T
+\ defined? sp@ ?\ T{ sp@ 2 3 4 sp@ nip nip nip - abs chars -> 4 }T
 T{ here 4 allot -4 allot here = -> -1 }T
 
 defined? d< ?\ T{  0  0  0  0 d< ->  0 }T
@@ -1092,17 +1097,19 @@ T{ 3.0 f 9.00 f f+ f>s -> 12 }T
 decimal
 .( passed: ) statistics u. space .( / ) 0 u.r cr
 .( here:   ) here . cr
-statistics <> ?\ .( [FAILED]     ) cr   abort
+statistics <> ?\ .( [FAILED]     ) cr  \ abort
 statistics  = ?\ .( [ALL PASSED] ) cr   
 
 .( CALLING MARKER 'XXX' ) cr
 xxx
 
 .( SAVING NEW IMAGE [SIZE:) here u. .( ] ) cr
-save
+
+0 here dump
 
 .( FINISHED TESTS ) cr
-\ bye
+bye
 \ ========================= END OF TESTS ======================================
+
 
 

@@ -14,10 +14,10 @@ int main(int argc, char **argv) {
 		if (fclose(f) < 0)
 			return 2;
 	}
-	for (pc = 0; !(pc & 0x8000u);) {
-		uint16_t a = m[L(pc++)];
-		uint16_t b = m[L(pc++)];
-		uint16_t c = m[L(pc++)];
+	for (pc = 0; pc < (SZ/2);) {
+		int a = m[L(pc++)];
+		int b = m[L(pc++)];
+		int c = m[L(pc++)];
 		if (a == 65535) {
 			m[L(b)] = getchar();
 		} else if (b == 65535) {
@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
 			if (fflush(stdout) < 0)
 				return 4;
 		} else {
-			uint16_t r = m[L(b)] - m[L(a)];
+			int r = m[L(b)] - m[L(a)];
 			if (r & 32768 || r == 0)
 				pc = c;
 			m[L(b)] = r;

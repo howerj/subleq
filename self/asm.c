@@ -4,6 +4,7 @@
 #include <string.h>
 #include <assert.h>
 
+#define SZ (1<<16)
 #define MAX_LABELS (256u)
 #define MAX_HOLES  (512u)
 #define MAX_NAME   (16u)
@@ -17,7 +18,7 @@ typedef struct {
 typedef struct {
 	label_t lb[MAX_LABELS];
 	label_t holes[MAX_HOLES];
-	uint64_t m[65536], max, pc;
+	uint64_t m[SZ], max, pc;
 	FILE *in, *out;
 } asm_t;
 

@@ -1,10 +1,3 @@
-: (order) ( w wid*n n -- wid*n w n )
-  dup if
-    1- swap >r recurse over r@ xor
-    if 1+ r> -rot exit then rdrop
-  then ;
-: -order get-order (order) nip set-order ; ( wid -- )
-: +order dup >r -order get-order r> swap 1+ set-order ;
 only forth definitions system +order
 : anonymous get-order 1+ here 1 cells allot swap set-order ;
 : undefined? bl word find nip 0= ; ( "name", -- f: Is word not in search order? )
@@ -14,7 +7,6 @@ undefined? 0<   ?\ : 0< 0 < ;
 undefined? 1-   ?\ : 1- 1 - ;
 undefined? 2*   ?\ : 2* 1 lshift ;
 undefined? 1+!  ?\ : 1+! 1 swap +! ;
-: within over - >r - r> u< ; ( u lo hi -- f )
 : arshift ( n u -- n : arithmetic right shift )
   2dup rshift >r swap $8000 and
   if $10 swap - -1 swap lshift else drop 0 then r> or ;

@@ -831,6 +831,7 @@ create tflash tflash size cells allot size erase
 variable tdp 0 tdp ! ( target dictionary pointer )
 variable tlast 0 tlast ! ( last defined target word pointer )
 variable tlocal 0 tlocal ! ( local variable allocator )
+variable voc-last 0 voc-last ! ( last defined in any vocab )
 
 \ We will be switching between vocabularies later, by using
 \ word pairs like ":m"/";m" and ":t"/";t" we can define words
@@ -1034,12 +1035,11 @@ cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
 \ when making the words that create functions in the target
 \ image such as ":" and "create".
 \
-\ There is a minor bug in that only meta-compiled words in the
-\ main dictionary can have these attributes applied to them.
+\ "voc-last" is used as "tlast" is swapped in and out depending
+\ on the vocabulary used, whereas "voc-last" is not.
 \
-
-:m compile-only tlast @ tnfa t@ 20 or tlast @ tnfa t! ;m 
-:m immediate    tlast @ tnfa t@ 40 or tlast @ tnfa t! ;m 
+:m compile-only voc-last @ tnfa t@ 20 or voc-last @ tnfa t! ;m 
+:m immediate   voc-last @ tnfa t@ 40 or voc-last @ tnfa t! ;m 
 
 \ "half" and "double" are just synonyms for "2/" and "2\*", it
 \ is much easier to know you are calling the correct version of
@@ -1086,6 +1086,7 @@ defined eforth [if]
 :m to' target.only.1 +order ' >body @ target.only.1 -order ;m
 [then]
 :m tcompile to' half t, ;m
+:m >tbody =cell + ;m
 
 \ "tcksum" is used to calculate the checksum over the part of
 \ the image that is checked. At the end of the meta-compilation
@@ -1178,7 +1179,7 @@ defined eforth [if]
 \ be done in the Forth Virtual Machine.
 \
 
-:m thead talign there tlast @ t, tlast !
+:m thead talign there tlast @ t, dup tlast ! voc-last !
    parse-word talign tpack talign ;m ( --, "name" )
 :m header >in @ thead >in ! ;m ( --, "name" )
 :m :ht ( "name" -- : forth routine, no header )
@@ -1550,7 +1551,7 @@ meta.1 +order definitions
 \ others).
 \
 \ The variables that are worth noting now are; "h", 
-\ "primitive", "{options}", "{up}", "check" and "{ms}".
+\ "primitive", "{options}", "{up}", and "check".
 \
 \ * "h" contains the dictionary pointer, as used by "here",
 \ this will be used much later on.
@@ -1560,7 +1561,6 @@ meta.1 +order definitions
 \ * "{up}" is used for thread local storage, which will be
 \ describe later, also known as user variables.
 \ * "check" is used to hold a checksum over the Forth image.
-\ * "{ms}" is part of a hack used to calibrate a delay loop.
 \ * "{options}" is a variable near the beginning of the image
 \ that can be manually edited to change fundamental behaviors
 \ of the image. It deserves more explanation.
@@ -1638,7 +1638,6 @@ label: entry       \ used to set entry point in next cell
 
   0 tvar h         \ dictionary pointer
   =thread half tvar {up} \ Current task addr. (Half size)
-  F00 tvar {ms}    \ delay loop calibration variable
   0 tvar check     \ used for system checksum
 
 \ The following will described at a later point, there is
@@ -1660,10 +1659,10 @@ label: entry       \ used to set entry point in next cell
   0 tvar {root-voc} \ absolute minimum vocabulary
   0 tvar {system}   \ system functions vocabulary
   0 tvar {cold}     \ entry point of VM program, set later on
-  0 tvar {dirty}    \ is block dirty?
   0 tvar {last}     \ last defined word
   0 tvar {cycles}   \ number of times we have switched tasks
   0 tvar {single}   \ is multi processing off?
+  0 tvar {user}     \ Number of locals assigned
 
 \ Most of the following are thread local variables, with the 
 \ exception of "ip" and "tos", the stack variables "{rp}" and 
@@ -1702,8 +1701,6 @@ label: entry       \ used to set entry point in next cell
   tuser {sender}    \ multitasking; msg. send, 0 = no message
   tuser {message}   \ multitasking; the message itself
   tuser {id}        \ executing from block or terminal?
-  tuser {tib}       \ terminal input buffer: cell 1,
-  =cell lallot      \ terminal input buffer: cell 2
 
 \ # Meta-compiler Assembly Macros
 \
@@ -2166,24 +2163,6 @@ assembler.1 -order
 \
 :a bye HALT (a);    ( -- : HALT system )
 
-\ The operation "invert" performs a bitwise invert, the only 
-\ bitwise operation we can perform easily. It uses the fact 
-\ that a subtraction using twos-compliment arithmetic is 
-\ equivalent to the following:
-\
-\        b - a = b + ~a + 1
-\
-\ If we would like to invert "a", we must get rid of "b" and
-\ the "+1" terms. We perform the subtraction, zeroing "b" first
-\ (which is "r1" in the code), then we just subtract one.
-\
-\ The other bitwise operations will be much more difficult
-\ to implement. When making the system for the first time,
-\ getting those bitwise operators correct was the most onerous 
-\ task of bringing the system up, as a bug in those operators 
-\ makes everything else more difficult to debug.
-\
-:a invert r1 ZERO tos r1 SUB r1 tos MOV tos DEC ;a
 
 \ We need a way of pushing a literal value, a number, onto
 \ the variable stack, "opPush" does that.
@@ -2218,32 +2197,6 @@ assembler.1 -order
 \
 
 :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
-
-\ The "opUp" function is similar to the "opPush" function,
-\ however it is used to access USER variables instead, that
-\ is variables stored in the thread local store, or to think of
-\ them another way, variables stored relative to a tasks
-\ memory area. They are part of the cooperative multitasking
-\ system. This instruction should be understood in conjunction
-\ with "tuser", "pause" (defined later on in this section) and
-\ the multitasking words defined towards the end of this
-\ document.
-\
-\ Where this function differs to "opPush" is that instead of
-\ pushing a literal, it loads a literal, adds it to the current
-\ task address stored in "{up}", and pushes that onto the
-\ stack. The address should be cell and not byte address, so
-\
-\        opUp 0
-\
-\ Would refer to the first thread local cell and push the
-\ address of it onto the stack.
-\
-\ "tuser" is used to reserve those thread local variables in
-\ the meta-compiler, which has already been described.
-\
-:a opUp ++sp tos {sp} iSTORE tos ip iLOAD ip INC
-   {up} tos ADD {up} tos ADD ;a
 
 \ The following instructions are nothing special, just simple
 \ stack manipulation functions, they implement the following
@@ -2317,8 +2270,12 @@ assembler.1 -order
 \ as ";a" writes in another unconditional jump which is no
 \ longer needed.
 \
+\ "opKey" is commented out, as it is possible to implement it
+\ in Forth code, which saves on space, by loading from address
+\ "-1" with "\[@\]".
+\
 :a opEmit tos PUT t' opDrop JMP (a);
-:a opKey ++sp tos {sp} iSTORE tos GET ;a ( -- n )
+( :a opKey ++sp tos {sp} iSTORE tos GET ;a ) ( -- n )
 
 \ Subtraction and addition need no real explanation, just note
 \ that they are relatively fast to execute in this machine.
@@ -2950,7 +2907,8 @@ there 2/ primitive t!
 \ * ":e"/";e": Define a word in the editor dictionary.
 \ * "system\[/\]system": Put a group of words within the
 \ system vocabulary.
-\
+\ * "root\[","\]root": Put a group of words within the
+\ root vocabulary.
 \
 \ The words that define new words in the target dictionary
 \ may only be used with the corresponding target dictionary
@@ -3026,6 +2984,9 @@ there 2/ primitive t!
 :m system[ tlast @ {system} t@ tlast ! BABE ;m
 :m ]system BABE <> if abort" unstructured" then
    tlast @ {system} t! tlast ! ;m
+:m root[ tlast @ {root-voc} t@ tlast ! D00D ;m
+:m ]root D00D <> if abort" unstructured" then
+   tlast @ {root-voc} t! tlast ! ;m
 
 \ As ":t" and ";t" are the default actions we want when we
 \ are defining new words in the target dictionary, we can make
@@ -3077,7 +3038,6 @@ there 2/ primitive t!
 \
 
 :m lit         opPush t, ;m ( n -- : compile literal )
-:m up          opUp   t, ;m ( n -- : compile user variable )
 :m [char] char opPush t, ;m ( --, "name" : compile char )
 :m char   char opPush t, ;m ( --, "name" : compile char )
 
@@ -3151,7 +3111,7 @@ there 2/ primitive t!
 :m then there 2/ swap t! ;m ( a -- )
 :m else tmark swap then ;m ( a -- a )
 :m while if ;m ( -- a )
-:m repeat swap again then ;m
+:m repeat swap again then ;m ( a a -- )
 :m aft drop tmark begin swap ;m ( a -- a a )
 :m next talign opNext 2/ t, ;m ( a -- )
 :m for opToR begin ;m ( -- a )
@@ -3168,7 +3128,6 @@ there 2/ primitive t!
 :m =unnest [ t' opExit  half ] literal ;m ( -- a )
 :m =>r     [ t' opToR   half ] literal ;m ( -- a )
 :m =next   [ t' opNext  half ] literal ;m ( -- a )
-:m =up     [ t' opUp    half ] literal ;m ( -- a )
 
 \ To avoid conflicts with meta-compiled words and words
 \ compiled in the target dictionary some instructions have
@@ -3242,7 +3201,6 @@ there 2/ primitive t!
 
 :to + + ; ( n n -- n : addition )
 :to - - ; ( n1 n2 -- n : subtract n2 from n1 )
-:to invert invert ; ( u -- u : bitwise logical negate )
 :to bye bye ; ( -- : halt the system )
 :to dup dup ; ( n -- n n : duplicate top of variable stack )
 :to drop opDrop ; ( n -- : drop top of variable stack )
@@ -3266,19 +3224,60 @@ there 2/ primitive t!
 
 \ Some important meta-compiler words can now be defined, ones
 \ for making constants, variables and thread-local variables
-\ (called user variables) can now be defined. We will fist
+\ (called user variables) can now be defined. We will first
 \ define three words that will be used by the meta-compiler 
 \ words we will define (they will also be used much later
-\ by the equivalent words defined in the target. Those words
-\ are "(var)", "(const)" and "(user)", which are used by
-\ "variable", "constant" and "user" respectively.
+\ by the equivalent words defined in the target, in the
+\ section on "create" and "does\>"). Those words are "(var)", 
+\ "(const)" and "(user)", which are used by "variable", 
+\ "constant" and "user" respectively.
+\
+\ The bracket words work by manipulating the return stack value 
+\ doing three things when they are compiled into a new word by
+\ "variable", "constant" or "user".
+\
+\ 1. Getting the address of a cell in which a special value
+\ is stored.
+\ 2. Optionally doing *something* with that address, such
+\ as fetching the contents as with "(const)".
+\ 3. Exiting to the caller instead of continue execution, that
+\ means these words do not exit their definitions like normal
+\ words using "opExit".
+\
+\ "(up)" does a similar function to "(user)", and is then
+\ used in the meta-compiler word "up". It is also similar
+\ to "opPush", however it is used to access USER variables 
+\ instead, that is variables stored in the thread local store, 
+\ or to think of them another way, variables stored relative to 
+\ a tasks memory area. They are part of the cooperative 
+\ multitasking system. This instruction should be understood in 
+\ conjunction with "tuser", "pause" (defined later on in this 
+\ section) and the multitasking words defined towards the end 
+\ of this document.
+\
+\ Where this function differs to "opPush" is that instead of
+\ pushing a literal, it loads a literal, adds it to the current
+\ task address stored in "{up}", and pushes that onto the
+\ stack. The address should be cell and not byte address, so
+\
+\        (up) 0
+\
+\ Would refer to the first thread local cell and push the
+\ address of it onto the stack.
+\
+\ "tuser" is used to reserve those thread local variables in
+\ the meta-compiler, which has already been described.
 \
 
-:s (var) r> 2* ;s ( compile-only ) ( R: a --, -- a )
-:s (const) r> [@] ;s ( compile-only ) ( R: a --, -- u )
-:s (user) r> [@] {up} half lit [@] + 2* ;s ( compile-only ) 
+:s (up) 
+   r> dup [@] {up} half lit [@] + 2* swap 1 lit + >r ;s
+  compile-only
+:s (var) r> 2* ;s compile-only ( R: a --, -- a )
+:s (const) r> [@] ;s compile-only ( R: a --, -- u )
+:s (user) r> [@] {up} half lit [@] + 2* ;s compile-only
   ( R: a --, -- u )
 
+:m up (up) t, ;m ( n -- : compile user variable )
 :m variable :t mdrop (var) 0 t, munorder ;m
 :m constant :t mdrop (const) t, munorder  ;m
 :m user :t mdrop (user) local? =cell lallot t, munorder ;m
@@ -3323,6 +3322,12 @@ system[
 
 : over swap dup >r swap r> ; ( n1 n2 -- n1 n2 n1 )
 
+\ "1+" and "1-" do what they say, increment and decrement
+\ respectively.
+\
+: 1+ #1 + ; ( n -- n : increment value in cell )
+: 1- #1 - ; ( n -- n : decrement value in cell )
+
 \ A common expression I find myself typing is "dup \>r",
 \ we could define a word that does this using "over" and
 \ some return stack manipulation, or with some of the other 
@@ -3347,16 +3352,28 @@ system[
 \ and then feeding them into "mux", it is a very versatile
 \ instruction.
 \
-
-: xor >r dup invert swap r> mux ; ( u u -- u : bitwise xor )
-: or  over mux ;                  ( u u -- u : bitwise or )
-: and #0 swap mux ;               ( u u -- u : bitwise and )
-
-\ "1+" and "1-" do what they say, increment and decrement
-\ respectively.
+\ The operation "invert" performs a bitwise invert, the only 
+\ bitwise operation we can perform easily. It uses the fact 
+\ that a subtraction using twos-compliment arithmetic is 
+\ equivalent to the following:
 \
-: 1+ #1 + ; ( n -- n : increment )
-: 1- #1 - ; ( n -- n : decrement )
+\        b - a = b + ~a + 1
+\
+\ If we would like to invert "a", we must get rid of "b" and
+\ the "+1" terms. We perform the subtraction, zeroing "b"
+\ first, then we just subtract one.
+\
+\ The other bitwise operations will be much more difficult
+\ to implement. When making the system for the first time,
+\ getting those bitwise operators correct was the most onerous 
+\ task of bringing the system up, as a bug in those operators 
+\ makes everything else more difficult to debug.
+\
+
+: invert #0 swap - 1- ;           ( u -- u : bitwise invert )
+: xor >r dup invert swap r> mux ; ( u u -- u : bitwise xor )
+: or over mux ;                   ( u u -- u : bitwise or )
+: and #0 swap mux ;               ( u u -- u : bitwise and )
 
 \ "2/", or dividing by two, is a very common operation, so it
 \ useful to have a word that does this. This Forth implements
@@ -3392,7 +3409,7 @@ system[
 \ destructive analogues that keep their input arguments intact,
 \ such as "if".
 \
-:s @+ dup @ ;s ( a -- a u )
+:s @+ dup @ ;s ( a -- a u : non-destructive load )
 
 \ ### Hook Variables
 \
@@ -3466,13 +3483,13 @@ system[
 user <ok> ( -- a : okay prompt xt loc. )
 
 system[
-  user <emit>     ( -- a : emit xt loc. )
-  user <key>      ( -- a : key xt loc. )
-  user <echo>     ( -- a : echo xt loc. )
-  user <literal>  ( -- a : literal xt loc. )
-  user <tap>      ( -- a : tap xt loc. )
-  user <expect>   ( -- a : expect xt loc. )
-  user <error>    ( -- a : <error> xt container. )
+  user <emit>    ( -- a : emit xt loc. )
+  user <key>     ( -- a : key xt loc. )
+  user <echo>    ( -- a : echo xt loc. )
+  user <literal> ( -- a : literal xt loc. )
+  user <tap>     ( -- a : tap xt loc. )
+  user <expect>  ( -- a : expect xt loc. )
+  user <error>   ( -- a : <error> xt container. )
 ]system
   
 :s <cold> {cold} lit ;s ( -- a : cold xt loc. )
@@ -3571,6 +3588,9 @@ system[
 variable blk ( -- a : latest loaded block )
 variable scr ( -- a : latest listed block )
 
+2F t' blk >tbody t!
+2F t' scr >tbody t!
+
 user base ( -- a : push the radix for numeric I/O )
 user dpl ( -- a : decimal point variable )
 user hld ( -- a : index to hold space for num. I/O)
@@ -3582,9 +3602,10 @@ $20 constant bl ( -- 32 : push space character )
 
 system[
        h constant h?  ( -- a : push the location of dict. ptr )
-    {ms} constant calibration ( -- a : "ms" calibration var )
 {cycles} constant cycles ( -- a : number of "cycles" ran for )
     {sp} constant sp ( -- a : address of v.stk ptr. )
+  {user} constant user? ( -- a : )
+         variable calibration F00 t' calibration >tbody t!
 ]system
 
 :s radix base @ ;s ( -- u : retrieve base )
@@ -3810,6 +3831,27 @@ system[
 : u>= u< 0= ; ( u1 u2 -- f )
 : u<= u> 0= ; ( u1 u2 -- f )
 
+\ "within" is a word that is used for bounds checking. Whether
+\ to include this word or not in the base system is up for
+\ debate, it is not used within it at the time of writing this
+\ sentence, however it is used quite a lot in extensions.
+\
+\ The word calculates:
+\
+\          lower bound <= u < upper bound
+\
+\ Note that the first comparison differs from the second!
+\
+\ You can test this yourself with:
+\
+\         0 1 10 within . ( 0 )
+\         1 1 10 within . ( -1 )
+\         5 1 10 within . ( -1 )
+\         9 1 10 within . ( -1 )
+\        10 1 10 within . ( 0 )
+\
+: within over - >r - r> u< ; ( u lo hi -- f )
+
 \ Miscellaneous arithmetic words need defining:
 \
 \ "negate", which is simple enough, it negates a value, most
@@ -3837,8 +3879,8 @@ system[
 \ programming languages do not do this.
 \
 
-: negate 1- invert ; ( n -- n )
-: s>d dup 0< ; ( n -- d )
+: negate 1- invert ; ( n -- n : twos compliment negation )
+: s>d dup 0< ; ( n -- d : signed to double width cell )
 : abs s>d if negate then ; ( n -- u )
 
 \ The cell word-set allows portable code to be written that
@@ -3903,7 +3945,7 @@ system[
 \        1 x ( prints "Executed. " )
 \
 
-: ?exit if rdrop then ; compile-only
+: ?exit if rdrop then ; compile-only ( u --, R: -- |??? )
 
 \ "key?" is a word that interfaces with the input channel
 \ and attempts to get a single character, or byte, of input
@@ -3938,9 +3980,21 @@ system[
 \
 \ "key?" does not call "pause" either.
 \
+\ Note that "key?" does not call a VM primitive to perform
+\ an input operation, it instead performs a load from a
+\ special address that triggers an input (*sort of* like
+\ memory mapped Input and Output).
+\
+\ This is done with the line:
+\
+\        #-1 [@] negate
+\
+\ Performing a load of address "#-1 [@] negate", which fetches
+\ a byte from input as a side effect of a load.
+\
 
-: key? opKey s>d ( -- c 0 | -1 : get single byte of input )
-   if
+: key? #-1 [@] negate ( -- c 0 | -1 : get byte of input )
+   s>d if
      {options} lit @ 8 lit and if bye then drop #0 exit
    then #-1 ;
 
@@ -4164,6 +4218,11 @@ system[
    tuck @+ swap #1 and 0= FF lit xor
    >r over xor r> and xor swap ! ;
 
+\ "c@+" is another space saving measure like "@+", but is also 
+\ useful to have around, and non-standard.
+\
+:s c@+ dup c@ ;s ( b -- b u : non-destructive 'c@' )
+
 \ "min" and "max" are more traditionally written as:
 \
 \        : max 2dup < if nip else drop then ; ( n1 n2 -- n )
@@ -4241,7 +4300,7 @@ system[
 \
 \ These words are using for parsing, which is defined later on.
 \
-:s tup {tib} up ;s ( -- a )
+system[ user tup =cell tallot ]system
 : source tup 2@ ; ( -- a u : get terminal input source )
 
 \ "aligned" is one of those words that has been implemented
@@ -4392,7 +4451,7 @@ system[
 \
 
 : cmove ( b1 b2 u -- )
-   for aft >r dup c@ r@ c! 1+ r> 1+ then next 2drop ;
+   for aft >r c@+ r@ c! 1+ r> 1+ then next 2drop ;
 : fill ( b u c -- : write byte 'c' to array 'b' of 'u' length )
    swap for swap aft 2dup c! 1+ then next 2drop ;
 : erase #0 fill ; ( b u -- : write zeros to array )
@@ -4748,7 +4807,7 @@ system[
     dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
   next rot drop ;
-: * um* drop ;
+: * um* drop ; ( n n -- n : multiply two numbers )
 : um/mod ( ud u -- ur uq : unsigned double cell div/mod )
   ?dup 0= -A lit and throw
   2dup u<
@@ -5149,7 +5208,7 @@ system[
 \ "u.r" but displays signed values.
 \
 : u.r >r #0 <# #s #>  r> over - bl banner type ; ( u r -- )
-: u. space #0 u.r ; ( u -- )
+: u. space #0 u.r ; ( u -- : unsigned numeric output )
 
 \ "(.)" bypasses all of the standard Forth mechanisms for
 \ formatting Forth numbers, the reason for doing this is speed,
@@ -5176,7 +5235,7 @@ system[
 \        : . space dup >r abs #0 <# #s r> sign #> type ;
 \
 \
-: . space s>d if [char] - emit then (.) ;
+: . space s>d if [char] - emit then (.) ; ( n -- )
 
 
 \ "\>number" is a large but not terribly complex word, it
@@ -5274,6 +5333,11 @@ system[
 \ A peculiarity of the implementation is that "1.2.3" is a
 \ valid number, with only the last ".3" having an effect on
 \ the "dpl" value.
+\
+\ The separator is a single dot, currently there is no way
+\ of changing this, to do this a variable could be introduced,
+\ or perhaps a string containing characters to allow as
+\ separators.
 \
 : number? ( a u -- d -1 | a u 0 : easier to use than >number )
   #-1 dpl !
@@ -5400,7 +5464,7 @@ system[
 
 : nfa cell+ ; ( pwd -- nfa : move word ptr to name field )
 : cfa ( pwd -- cfa : move to Code Field Address )
-  nfa dup c@ 1F lit and + cell+ cell negate and ;
+  nfa c@+ 1F lit and + cell+ cell negate and ;
 
 \ "(search)" and "(find)" are made to be as generic as
 \ possible, they are not complex words, but they do a lot.
@@ -5758,6 +5822,15 @@ system[
   dup #vocs > -$31 lit and throw
   context swap for aft tuck ! cell+ then next #0 swap ! ;r
 
+: (order) ( w wid*n n -- wid*n w n )
+  dup if
+    1- swap >r ( recurse -> ) (order) over r@ xor
+    if 1+ r> -rot exit then rdrop
+  then ;
+: -order get-order (order) nip set-order ; ( wid -- )
+: +order dup >r -order get-order r> swap 1+ set-order ;
+
+
 \ "forth-wordlist" contains the standard Forth words,
 \ excluding the root Forth words, as mentioned, and "system"
 \ contains non-standard Forth words used in the implementation.
@@ -5773,8 +5846,10 @@ system[
 \ memory efficient. The current setup works however.
 \
 
-:r forth-wordlist {forth-wordlist} lit ;r ( -- wid )
-:r system {system} lit ;r ( -- wid )
+root[
+  {forth-wordlist} constant forth-wordlist ( -- wid )
+          {system} constant system         ( -- wid )
+]root
 
 \ "forth" sets the search order to include both the root
 \ and Forth vocabularies.
@@ -5975,8 +6050,8 @@ system[
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= ?exit space
  2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
-:s ?nul dup c@ ?exit -$10 lit throw ;s ( b -- b )
-:s ?len dup c@ 1F lit > -$13 lit and throw ;s ( b -- b )
+:s ?nul c@+ ?exit -$10 lit throw ;s ( b -- b )
+:s ?len c@+ 1F lit > -$13 lit and throw ;s ( b -- b )
 :to char token ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char =push lit , , ; immediate
 :to ;
@@ -6266,7 +6341,7 @@ system[
 \ VM instructions.
 \
 
-:s mark here #0 , ;s ( compile-only )
+:s mark here #0 , ;s compile-only
 :to begin here ; immediate compile-only
 :to if =jumpz lit , mark ; immediate compile-only
 :to until 2/ postpone if ! ; immediate compile-only
@@ -6331,6 +6406,8 @@ system[
 \ is used to retrieve stored information required by the word
 \ "marker", it is similar in to "(var)" and "(const)".
 \
+\ We have already encountered their use in the meta-compiler.
+\
 \ The explanation of "does\>" will require more effort, it
 \ modifies the created word so that it now executes a different
 \ set of instructions, the ones pointing to after the "does\>"
@@ -6372,21 +6449,21 @@ system[
 \ it yourself.
 \
 
-:s (marker) r> 2* @+ h? ! cell+ @ get-current ! ;s
-  ( compile-only )
+:s (marker) r> 2* @+ h? ! cell+ @ get-current ! ;s compile-only
 : create postpone : drop postpone [ compile (var)
    get-current ! ;
 :to variable create #0 , ;
 :to constant create cell negate allot compile (const) , ;
-\ :to user create compile (user) uhere , uallot ;
+:to user create cell negate allot compile (user) 
+    user? @ , #1 user? +! ;
 
 : >body cell+ ; ( a -- a : move to a create words body )
-:s (does) r> r> 2* swap >r ;s ( compile-only )
+:s (does) r> r> 2* swap >r ;s compile-only
 :s (comp)
   r> {last} lit @ cfa
   ( check we are running does> on a created word )
   @+ to' (var) half lit <> -$1F lit and throw
-  ! ;s ( compile-only )
+  ! ;s compile-only
 : does> compile (comp) compile (does) ;
    immediate compile-only
 
@@ -6935,7 +7012,7 @@ system[
 :to [then] ; immediate ( -- )
 :to [else]
  begin
-  begin token dup c@ while
+  begin token c@+ while
    find drop cfa dup to' [else] lit = swap to' [then] lit = or
     ?exit repeat query drop again ; immediate
 :to [if] ?exit postpone [else] ; immediate
@@ -7212,11 +7289,25 @@ system[
 \ binary data. You will need to add back in the line with
 \ "emit" and remove the line with "type".
 \
+\ It might be worth having a compile time switch for more
+\ or less complicated versions of "block", the simplest and
+\ least functional block implementation is:
+\
+\        : block 1024 * ;
+\ 
+\ A little too spartan. Switching between this version of 
+\ "block" and one that can access all memory along with proper
+\ block buffers would be useful, however.
+\
+\ "thru" and "screens" for loading a block range and listing
+\ a block range are listed in the appendix.
+\
 
+( system[ variable dirty ]system )
 : b/buf 400 lit ; ( -- u : size of the block buffer )
 : block #1 ?depth dup blk ! A lit lshift pause ; ( k -- u )
-: flush ( save-buffers empty-buffers ) ; ( -- )
-: update #-1 {dirty} lit ! ; ( -- : mark current buf as dirty )
+: flush ( dirty @ if save-buffers empty-buffers then ) ;
+: update ( #-1 dirty ! ) ; ( -- : mark cur. buf. as dirty )
 : blank bl fill ; ( a u -- : blank an area of memory )
 : list ( k -- : display a block )
    page cr         ( clean the screen )
@@ -7226,9 +7317,6 @@ system[
      40 lit 2dup type cr +         ( print line )
    ( 3F lit for count emit next cr \ print line )
    next drop ;
-
-\ Remember, the definition of "block" above is one of the
-\ simplest, but not necessarily the best.
 
 \ # The Read-Eval-Loop
 \
@@ -7282,7 +7370,7 @@ system[
 \ "\<ok\>", as just mentioned.
 \
 :s eval ( "word" -- )
-   begin token dup c@ while
+   begin token c@+ while
      interpret #0 ?depth
    repeat drop <ok> @execute ;s 
 
@@ -8033,6 +8121,7 @@ t' (cold) half {cold} t!      \ Set starting Forth word
 atlast {forth-wordlist} t!    \ Make wordlist work
 {forth-wordlist} {current} t! \ Set "current" dictionary
 there h t!                    \ Assign dictionary pointer
+local? {user}  t!             \ Assign number of locals
 primitive t@ double mkck check t! \ Set checksum over Forth
 atlast {last} t!              \ Set last defined word
 save-target                   \ Output target
@@ -9288,7 +9377,9 @@ it being run.
   dup =jump  lit = if drop ."  jump  " cell+ dup @ . exit then
   dup =push  lit = if drop ."  push  " cell+ dup @ . exit then
   dup =next  lit = if drop ."  next  " cell+ dup @ . exit then
-  dup =up    lit = if drop ."  up    " cell+ dup @ . exit then
+  \ "(var)", "(const)" and "(user)", "(up)", need adding, as
+  \ well as dealing with "create"/"does\>", and better control 
+  \ structure handling.
   dup to' .$ half lit = if drop ."  ." [char] " emit space
     cell+ count 2dup type [char] " emit + aligned
   exit then
@@ -9692,13 +9783,6 @@ variable seed ( NB. Could be mixed with keyboard input )
   dup  9 rshift xor
   dup  7 lshift xor
   dup seed ! ;
-: (order) ( w wid*n n -- wid*n w n )
-  dup if
-    1- swap >r recurse over r@ xor
-    if 1+ r> -rot exit then rdrop
-  then ;
-: -order get-order (order) nip set-order ; ( wid -- )
-: +order dup >r -order get-order r> swap 1+ set-order ;
 : cell- 2 - ;
 : rpick rp@ swap - 1- 2* @ ;
 : c, here c! 1 allot ; ( c -- )
@@ -9716,7 +9800,6 @@ variable seed ( NB. Could be mixed with keyboard input )
 : binary $2 base ! ; ( -- )
 : octal $8 base ! ; ( -- )
 : .base base @ dup decimal . base ! ; ( -- )
-: only -1 set-order ; ( -- )
 : also get-order over swap 1+ set-order ; ( -- )
 : previous get-order nip 1- set-order ; ( -- )
 : buffer block ; ( k -- a )
@@ -9757,6 +9840,8 @@ variable seed ( NB. Could be mixed with keyboard input )
 : d- dnegate d+ ;                  ( d d -- d )
 : dabs  s>d if dnegate then ;      ( d -- ud )
 : d<> d= 0= ;                      ( d d -- f )
+: d0= or 0= ;                      ( d -- f )
+: d0<> d0= 0= ;                    ( d -- f )
 : 2rdrop r> rdrop rdrop >r ; ( R: n n -- )
 : 2. swap . . ; ( n n -- )
 : m* 2dup xor 0< >r abs swap abs um* r> if dnegate then ;
@@ -9944,15 +10029,8 @@ mark
 
 <ok> @ ' ) <ok> !
 
+system +order
 : wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
-
-: (order) ( w wid*n n -- wid*n w n )
-  dup if
-    1- swap >r recurse over r@ xor
-    if 1+ r> -rot exit then rdrop
-  then ;
-: -order get-order (order) nip set-order ; ( wid -- )
-: +order dup >r -order get-order r> swap 1+ set-order ;
 
 ( NB. Bitwise ops must be masked off on non 16-bit machines )
 : crc ( b u -- u : calculate ccitt-ffff CRC )
@@ -9983,18 +10061,18 @@ dup constant (prompt)
 
 forth-wordlist +order definitions
 
-: user 
+: user:
   create pass ,
   does> ask @ pass = if restore success exit then fail ;
 : login secure message ' ) <ok> ! ;
 : .users get-order secure words set-order ;
 
 users +order definitions
-user guest guest
-user admin password1
-user archer dangerzone
-user cyril figgis
-user lana stirling
+user: guest guest
+user: admin password1
+user: archer dangerzone
+user: cyril figgis
+user: lana stirling
 users -order
 .( EFORTH ONLINE ) cr
 <ok> ! login

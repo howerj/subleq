@@ -1,6 +1,4 @@
-\ system +order
-
-get-order 1+ system swap set-order
+system +order
 task: rx
 task: tx1
 task: tx2
