@@ -7467,10 +7467,10 @@ root[
 \ Also note that the license applies to the Forth image and
 \ not the book!
 \
-:r eforth 0108 lit ;r ( --, version )
+:r eforth 0109 lit ;r ( --, version )
 
 :s info cr ( --, print system info )
-  ." eForth v1.8, Public Domain,"  here . cr
+  ." eForth v1.9, Public Domain,"  here . cr
   ." Richard James Howe, howe.r.j.89@gmail.com" cr
   ." https://github.com/howerj/subleq" cr ;s
 
