@@ -26,4 +26,4 @@ all-run: ../subleq all.dec
 	../subleq all.dec ../subleq.dec
 
 clean:
-	rm sqasm
+	rm -f sqasm asm

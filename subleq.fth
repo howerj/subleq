@@ -2196,7 +2196,7 @@ assembler.1 -order
 \ "opPush" is defined as:
 \
 
-:a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
+( :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a )
 
 \ The following instructions are nothing special, just simple
 \ stack manipulation functions, they implement the following
@@ -2373,8 +2373,9 @@ assembler.1 -order
 \ conditional jumps respectively. The actual jump is performed
 \ by "ip ip iLOAD", as "ip" has been incremented before the
 \ instruction has been called it points to the next cell,
-\ which is used to store the jump location, much like with
-\ "opPush". These instructions are used to implement the
+\ which is used to store the jump location.
+\
+\ These instructions are used to implement the
 \ control structures "if", "begin", "again", "until", "repeat",
 \ along with other conditional statements. As shown later
 \ patching the binary and computing addresses will need to be
@@ -2394,15 +2395,15 @@ assembler.1 -order
 \        <word header not shown> 
 \         0: opJumpZ
 \         1: 12
-\         2: opPush
+\         2: (push)
 \         3: 2
-\         4: opPush
+\         4: (push)
 \         5: 2
 \         6: address of +
 \         7: address of .
-\         8: opPush
+\         8: (push)
 \         9: 3
-\        10: opPush
+\        10: (push)
 \        11: 3
 \        12: address of +
 \        13: address of .
@@ -2723,6 +2724,10 @@ assembler.1 -order
 \ be best to allow them to be compiled out with a meta-compile
 \ time flag.
 \
+\ This could be rewritten to use long division, which would
+\ be larger, but faster.
+\
+
 
 :a opDivMod
   r0 {sp} iLOAD
@@ -2932,6 +2937,8 @@ there 2/ primitive t!
 \ the stack, or the incorrect number is compiled into a word
 \ definition by the meta-compiler.
 \
+\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
+\
 \ An example of this is "lit", which pulls a value off of the
 \ stack and compiles into a word definition. We can use this
 \ in an example:
@@ -3001,45 +3008,6 @@ there 2/ primitive t!
 
 :m : :t ;m ( -- ???, "name" : start cross-compilation )
 :m ; ;t ;m ( ??? -- : end cross-compilation of a target word )
-
-
-\ "lit" is used to compile a literal into the dictionary, which
-\ will be pushed when run. Note again, we are not in command 
-\ mode when in between ":t" and ";t", and even if we were, it 
-\ would not do the correct action, the Forth we are running 
-\ this meta-compiler under would attempt to compile a number 
-\ given to it into the dictionary, but into its dictionary, and 
-\ in a way that would not work in the target. We cannot modify
-\ the internals of the Forth used to compile this program,
-\ (or not the gforth interpreter and not in a portable way)
-\ so we are left with having to call "lit" after each number
-\ we want to compile into a target word.
-\
-\ "up" takes a number representing an index into the thread
-\ local storage and compiles an instruction into the dictionary
-\ that will push a number on to the stack at run time that
-\ represents the address of that thread local variable.
-\
-\ "\[char\]" and "char" have different uses in a running Forth,
-\ when meta-compiling there is no command vs compile mode,
-\ we use meta-compiler commands to compile into the target
-\ always, so for the meta-compiler the words both do the same
-\ thing, which is to get a single character from the input
-\ stream and compile into the dictionary instructions which
-\ push the number representing that character on to the
-\ variable stack. The reason both are defined is so that they
-\ can be used in the appropriate places where they would be
-\ used in normal Forth code, so as to make the code look more
-\ like normal Forth code.
-\
-\ All of these operations take up two cells in the dictionary
-\ as they are not just a simple call, but a VM instruction and
-\ then the compiled number.
-\
-
-:m lit         opPush t, ;m ( n -- : compile literal )
-:m [char] char opPush t, ;m ( --, "name" : compile char )
-:m char   char opPush t, ;m ( --, "name" : compile char )
 
 \ It is interesting to see just how simple and easy it is
 \ to define a set of words for creating control structures.
@@ -3122,7 +3090,6 @@ there 2/ primitive t!
 \ defined words. Note that they use the cell address.
 \
 
-:m =push   [ t' opPush  half ] literal ;m ( -- a )
 :m =jump   [ t' opJump  half ] literal ;m ( -- a )
 :m =jumpz  [ t' opJumpZ half ] literal ;m ( -- a )
 :m =unnest [ t' opExit  half ] literal ;m ( -- a )
@@ -3215,6 +3182,17 @@ there 2/ primitive t!
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
 
+\ If "opAsm" is defined, so should this:
+\
+\        :so asm opAsm ;s
+\
+\ However, if that is defined, then an entire assembly word-set
+\ should be as well, along with easily accessible constants
+\ such as the value of "opExit", and the locations of registers
+\ should as "tos", "ip", and ways of accessing the stack 
+\ pointers from assembly.
+\
+
 \ One of the earliest tricks I remember being taught when
 \ learning to program is doubling a number by adding that
 \ number to itself, "2\*" does this, "2\/" will be defined
@@ -3269,18 +3247,8 @@ there 2/ primitive t!
 \ the meta-compiler, which has already been described.
 \
 
-:s (up) 
-   r> dup [@] {up} half lit [@] + 2* swap 1 lit + >r ;s
-  compile-only
-:s (var) r> 2* ;s compile-only ( R: a --, -- a )
 :s (const) r> [@] ;s compile-only ( R: a --, -- u )
-:s (user) r> [@] {up} half lit [@] + 2* ;s compile-only
-  ( R: a --, -- u )
-
-:m up (up) t, ;m ( n -- : compile user variable )
-:m variable :t mdrop (var) 0 t, munorder ;m
 :m constant :t mdrop (const) t, munorder  ;m
-:m user :t mdrop (user) local? =cell lallot t, munorder ;m
 
 \ To both save space, and because using "lit" as a postfix is
 \ annoying, for the most common constants; 0, 1, and -1, we
@@ -3288,7 +3256,7 @@ there 2/ primitive t!
 \ vocabulary with ":s".
 \
 \ Compiling a number into a word definition takes up two
-\ cells, one for "opPush" and another for the value. A
+\ cells, one for "(push)" and another for the value. A
 \ reference to a word only takes up one cell, hence the saving.
 \ The trade off is that it takes longer to execute and space
 \ must be reserved for the words that push those constants.
@@ -3300,16 +3268,64 @@ system[
  2 constant #2  ( --  2 : push two onto the stack )
 ]system
 
-\ If "opAsm" is defined, so should this:
+\ "1+" and "1-" do what they say, increment and decrement
+\ respectively. They are defined here as they are needed
+\ for the next few definitions.
 \
-\        :so asm opAsm ;s
+: 1+ #1 + ; ( n -- n : increment value in cell )
+: 1- #1 - ; ( n -- n : decrement value in cell )
+
+\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
+
+\ "lit" is used to compile a literal into the dictionary, which
+\ will be pushed when run. Note again, we are not in command 
+\ mode when in between ":t" and ";t", and even if we were, it 
+\ would not do the correct action, the Forth we are running 
+\ this meta-compiler under would attempt to compile a number 
+\ given to it into the dictionary, but into its dictionary, and 
+\ in a way that would not work in the target. We cannot modify
+\ the internals of the Forth used to compile this program,
+\ (or not the gforth interpreter and not in a portable way)
+\ so we are left with having to call "lit" after each number
+\ we want to compile into a target word.
 \
-\ However, if that is defined, then an entire assembly word-set
-\ should be as well, along with easily accessible constants
-\ such as the value of "opExit", and the locations of registers
-\ should as "tos", "ip", and ways of accessing the stack 
-\ pointers from assembly.
+\ "up" takes a number representing an index into the thread
+\ local storage and compiles an instruction into the dictionary
+\ that will push a number on to the stack at run time that
+\ represents the address of that thread local variable.
 \
+\ "\[char\]" and "char" have different uses in a running Forth,
+\ when meta-compiling there is no command vs compile mode,
+\ we use meta-compiler commands to compile into the target
+\ always, so for the meta-compiler the words both do the same
+\ thing, which is to get a single character from the input
+\ stream and compile into the dictionary instructions which
+\ push the number representing that character on to the
+\ variable stack. The reason both are defined is so that they
+\ can be used in the appropriate places where they would be
+\ used in normal Forth code, so as to make the code look more
+\ like normal Forth code.
+\
+\ All of these operations take up two cells in the dictionary
+\ as they are not just a simple call, but a VM instruction and
+\ then the compiled number.
+\
+
+:s (push) r> dup [@] swap 1+ >r ;s
+:m lit (push) t, ;m ( n -- : compile a literal )
+
+:s (up) 
+   r> dup [@] {up} half lit [@] + 2* swap 1+ >r ;s
+  compile-only
+:s (var) r> 2* ;s compile-only ( R: a --, -- a )
+:s (user) r> [@] {up} half lit [@] + 2* ;s compile-only
+  ( R: a --, -- u )
+
+:m up (up) t, ;m ( n -- : compile user variable )
+:m [char] char (push) t, ;m ( --, "name" : compile char )
+:m char   char (push) t, ;m ( --, "name" : compile char )
+:m variable :t mdrop (var) 0 t, munorder ;m
+:m user :t mdrop (user) local? =cell lallot t, munorder ;m
 
 \ ")" is defined here, it can be used as a "no-operation"
 \ instruction. This word will be better described later on.
@@ -3321,12 +3337,6 @@ system[
 \
 
 : over swap dup >r swap r> ; ( n1 n2 -- n1 n2 n1 )
-
-\ "1+" and "1-" do what they say, increment and decrement
-\ respectively.
-\
-: 1+ #1 + ; ( n -- n : increment value in cell )
-: 1- #1 - ; ( n -- n : decrement value in cell )
 
 \ A common expression I find myself typing is "dup \>r",
 \ we could define a word that does this using "over" and
@@ -3591,12 +3601,12 @@ variable scr ( -- a : latest listed block )
 2F t' blk >tbody t!
 2F t' scr >tbody t!
 
-user base ( -- a : push the radix for numeric I/O )
-user dpl ( -- a : decimal point variable )
-user hld ( -- a : index to hold space for num. I/O)
+user base  ( -- a : push the radix for numeric I/O )
+user dpl   ( -- a : decimal point variable )
+user hld   ( -- a : index to hold space for num. I/O)
 user state ( -- f : interpreter state )
-user >in ( -- a : input buffer position var )
-user span ( -- a : number of chars saved by expect )
+user >in   ( -- a : input buffer position var )
+user span  ( -- a : number of chars saved by expect )
 
 $20 constant bl ( -- 32 : push space character )
 
@@ -3615,7 +3625,7 @@ system[
 \ here. It retrieves the variable stack position, and pushes
 \ it on to the variable stack. 
 \
-: sp@ sp @ 1+ ; ( -- a )
+: sp@ sp @ 1+ ; ( -- a : Fetch variable stack pointer )
 
 \ To make switching bases easier the words "hex" and "decimal"
 \ are made available, which set the numeric input and output
@@ -3763,6 +3773,11 @@ system[
 \ nothing really needs to be said about them. Their stack
 \ effect describes them perfectly.
 \
+\ "shed" is a Forth word of my own design, by searching for
+\ synonyms for "drop" I decided upon this word, which removes
+\ the third item on the stack. It currently uses as much space
+\ as it saves, so it is kept in.
+\
 
 : nip swap drop ;   ( x y -- y : remove second item on stack )
 : tuck swap over ;  ( x y -- y x y : save item for rainy day )
@@ -3771,6 +3786,7 @@ system[
 : -rot rot rot ; ( x y z -- z x y : "rotate" stack backwards )
 : 2drop drop drop ; ( x x -- : drop it like it is hot )
 : 2dup  over over ; ( x y -- x y x y )
+:s shed rot drop ;s ( x y z -- y z : drop third stack item )
 
 \ The comparison or test words are defined in relation to
 \ to each other, which is no surprise. Given one comparison
@@ -3881,7 +3897,7 @@ system[
 
 : negate 1- invert ; ( n -- n : twos compliment negation )
 : s>d dup 0< ; ( n -- d : signed to double width cell )
-: abs s>d if negate then ; ( n -- u )
+: abs s>d if negate then ; ( n -- u : absolute value )
 
 \ The cell word-set allows portable code to be written that
 \ does have to worry about the number of bytes that are in a
@@ -4081,9 +4097,9 @@ system[
 \ See also "definitions".
 \
 
-: get-current current @ ; ( -- wid )
-: set-current current ! ; ( -- wid )
-:s last get-current @ ;s ( -- wid )
+: get-current current @ ; ( -- wid : get definitions vocab. )
+: set-current current ! ; ( -- wid : set definitions vocab. )
+:s last get-current @ ;s ( -- wid : get last defined word )
 
 \ "pick" is a word whose use is discouraged in Forth, if
 \ you find yourself using it your code is likely to be
@@ -4127,7 +4143,7 @@ system[
 \ number of items on the stack to be rotated.
 \
 
-: pick sp@ + [@] ; ( nu...n0 u -- nu )
+: pick sp@ + [@] ; ( nu...n0 u -- nu : pick item on stack )
 
 \ "+!" is a useful utility word, often found with "1+!" and
 \ "1-!", neither of which are defined here as they are not
@@ -4149,7 +4165,7 @@ system[
 \ program instead of typing them in at the command prompt.
 \
 
-: +! 2/ tuck [@] + swap [!] ; ( u a -- )
+: +! 2/ tuck [@] + swap [!] ; ( u a -- : add val to cell )
 
 \ "lshift" is much faster to compute than "rshift" as
 \ "2\*" is faster than "2/". As "2\*" is much faster we can
@@ -4214,9 +4230,9 @@ system[
 \
 
 : c@ @+ swap #1 and if 8 lit rshift exit then FF lit and ;
-: c! swap FF lit and dup 8 lit lshift or swap ( c a -- )
+: c! swap FF lit and dup 8 lit lshift or swap
    tuck @+ swap #1 and 0= FF lit xor
-   >r over xor r> and xor swap ! ;
+   >r over xor r> and xor swap ! ; ( c a -- character store )
 
 \ "c@+" is another space saving measure like "@+", but is also 
 \ useful to have around, and non-standard.
@@ -4269,8 +4285,8 @@ system[
 \ structures.
 \
 
-: 2! tuck ! cell+ ! ; ( u1 u2 a -- )
-: 2@ dup cell+ @ swap @ ; ( a -- u1 u2 )
+: 2! tuck ! cell+ ! ; ( u1 u2 a -- : store two cells )
+: 2@ dup cell+ @ swap @ ; ( a -- u1 u2 : fetch two cells )
 
 \ These two words are like "2!" and "2@", but for shunting
 \ two numbers between the return and data stacks. Note that
@@ -4404,7 +4420,7 @@ system[ user tup =cell tallot ]system
 \ Which uses "type", a word we will encounter next.
 \
 
-: count dup 1+ swap c@ ; ( b -- b c )
+: count dup 1+ swap c@ ; ( b -- b c : advance string )
 : +string #1 over min rot over + -rot - ; ( b u -- b u )
 
 \ "type" is used to print out a string. It is not complicated,
@@ -4433,7 +4449,8 @@ system[ user tup =cell tallot ]system
 \ does a fill but the byte being zero.
 \
 \ "cmove" is used to move one section of memory to another 
-\ section of memory.
+\ section of memory. "move" is a cell by cell equivalent, but
+\ is missing as it is not used within this Forth.
 \
 \ Both functions operate on bytes, not cells. "cmove" is often
 \ used for strings however, and "fill" (in the form of "blank"
@@ -4450,7 +4467,7 @@ system[ user tup =cell tallot ]system
 \ "blank" is sometimes used in Forth block editors.
 \
 
-: cmove ( b1 b2 u -- )
+: cmove ( b1 b2 u -- : move character blocks around )
    for aft >r c@+ r@ c! 1+ r> 1+ then next 2drop ;
 : fill ( b u c -- : write byte 'c' to array 'b' of 'u' length )
    swap for swap aft 2dup c! 1+ then next 2drop ;
@@ -4533,7 +4550,7 @@ system[ user tup =cell tallot ]system
 \ Another example of messing around with the return stack
 \ to achieve greatness is "?exit", previously defined.
 \
-:s do$ r> r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
+:s do$ 2r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
 :s ($) do$ ;s           ( -- a : do string NB. )
 :s .$ do$ count type ;s ( -- : print string in next cells )
 :m ." .$ $literal ;m ( --, ccc" : compile string )
@@ -4806,7 +4823,7 @@ system[ user tup =cell tallot ]system
   for
     dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
-  next rot drop ;
+  next shed ;
 : * um* drop ; ( n n -- n : multiply two numbers )
 : um/mod ( ud u -- ur uq : unsigned double cell div/mod )
   ?dup 0= -A lit and throw
@@ -5078,9 +5095,9 @@ system[ user tup =cell tallot ]system
     dup
   while
     over c@ r@ - r@ bl = 4 lit pick execute
-    if rdrop rot drop exit then
+    if rdrop shed exit then
     +string
-  repeat rdrop rot drop ;s
+  repeat rdrop shed ;s
 :s unmatch if 0> exit then 0<> ;s ( c1 c2 -- t )
 :s match unmatch invert ;s        ( c1 c2 -- t )
 : parse ( c -- b u ; <string> )
@@ -5349,7 +5366,7 @@ system[ user tup =cell tallot ]system
   begin
     >number dup
   while over c@ [char] . <>
-    if rot drop rot r> 2drop #0 r> base ! exit then
+    if shed rot r> 2drop #0 r> base ! exit then
     1- dpl ! 1+ dpl @
   repeat
   2drop r> if dnegate then r> base ! #-1 ;
@@ -5531,14 +5548,14 @@ system[ user tup =cell tallot ]system
   while
     @+ @ r@ swap (search) ?dup
     if
-      >r rot drop r> rdrop exit
+      >r shed r> rdrop exit
     then
     cell+
   repeat drop #0 r> #0 ;s
 : search-wordlist ( a wid -- PWD 1|PWD -1|a 0 )
-   (search) rot drop ;
+   (search) shed ;
 : find ( a -- pwd 1 | pwd -1 | a 0 : find word in dictionary )
-  (find) rot drop ;
+  (find) shed ;
 
 \ # The Interpreter
 
@@ -5595,7 +5612,9 @@ system[ user tup =cell tallot ]system
 \ we have to use the "lit" mechanism, which is unfortunate but
 \ not world ending.
 \
-:s (literal) state @ if =push lit , , then ;s
+
+: compile r> dup [@] , 1+ >r ; compile-only ( -- )
+:s (literal) state @ if compile (push) , then ;s
 : literal <literal> @execute ; immediate ( u -- )
 
 \ "compile," is a version of "," which can turn an execution
@@ -5830,7 +5849,6 @@ system[ user tup =cell tallot ]system
 : -order get-order (order) nip set-order ; ( wid -- )
 : +order dup >r -order get-order r> swap 1+ set-order ;
 
-
 \ "forth-wordlist" contains the standard Forth words,
 \ excluding the root Forth words, as mentioned, and "system"
 \ contains non-standard Forth words used in the implementation.
@@ -6053,7 +6071,7 @@ root[
 :s ?nul c@+ ?exit -$10 lit throw ;s ( b -- b )
 :s ?len c@+ 1F lit > -$13 lit and throw ;s ( b -- b )
 :to char token ?nul count drop c@ ; ( "name", -- c )
-:to [char] postpone char =push lit , , ; immediate
+:to [char] postpone char compile (push) , ; immediate
 :to ;
   CAFE lit <> -$16 lit and throw ( check compile safety )
   =unnest lit ,                     ( compile exit )
@@ -6171,7 +6189,6 @@ root[
 \
 
 :to ' token find ?found cfa literal ; immediate
-: compile r> dup [@] , 1+ >r ; compile-only ( -- )
 :to recurse {last} lit @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
 :s hide token find ?found nfa 80 lit swap toggle ;s
@@ -6505,6 +6522,9 @@ root[
 
 :to marker last align here create cell negate allot compile
     (marker) , , ; ( --, "name" )
+
+
+\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
 
 \ # Return Stack Words
 \
@@ -9375,7 +9395,7 @@ it being run.
 :s decompile ( a u -- a )
   dup =jumpz lit = if drop ."  jumpz " cell+ dup @ . exit then
   dup =jump  lit = if drop ."  jump  " cell+ dup @ . exit then
-  dup =push  lit = if drop ."  push  " cell+ dup @ . exit then
+\  dup =push  lit = if drop ."  push  " cell+ dup @ . exit then
   dup =next  lit = if drop ."  next  " cell+ dup @ . exit then
   \ "(var)", "(const)" and "(user)", "(up)", need adding, as
   \ well as dealing with "create"/"does\>", and better control 
