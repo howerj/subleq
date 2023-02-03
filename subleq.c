@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
-#define SZ   (32768)
+#define SZ   (1<<16)
 #define L(X) ((X)%SZ)
 int main(int s, char **v) {
 	static uint16_t m[SZ];
@@ -14,8 +14,8 @@ int main(int s, char **v) {
 		if (fclose(f) < 0)
 			return 2;
 	}
-	for (pc = 0; pc < SZ;) {
-		uint16_t a = m[L(pc++)], b = m[L(pc++)], c = m[L(pc++)];
+	for (pc = 0; pc < (SZ/2);) {
+		int a = m[L(pc++)], b = m[L(pc++)], c = m[L(pc++)];
 		if (a == 65535) {
 			m[L(b)] = getchar();
 		} else if (b == 65535) {
