@@ -23,20 +23,23 @@ typedef struct {
 	FILE *in, *out;
 } asm_t;
 
-static int add_label(label_t *lbs, size_t lables, const char *name, uint64_t location) {
+static int add_label(label_t *lbs, size_t lables, const char *name, uint64_t location, int negate) {
 	assert(lbs);
 	if ((strlen(name) + 1) > MAX_NAME)
 		return -1;
+	if (!strcmp(name, "?") || !strcmp(name, "len"))
+		return -2;
 	for (size_t i = 0; i < lables ; i++) {
 		label_t *lb = &lbs[i];
 		if (lb->used == 0) {
 			lb->used = 1;
 			strcpy(lb->name, name);
-			lb->location += location;
+			lb->location = location;
+			lb->negate = negate;
 			return 0;
 		}
 	}
-	return -2;
+	return -3;
 }
 
 static int find_label(label_t *lbs, size_t labels, const char *name, uint64_t *loc)  {
@@ -60,20 +63,30 @@ static int find_label(label_t *lbs, size_t labels, const char *name, uint64_t *l
 
 static int resolve(asm_t *a) {
 	assert(a);
-	/* TODO: Add "len" as special label? */
 
 	for (size_t j = 0; j < MAX_HOLES; j++) {
 		int found = 0;
 		label_t *hole = &a->holes[j];
 		if (hole->used == 0)
 			continue;
+		if (!strcmp(hole->name, "?")) {
+			a->m[hole->location] += hole->negate ? -a->pc : a->pc;
+			hole->used = 0;
+			continue;
+		}
+		if (!strcmp(hole->name, "len")) {
+			uint64_t loc = hole->location - (hole->location % 3);
+			a->m[hole->location] += hole->negate ? -loc : loc;
+			hole->used = 0;
+			continue;
+		}
+
 		for (size_t i = 0; i < MAX_LABELS; i++) {
 			label_t *lb = &a->lb[i];
 			if (lb->used) {
 				if (!strcmp(hole->name, lb->name)) {
 					found = 1;
-					/* add or subtract here? */
-					a->m[hole->location] = lb->location;
+					a->m[hole->location] += hole->negate ? -lb->location : lb->location;
 					break;
 				}
 			}
@@ -85,11 +98,17 @@ static int resolve(asm_t *a) {
 	return 0;
 }
 
-static int dump(asm_t *a) {
+static int dump(asm_t *a, int mod3) {
 	assert(a);
-	for (size_t i = 0; i < a->pc; i++)
-		if (fprintf(a->out, "%ld\n", (long)a->m[i]) < 0)
+	for (size_t i = 0; i < a->pc; i++) {
+		if (mod3 && i && (i % 3) == 0)
+			if (fprintf(a->out, "\n") < 0)
+				return -1;
+		if (fprintf(a->out, "%ld%c", (long)a->m[i], mod3 ? ' ' : '\n') < 0)
 			return -1;
+	}
+	if (fprintf(a->out, "\n") < 0)
+		return -1;
 	return 0;
 }
 
@@ -98,6 +117,7 @@ static int assemble(asm_t *a) {
 	assert(a->in);
 	for (char line[512]={0,};fgets(line, sizeof (line), a->in);) {
 		int v[3] = { 0, }, s = 0, i = 0, done = 0, newline = 0, single = 0;
+		char copy[512] = { 0, }, ncopy = 0;
 	again:
 		for (int ch = 0;;i++) {
 			assert(i < sizeof(line));
@@ -111,14 +131,18 @@ static int assemble(asm_t *a) {
 			case ' ': case '\t': break;
 			case 0: case '#': case '\n': done = 1; newline = 1; single = 0; goto proc;
 			case ';': done = 1; newline = 0; goto proc;
+			case '(': case ')': i++;
 			default: {
-				/* TODO: Process [-+]<id>[-+]<id>...
-				 * With special IDs '?', 'len', ... */
-				/* TODO: Copy holes! */
-				char name[512] = { 0, };
-				int j = 0;
-				if (line[i] == '+' || line[i] == '-')
+				/* TODO: Process [-+]<id>[-+]<id>...  With special IDs '?', 'len', ... */
+				char name[sizeof (copy)] = { 0, };
+				int j = 0, negate = 0;
+				if (line[i] == '+' || line[i] == '-') {
+					if (line[i] == '-') {
+						negate = 1;
+						ncopy = 1;
+					}
 					name[j++] = line[i++];
+				}
 				for (int ch = 0; isalnum(line[i]); i++)
 					name[j++] = line[i];
 				if (isalpha(name[0])) { /* handle negation? */
@@ -131,7 +155,7 @@ static int assemble(asm_t *a) {
 							(void)fprintf(stderr, "Label already exists: '%s'\n", name);
 							return -1;
 						}
-						if (add_label(a->lb, MAX_LABELS, name, a->pc + s) < 0) {
+						if (add_label(a->lb, MAX_LABELS, name, a->pc + s, 0) < 0) {
 							(void)fprintf(stderr, "Adding label '%s' failed\n", name);
 							return -1;
 						}
@@ -140,11 +164,12 @@ static int assemble(asm_t *a) {
 						if (find_label(a->lb, MAX_LABELS, name, &loc) >= 0) {
 							v[s++] = loc;
 						} else {
-							if (add_label(a->holes, MAX_HOLES, name, a->pc + s) < 0) {
+							if (add_label(a->holes, MAX_HOLES, name, a->pc + s, negate) < 0) {
 								(void)fprintf(stderr, "Adding hole '%s' failed\n", name);
 								return -1;
 							}
 							v[s++] = 0;
+							memcpy(copy, name, sizeof(name));
 						}
 					}
 				} else if (name[0] == '-' || name[0] == '+' || isdigit(name[0])) {
@@ -180,6 +205,12 @@ static int assemble(asm_t *a) {
 			case 1: 
 				a->m[a->pc+0] = v[0];
 				a->m[a->pc+1] = v[0];
+				if (copy[0]) {
+					if (add_label(a->holes, MAX_HOLES, copy, a->pc + 1, ncopy) < 0) {
+						(void)fprintf(stderr, "Adding hole '%s' failed\n", copy);
+						return -1;
+					}
+				}
 				a->m[a->pc+2] = a->pc + 3;
 				a->pc += 3;
 				break;
@@ -198,6 +229,8 @@ static int assemble(asm_t *a) {
 			}
 		}
 		s = 0;
+		copy[0] = 0;
+		ncopy = 0;
 		if (!newline)
 			goto again;
 	}
@@ -205,7 +238,7 @@ static int assemble(asm_t *a) {
 		(void)fprintf(stderr, "Resolving labels failed\n");
 		return -1;
 	}
-	return dump(a);
+	return dump(a, 1);
 }
 
 /* TODO: Example programs */
@@ -236,7 +269,6 @@ the next instruction.\n\
 	return fprintf(out, help, arg0);
 }
 
-/* TODO: Help */
 int main(int argc, char **argv) {
 	asm_t a = { .m = {0, }, .in = stdin, .out = stdout, };
 	if (argc != 1) {

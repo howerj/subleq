@@ -1,0 +1,6 @@
+start:
+ char;
+ char -1;
+ -1 char;
+ 0 0 start;
+. char:0

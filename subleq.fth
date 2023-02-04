@@ -1995,7 +1995,6 @@ err-str 2/ tvar err-str-addr
 assembler.1 +order
 label: die
    err-str-addr r1 MOV
-   r0 ZERO
    err-str r0 MOV
    begin
      r0
@@ -2163,41 +2162,6 @@ assembler.1 -order
 \
 :a bye HALT (a);    ( -- : HALT system )
 
-
-\ We need a way of pushing a literal value, a number, onto
-\ the variable stack, "opPush" does that.
-\
-\ In order to push a literal value onto the variable stack
-\ the instruction "opPush" has to manipulate the instruction
-\ pointer. Remember "ip" points to the next cell, if we store
-\ the number in the next cell when compiling the number into
-\ a word definition, then once we have loaded it via "ip", we
-\ just need to increment "ip" in order put "ip" back onto a
-\ valid instruction.
-\
-\ As an example, the following word "x", pushes "2", then "3"
-\ onto the variable stack:
-\
-\        : x 2 3 ;
-\
-\ This gets compiled to:
-\
-\        PUSH:
-\                opPush
-\                2
-\                opPush
-\                3
-\                exit
-\
-\ "opPush" does not have to be defined as a SUBLEQ instruction,
-\ it could be defined by using "@" and some introspection of
-\ the return stack as an ordinary Forth word.
-\
-\ "opPush" is defined as:
-\
-
-( :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a )
-
 \ The following instructions are nothing special, just simple
 \ stack manipulation functions, they implement the following
 \ Forth functions, and are as expected by a Forth programmer:
@@ -2238,15 +2202,16 @@ assembler.1 -order
 :a [@] tos tos iLOAD ;a
 :a [!] r0 {sp} iLOAD r0 tos iSTORE --sp t' opDrop JMP (a);
 
-\ "opEmit" and "opKey" perform the I/O functions, of which
-\ there are only two, there are Forth functions which wrap
-\ these primitives but the basic I/O is done by these two. They
-\ both operate on cells pulled or pushed to the stack, with
-\ only the lowest 8-bits used by those I/O functions.
+\ "opEmit" (and formerly "opKey") perform the I/O functions, 
+\ of which there are only two support by the SUBLEQ 
+\ architecture, get an octet of input and output one. Only
+\ one of those, output, is coded in assembly and that is
+\ "opEmit". It is possible to implement input directly in
+\ Forth with the "\[@\]" primitive.
 \
 \ "opEmit", called by "emit", outputs a single byte. It is
-\ always blocking. "opKey" accepts a single byte of input
-\ and returns negative on error. Depending on the
+\ always blocking. "opKey" (no longer used) accepts a single 
+\ byte of input and returns negative on error. Depending on the
 \ implementation the negative can mean "no byte has been
 \ received yet" (it is non-blocking) or it can mean "End Of
 \ Input". There are option bits in the "{options}" variable
@@ -2272,10 +2237,12 @@ assembler.1 -order
 \
 \ "opKey" is commented out, as it is possible to implement it
 \ in Forth code, which saves on space, by loading from address
-\ "-1" with "\[@\]".
+\ "-1" with "\[@\]". The former assembly definition of "opKey"
+\ is as follows:
+\
+\        :a opKey ++sp tos {sp} iSTORE tos GET ;a ) ( -- n )
 \
 :a opEmit tos PUT t' opDrop JMP (a);
-( :a opKey ++sp tos {sp} iSTORE tos GET ;a ) ( -- n )
 
 \ Subtraction and addition need no real explanation, just note
 \ that they are relatively fast to execute in this machine.
@@ -3200,7 +3167,44 @@ there 2/ primitive t!
 \
 : 2* dup + ; ( u -- u : multiply by two )
 
-\ Some important meta-compiler words can now be defined, ones
+\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
+\ 
+\ We need a way of pushing a literal value, a number, onto
+\ the variable stack, "(push)" does that, formerly "opPush"
+\ which was written in SUBLEQ assembly did that, which
+\ was defined as so:
+\
+\        :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
+\
+\ As usual, to save space, "opPush" was recoded in Forth.
+\
+\ In order to push a literal value onto the variable stack
+\ the instruction "(push)" has to manipulate the return stack.
+\ Remember when calling a function the topmost return stack
+\ variable points to the next cell from which the word
+\ was stored. If we store the number in the next cell when 
+\ compiling the number into a word definition, then by
+\ manipulating the return stack value to load from that address
+\ and then placing that return address back but incremented
+\ over the address of the number we have just loaded, we will
+\ have loaded the right number and ensured execution continues
+\ from the correct place.
+\
+\ As an example, the following word "x", pushes "2", then "3"
+\ onto the variable stack:
+\
+\        : x 2 3 ;
+\
+\ This gets compiled to:
+\
+\        PUSH:
+\                (push)
+\                2
+\                (push)
+\                3
+\                exit
+\
+\ Some other important meta-compiler words will be defined ones
 \ for making constants, variables and thread-local variables
 \ (called user variables) can now be defined. We will first
 \ define three words that will be used by the meta-compiler 
@@ -3224,7 +3228,7 @@ there 2/ primitive t!
 \
 \ "(up)" does a similar function to "(user)", and is then
 \ used in the meta-compiler word "up". It is also similar
-\ to "opPush", however it is used to access USER variables 
+\ to "(push)", however it is used to access USER variables 
 \ instead, that is variables stored in the thread local store, 
 \ or to think of them another way, variables stored relative to 
 \ a tasks memory area. They are part of the cooperative 
@@ -3233,7 +3237,7 @@ there 2/ primitive t!
 \ section) and the multitasking words defined towards the end 
 \ of this document.
 \
-\ Where this function differs to "opPush" is that instead of
+\ Where this function differs to "(push)" is that instead of
 \ pushing a literal, it loads a literal, adds it to the current
 \ task address stored in "{up}", and pushes that onto the
 \ stack. The address should be cell and not byte address, so
@@ -6090,6 +6094,8 @@ root[
   postpone ] ;          ( turn compile mode on )
 :to :noname align here #0 CAFE lit ] ; ( "name", -- xt )
 
+\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
+\
 \ "'" is an immediate word that attempts to
 \ find a word in the dictionary (and throws an error if one
 \ is not found), it then calls "literal" on the execution token
@@ -10224,17 +10230,10 @@ users -order
 \ language.
 \
 \ There are a number of optimizations, or just changes, that
-\ could be done to the system. The bitwise operators currently
-\ take up quite a bit of room as they are all implemented in
-\ SUBLEQ assembly. It might be best to implement them in terms
-\ of a 2:1 multiplexing function, or "mux". This can the be
-\ used to trivially implement "AND", "OR", and "XOR", with far 
-\ fewer operations and multiple applications of the bitwise 
-\ operators than would be needed if we were to implement "OR" 
-\ in terms "AND" and "NOT", meaning performance would be 
-\ maintained somewhat. I am sure there are other optimizations
-\ that could be performed to speed things up in general or
-\ reduce the images size.
+\ could be done to the system. Removing SUBLEQ assembly 
+\ routines, or at least making them compile time switches,
+\ and implementing the routine in Forth where doable is one
+\ way to save space. 
 \
 \ Writing an LZSS CODEC in pure Forth would be a utility that
 \ could find use elsewhere, and compression routines in 
@@ -10253,6 +10252,9 @@ users -order
 \ factored Forth code is considered good Forth code. This is
 \ quite similar to the automatic searching and replacing of
 \ repeated sub-sequences in dictionary encoding. 
+\ 
+\ The utility <https://github.com/howerj/ngram> can be used
+\ to repeated sequences of words suitable for factoring.
 \ 
 \ An LZSS encoder for this system would best being adapted to
 \ work on 16-bit data instead of bytes, perhaps using the top

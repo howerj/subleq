@@ -1,15 +1,16 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O3
 FORTH=subleq.fth
+IMAGE=subleq.dec
 
 .PHONY: all clean test run gforth width extra
 
 all: subleq
 
-run: subleq subleq.dec
-	./subleq subleq.dec
+run: subleq ${IMAGE}
+	./subleq ${IMAGE}
 
-1.dec: subleq subleq.dec ${FORTH}
-	./subleq subleq.dec < ${FORTH} > $@
+1.dec: subleq ${IMAGE} ${FORTH}
+	./subleq ${IMAGE} < ${FORTH} > $@
 
 2.dec: subleq 1.dec ${FORTH}
 	./subleq 1.dec < ${FORTH} > $@
@@ -20,7 +21,7 @@ test: 1.dec 2.dec nbit
 eforth.fth: subleq.fth
 	sed -e 's/^\\.*//' -e '/^$$/d' < $< > $@
 
-width: gforth.dec nbit 
+width: ${IMAGE} nbit 
 	./nbit  8 $<
 	./nbit  9 $<
 	./nbit 15 $<
@@ -31,8 +32,11 @@ width: gforth.dec nbit
 	./nbit 64 $<
 	echo ".( Ahoy, World! ) cr bye " | ./nbit 16 $<
 
-subleq.bin: subleq subleq.dec
-	echo "0 here : ddd 1- for dup c@ emit 1+ next drop ; ddd bye " | ./subleq subleq.dec > $@
+subleq.bin: subleq ${IMAGE}
+	echo "0 here : ddd 1- for dup c@ emit 1+ next drop ; ddd bye " | ./subleq ${IMAGE} > $@
+
+dump.dec:
+	echo "0 here dump bye" | ./subleq ${IMAGE} > $@
 
 gforth.dec: subleq.fth
 	gforth $< > $@
