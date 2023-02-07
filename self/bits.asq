@@ -17,14 +17,14 @@ count:
   tr zr;
   zr tr;
   zr;
-  zr tr (counted);
+  zr tr counted;
   max zr
-  bits zr (counted);
-  zr zr (count);
+  bits zr counted;
+  zr zr count;
 counted:
   zr;
 
-bits (-1);
-0 0 (-1);
+bits -1;
+0 0 -1;
 
-. zr:0 tr:1 bits:1 max:-16 nr:-1
+. zr:0 tr:1 bits:1 max:-64 nr:-1

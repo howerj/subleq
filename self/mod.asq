@@ -15,8 +15,8 @@ a ta;
 ta tc;
 
 # if (tb <= 0) { tb = -tb; }
-zr tb (negate);
-zr zr (noneg);
+zr tb negate;
+zr zr noneg;
 negate:
   tb zr; zr td; tb; td tb;
 noneg:
@@ -25,8 +25,8 @@ c;
 
 div:
   nr c;         # c++
-  tc tb (dend); # b -= a, if b <= 0 JMP 'dend'
-  zr zr (div);  # jump back to 'div', unconditionally
+  tc tb dend; # b -= a, if b <= 0 JMP 'dend'
+  zr zr div;  # jump back to 'div', unconditionally
 dend:
 
 ta; tb ta; # ta = -tb;
@@ -37,19 +37,19 @@ td tc;
 
 td;
 or ta;         # ta--
-ta td (fix);   # if (td-ta <= 0) jump to fix
-tc tc (nofix); # else jump to no fix
+ta td fix;   # if (td-ta <= 0) jump to fix
+tc tc nofix; # else jump to no fix
 fix:
   or c;        # c--
 nofix:
 
 
 # Output values and halt
-c (-1);
-tc (-1);
-0 0 (-1);
+c -1;
+tc -1;
+0 0 -1;
 
-. ta:0 tb:0 tc:0 td:0 a:256 b:1024 c:0 zr:0 nr:-1 or:1
+. ta:0 tb:0 tc:0 td:0 a:128 b:1024 c:0 zr:0 nr:-1 or:1
 
 
 

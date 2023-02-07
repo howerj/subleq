@@ -14,7 +14,7 @@ double: self.dec ../subleq ../subleq.dec
 %.dec: %.asq sqasm
 	./sqasm < $< > $@
 
-sqasm: sqasm.cpp
+sqasm: sqasm.c
 
 ../subleq.dec ../subleq:
 	make -C .. subleq.dec subleq

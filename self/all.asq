@@ -14,7 +14,7 @@
 
 
 start:
-0 0 (begin); # Jump over variables
+0 0 begin; # Jump over variables
 
 . Z: zr: 0 tr:1 bits:1 max:-16 IOV: nr:-1
 . tw:0 tx:0 ty:0 td:0 x:65536 y:1024 w:0 or:1 c:0 negated:0
@@ -27,10 +27,10 @@ count:
   tr zr;
   zr tr;
   zr;
-  zr tr (counted);
+  zr tr counted;
   max zr
-  bits zr (counted);
-  zr zr (count);
+  bits zr counted;
+  zr zr count;
 counted:
   zr;
 
@@ -83,8 +83,8 @@ c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
   negated;
 
   # if (tx <= 0) { tx = -tx; }
-  zr tx (negate);
-  zr zr (noneg);
+  zr tx negate;
+  zr zr noneg;
   negate:
     tx zr; zr td; tx; td tx;
     or negated;
@@ -94,8 +94,8 @@ c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
 
   div:
     nr y;         # y++
-    ty tx (dend); # x -= w, if x <= 0 JMP 'dend'
-    zr zr (div);  # jump back to 'div', unconditionally
+    ty tx dend; # x -= w, if x <= 0 JMP 'dend'
+    zr zr div;  # jump back to 'div', unconditionally
   dend:
 
   tw; tx tw; # tw = -tx;
@@ -106,8 +106,8 @@ c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
 
   td;
   or tw;         # tw--
-  tw td (fix);   # if (td-tw <= 0) jump to fix
-  ty ty (nofix); # else jump to no fix
+  tw td fix;   # if (td-tw <= 0) jump to fix
+  ty ty nofix; # else jump to no fix
   fix:
     or y;        # y--
   nofix:
@@ -131,7 +131,7 @@ a:0 b:0 leqz;   # Emulate subtraction / instruction
   Z Z start;    # Jump back to beginning
 leqz: 
   pc; c Z; Z pc; Z; # [pc] = [c]
-  nr c (-1);    # Check if [c] is negative, halt if it is.
+  nr c -1;    # Check if [c] is negative, halt if it is.
   len pc;         # [pc] = [pc] - [len]
   Z Z start;      # Jump back to the beginning
 

@@ -1,8 +1,9 @@
 *.exe
 *.sq
-hsq
-save
-sqasm
-subleq
 asm
 div
+hsq
+save
+sq
+sqasm
+subleq
