@@ -145,7 +145,8 @@ static int sys_is_number(const char *num, int is_unsigned, int base, long *out) 
 	assert(num);
 	char *end = NULL;
 	enum { BAD_NUM = -'#', BAD_RANGE = -'~', BAD_BASE = -'b', };
-	*out = 0;
+	if (out)
+		*out = 0;
 	errno = 0;
 	if ((base < 2 || base > 36) && base != 0)
 		return BAD_BASE;
@@ -154,14 +155,16 @@ static int sys_is_number(const char *num, int is_unsigned, int base, long *out) 
 		if (v == ULONG_MAX)
 			if (errno == ERANGE)
 				return BAD_RANGE;
-		*out = v;
+		if (out)
+			*out = v;
 	} else {
 		long v = strtol(num, &end, base);
 		if (v == LONG_MAX || v == LONG_MIN) {
 			if (errno == ERANGE)
 				return BAD_RANGE;
 		}
-		*out = v;
+		if (out)
+			*out = v;
 	}
 	if (*end)
 		return BAD_NUM;
@@ -270,7 +273,7 @@ retry:
 alternative:
 	i = 0;
 	for (int ch = 0; (ch = *fmt++); i++) {
-		if (ch == '|') { if (i == argc) return 0; goto alternative; }
+		if (ch == '|') { if (i >= argc) return 0; goto alternative; }
 		if (ch == '*') { if (*fmt != '\0' && *fmt != '|') return BAD_FMT; return 0; }
 		if (i >= argc) goto retry;
 		switch (ch) {
@@ -575,17 +578,6 @@ static int dump(asm_t *a, int mod3) {
 	return 0;
 }
 
-static char *strset(char *s, char *set) {
-	assert(s);
-	assert(set);
-	int sch = 0, tch = 0;
-	for (size_t i = 0; (sch = s[i]); i++)
-		for (size_t j = 0; (tch = set[j]); j++)
-			if (sch == tch)
-				return &s[i];
-	return NULL;
-}
-
 enum {  
 	ERROR = -'X',
 	EOI = 'E', EOL = 'L', 
@@ -651,7 +643,7 @@ static int inner(asm_t *a) {
 					a->name[i] = ch;
 			}
 			if (number)
-				a->number = strtol(a->name, NULL, 0);
+				a->number = strtol(a->name, NULL, 0) & msk(a->N);
 			/* key words, if any, would go here...*/
 			return number ? NUMBER : (colon ? COLON : LABEL);
 		} else {
@@ -700,23 +692,23 @@ static int assemble(asm_t *a, int output) {
 			switch (cnt) {
 			case 0: break;
 			case 1: 
-				a->m[a->apc + 0] = v[0];
-				a->m[a->apc + 1] = v[0];
+				a->m[a->apc + 0] = v[0] & msk(a->N);
+				a->m[a->apc + 1] = v[0] & msk(a->N);
 				a->m[a->apc + 2] = a->apc + 3;
 				if (add_copy(a, a->apc + 0, a->apc + 1) < 0)
 					return -1;
 				a->apc += 3;
 				break;
 			case 2: 
-				a->m[a->apc + 0] = v[0];
-				a->m[a->apc + 1] = v[1];
+				a->m[a->apc + 0] = v[0] & msk(a->N);
+				a->m[a->apc + 1] = v[1] & msk(a->N);
 				a->m[a->apc + 2] = a->apc + 3;
 				a->apc += 3;
 				break;
 			case 3: 
-				a->m[a->apc + 0] = v[0];
-				a->m[a->apc + 1] = v[1];
-				a->m[a->apc + 2] = v[2];
+				a->m[a->apc + 0] = v[0] & msk(a->N);
+				a->m[a->apc + 1] = v[1] & msk(a->N);
+				a->m[a->apc + 2] = v[2] & msk(a->N);
 				a->apc += 3;
 				break;
 			}
@@ -1110,7 +1102,7 @@ static int assemble_with_opts(subleq_t *s, int clear, int dump, uint64_t start) 
 		memset(s->lb, 0, sizeof (s->lb));
 	}
 	s->apc = start;
-	return assemble(s, dump) < 0 ? 1 : 0; 
+	return assemble(s, dump);
 }
 
 static int assemble_from_file(subleq_t *s, const char *name, int clear, int dump, uint64_t start) {
@@ -1134,7 +1126,7 @@ static int assemble_from_file(subleq_t *s, const char *name, int clear, int dump
 /* We probably want all kinds of fancy options for this assembler */
 static int cmd_assemble(subleq_t *s, int argc, char **argv) {
 	asserts_for_cmd(s, argc, argv);
-	return assemble_with_opts(s, 1, 0, argc > 1 ? atol(argv[1]) : 0);
+	return assemble_with_opts(s, 1, 0, argc > 1 ? atol(argv[1]) : 0) < 0 ? 1 : 0;
 }
 
 static int subleq_getch(subleq_t *s, terminal_t *t) {
@@ -1567,6 +1559,8 @@ Options:\n\n\
 \t-c num\n\t\tRun for 'num' cycles before halting into debugger.\n\
 \t-b break-point\n\t\tAdd break point.\n\
 \t-s file.dec\n\t\tSave to file after running.\n\
+\t-a file.asq\n\t\tAssemble a file and dump it to standard out.\n\
+\t-A file.asq\n\t\tAssemble a file into a memory.\n\
 \t-n num (8-64)\n\t\tSet SUBLEQ VM to bit-width, inclusive.\n\
 \t-p num\n\t\tPrint out cell contents after exiting VM.\n\
 \t-S num\n\t\tChange memory size, max size is %ld.\n\
@@ -1949,9 +1943,9 @@ int main(int argc, char **argv) {
 	terminal.out = stdout;
 	atexit(restore);
 
-	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhtdkc:s:b:x:n:p:S:")) != -1;) {
+	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhtdkc:s:b:x:n:p:S:a:A:")) != -1;) {
 		switch (ch) {
-		case 'h': cli_help(stderr); return 0;
+		case 'h': return cli_help(stderr) < 0 ? 1 : 0;
 		case 'k': s.non_blocking = 1; break;
 		case 't': s.tron++; break;
 		case 'd': s.debug = 1; s.debug_on_halt = 1; break;
@@ -1964,6 +1958,8 @@ int main(int argc, char **argv) {
 		case 'p': s.meta[L(&s, number(opt.arg))] |= META_PRN; break;
 		case 'r': s.stats = 1; break;
 		case 'S': { long sz = number(opt.arg); if (sz <= 0 || sz > SZ) { (void)fprintf(stderr, "Incorrect size: %ld\n", sz); return 1; } s.sz = sz; } break;
+		case 'a': return assemble_from_file(&s, opt.arg, 1, 1, 0) < 0 ? 1 : 0;
+		case 'A': if (assemble_from_file(&s, opt.arg, 0, 0, s.apc) < 0) return 1; break;
 		default: return 1;
 		}
 	}
