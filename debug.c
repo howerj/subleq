@@ -16,7 +16,7 @@
 #define VERSION "1.0"
 /* TODO:
  * - I/O better escape handling, terminal options via CLI, retry option, retry if not Escape
- * - Integrate assembler, add named breakpoints
+ * - add named breakpoints to assembler
  * - Gather more information about running environment (which cells are modified, etc). */
 
 #include <assert.h>
@@ -379,7 +379,7 @@ typedef struct {
 
 #define MAX_LABELS (512u)
 #define MAX_HOLES  (512u)
-#define MAX_COPY   (512u)
+#define MAX_COPY   (2048u)
 #define MAX_NAME   (16u)
 
 typedef struct {
@@ -783,8 +783,8 @@ static int assemble(asm_t *a, int output) {
 }
 
 /* TODO: Example programs, better help, assemble then run... */
-static int assembly_help(FILE *out, const char *arg0) {
-	const char *help = "Usage: %s < file.asq > file.dec\n\n\
+static int assembly_help(FILE *out) {
+	const char *help = "\
 SUBLEQ ASSEMBLER. This is an assembler for a SUBLEQ Single Instruction\n\
 machine. A SUBLEQ instruction consists of three operands; 'a', 'b'\n\
 and 'c'.\n\
@@ -811,19 +811,18 @@ There are some things missing which would be useful for\n\
 larger programs; entering string constants, macros, removal\n\
 of memory limitations, etcetera. There is not much need for\n\
 them though.\n\
-";
-	return fprintf(out, help, arg0);
-}
+\n\
+Some of the built in limitations are:\n\
+Number of labels:  %u (labels of the type 'label:'\n\
+Number of holes:   %u (references to a label)\n\
+Number of copies:  %u (single operand instructions)\n\
+Label name length: %u\n\n\
+It would be possible to remove these restrictions, but it\n\
+is far easier to keep them in.\n";
 
-/*
-int main(int argc, char **argv) {
-	asm_t a = { .m = { 0, }, .in = stdin, .out = stdout, .err = stderr, };
-	if (argc != 1) {
-		(void)assembly_help(stderr, argv[0]);
-		return 1;
-	}
-	return assemble(&a);
-}*/
+
+	return fprintf(out, help, MAX_LABELS, MAX_HOLES, MAX_COPY, MAX_NAME);
+}
 
 static int tracer(subleq_t *s, const char *fmt, ...) {
 	assert(s);
@@ -1551,6 +1550,7 @@ the following program will run SUBLEQ programs:\n\n\
 \n\n\
 Options:\n\n\
 \t-h\n\t\tDisplay this help message and exit.\n\
+\t-H\n\t\tDisplay the assembler help and exit.\n\
 \t-k\n\t\tTurn non-blocking terminal input on.\n\
 \t-t\n\t\tTurn tracing on.\n\
 \t-r\n\t\tPrint report after execution.\n\
@@ -1943,9 +1943,10 @@ int main(int argc, char **argv) {
 	terminal.out = stdout;
 	atexit(restore);
 
-	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhtdkc:s:b:x:n:p:S:a:A:")) != -1;) {
+	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhHtdkc:s:b:x:n:p:S:a:A:")) != -1;) {
 		switch (ch) {
 		case 'h': return cli_help(stderr) < 0 ? 1 : 0;
+		case 'H': return assembly_help(stderr) < 0 ? 1 : 0;
 		case 'k': s.non_blocking = 1; break;
 		case 't': s.tron++; break;
 		case 'd': s.debug = 1; s.debug_on_halt = 1; break;
