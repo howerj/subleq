@@ -15,8 +15,7 @@
 #define LICENSE "Public Domain / Unlicense for code only"
 #define VERSION "1.0"
 /* TODO:
- * - I/O better escape handling, terminal options via CLI, retry option, retry if not Escape
- * - add named breakpoints to assembler
+ * - add named breakpoints from assembler
  * - Gather more information about running environment (which cells are modified, etc). */
 
 #include <assert.h>
@@ -55,57 +54,34 @@ static inline void binary(FILE *f) { UNUSED(f); }
 #ifdef __unix__
 #include <unistd.h>
 #include <termios.h>
-typedef struct {
-	struct termios oldattr, newattr;
-	int fd, setup;
-	FILE *in, *out;
-} terminal_t;
+#include <poll.h>
 
-static void term_restore(terminal_t *t) {
-	assert(t);
-	if (t->setup) {
-		tcsetattr(t->fd, TCSANOW, &t->oldattr);
-		t->setup = 0;
-		t->fd = -1;
-	}
-}
-
-/* Instead of the setup code, which is reliant on a global structure, we
- * could instead set and then restore the terminal surrounding calls to the
- * get character function... */
-
-static int setup(terminal_t *t) {
-	assert(t);
-	if (t->setup)
-		return 0;
-	t->fd = fileno(t->in);
-	if (!isatty(t->fd))
-		return 0;
-	tcgetattr(t->fd, &t->oldattr);
-	t->newattr = t->oldattr;
-	t->newattr.c_iflag &= ~(ICRNL);
-	t->newattr.c_lflag &= ~(ICANON | ECHO);
-	t->newattr.c_cc[VMIN]  = 0;
-	t->newattr.c_cc[VTIME] = 0;
-	tcsetattr(t->fd, TCSANOW, &t->newattr);
-	t->setup = 1;
-	return 0;
-}
-
-static int term_getch(terminal_t *t) {
-	if (setup(t) < 0)
-		return -1;
-	if (!isatty(t->fd))
-	       return fgetc(t->in);	
+static int term_getch(FILE *in) {
+	const int fd = fileno(in);
+	if (!isatty(fd))
+	       return fgetc(in);
+	struct pollfd p = { .fd = fd, .events = POLLIN, };
+	int n = 0;
 	unsigned char r = 0;
-	if (read(t->fd, &r, 1) != 1)
+	errno = 0;
+	while ((n = poll(&p, 1, 0)) < 0)
+		if (errno == EAGAIN || errno == EINTR)
+			continue;
+	if (!n)
 		return -1;
+	errno = 0;
+	while ((n = read(fd, &r, 1)) < 0) {
+		if (errno == EAGAIN || errno == EINTR)
+			continue;
+		else
+			return -1;
+	}
 	return r;
 }
 
-static int term_putch(terminal_t *t, int c) {
-	const int r = fputc(c, t->out);
-	if (fflush(t->out) < 0)
+static int term_putch(const int c, FILE *out) {
+	const int r = fputc(c, out);
+	if (fflush(out) < 0)
 		return -1;
 	return r;
 }
@@ -115,18 +91,14 @@ static void term_sleep_ms(unsigned ms) {
 }
 #else
 #ifdef _WIN32
-typedef struct { FILE *in, *out; } terminal_t;
 extern int getch(void);
 extern int putch(int c);
-static int term_getch(terminal_t *t) { assert(t); assert(t->in); return t->in == stdin ? getch() : fgetc(t->in); }
-static int term_putch(terminal_t *t, const int c, FILE *out) { UNUSED(t); return putch(c); }
-static int term_restore(terminal_t *t) { UNUSED(t); return 0; }
+static int term_getch(FILE *in) { assert(in); return in == stdin ? getch() : fgetc(in); }
+static int term_putch(const int c, FILE *out) { return out == stdout ? putch(c) : fputc(c, out); }
 static void term_sleep_ms(unsigned ms) { usleep((unsigned long)ms * 1000); }
 #else
-typedef struct { FILE *in, *out; } terminal_t;
-static int term_getch(terminal_t *t) {  return fgetc(t->in); }
-static int term_putch(term_putch *t, const int c) { return fputc(c, t->out); }
-static int term_restore(terminal_t *t) { UNUSED(t); return 0; }
+static int term_getch(FILE *in) { assert(in); return fgetc(in); }
+static int term_putch(const int c, FILE *out) { return fputc(c, out); }
 static void term_sleep_ms(unsigned ms) { (void)ms; }
 #endif
 #endif /** __unix__ **/
@@ -570,7 +542,12 @@ static int dump(asm_t *a, int mod3) {
 		if (mod3 && i && (i % 3) == 0)
 			if (fprintf(a->out, "\n") < 0)
 				return -1;
-		if (fprintf(a->out, "%ld%c", (long)a->m[i], mod3 ? ' ' : '\n') < 0)
+		long v = a->m[i];
+		/*if (HI(a->N) & v) {
+			v &= ~HI(a->N);
+			v -= HI(a->N);
+		}*/
+		if (fprintf(a->out, "%ld%c", v, mod3 ? ' ' : '\n') < 0)
 			return -1;
 	}
 	if (fprintf(a->out, "\n") < 0)
@@ -580,7 +557,7 @@ static int dump(asm_t *a, int mod3) {
 
 enum {  
 	ERROR = -'X',
-	EOI = 'E', EOL = 'L', 
+	EOI = 'E', EOL = 'L', EXCLAIM = '!',
 	DOT = '.', LPAR = '(', RPAR = ')', SEP = ' ', COMMA = ',', 
 	SEMI = ';', PLUS = '+', MINUS = '-', NUMBER = '0', LABEL = 'N',  COLON = ':', QUESTION = '?', AT = '@',  
 };
@@ -616,6 +593,7 @@ static int inner(asm_t *a) {
 	case '@': return AT; case '?': return QUESTION;
 	case '+': return PLUS; case '-': return MINUS;
 	case '(': return LPAR; case ')': return RPAR;
+	case '!': return EXCLAIM;
 	case EOF: return EOI;
 	default:
 		if (isalnum(ch)) {
@@ -676,7 +654,7 @@ static int unget(asm_t *a) {
 }
 
 static int end(int token) {
-	return token == EOL || token == SEMI || token == EOI;
+	return token == EOL || token == SEMI || token == EOI || token == EXCLAIM;
 }
 
 static int assemble(asm_t *a, int output) {
@@ -715,9 +693,10 @@ static int assemble(asm_t *a, int output) {
 			memset(v, 0, sizeof (v));
 			a->number = 0;
 			cnt = 0;
-			if (t == EOI) { break; }
+			if (t == EOI || t == EXCLAIM) { break; }
 			continue;
 		}
+
 
 		if (t == COLON) {
 			/* TODO: In debugger, use names of symbols for breakpoints and tracing */
@@ -782,7 +761,6 @@ static int assemble(asm_t *a, int output) {
 	return output ? dump(a, 1) : 0;
 }
 
-/* TODO: Example programs, better help, assemble then run... */
 static int assembly_help(FILE *out) {
 	const char *help = "\
 SUBLEQ ASSEMBLER. This is an assembler for a SUBLEQ Single Instruction\n\
@@ -794,11 +772,12 @@ The assembler syntax is as follows:\n\n\
 * number, a number compiled into the current instruction.\n\
 * 'label', a reference to a label, the address of which\n\
 will be filled into the current cell location.\n\
-* 'label:', a label, forward references are allowed\n\
+* 'label:', a label, forward references are allowed.\n\
 * '.', allows output of single cells and not instruction on\n\
 the current line.\n\
 * A special label identifier, such as '?' or '@'.\n\
 * Simple expressions with '+' and '-' are allowed.\n\
+* '!', to end assembly before End Of File (for interactive use).\n\
 \n\
 Instructions consist of three numbers or expressions. They\n\
 can either be explicitly stated or the last two can be missing.\n\
@@ -807,6 +786,10 @@ will be the next instruction, if the last two are missing the\n\
 second will be a copy of the first and the third a jump to\n\
 the next instruction.\n\
 \n\
+This example program echos back characters to the user\n\
+and exits when an End-Of-File signal is received.\n\
+\n\
+\tstart:\n\t char;\n\t -1 char;\n\t Z char -1;\n\t char -1;\n\t 0 0 start;\n\t. char:0 Z:0\n\n\
 There are some things missing which would be useful for\n\
 larger programs; entering string constants, macros, removal\n\
 of memory limitations, etcetera. There is not much need for\n\
@@ -824,6 +807,7 @@ is far easier to keep them in.\n";
 	return fprintf(out, help, MAX_LABELS, MAX_HOLES, MAX_COPY, MAX_NAME);
 }
 
+/* TODO: Replace vfprintf and lookup labels, printing them... */
 static int tracer(subleq_t *s, const char *fmt, ...) {
 	assert(s);
 	assert(fmt);
@@ -840,14 +824,22 @@ static int tracer(subleq_t *s, const char *fmt, ...) {
 	return r;
 }
 
+/* Using a custom print function might help, being able to
+ * select the base we print out for decimals as well as alignment
+ * and leading zeros globally, with respect to the bit-width
+ * of the machine, would improve things. Perhaps I should make
+ * a logging library that I can reuse... */
 static int printer(subleq_t *s, const char *fmt, ...) {
 	assert(s);
 	assert(s->out);
 	assert(fmt);
+	FILE *out = s->trace;
+	if (!out)
+		return 0;
 	int r = 0;
 	va_list ap;
 	va_start(ap, fmt);
-	if (vfprintf(s->trace, fmt, ap) < 0) {
+	if (vfprintf(out, fmt, ap) < 0) {
 		s->error = -1;
 		r = -1;
 	}
@@ -880,10 +872,10 @@ static int cmd_dump(subleq_t *s, int argc, char **argv) {
 	const uint64_t addr = number(argv[1]), len = number(argv[2]);
 	size_t width = 4;
 	size_t bytes = 8;
-	const char *fmt = "%016lx ";
-	if (s->N <= 32) { fmt = "%08lx "; bytes = 4; width = 8; }
-	if (s->N <= 16) { fmt = "%04lx "; bytes = 2; width = 8; }
-	if (s->N <=  8) { fmt = "%02lx "; bytes = 1; width = 16; }
+	const char *fmt = "%016ld ";
+	if (s->N <= 32) { fmt = "%09ld "; bytes = 4; width = 8; }
+	if (s->N <= 16) { fmt = "%05ld "; bytes = 2; width = 8; }
+	if (s->N <=  8) { fmt = "%03ld "; bytes = 1; width = 16; }
 
 	for (size_t i = 0; i < len; i += width) {
 		printer(s, fmt, (long)i);
@@ -911,8 +903,16 @@ static int cmd_dump(subleq_t *s, int argc, char **argv) {
 static int cmd_breakp(subleq_t *s, int argc, char **argv) {
 	asserts_for_cmd(s, argc, argv);
 	for (int i = 1; i < argc; i++) {
-		const uint64_t addr = number(argv[i]);
-		s->meta[L(s, addr)] |= META_BPS;
+		long addr = 0;
+		if (sys_is_number(argv[i], 1, 10, &addr) == 0) {
+			s->meta[L(s, addr)] |= META_BPS;
+		} else {
+			uint64_t ad = 0;
+			if (find_label(s->lb, MAX_LABELS, argv[i], &ad) >= 0)
+				s->meta[L(s, ad)] |= META_BPS;
+			else
+				return 1;
+		}
 	}
 	return 0;
 }
@@ -927,10 +927,10 @@ static int cmd_breakp_clear(subleq_t *s, int argc, char **argv) {
 
 static int cmd_breakp_list(subleq_t *s, int argc, char **argv) {
 	asserts_for_cmd(s, argc, argv);
-	printer(s, "pc=%lx cycles=%ld bps: ", (long)s->pc, (long)s->count);
+	printer(s, "pc=%ld cycles=%ld bps: ", (long)s->pc, (long)s->count);
 	for (size_t i = 0; i < s->sz; i++)
 		if (s->meta[i] & META_BPS)
-			printer(s, "%lx ", (long)i);
+			printer(s, "%ld ", (long)i);
 	printer(s, "\n");
 	return 0;
 }
@@ -963,6 +963,73 @@ static int subleq_save(subleq_t *s, uint64_t start, uint64_t len, const char *fi
 	if (fclose(f) < 0)
 		return -3;
 	return 0;
+}
+
+typedef struct {
+	unsigned buffer, mask;
+} bit_buffer_t;
+
+static int bit_buffer_put_bit(bit_buffer_t *bit, FILE *out, const unsigned one) {
+	assert(bit);
+	assert(out);
+	assert(bit->mask <= 128u);
+	assert((bit->buffer & ~0xFFu) == 0);
+	if (one)
+		bit->buffer |= bit->mask;
+	if ((bit->mask >>= 1) == 0) {
+		if (fputc(bit->buffer, out) < 0)
+			return -1;
+		bit->buffer = 0;
+		bit->mask   = 128;
+	}
+	return 0;
+}
+
+static int bit_buffer_flush(bit_buffer_t *bit, FILE *out) {
+	assert(bit);
+	assert(out);
+	if (bit->mask != 128)
+		if (fputc(bit->buffer, out) < 0)
+			return -1;
+	bit->mask = 0;
+	return 0;
+}
+
+static int bits_output(bit_buffer_t *b, FILE *out, uint64_t u, int len) {
+	assert(b);
+	assert(out);
+	if (len > 64 || len < 0)
+		return -1;
+	if (len == 0)
+		return bit_buffer_flush(b, out);
+	uint64_t mask = 1ull << (len - 1);
+	for (int i = 0; i < len; i++) {
+		if (bit_buffer_put_bit(b, out, u & mask) < 0)
+			return -1;
+		mask >>= 1;
+	}
+	return 0;
+}
+
+static int subleq_bits_save(subleq_t *s, uint64_t start, uint64_t len, const char *file) {
+	assert(s);
+	assert(file);
+	int r = 0;
+	FILE *f = fopen(file, "wb");
+	if (!f)
+		return -1;
+	bit_buffer_t bb = { .mask = 128, };
+	for (size_t i = 0; i < len; i++)
+		if (bits_output(&bb, f, s->m[L(s, i + start)], s->N) < 0) {
+			r = -2;
+			goto fail;
+		}
+	if (bit_buffer_flush(&bb, f) < 0)
+		r = -3;
+fail:
+	if (fclose(f) < 0)
+		return -4;
+	return r;
 }
 
 static int subleq_load(subleq_t *s, uint64_t start, const char *file) {
@@ -1043,7 +1110,7 @@ static int cmd_compare(subleq_t *s, int argc, char **argv) {
 		const long la = s->m[a];
 		const long lb = s->m[b];
 		if (la != lb)
-			printer(s, "%04lx:%04lx - %04lx:%04lx\n", a, la, b, lb);
+			printer(s, "%05ld:%05ld - %05ld:%05ld\n", a, la, b, lb);
 	}
 	return 0;
 }
@@ -1067,7 +1134,7 @@ static int cmd_register(subleq_t *s, int argc, char **argv) {
 	const long a = s->m[L(s, pc + 0)];
 	const long b = s->m[L(s, pc + 1)];
 	const long c = s->m[L(s, pc + 2)];
-	printer(s, "pc=%04lx, a=%04lx, b=%04lx, c=%04lx, N=%d, load=%ld\n", pc, a, b, c, (int)s->N, (long)s->load);
+	printer(s, "pc=%05ld, a=%05ld, b=%05ld, c=%05ld, N=%d, load=%ld\n", pc, a, b, c, (int)s->N, (long)s->load);
 	return 0;
 }
 
@@ -1081,7 +1148,7 @@ static int cmd_search(subleq_t *s, int argc, char **argv) {
 		for (size_t j = 0; j < length; j++) {
 			const long addr = L(s, start + j);
 			if (find == (long)s->m[addr])
-				printer(s, "%04lx:%04lx\n", addr, find);
+				printer(s, "%05ld:%05ld\n", addr, find);
 		}
 	}
 
@@ -1128,26 +1195,15 @@ static int cmd_assemble(subleq_t *s, int argc, char **argv) {
 	return assemble_with_opts(s, 1, 0, argc > 1 ? atol(argv[1]) : 0) < 0 ? 1 : 0;
 }
 
-static int subleq_getch(subleq_t *s, terminal_t *t) {
+static int subleq_getch(subleq_t *s) {
 	assert(s);
-	assert(t);
-	if (s->non_blocking == 0) {
-		const int ch = fgetc(t->in);
-		if (ch == ESCAPE)
-			s->debug = 1;
-		return ch;
-	}
-	const int ch = term_getch(t);
+	if (s->non_blocking == 0)
+		return fgetc(s->in);
+	const int ch = term_getch(s->in);
 	if (ch == EOF) 
 		term_sleep_ms(1);
-	if (ch == ESCAPE) {
-		s->debug = 1;
-		if (s->exit_on_escape)
-			exit(0);
-	}
 	return ch == DELETE ? BACKSPACE : ch;
 }
-
 
 static int match(subleq_t *s, uint64_t *n, int sz, uint64_t pc, const char *st, ...) {
 	va_list ap;
@@ -1444,9 +1500,9 @@ static int cmd_disassemble(subleq_t *s, int argc, char **argv) {
 			const long a = s->m[L(s, i + 0)];
 			const long b = s->m[L(s, i + 1)];
 			const long c = s->m[L(s, i + 2)];
-			printer(s, "%04lx: %s %04lx %04lx %04lx\n", (long)i, name, a, b, c);
+			printer(s, "%05ld: %s %05ld %05ld %05ld\n", (long)i, name, a, b, c);
 		} else {
-			printer(s, "%04lx: %s s=%04lx d=%04lx\n", (long)i, name, (long)im->s, (long)im->d); 
+			printer(s, "%05ld: %s s=%05ld d=%05ld\n", (long)i, name, (long)im->s, (long)im->d); 
 		}
 		inc = instruction_increment[instruction];
 		if (inc <= 0)
@@ -1510,8 +1566,8 @@ static int cmd_hex(subleq_t *s, int argc, char **argv) {
 	long mul = a * b;
 	long div = a / (b ? b : 1);
 
-	printer(s, "hex: 0x%04lx 0x%04lx add=%04lx sub=%04lx mul=%04lx div=%04lx\n", a, b, add, sub, mul, div);
-	printer(s, "dec:   %04ld   %04ld add=%04ld sub=%04ld mul=%04ld div=%04ld\n", a, b, add, sub, mul, div);
+	printer(s, "hex: 0x%05lx 0x%05lx add=%05lx sub=%05lx mul=%05lx div=%05lx\n", a, b, add, sub, mul, div);
+	printer(s, "dec:   %05ld   %05ld add=%05ld sub=%05ld mul=%05ld div=%05ld\n", a, b, add, sub, mul, div);
 
 	long and = a & b;
 	long or  = a | b;
@@ -1519,8 +1575,8 @@ static int cmd_hex(subleq_t *s, int argc, char **argv) {
 	long ina = ~a;
 	long inb = ~b;
 
-	printer(s, "hex: 0x%04lx 0x%04lx and=%04lx or=%04lx xor=%04lx ~a=%04lx ~b=%04lx\n", a, b, and, or, xor, ina, inb);
-	printer(s, "dec:   %04ld   %04ld and=%04ld or=%04ld xor=%04ld ~a=%04ld ~b=%04ld\n", a, b, and, or, xor, ina, inb);
+	printer(s, "hex: 0x%05lx 0x%05lx and=%05lx or=%05lx xor=%05lx ~a=%05lx ~b=%05lx\n", a, b, and, or, xor, ina, inb);
+	printer(s, "dec:   %05ld   %05ld and=%05ld or=%05ld xor=%05ld ~a=%05ld ~b=%05ld\n", a, b, and, or, xor, ina, inb);
 
 	return 0;
 }
@@ -1549,23 +1605,23 @@ the following program will run SUBLEQ programs:\n\n\
 \ta<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])<=0?p=c:0;}}\n\
 \n\n\
 Options:\n\n\
-\t-h\n\t\tDisplay this help message and exit.\n\
-\t-H\n\t\tDisplay the assembler help and exit.\n\
-\t-k\n\t\tTurn non-blocking terminal input on.\n\
-\t-t\n\t\tTurn tracing on.\n\
-\t-r\n\t\tPrint report after execution.\n\
-\t-z\n\t\tRecompile SUBLEQ code for speed, might break program\n\
-\t-d\n\t\tRun debugger first before execution.\n\
-\t-c num\n\t\tRun for 'num' cycles before halting into debugger.\n\
-\t-b break-point\n\t\tAdd break point.\n\
-\t-s file.dec\n\t\tSave to file after running.\n\
-\t-a file.asq\n\t\tAssemble a file and dump it to standard out.\n\
-\t-A file.asq\n\t\tAssemble a file into a memory.\n\
-\t-n num (8-64)\n\t\tSet SUBLEQ VM to bit-width, inclusive.\n\
-\t-p num\n\t\tPrint out cell contents after exiting VM.\n\
-\t-S num\n\t\tChange memory size, max size is %ld.\n\
-\t-x forth,hi,echo,halt,self\n\t\tLoad example image from internal storage.\n";
-
+\t-h             Display this help message and exit.\n\
+\t-H             Display the assembler help and exit.\n\
+\t-k             Turn non-blocking terminal input on.\n\
+\t-t             Turn tracing on.\n\
+\t-r             Print report after execution.\n\
+\t-z             Recompile SUBLEQ code for speed, might break program\n\
+\t-d             Run debugger first before execution.\n\
+\t-c num         Run for 'num' cycles before halting into debugger.\n\
+\t-b break-point Add break point.\n\
+\t-s file.dec    Save to file after running.\n\
+\t-a file.asq    Assemble a file and dump it to standard out.\n\
+\t-A file.asq    Assemble a file into a memory.\n\
+\t-n num (8-64)  Set SUBLEQ VM to bit-width, inclusive.\n\
+\t-p num         Print out cell contents after exiting VM.\n\
+\t-S num         Change memory size, max size is %ld.\n\
+\t-x forth,hi,echo,halt,self    Load example image from internal storage.\n\
+\n";
 	if (fprintf(out, help_string, PROJECT, AUTHOR, EMAIL, REPO, VERSION, (long)SZ) < 0)
 		return -1;
 	return 0;
@@ -1738,9 +1794,8 @@ static int subleq_break(subleq_t *s, int instruction) {
  * more than one instruction, the answer is "optimizations", the
  * code can be recompiled with common expressions factored out into
  * instructions. */
-static int subleq(subleq_t *s, terminal_t *t) {
+static int subleq(subleq_t *s) {
 	assert(s);
-	assert(t);
 	assert(s->N >= 8 && s->N <= 64);
 	assert(s->in);
 	assert(s->out);
@@ -1779,10 +1834,10 @@ static int subleq(subleq_t *s, terminal_t *t) {
 
 		s->o.cnt[instruction/*% MAX*/]++;
 
-		tracer(s, "pc:%04lx: ", (long)s->pc);
+		tracer(s, "pc:%05ld: ", (long)s->pc);
 
 		if (instruction != SUBLEQ)
-			tracer(s, "i=%s src=%04lx dst=%04lx ", instruction_names[instruction], (long)src, (long)d);
+			tracer(s, "i=%s src=%05ld dst=%05ld ", instruction_names[instruction], (long)src, (long)d);
 
 		switch (instruction) {
 		case SUBLEQ: { /* OG Instruction */
@@ -1791,13 +1846,22 @@ static int subleq(subleq_t *s, terminal_t *t) {
 			const uint64_t c = s->m[L(s, s->pc++)];
 			const size_t la = L(s, a), lb = L(s, b);
 
-			tracer(s, "a=%04lx b=%04lx c=%04lx ", (long)a, (long)b, (long)c);
+			tracer(s, "a=%05ld b=%05ld c=%05ld ", (long)a, (long)b, (long)c);
 			if (a == msk(s->N)) {
-				s->m[lb] = subleq_getch(s, t) & msk(s->N);
-				tracer(s, "i=%04lx ", (long)s->m[lb]);
+				const int ch = subleq_getch(s) & msk(s->N);
+				if (ch == ESCAPE) {
+					s->debug = 1;
+					if (s->exit_on_escape)
+						return 0;
+					s->pc -= 3; /* redo instruction */
+					s->count--;
+				} else {
+					s->m[lb] = ch;
+					tracer(s, "i=%05ld ", (long)s->m[lb]);
+				}
 			} else if (b == msk(s->N)) {
-				tracer(s, "o=%04lx ", (long)s->m[la]);
-				if (term_putch(t, s->m[la]) < 0) {
+				tracer(s, "o=%05ld ", (long)s->m[la]);
+				if (term_putch(s->m[la], s->out) < 0) {
 					s->error = -1;
 					return -1;
 				}
@@ -1808,7 +1872,7 @@ static int subleq(subleq_t *s, terminal_t *t) {
 			} else {
 				uint64_t r = s->m[lb] - s->m[la];
 				r &= msk(s->N);
-				tracer(s, "[a]=%04lx [b]=%04lx r=%04lx ", (long)s->m[la], (long)s->m[lb], (long)r);
+				tracer(s, "[a]=%05ld [b]=%05ld r=%05ld ", (long)s->m[la], (long)s->m[lb], (long)r);
 				if (r & HI(s->N) || r == 0) {
 					tracer(s, "%c ", s->pc == c ? '=' : '!');
 					if (s->pc != c)
@@ -1816,7 +1880,7 @@ static int subleq(subleq_t *s, terminal_t *t) {
 					s->pc = c;
 				}
 				s->max = MAX(lb, s->max);
-				s->meta[lb] |= META_WRT;
+				s->meta[lb] |= META_WRT; /* Note, this is not done for the pseudo-instructions */
 				s->m[lb] = r;
 			}
 		} break;
@@ -1826,7 +1890,7 @@ static int subleq(subleq_t *s, terminal_t *t) {
 			* instruction macro, this would slow things down
 			* however. */
 		case JMP: s->pc = d; m[src] = 0; s->debug = s->debug_on_jump; break;
-		case MOV: m[d]	= m[src]; s->pc += inc; break;
+		case MOV: m[d]	= m[src]; s->pc += inc;   break;
 		case ADD: m[d] += m[src]; s->pc += inc; break;
 		case DOUBLE: m[d] <<= 1; s->pc += inc; break;
 		case LSHIFT: m[d] <<= src; s->pc += inc * src; break;
@@ -1838,11 +1902,22 @@ static int subleq(subleq_t *s, terminal_t *t) {
 		case ISTORE: m[L(s, m[d])] = m[src]; s->pc += inc;
 			break;
 		case PUT:
-			if (term_putch(t, m[im[L(s, s->pc)].s]) < 0)
+			if (term_putch(m[im[L(s, s->pc)].s], s->out) < 0)
 				return -1;
 			s->pc += inc;
 			break;
-		case GET: m[im[s->pc].d] = subleq_getch(s, t) & msk(s->N); s->pc += inc; break;
+		case GET: {
+			const int ch = subleq_getch(s) & msk(s->N); 
+			if (ch == ESCAPE) {
+				s->debug = 1;
+				s->count--;
+				if (s->exit_on_escape)
+					return 0;
+			} else {
+				m[im[s->pc].d] = ch;
+				s->pc += inc; 
+			}
+		} break;
 		case HALT: s->pc |= msk(s->N); break;
 		case INC: m[d]++; s->pc += inc; break;
 		case DEC: m[d]--; s->pc += inc; break;
@@ -1857,12 +1932,6 @@ static int subleq(subleq_t *s, terminal_t *t) {
 		if (report(s) < 0)
 			return 1;
 	return s->error;
-}
-
-static terminal_t terminal = { .in = NULL, };
-
-static void restore(void) {
-	term_restore(&terminal);
 }
 
 static int subleq_examples(subleq_t *s, const char *name) {
@@ -1911,6 +1980,7 @@ static int subleq_examples(subleq_t *s, const char *name) {
 		load = forever;
 		nelems = NELEMS(forever);
 	}
+#if defined(CONFIG_PROGRAM_ADD_SELF) && CONFIG_PROGRAM_ADD_SELF != 0
 	if (!strcmp(name, "self")) {
 		static uint64_t self_image[] = {
 #include "self.cma"
@@ -1918,6 +1988,7 @@ static int subleq_examples(subleq_t *s, const char *name) {
 		load = self_image;
 		nelems = NELEMS(self_image);
 	}
+#endif
 	/* An image that performed introspection into the
 	 * SUBLEQ machine; machine width, arithmetic type (twos,
 	 * ones compliment) and more would be useful, it does not 
@@ -1931,7 +2002,7 @@ static int subleq_examples(subleq_t *s, const char *name) {
 
 int main(int argc, char **argv) {
 	sys_getopt_t opt = { .init = 0, .error = stdout, };
-	char *save = NULL;
+	char *save = NULL, *bsave;
 	subleq_t s = { 
 		.N = 16, .sz = SZ,
 		.in = stdin, .out = stdout, .trace = stderr,
@@ -1939,11 +2010,8 @@ int main(int argc, char **argv) {
 	binary(stdin);
 	binary(stdout);
 	binary(stderr);
-	terminal.in = stdin;
-	terminal.out = stdout;
-	atexit(restore);
 
-	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhHtdkc:s:b:x:n:p:S:a:A:")) != -1;) {
+	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhHtdkc:s:B:b:x:n:p:S:a:A:")) != -1;) {
 		switch (ch) {
 		case 'h': return cli_help(stderr) < 0 ? 1 : 0;
 		case 'H': return assembly_help(stderr) < 0 ? 1 : 0;
@@ -1953,6 +2021,7 @@ int main(int argc, char **argv) {
 		case 'c': s.cycles = number(opt.arg); break;
 		case 'b': s.meta[L(&s, number(opt.arg))] |= META_BPS; break;
 		case 's': save = opt.arg; break;
+		case 'B': bsave = opt.arg; break;
 		case 'n': s.N = atoi(opt.arg); break;
 		case 'x': if (subleq_examples(&s, opt.arg) < 0) return 1; break;
 		case 'z': s.optimize = 1; break;
@@ -1974,11 +2043,11 @@ int main(int argc, char **argv) {
 		}
 	/* We could implement SUBNEG and other variants, if we wanted */
 	s.max = s.load;
-	const int r = subleq(&s, &terminal);
+	const int r = subleq(&s);
 
 	for (size_t i = 0; i < s.sz; i++)
 		if (s.meta[i] & META_PRN)
-			if (printer(&s, "%02lx:%02lx\n", (long)i, (long)s.m[i]) < 0)
+			if (printer(&s, "%02ld:%02ld\n", (long)i, (long)s.m[i]) < 0)
 				return 4;
 
 	if (save)
@@ -1986,6 +2055,14 @@ int main(int argc, char **argv) {
 			(void)fprintf(stderr, "Save '%s' failed\n", save);
 			return 5;
 		}
+	if (bsave)
+		if (subleq_bits_save(&s, 0, s.max, bsave) < 0) {
+			(void)fprintf(stderr, "Binary save '%s' failed\n", save);
+			return 6;
+		}
+	
 	return r < 0 ? 6 : 0;
 }
+
+
 

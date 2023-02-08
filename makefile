@@ -106,7 +106,7 @@ self.dec:
 	sed -i 's/ /\n/g' $@
 	sed -i '/^$$/d' $@
 
-debug.o: debug.c subleq.cma self.cma
+debug.o: debug.c subleq.cma
 	${CC} -std=gnu99 -Wall -Wextra $< -c -o $@
 
 debug: debug.o

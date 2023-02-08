@@ -3,8 +3,7 @@
 #define SZ   (1<<16)
 #define L(X) ((X)%SZ)
 int main(int argc, char **argv) {
-	static uint16_t m[SZ];
-	uint16_t pc = 0;
+	uint16_t m[SZ], pc = 0, n = 65535;
 	for (int i = 1, d = 0; i < argc; i++) {
 		FILE *f = fopen(argv[i], "r");
 		if (!f)
@@ -18,9 +17,9 @@ int main(int argc, char **argv) {
 		int a = m[L(pc++)];
 		int b = m[L(pc++)];
 		int c = m[L(pc++)];
-		if (a == 65535) {
+		if (a == n) {
 			m[L(b)] = getchar();
-		} else if (b == 65535) {
+		} else if (b == n) {
 			if (putchar(m[L(a)]) < 0)
 				return 3;
 			if (fflush(stdout) < 0)

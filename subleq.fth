@@ -2692,7 +2692,25 @@ assembler.1 -order
 \ time flag.
 \
 \ This could be rewritten to use long division, which would
-\ be larger, but faster.
+\ be larger, but faster, with the pseudo-code:
+\
+\        if D = 0 then throw() end
+\        Q := 0 -- Initialize quotient and remainder to zero
+\        R := 0                  
+\        -- Where n is the number of bits in N
+\        for i := n - 1 .. 0 do  
+\          R := R << 1 -- Left-shift R by 1 bit
+\          -- Set the least-significant bit of R 
+\          -- equal to bit i of the numerator
+\          R(0) := N(i) 
+\          if R >= D then
+\            R := R - D
+\            Q(i) := 1
+\          end
+\        end 
+\
+\ (from <https://en.wikipedia.org/wiki/Division_algorithm>)
+\
 \
 
 
@@ -2903,8 +2921,6 @@ there 2/ primitive t!
 \ numbers that have meant to compiled are instead left on
 \ the stack, or the incorrect number is compiled into a word
 \ definition by the meta-compiler.
-\
-\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
 \
 \ An example of this is "lit", which pulls a value off of the
 \ stack and compiles into a word definition. We can use this
@@ -4397,8 +4413,16 @@ system[ user tup =cell tallot ]system
 \ The function "x" will work, but "y" will not. "compile,"
 \ is defined later.
 \
+\ "c," is analogous to "," except it writes single characters
+\ into the dictionary, it does not align the dictionary after
+\ writing (which would defeat the purpose of the word). It
+\ advances the dictionary pointer by one byte and not the size
+\ of a cell, like "," does. In this Forth two characters, or
+\ bytes, fit into a single cell.
+\
 : allot h? +! ; ( n -- : allocate space in dictionary )
 : , align here ! cell allot ; ( u -- : write value into dict. )
+: c, here c! #1 allot ; ( c -- : write character into dict. )
 
 \ "count" and "+string" are two words used for string
 \ manipulation. "count" is named because it is often used with
@@ -5616,6 +5640,30 @@ system[ user tup =cell tallot ]system
 \ we have to use the "lit" mechanism, which is unfortunate but
 \ not world ending.
 \
+\ In order to define "(literal)" we will need to define 
+\ "compile".
+\
+\ "compile" is a word that skips over the next compiled word
+\ in the instruction stream and instead compiles that word into
+\ the dictionary. It has some restrictions on what it can be
+\ used on, for example it will not work on immediate words on
+\ this platform as instead they will have already been 
+\ executed, and it will not work on literals, as they are not 
+\ words (and they take up two cells). "compile" does its job by 
+\ looking at the return stack value, copying it, and 
+\ manipulating it.
+\
+\ A contrived example usage is:
+\
+\        : x compile + ; immediate
+\        : y 2 2 + ;
+\        : z 2 2 x ;
+\
+\ In this case "y" and "z" are equivalent words, they both
+\ compute "4" at runtime. A more succinct way of explaining 
+\ "compile" is "compile compiles the next word into another 
+\ word via return stack manipulation".
+\
 
 : compile r> dup [@] , 1+ >r ; compile-only ( -- )
 :s (literal) state @ if compile (push) , then ;s
@@ -6094,8 +6142,6 @@ root[
   postpone ] ;          ( turn compile mode on )
 :to :noname align here #0 CAFE lit ] ; ( "name", -- xt )
 
-\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
-\
 \ "'" is an immediate word that attempts to
 \ find a word in the dictionary (and throws an error if one
 \ is not found), it then calls "literal" on the execution token
@@ -6106,26 +6152,8 @@ root[
 \ When in command mode, "2 2 ' + execute" is the same as
 \ "2 2 +".
 \
-\ "compile" is a word that skips over the next compiled word
-\ in the instruction stream and instead compiles that word into
-\ the dictionary. It has some restrictions on what it can be
-\ used on, for example it will not work on immediate words on
-\ this platform as instead they will have already been 
-\ executed, and it will not work on literals, as they are not 
-\ words (and they take up two cells). "compile" does its job by 
-\ looking at the return stack value, copying it, and 
-\ manipulating it.
-\
-\ A contrived example usage is:
-\
-\        : x compile + ; immediate
-\        : y 2 2 + ;
-\        : z 2 2 x ;
-\
-\ In this case "y" and "z" are equivalent words, they both
-\ compute "4" at runtime. A more succinct way of explaining 
-\ "compile" is "compile compiles the next word into another 
-\ word via return stack manipulation".
+\ "compile" belongs with these words, but is needed earlier
+\ on.
 \
 \ Some Forth implementations of "'" return a zero value (and
 \ thus invalid) execution token when a word is not found, 
@@ -6528,9 +6556,6 @@ root[
 
 :to marker last align here create cell negate allot compile
     (marker) , , ; ( --, "name" )
-
-
-\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
 
 \ # Return Stack Words
 \
@@ -9524,6 +9549,53 @@ it being run.
 \              vocabulary, a pointer to the start of the linked
 \              list of words.
 \
+\ ## Example Long Division C Code
+\
+\ This C code shows the example long division code that could
+\ be used for "opDivMod".
+\
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+static int long_division(uint32_t n, uint32_t d, 
+  uint32_t *quo, uint32_t *rem) {
+  assert(quo);
+  assert(rem);
+  *quo = 0;
+  *rem = 0;
+  if (d == 0)
+    return -1;
+  uint32_t q = 0, r = 0;
+  for (int i = 31; i >= 0; i--) {
+    r <<= 1;
+    r |= !!(n & (1ul << i));
+    if (r >= d) {
+      r -= d;
+      q |= (1ul << i);
+    }
+  }
+  *quo = q;
+  *rem = r;
+  return 0;
+}
+
+int main(int argc, char **argv) {
+  if (argc != 3)
+    return 1;
+  unsigned long op = atol(argv[1]);
+  unsigned long di = atol(argv[2]);
+  uint32_t quo = 0, rem = 0;
+  if (long_division(op, di, &quo, &rem) < 0)
+    return 2;
+  const char *fmt = "%lu / %lu = %lu rem: %lu\n";
+  unsigned long q = quo, r = rem;
+  int e = printf(fmt, op, di, q, r);
+  return e < 0 ? 3 : 0;
+}
+
 \ ## Faster SUBLEQ Assembly Operations
 \
 \ Here is an alternate set of assembly instruction macros for
@@ -9550,6 +9622,8 @@ it being run.
 \ subtracting it from itself, eg. "subleq a" expands to 
 \ "subleq a a +1". The JMP instruction is the same as our JMP 
 \ instruction, ie. "JMP c" is "subleq Z Z c".
+\
+\ The code is not tested.
 \
 \ ### ADD a b c
 \
@@ -9811,7 +9885,6 @@ variable seed ( NB. Could be mixed with keyboard input )
   dup seed ! ;
 : cell- 2 - ;
 : rpick rp@ swap - 1- 2* @ ;
-: c, here c! 1 allot ; ( c -- )
 : cell- cell - ; ( a -- a )
 : umin 2dup swap u< if swap then drop ; ( u u -- u )
 : umax 2dup      u< if swap then drop ; ( u u -- u )
@@ -10102,6 +10175,216 @@ user: lana stirling
 users -order
 .( EFORTH ONLINE ) cr
 <ok> ! login
+
+\ ## Sokoban
+\ 
+\ This is a game of Sokoban, to play, type:
+\ 
+\ 	./embed sokoban.fth /dev/stdin
+\       cat sokoban.fth /dev/stdin | ./subleq subleq.dec
+\ 
+\ On the command line. Four maps are provided, more can be 
+\ found online at <https://github.com/begoon/sokoban-maps>, 
+\ where the four maps were found.
+\
+\ * Author:  Richard James Howe
+\ * License: The Unlicense (excluding the maps)
+\
+
+variable ook <ok> @ ook ! ' ( <ok> !
+.( LOADING... ) cr
+
+only forth definitions hex
+
+variable sokoban-wordlist
+sokoban-wordlist +order definitions
+
+$20    constant maze
+char X constant wall
+char * constant boulder
+char . constant off
+char & constant on
+char @ constant player
+char ~ constant player+ ( player + off pad )
+$10    constant l/b     ( lines   per block )
+$40    constant c/b     ( columns per block )
+     7 constant bell    ( bell character )
+
+variable position  ( current player position )
+variable moves     ( moves made by player )
+
+( used to store rule being processed )
+create rule 3 c, 0 c, 0 c, 0 c,
+
+: n1+ swap 1+ swap ; ( n n -- n n )
+: match              ( a a -- f )
+  n1+ ( replace with umin of both counts? )
+  count
+  for aft 
+    count rot count rot <> if 2drop rdrop 0 exit then
+  then next 2drop -1 ;
+
+: beep bell emit ; ( -- )
+: ?apply           ( a a a -- a, R: ? -- ?| )
+  >r over swap match if drop r> rdrop exit then rdrop ;
+
+: apply ( a -- a )
+ $" @ "  $"  @"  ?apply
+ $" @."  $"  ~"  ?apply
+ $" @* " $"  @*" ?apply
+ $" @*." $"  @&" ?apply
+ $" @&." $"  ~&" ?apply
+ $" @& " $"  ~*" ?apply
+ $" ~ "  $" .@"  ?apply
+ $" ~."  $" .~"  ?apply
+ $" ~* " $" .@*" ?apply
+ $" ~*." $" .@&" ?apply
+ $" ~&." $" .~&" ?apply
+ $" ~& " $" .~*" ?apply beep ;
+
+: pack ( c0...cn b n -- )
+  2dup swap c! for aft 1+ tuck c! then next drop ;
+
+: locate ( b u c -- u f )
+  >r
+  begin
+    ?dup
+  while
+    1- 2dup + c@ r@ = if nip rdrop -1 exit then
+  repeat
+  rdrop
+  drop
+  0 0 ;
+
+: relative swap c/b * + + ( $3ff and ) ; ( +x +y pos -- pos )
+: +position position @ relative ; ( +x +y -- pos )
+: double 2* swap 2* swap ;  ( u u -- u u )
+: arena blk @ block b/buf ; ( -- b u )
+: >arena arena drop + ;     ( pos -- a )
+: fetch                     ( +x +y -- a a a )
+  2dup   +position >arena >r
+  double +position >arena r> swap
+  position @ >arena -rot ;
+: rule@ fetch c@ rot c@ rot c@ rot ; ( +x +y -- c c c )
+: 3reverse -rot swap ;               ( 1 2 3 -- 3 2 1 )
+: rule! rule@ 3reverse rule 3 pack ; ( +x +y -- )
+: think 2dup rule! rule apply >r fetch r> ; ( +x +y --a a a a )
+: count! count rot c! ;              ( a a -- )
+
+\ 'act' could be made to be more elegant, but it works, it
+\ handles rules of length 2 and length 3
+
+: act ( a a a a -- )
+  count swap >r 2 =
+  if
+     drop swap r> count! count!
+  else
+     3reverse r> count! count! count!
+  then drop ;
+
+: #boulders ( -- n )
+   0 arena
+   for aft
+     dup c@ boulder = if n1+ then
+     1+
+   then next drop ;
+: .boulders  ." BOLDERS: " #boulders u. cr ; ( -- )
+: .moves    ." MOVES: " moves    @ u. cr ; ( -- )
+: .help     ." WASD - MOVEMENT" cr ." H    - HELP" cr ; ( -- )
+: .maze blk @ list ;                  ( -- )
+: show ( page cr ) .maze .boulders .moves .help ; ( -- )
+: solved? #boulders 0= ;               ( -- )
+: finished? solved? if 1 throw then ; ( -- )
+: instructions ;                      ( -- )
+: where >r arena r> locate ;          ( c -- u f )
+: player? player where 0= if drop player+ where else -1 then ;
+: player! player? 0= throw position ! ; ( -- )
+: start player! 0 moves ! ;           ( -- )
+: .winner show cr ." SOLVED!" cr ;    ( -- )
+: .quit cr ." Quitter!" cr ;          ( -- )
+: finish 1 = if .winner exit then .quit ; ( n -- )
+: rules think act player! ;           ( +x +y -- )
+: +move 1 moves +! ;                  ( -- )
+: ?ignore over <> if rdrop then ;     ( c1 c2 --, R: x -- | x )
+: left  [char] a ?ignore -1  0 rules +move ; ( c -- c )
+: right [char] d ?ignore  1  0 rules +move ; ( c -- c )
+: up    [char] w ?ignore  0 -1 rules +move ; ( c -- c )
+: down  [char] s ?ignore  0  1 rules +move ; ( c -- c )
+: help  [char] h ?ignore instructions ; ( c -- c )
+: end  [char] q ?ignore drop 2 throw ; ( c -- | c, R ? -- | ? )
+: default drop ;  ( c -- )
+: command up down left right help end default finished? ;
+: maze! block drop ; ( k -- )
+: input key ;        ( -- c )
+
+sokoban-wordlist -order definitions
+sokoban-wordlist +order
+
+: sokoban ( k -- )
+  maze! start
+  begin
+    show input ' command catch ?dup
+  until finish ;
+
+decimal 47 maze!  
+only forth definitions decimal
+editor x
+ 1 i            XXXXX            
+ 2 i            X   X            
+ 3 i            X*  X            
+ 4 i          XXX  *XXX          
+ 5 i          X  *  * X          
+ 6 i        XXX X XXX X     XXXXXX
+ 7 i        X   X XXX XXXXXXX  ..X
+ 8 i        X *  *             ..X
+ 9 i        XXXXX XXXX X@XXXX  ..X
+10 i            X      XXX  XXXXXX
+11 i            XXXXXXXX         
+12 i       
+n x
+ 1 i       XXXXXXXXXXXX 
+ 2 i       X..  X     XXX
+ 3 i       X..  X *  *  X
+ 4 i       X..  X*XXXX  X
+ 5 i       X..    @ XX  X
+ 6 i       X..  X X  * XX
+ 7 i       XXXXXX XX* * X
+ 8 i         X *  * * * X
+ 9 i         X    X     X
+10 i         XXXXXXXXXXXX
+11 i      
+n x
+ 1 i               XXXXXXXX
+ 2 i               X     @X
+ 3 i               X *X* XX
+ 4 i               X *  *X 
+ 5 i               XX* * X 
+ 6 i       XXXXXXXXX * X XXX
+ 7 i       X....  XX *  *  X
+ 8 i       XX...    *  *   X
+ 9 i       X....  XXXXXXXXXX
+10 i       XXXXXXXX        
+n x
+ 1 i                     XXXXXXXX
+ 2 i                     X  ....X
+ 3 i          XXXXXXXXXXXX  ....X
+ 4 i          X    X  * *   ....X
+ 5 i          X ***X*  * X  ....X
+ 6 i          X  *     * X  ....X
+ 7 i          X ** X* * *XXXXXXXX
+ 8 i       XXXX  * X     X      
+ 9 i       X   X XXXXXXXXX      
+10 i       X    *  XX           
+11 i       X **X** @X           
+12 i       X   X   XX           
+13 i       XXXXXXXXX            
+q
+
+.( LOADED ) cr
+.( Type '# sokoban' to play, where '#' is a block number ) cr
+.( For example "47 sokoban" ) cr
+.( Follow the on screen instructions to play a game. ) cr
+ook <ok> !
 
 \ ## Simple Bootloader
 \

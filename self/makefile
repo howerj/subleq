@@ -11,19 +11,13 @@ run-orig: ../subleq ../subleq.dec
 double: self.dec ../subleq ../subleq.dec
 	../subleq self.dec self.dec ../subleq.dec
 
-%.dec: %.asq sqasm
-	./sqasm < $< > $@
+%.dec: %.asq ../debug
+	../debug -a $< > $@
 
-sqasm: sqasm.c
+../debug:
+	make -C .. debug
 
 ../subleq.dec ../subleq:
 	make -C .. subleq.dec subleq
 
-asm-run: asm self.asq
-	./asm < self.asq > self.dec
-
-all-run: ../subleq all.dec
-	../subleq all.dec ../subleq.dec
-
 clean:
-	rm -f sqasm asm
