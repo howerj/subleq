@@ -316,7 +316,7 @@ enum {
 	IJMP, ILOAD, ISTORE, INC, DEC,
 	INV, DOUBLE, LSHIFT,
 
-	MAX
+	IMAX
 };
 
 static const uint64_t instruction_increment[] = {
@@ -341,12 +341,12 @@ typedef struct {
 } instruction_t;
 
 typedef struct {
-	int matches[MAX];
+	int matches[IMAX];
 	int set[9];
 	uint64_t v[9];
 	unsigned char z_reg[SZ], one_reg[SZ], neg1_reg[SZ];
 	clock_t start, end;
-	int64_t cnt[MAX];
+	int64_t cnt[IMAX];
 } optimizer_t;
 
 #define MAX_LABELS (512u)
@@ -807,21 +807,122 @@ is far easier to keep them in.\n";
 	return fprintf(out, help, MAX_LABELS, MAX_HOLES, MAX_COPY, MAX_NAME);
 }
 
-/* TODO: Replace vfprintf and lookup labels, printing them... */
+static int ilog(unsigned long l, int base) {
+	int i = 0;
+	while (l /= base) i++;
+	return i + 1;
+}
+
+static int nchars(unsigned long i, int base) {
+	assert(base >= 2 && base <= 36);
+	return ilog(i, base);
+}
+
+static int itoa(char a[64 + 1], unsigned long n, int base) {
+	assert(a);
+	assert(base >= 2 && base <= 36);
+	int i = 0;
+	do a[i++] = "0123456789abcdefghijklmnopqrstuvwxyz"[n % base]; while(n /= base);
+	a[i] = '\0';
+	for (int j = 0; j < (i/2); j++) {
+		char t = a[j];
+		a[j] = a[(i - j) - 1];
+		a[(i - j) - 1] = t;
+	}
+	return i;
+}
+
+static int is_power_of_two(unsigned long x) {
+	return (x != 0) && ((x & (x - 1ul)) == 0);
+}
+
+static int pnum(long n, int base, int pad_char, unsigned long max_val, FILE *out) {
+	assert(base >= 2 && base <= 36);
+	assert(out);
+	assert(is_power_of_two((max_val + 1ul)));
+	/*const int extend = ((max_val + 1ul) >> 1) & n && n >= 0;
+	if (extend)
+		n |= (-1ul & ~max_val);*/
+	const int negate = n < 0;
+	const int maxchars = nchars(max_val, base) + 1;
+	if (negate) n = -n;
+	const int pad = maxchars - nchars(n, base) - negate;
+	for (int i = 0; i < pad; i++)
+		if (fputc(pad_char, out) < 0)
+			return -1;
+	char a[65] = { 0, };
+	const int len = itoa(a, n, base);
+	/* TODO: Sign extend */
+	if (negate)
+		if (fputc('-', out) < 0)
+			return -1;
+	if (fputs(a, out) < 0)
+		return -1;
+	return len + negate;
+}
+
 static int tracer(subleq_t *s, const char *fmt, ...) {
 	assert(s);
 	assert(fmt);
-	int r = 0;
 	va_list ap;
-	if (s->tron <= 0 || s->trace == NULL)
+	FILE *out = s->trace;
+	if (s->tron <= 0 || out == NULL)
 		return 0;
 	va_start(ap, fmt);
-	if (vfprintf(s->trace, fmt, ap) < 0) {
-		s->error = -1;
-		r = -1;
+
+	/* TODO: Turn labels on/off, change padding, change base */
+	/* TODO: turn into snprintf like function then use throughout interpreter */
+	const int base = 10, pad = ' ', plables = s->tron > 1;
+	for (int ch = 0; (ch = *fmt++);) {
+		if (ch == '%') {
+			ch = *fmt++;
+			switch (ch) {
+			case 's': { char *s = va_arg(ap, char*); if (fputs(s, out) < 0) goto fail; } break;
+			case 'c': { 
+				char c = va_arg(ap, int); 
+				if (fputc(c, out) < 0)
+					goto fail;
+			} break;
+			case 'l': { 
+				long l = va_arg(ap, long), found = 0;
+				if (plables) {
+					for (size_t i = 0; i < MAX_LABELS; i++) {
+						label_t *b = &s->lb[i];
+						if ((long)b->location == l) {
+							if (fputs(b->name, out) < 0) {
+								return -1;
+							}
+							found = 1;
+							break;
+						}
+					}
+				}
+				if (!found || !plables) {
+				}
+			} break;
+			case 'd': {
+				long v = va_arg(ap, long);
+				if (pnum(v, base, pad, msk(s->N), out) < 0)
+					goto fail;
+			} break;
+			case 'i': { 
+				unsigned long i = va_arg(ap, unsigned long);
+				assert(i < NELEMS(instruction_names));
+				if (fputs(instruction_names[i], out) < 0) goto fail;
+			} break;
+
+			default: goto fail;
+			}
+		} else {
+			if (fputc(ch, out) < 0) goto fail;
+		}
 	}
 	va_end(ap);
-	return r;
+	return 0;
+fail:
+	s->error = -1;
+	va_end(ap);
+	return -1;
 }
 
 /* Using a custom print function might help, being able to
@@ -1444,7 +1545,7 @@ static int report(subleq_t *s) {
 	elapsed_s /= CLOCKS_PER_SEC;
 	int64_t total = 0, subs = 0;
 	FILE *e = stderr;
-	for (int i = 0; i < MAX; i++) {
+	for (int i = 0; i < IMAX; i++) {
 		total += o->cnt[i];
 		subs  += o->matches[i];
 	}
@@ -1456,7 +1557,7 @@ static int report(subleq_t *s) {
 		return -1;
 	if (fputs(rep_div, e) < 0)
 		return -1;
-	for (int i = 0; i < MAX; i++)
+	for (int i = 0; i < IMAX; i++)
 		if (fprintf(e, "| %s| % 6d | % 12"PRId64" | % 7.1f%% |\n", instruction_names[i], o->matches[i], o->cnt[i], 100.0*((float)o->cnt[i])/(float)total) < 0)
 			return 1;
 	if (fputs(rep_div, e) < 0)
@@ -1834,10 +1935,10 @@ static int subleq(subleq_t *s) {
 
 		s->o.cnt[instruction/*% MAX*/]++;
 
-		tracer(s, "pc:%05ld: ", (long)s->pc);
+		tracer(s, "pc:%d: ", (long)s->pc);
 
 		if (instruction != SUBLEQ)
-			tracer(s, "i=%s src=%05ld dst=%05ld ", instruction_names[instruction], (long)src, (long)d);
+			tracer(s, "i=%l src=%d dst=%d ", (unsigned long)instruction, (long)src, (long)d);
 
 		switch (instruction) {
 		case SUBLEQ: { /* OG Instruction */
@@ -1846,7 +1947,7 @@ static int subleq(subleq_t *s) {
 			const uint64_t c = s->m[L(s, s->pc++)];
 			const size_t la = L(s, a), lb = L(s, b);
 
-			tracer(s, "a=%05ld b=%05ld c=%05ld ", (long)a, (long)b, (long)c);
+			tracer(s, "a=%d b=%d c=%d ", (long)a, (long)b, (long)c);
 			if (a == msk(s->N)) {
 				const int ch = subleq_getch(s) & msk(s->N);
 				if (ch == ESCAPE) {
@@ -1857,10 +1958,10 @@ static int subleq(subleq_t *s) {
 					s->count--;
 				} else {
 					s->m[lb] = ch;
-					tracer(s, "i=%05ld ", (long)s->m[lb]);
+					tracer(s, "i=%d ", (long)s->m[lb]);
 				}
 			} else if (b == msk(s->N)) {
-				tracer(s, "o=%05ld ", (long)s->m[la]);
+				tracer(s, "o=%d ", (long)s->m[la]);
 				if (term_putch(s->m[la], s->out) < 0) {
 					s->error = -1;
 					return -1;
@@ -1872,7 +1973,7 @@ static int subleq(subleq_t *s) {
 			} else {
 				uint64_t r = s->m[lb] - s->m[la];
 				r &= msk(s->N);
-				tracer(s, "[a]=%05ld [b]=%05ld r=%05ld ", (long)s->m[la], (long)s->m[lb], (long)r);
+				tracer(s, "[a]=%d [b]=%d r=%d ", (long)s->m[la], (long)s->m[lb], (long)r);
 				if (r & HI(s->N) || r == 0) {
 					tracer(s, "%c ", s->pc == c ? '=' : '!');
 					if (s->pc != c)
@@ -2063,6 +2164,5 @@ int main(int argc, char **argv) {
 	
 	return r < 0 ? 6 : 0;
 }
-
 
 

@@ -3331,12 +3331,11 @@ system[
 \ then the compiled number.
 \
 
-:s (push) r> dup [@] swap 1+ >r ;s
+:s (push) r> dup [@] swap 1+ >r ;s ( -- n : inline push value )
 :m lit (push) t, ;m ( n -- : compile a literal )
 
-:s (up) 
-   r> dup [@] {up} half lit [@] + 2* swap 1+ >r ;s
-  compile-only
+:s (up) r> dup [@] {up} half lit [@] + 2* swap 1+ >r ;s
+  compile-only ( -- n : user variable implementation word )
 :s (var) r> 2* ;s compile-only ( R: a --, -- a )
 :s (user) r> [@] {up} half lit [@] + 2* ;s compile-only
   ( R: a --, -- u )
@@ -3344,7 +3343,7 @@ system[
 :m up (up) t, ;m ( n -- : compile user variable )
 :m [char] char (push) t, ;m ( --, "name" : compile char )
 :m char   char (push) t, ;m ( --, "name" : compile char )
-:m variable :t mdrop (var) 0 t, munorder ;m
+:m variable :t mdrop (var) 0 t, munorder ;m ( --, "name": var )
 :m user :t mdrop (user) local? =cell lallot t, munorder ;m
 
 \ ")" is defined here, it can be used as a "no-operation"
