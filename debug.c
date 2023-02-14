@@ -2,6 +2,13 @@
  * a SUBLEQ One Instruction machine, containing a virtual
  * machine for that platform.
  *
+ * There is a surprisingly large amount of code that could
+ * be reused for different purposes, argument parsing, parsing
+ * in general (not reused, but used as a template), printing
+ * numbers in bases with padding, argument parsing (listed
+ * twice, there's a lot of it!), and examples for mini-languages
+ * and the like.
+ *
  * See:
  *
  * - <https://montcs.bloomu.edu/Information/LowLevel/DOS-Debug.html> 
@@ -364,7 +371,7 @@ typedef struct {
 	uint64_t m[SZ], meta[SZ], N, pc, cycles, count, load, max;
 	size_t sz;
 	FILE *in, *out, *trace;
-	int  error, tron;
+	int  error, tron, base;
 	char prompt[MAX_LINE];
 	char name[MAX_LINE];
 	optimizer_t o;
@@ -374,9 +381,11 @@ typedef struct {
 		 debug_on_halt: 1,
 		 debug_on_jump: 1,
 		 exit_on_cycles :1, 
-		 non_blocking :1,
 		 exit_on_escape :1,
+		 non_blocking :1,
+		 trace_zero_padding :1,
 		 optimize :1,
+		 assembler_print_labels :1,
 		 stats :1;
 
 	/* assembler stuff */
@@ -542,12 +551,14 @@ static int dump(asm_t *a, int mod3) {
 		if (mod3 && i && (i % 3) == 0)
 			if (fprintf(a->out, "\n") < 0)
 				return -1;
-		long v = a->m[i];
-		/*if (HI(a->N) & v) {
-			v &= ~HI(a->N);
-			v -= HI(a->N);
-		}*/
-		if (fprintf(a->out, "%ld%c", v, mod3 ? ' ' : '\n') < 0)
+		char *sgn = "";
+		unsigned long v = a->m[i];
+		if (HI(a->N) & v) {
+			v = -v;
+			v &= msk(a->N);
+			sgn = "-";
+		}
+		if (fprintf(a->out, "%s%lu%c", sgn, v, mod3 ? ' ' : '\n') < 0)
 			return -1;
 	}
 	if (fprintf(a->out, "\n") < 0)
@@ -699,8 +710,11 @@ static int assemble(asm_t *a, int output) {
 
 
 		if (t == COLON) {
-			/* TODO: In debugger, use names of symbols for breakpoints and tracing */
-			/*printf("%s:%d\n", name, (int)(a->apc + cnt));*/
+			if (a->assembler_print_labels)
+				if (fprintf(a->out, "%s:%ld\n", a->name, (long)(a->apc + cnt)) < 0) {
+					a->error = -1;
+					return -1;
+				}
 			if (add_label(a, a->name, a->apc + cnt) < 0)
 				return -1;
 			continue;
@@ -818,7 +832,7 @@ static int nchars(unsigned long i, int base) {
 	return ilog(i, base);
 }
 
-static int itoa(char a[64 + 1], unsigned long n, int base) {
+static int itoa(char a[64 + 2], unsigned long n, int base) {
 	assert(a);
 	assert(base >= 2 && base <= 36);
 	int i = 0;
@@ -832,27 +846,24 @@ static int itoa(char a[64 + 1], unsigned long n, int base) {
 	return i;
 }
 
-static int is_power_of_two(unsigned long x) {
+static inline int is_power_of_two(unsigned long x) {
 	return (x != 0) && ((x & (x - 1ul)) == 0);
 }
 
-static int pnum(long n, int base, int pad_char, unsigned long max_val, FILE *out) {
+static int pnum(uint64_t n, int base, int pad_char, int nbits, FILE *out) {
 	assert(base >= 2 && base <= 36);
 	assert(out);
-	assert(is_power_of_two((max_val + 1ul)));
-	/*const int extend = ((max_val + 1ul) >> 1) & n && n >= 0;
-	if (extend)
-		n |= (-1ul & ~max_val);*/
-	const int negate = n < 0;
+	const uint64_t max_val = msk(nbits);
+	const int negate = !!(HI(nbits) & n);
 	const int maxchars = nchars(max_val, base) + 1;
 	if (negate) n = -n;
+	n &= msk(nbits);
 	const int pad = maxchars - nchars(n, base) - negate;
 	for (int i = 0; i < pad; i++)
 		if (fputc(pad_char, out) < 0)
 			return -1;
-	char a[65] = { 0, };
+	char a[66] = { 0, }; /* 64 (base = 2, 64 bit number) + ASCII NUL + '-' (although not needed) */
 	const int len = itoa(a, n, base);
-	/* TODO: Sign extend */
 	if (negate)
 		if (fputc('-', out) < 0)
 			return -1;
@@ -870,9 +881,8 @@ static int tracer(subleq_t *s, const char *fmt, ...) {
 		return 0;
 	va_start(ap, fmt);
 
-	/* TODO: Turn labels on/off, change padding, change base */
 	/* TODO: turn into snprintf like function then use throughout interpreter */
-	const int base = 10, pad = ' ', plables = s->tron > 1;
+	const int base = s->base ? s->base : 10, pad = s->trace_zero_padding ? '0' : ' ', plables = s->tron > 1;
 	for (int ch = 0; (ch = *fmt++);) {
 		if (ch == '%') {
 			ch = *fmt++;
@@ -889,20 +899,26 @@ static int tracer(subleq_t *s, const char *fmt, ...) {
 					for (size_t i = 0; i < MAX_LABELS; i++) {
 						label_t *b = &s->lb[i];
 						if ((long)b->location == l) {
-							if (fputs(b->name, out) < 0) {
-								return -1;
-							}
+							int len = strlen(b->name);
+							int max = nchars(msk(s->N), base) + 1;
+							for (int i = 0; i < (max - len); i++)
+								if (fputc(' ', out) < 0)
+									goto fail;
+							if (fputs(b->name, out) < 0)
+								goto fail;
 							found = 1;
 							break;
 						}
 					}
 				}
 				if (!found || !plables) {
+					if (pnum(l, base, pad, s->N, out) < 0)
+						goto fail;
 				}
 			} break;
 			case 'd': {
 				long v = va_arg(ap, long);
-				if (pnum(v, base, pad, msk(s->N), out) < 0)
+				if (pnum(v, base, pad, s->N, out) < 0)
 					goto fail;
 			} break;
 			case 'i': { 
@@ -1365,12 +1381,11 @@ static uint64_t get(optimizer_t *o, char var) {
 	return o->v[var - '0'];
 }
 
-/* This section pattern matches the code finding
-* sequences of SUBLEQ instructions against known
-* instruction macros.	It is essentially a
-* disassembler. It is liable not to work for every
-* case, but will do so for the code that *I* want to
-* speed up. */
+/* This section pattern matches the code finding sequences of 
+ * SUBLEQ instructions against known instruction macros.
+ * It is essentially a disassembler. It is liable not to work 
+ * for every case, but will do so for the code that *I* want to 
+ * speed up. */
 static int optimizer(subleq_t *s, uint64_t pc) {
 	assert(s);
 
@@ -1721,6 +1736,7 @@ Options:\n\n\
 \t-n num (8-64)  Set SUBLEQ VM to bit-width, inclusive.\n\
 \t-p num         Print out cell contents after exiting VM.\n\
 \t-S num         Change memory size, max size is %ld.\n\
+\t-R num (2-36)  Change input and output radix.\n\
 \t-x forth,hi,echo,halt,self    Load example image from internal storage.\n\
 \n";
 	if (fprintf(out, help_string, PROJECT, AUTHOR, EMAIL, REPO, VERSION, (long)SZ) < 0)
@@ -1935,10 +1951,10 @@ static int subleq(subleq_t *s) {
 
 		s->o.cnt[instruction/*% MAX*/]++;
 
-		tracer(s, "pc:%d: ", (long)s->pc);
+		tracer(s, "pc:%l: ", (long)s->pc);
 
 		if (instruction != SUBLEQ)
-			tracer(s, "i=%l src=%d dst=%d ", (unsigned long)instruction, (long)src, (long)d);
+			tracer(s, "i=%i src=%l dst=%l ", (unsigned long)instruction, (long)src, (long)d);
 
 		switch (instruction) {
 		case SUBLEQ: { /* OG Instruction */
@@ -1947,7 +1963,7 @@ static int subleq(subleq_t *s) {
 			const uint64_t c = s->m[L(s, s->pc++)];
 			const size_t la = L(s, a), lb = L(s, b);
 
-			tracer(s, "a=%d b=%d c=%d ", (long)a, (long)b, (long)c);
+			tracer(s, "a=%l b=%l c=%l ", (long)a, (long)b, (long)c);
 			if (a == msk(s->N)) {
 				const int ch = subleq_getch(s) & msk(s->N);
 				if (ch == ESCAPE) {
@@ -2101,6 +2117,45 @@ static int subleq_examples(subleq_t *s, const char *name) {
 	return 0;
 }
 
+static int flag(const char *v) {
+	static char *y[] = { "yes", "on", "true", };
+	static char *n[] = { "no",  "off", "false", };
+
+	for (size_t i = 0; i < NELEMS(y); i++) {
+		if (!strcmp(y[i], v))
+			return 1;
+		if (!strcmp(n[i], v))
+			return 0;
+	}
+	return -1;
+}
+
+static int set_option(subleq_t *s, char *kv) {
+	assert(s);
+	assert(kv);
+	char *k = kv, *v = NULL;
+	if ((v = strchr(kv, '=')) == NULL || *v == '\0') {
+		return -1;
+	}
+	*v++ = '\0';
+
+	int r = flag(v);
+	if (r < 0) return -1;
+	if (!strcmp(k, "asm-print-label"))     { s->assembler_print_labels = r; } 
+	else if (!strcmp(k, "optimize"))       { s->optimize = r; }
+	else if (!strcmp(k, "exit-on-escape")) { s->exit_on_escape = r; }
+	else if (!strcmp(k, "exit-on-cycles")) { s->exit_on_cycles = r; }
+	else if (!strcmp(k, "debug"))          { s->debug = r; }
+	else if (!strcmp(k, "stats"))          { s->stats = r; }
+	else if (!strcmp(k, "non-blocking"))   { s->non_blocking = r; }
+	else if (!strcmp(k, "debug-on-io"))    { s->debug_on_io = r; }
+	else if (!strcmp(k, "debug-on-jump"))  { s->debug_on_jump = r; }
+	else if (!strcmp(k, "debug-on-halt"))  { s->debug_on_halt = r; }
+	else if (!strcmp(k, "trace-zero-pad")) { s->trace_zero_padding = r; }
+	else { return -2; }
+	return 0;
+}
+
 int main(int argc, char **argv) {
 	sys_getopt_t opt = { .init = 0, .error = stdout, };
 	char *save = NULL, *bsave;
@@ -2112,7 +2167,7 @@ int main(int argc, char **argv) {
 	binary(stdout);
 	binary(stderr);
 
-	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhHtdkc:s:B:b:x:n:p:S:a:A:")) != -1;) {
+	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhHtdkc:s:B:b:x:n:p:S:a:A:o:R:")) != -1;) {
 		switch (ch) {
 		case 'h': return cli_help(stderr) < 0 ? 1 : 0;
 		case 'H': return assembly_help(stderr) < 0 ? 1 : 0;
@@ -2128,6 +2183,8 @@ int main(int argc, char **argv) {
 		case 'z': s.optimize = 1; break;
 		case 'p': s.meta[L(&s, number(opt.arg))] |= META_PRN; break;
 		case 'r': s.stats = 1; break;
+		case 'R': s.base = number(opt.arg); if (s.base < 2 || s.base > 36) { (void)fprintf(stderr, "Invalid base '%s'\n", opt.arg); return 1; } break;
+		case 'o': if (set_option(&s, opt.arg) < 0) return 1; break;
 		case 'S': { long sz = number(opt.arg); if (sz <= 0 || sz > SZ) { (void)fprintf(stderr, "Incorrect size: %ld\n", sz); return 1; } s.sz = sz; } break;
 		case 'a': return assemble_from_file(&s, opt.arg, 1, 1, 0) < 0 ? 1 : 0;
 		case 'A': if (assemble_from_file(&s, opt.arg, 0, 0, s.apc) < 0) return 1; break;
