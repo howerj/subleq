@@ -558,6 +558,7 @@ static int dump(asm_t *a, int mod3) {
 			v &= msk(a->N);
 			sgn = "-";
 		}
+		/* TODO: Use pnum */
 		if (fprintf(a->out, "%s%lu%c", sgn, v, mod3 ? ' ' : '\n') < 0)
 			return -1;
 	}
@@ -850,21 +851,41 @@ static inline int is_power_of_two(unsigned long x) {
 	return (x != 0) && ((x & (x - 1ul)) == 0);
 }
 
-static int pnum(uint64_t n, int base, int pad_char, int nbits, FILE *out) {
+static int max_chars(int base, int nbits, int sign) {
+	const uint64_t max_val = msk(nbits);
+	const int maxchars = nchars(max_val, base) + 1;
+	/* Adding "const int negate = !!(HI(nbits) & n);" not needed, always add one
+	 * for sign if 'n' is actually signed. */
+	return maxchars + !!sign;
+}
+
+/* There's lots of ways numbers can be input and output, for example, things
+ * that are missing:
+ * - Bases about 36, (base-64 for example could be a special case)
+ * - Printing fixed point numbers.
+ * - Equivalent input routines
+ * - Base-256 would be a special case that would allow N-Bit output.
+ * In fact this function along with others for consuming binary and textual
+ * input in various formats, such as outputting individual bits, parsing
+ * and outputting escaped strings, serialization of floats and integers of
+ * different sizes into different formats, and more.  */
+static int pnum(uint64_t n, int base, int pad_char, int nbits, int sign, FILE *out) {
+	base = base ? base : 10;
 	assert(base >= 2 && base <= 36);
 	assert(out);
 	const uint64_t max_val = msk(nbits);
 	const int negate = !!(HI(nbits) & n);
 	const int maxchars = nchars(max_val, base) + 1;
-	if (negate) n = -n;
+	if (negate && sign) n = -n;
 	n &= msk(nbits);
-	const int pad = maxchars - nchars(n, base) - negate;
+	const int pad = maxchars - nchars(n, base) - (negate && sign);
 	for (int i = 0; i < pad; i++)
 		if (fputc(pad_char, out) < 0)
 			return -1;
 	char a[66] = { 0, }; /* 64 (base = 2, 64 bit number) + ASCII NUL + '-' (although not needed) */
 	const int len = itoa(a, n, base);
-	if (negate)
+	/* TODO: Fix padding, if numeric (eg. '0') then sign goes before negate */
+	if (negate && sign)
 		if (fputc('-', out) < 0)
 			return -1;
 	if (fputs(a, out) < 0)
@@ -912,13 +933,13 @@ static int tracer(subleq_t *s, const char *fmt, ...) {
 					}
 				}
 				if (!found || !plables) {
-					if (pnum(l, base, pad, s->N, out) < 0)
+					if (pnum(l, base, pad, s->N, 1, out) < 0)
 						goto fail;
 				}
 			} break;
 			case 'd': {
 				long v = va_arg(ap, long);
-				if (pnum(v, base, pad, s->N, out) < 0)
+				if (pnum(v, base, pad, s->N, 1, out) < 0)
 					goto fail;
 			} break;
 			case 'i': { 
@@ -987,30 +1008,39 @@ static int cmd_continue(subleq_t *s, int argc, char **argv) {
 static int cmd_dump(subleq_t *s, int argc, char **argv) {
 	asserts_for_cmd(s, argc, argv);
 	const uint64_t addr = number(argv[1]), len = number(argv[2]);
+	const int max_char = max_chars(s->N, s->base, 0), pad = ' ';
 	size_t width = 4;
-	size_t bytes = 8;
-	const char *fmt = "%016ld ";
-	if (s->N <= 32) { fmt = "%09ld "; bytes = 4; width = 8; }
-	if (s->N <= 16) { fmt = "%05ld "; bytes = 2; width = 8; }
-	if (s->N <=  8) { fmt = "%03ld "; bytes = 1; width = 16; }
+	size_t bytes = s->N / 8 + !!(s->N % 8);
+	FILE *out = s->trace;
 
 	for (size_t i = 0; i < len; i += width) {
-		printer(s, fmt, (long)i);
+		pnum(i, s->base, pad, s->N, 0, out);
 		printer(s, ": ");
 		for (size_t j = 0; j < width && ((j + i) < len); j++) {
 			uint64_t d = s->m[(addr + i + j) % s->sz];
-			printer(s, fmt, (long)d);
+			pnum(d, s->base, pad, s->N, 0, out);
+			if (fputc(pad, out) < 0)
+				return -1;
 		}
+		size_t remain = (i + width) - len;
 		if ((i + width) > len) {
+			for (size_t m = 0; m <= remain; m++)
+				for (int n = 0; n <= (max_char + 1); n++)
+					if (fputc(pad, out) < 0)
+						return -1;
 		}
 		printer(s, "\t");
 		for (size_t j = 0; j < width && ((j + i) < len); j++) {
 			uint64_t d = s->m[(addr + i + j) % s->sz];
-			for (size_t k = 0; k < bytes; k++) {
-				int ch = d & 255;
+			for (size_t k = 0; k < bytes; k++) { 
+				int mod = s->N % 8;
+				int last = (k + 1) == bytes;
+				int mk = mod ? msk(mod) : 255;
+				int ch = last ? d & mk : d & 255;
 				d >>= 8;
 				printer(s, "%c", isgraph(ch) ? ch : '.');
 			}
+			printer(s, " ");
 		}
 		printer(s, "\n");
 	}
@@ -1067,6 +1097,7 @@ static int cmd_read(subleq_t *s, int argc, char **argv) {
 	return 0;
 }
 
+/* TODO: Merge with dump? */
 static int subleq_save(subleq_t *s, uint64_t start, uint64_t len, const char *file) {
 	assert(s);
 	assert(file);
