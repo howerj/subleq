@@ -1,15 +1,19 @@
 .PHONY: all run run-orig clean
+VM=../subleq
+OPTS=
+IMAGE=../subleq.dec
 
 all: self.dec
 
-run: self.dec ../subleq ../subleq.dec
-	../subleq self.dec ../subleq.dec 
+run: self.dec ${VM} ${IMAGE}
+	${VM} ${OPTS} self.dec ${IMAGE} 
 
-run-orig: ../subleq ../subleq.dec
-	../subleq ../subleq.dec
+run-orig: ${VM} ${IMAGE}
+	${VM} ${OPTS} ${IMAGE}
 
-double: self.dec ../subleq ../subleq.dec
-	../subleq self.dec self.dec ../subleq.dec
+double: self.dec ${VM} ${IMAGE}
+	${VM} ${OPTS} self.dec self.dec ${IMAGE}
+
 
 %.dec: %.asq ../debug
 	../debug -a $< > $@
@@ -19,5 +23,8 @@ double: self.dec ../subleq ../subleq.dec
 
 ../subleq.dec ../subleq:
 	make -C .. subleq.dec subleq
+
+run-all: all.dec ${VM} ${IMAGE}
+	${VM} ${OPTS} all.dec ${IMAGE}
 
 clean:

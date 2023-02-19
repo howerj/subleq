@@ -3177,14 +3177,12 @@ there 2/ primitive t!
 \
 
 \ One of the earliest tricks I remember being taught when
-\ learning to program is doubling a number by adding that
-\ number to itself, "2\*" does this, "2\/" will be defined
-\ later, it is slightly more complex.
+\ learning to program is shift left by one place is equivalent
+\ to adding that number to itself, "2\*" does this, "2\/" will 
+\ be defined later, it is slightly more complex.
 \
 : 2* dup + ; ( u -- u : multiply by two )
 
-\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
-\ 
 \ We need a way of pushing a literal value, a number, onto
 \ the variable stack, "(push)" does that, formerly "opPush"
 \ which was written in SUBLEQ assembly did that, which
@@ -3192,7 +3190,8 @@ there 2/ primitive t!
 \
 \        :a opPush ++sp tos {sp} iSTORE tos ip iLOAD ip INC ;a
 \
-\ As usual, to save space, "opPush" was recoded in Forth.
+\ As usual, to save space, "opPush" was recoded in Forth, at
+\ the expense of some speed.
 \
 \ In order to push a literal value onto the variable stack
 \ the instruction "(push)" has to manipulate the return stack.
@@ -3263,8 +3262,6 @@ there 2/ primitive t!
 \ Would refer to the first thread local cell and push the
 \ address of it onto the stack.
 \
-\ "tuser" is used to reserve those thread local variables in
-\ the meta-compiler, which has already been described.
 \
 
 :s (const) r> [@] ;s compile-only ( R: a --, -- u )
@@ -3290,12 +3287,14 @@ system[
 
 \ "1+" and "1-" do what they say, increment and decrement
 \ respectively. They are defined here as they are needed
-\ for the next few definitions.
+\ for the next few definitions. 
+
+\ "1+" is needed for our definition "(push)" so is defined 
+\ here, it also needs the constant '#1' to be defined, as
+\ does "1-".  
 \
 : 1+ #1 + ; ( n -- n : increment value in cell )
 : 1- #1 - ; ( n -- n : decrement value in cell )
-
-\ TODO ==== REWRITE ==== REWRITE ==== REWRITE ==== REWRITE ====
 
 \ "lit" is used to compile a literal into the dictionary, which
 \ will be pushed when run. Note again, we are not in command 
@@ -3329,6 +3328,13 @@ system[
 \ All of these operations take up two cells in the dictionary
 \ as they are not just a simple call, but a VM instruction and
 \ then the compiled number.
+\
+\ "variable" like "constant" should be familiar to all Forth
+\ programmers, "user" is more esoteric but is the thread local
+\ equivalent of allocating a variable, note that these
+\ definitions are for the meta-compiler, they will be
+\ redefined in the target dictionary using ":to" much later
+\ in the section on "create" and "does\>".
 \
 
 :s (push) r> dup [@] swap 1+ >r ;s ( -- n : inline push value )
