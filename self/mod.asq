@@ -18,8 +18,8 @@ ta tc;
 zr tb negate;
 zr zr noneg;
 negate:
-  tb zr; zr td; tb; td tb;
-  or negged;
+  tb zr; zr td; tb; td tb; zr;
+  nr negged;
 noneg:
 
 c;
@@ -37,14 +37,17 @@ tb td;
 td tc; 
 
 td;
-or ta;         # ta--
+or ta;       # ta--
 ta td fix;   # if (td-ta <= 0) jump to fix
 tc tc nofix; # else jump to no fix
 fix:
   or c;        # c--
 nofix:
 
-# negged nego: nonego:
+zr negged nego;
+zr zr nonego;
+nego: 
+nonego:
 
 # Output values and halt
 c -1;
@@ -53,5 +56,5 @@ negged -1;
 0 0 -1;
 
 . ta:0 tb:0 tc:0 td:0 c:0 zr:0 nr:-1 or:1 negged:0
-. a:128   b:-1024
+. a:128   b:1026
 #. a:32768 b:-65537 

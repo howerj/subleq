@@ -339,6 +339,7 @@ enum {
 enum {
 	SUBLEQ, JMP, ADD, SUB, MOV,
 	ZERO, PUT, GET, HALT,
+	IADD, ISUB,
 	IJMP, ILOAD, ISTORE, INC, DEC,
 	INV, DOUBLE, LSHIFT,
 
@@ -349,6 +350,7 @@ static const uint64_t instruction_increment[] = {
 	[SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/, [MOV] = 12,
 	[ADD] = 9, [DOUBLE] = 9, [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
 	[ZERO] = 3, [IJMP] = 15/*Disassembly only*/, [ILOAD] = 24,
+	[IADD] = 21, [ISUB] = 15,
 	[ISTORE] = 48, [PUT] = 3, [GET] = 3, [HALT] = 3/*Disassembly only*/,
 	[INC] = 3, [DEC] = 3, [INV] = 21,
 };
@@ -356,9 +358,9 @@ static const uint64_t instruction_increment[] = {
 static const char *instruction_names[] = {
 	"SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
 	"MOV    ", "ZERO   ", "PUT    ", "GET    ",
-	"HALT   ", "IJMP   ", "ILOAD  ", "ISTORE ",
-	"INC    ", "DEC    ", "INV    ", "DOUBLE ",
-	"LSHIFT ",
+	"HALT   ", "IADD   ", "ISUB   ", "IJMP   ", 
+	"ILOAD  ", "ISTORE ", "INC    ", "DEC    ", 
+	"INV    ", "DOUBLE ", "LSHIFT ",
 };
 
 typedef struct {
@@ -1463,6 +1465,7 @@ static int optimizer(subleq_t *s, uint64_t pc) {
 
 		/* Largest instructions *must* go first */
 
+		/* TODO: Fix this to match new ISTORE */
 		if (match(s, n, DEPTH, i, "00> !Z> Z0> ZZ> 11> ?Z> Z1> ZZ> 22> ?Z> Z2> ZZ> 33> !Z> Z3> ZZ>", &q0, &q1) == 1
 			&& get(&s->o, '0') == (i+(3*12))
 			&& get(&s->o, '1') == (i+(3*12)+1)) {
@@ -1504,12 +1507,27 @@ static int optimizer(subleq_t *s, uint64_t pc) {
 			continue;
 		}
 
+		if (match(s, n, DEPTH, i, "01> 23> 44> 14> 3Z> 11> 33>") == 1) {
+			s->im[L(s, i)].instruction = IADD;
+			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
+			s->im[L(s, i)].s = L(s, get(&s->o, '2'));
+			s->o.matches[IADD]++;
+			continue;
+		}
 
 		if (match(s, n, DEPTH, i, "00> 10> 11> 2Z> Z1> ZZ> !1>", &q0) == 1
 				&& s->o.one_reg[q0]) {
 			s->im[L(s, i)].instruction = INV;
 			s->im[L(s, i)].d = L(s, get(&s->o, '1'));
 			s->o.matches[INV]++;
+			continue;
+		}
+
+		if (match(s, n, DEPTH, i, "01> 33> 14> 5Z> 11>") == 1) {
+			s->im[L(s, i)].instruction = ISUB;
+			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
+			s->im[L(s, i)].s = L(s, get(&s->o, '5'));
+			s->o.matches[ISUB]++;
 			continue;
 		}
 
@@ -1553,7 +1571,7 @@ static int optimizer(subleq_t *s, uint64_t pc) {
 			continue;
 		}
 
-		if (match(s, n, DEPTH, i, "ZZ!", &q0) == 1 && q0 >= SZ) {
+		if (match(s, n, DEPTH, i, "ZZ!", &q0) == 1 && q0 == msk(s->N)) {
 			s->im[L(s, i)].instruction = HALT;
 			s->o.matches[HALT]++;
 			continue;
@@ -1690,7 +1708,6 @@ static int cmd_tron(subleq_t *s, int argc, char **argv) {
 	s->cycles = argc > 1 ? number(argv[1]) : 0;
 	return 0;
 }
-
 
 static int cmd_trace(subleq_t *s, int argc, char **argv) {
 	s->debug_on_io = 0;
@@ -2118,6 +2135,8 @@ static int subleq(subleq_t *s) {
 				}
 				break;
 		}
+		case IADD: m[L(s, m[d])] += m[src]; s->pc += inc; break;
+		case ISUB: m[L(s, m[d])] -= m[src]; s->pc += inc; break;
 		case GET: {
 			const int ch = subleq_getch(s) & msk(s->N); 
 			if (ch == ESCAPE) {
@@ -2130,7 +2149,7 @@ static int subleq(subleq_t *s) {
 				s->pc += inc; 
 			}
 		} break;
-		case HALT: s->pc |= HI(s->N); break;
+		case HALT: s->pc = msk(s->N); break;
 		case INC: m[d]++; s->pc += inc; break;
 		case DEC: m[d]--; s->pc += inc; break;
 		case INV: m[d] = ~m[d]; s->pc += inc; break;

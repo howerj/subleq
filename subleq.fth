@@ -1412,6 +1412,11 @@ defined eforth [if] system -order [then]
 \ final "MOV", leaving the last instruction of the modified
 \ "MOV" the same, to zero out the "Z" register.
 \
+\ "iADD" and "iSUB" perform indirect add and subtract
+\ respectively, both are shorter than an "iSTORE" and find
+\ their use implementing "+" and "-" which operate on the
+\ variable stack (and thus have to do indirection).
+\
 \ There are under twenty macro instructions in the base 
 \ assembler; I/O, Loads/Stores, and arithmetic. The conditional
 \ instruction macros will be defined in the next section. That
@@ -1419,6 +1424,8 @@ defined eforth [if] system -order [then]
 \
 
 :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
+:m V, 1 t, ;m ( -- : Address 1 also contains 0, temp location )
+:m A, 0 t, ;m ( -- : Synonym for 'Z', temporary location )
 :m NADDR there 2/ 1+ t, ;m ( --, jump to next cell )
 :m HALT 0 t, 0 t, -1 t, ;m ( --, Halt but do not catch fire )
 :m JMP 2/ Z Z t, ;m ( a --, Jump to location )
@@ -1432,10 +1439,78 @@ defined eforth [if] system -order [then]
    Z Z NADDR ;m
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( a a -- )
 :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
-:m iSTORE ( a a -- )
-   swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV
-   r> 0 MOV ;m
 
+:m iADD ( a a -- )
+   2/ t, A, NADDR
+   2/ t, V, NADDR
+   there 2/ 7 + dup dup t, t, NADDR
+   A,   t, NADDR
+   V, 0 t, NADDR
+   A, A, NADDR
+   V, V, NADDR ;m
+:m iSUB ( a a -- )
+   2/ t, A, NADDR
+   2/ >r
+   there 2/ 7 + dup dup t, t, NADDR
+   A,   t, NADDR
+   r> t, 0 t, NADDR
+   A, A, NADDR ;m
+
+\ :m iSTORE ( a a -- )
+\   swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV
+\   r> 0 MOV ;m
+
+
+  :m iSTORE
+     2/ t, A, NADDR
+     there 2/ 3 4 * + dup t, t, NADDR
+     there 2/ $A + dup t, t, NADDR
+     A, there 2/ 5 + t, NADDR
+     A, there 2/ 3 + t, NADDR
+     0 t, 0 t, NADDR
+     2/ t, V, NADDR
+     there 2/ 7 + dup dup t, t, NADDR
+     A,   t, NADDR
+     V, 0 t, NADDR
+  
+     A, A, NADDR
+     V, V, NADDR
+     ;m
+  
+  
+  \  a; b; b1; b2; v;
+  \  val v;
+  \  ptr a; a b1; a b2; a b;
+  \  b1:0 b2:0;
+  \  a b;
+  \  v b:0;
+  \  
+  \  a; c; v;
+  \  val2 v;
+  \  ptr a;
+  \  a c;
+  \  v c:0;
+  \  
+  \  
+  \  80 -1;
+  \  0 0 -1;
+  \  
+  \  . Z:0 ptr:80 val:9 val2:99 a:0 v:0
+  \  
+  
+  
+  \  a; v;
+  \  ptr a;
+  \  val v;
+  \  b;
+  \  a b;
+  \  v b:0;
+  \  
+  \  80 -1;
+  \  0 0 -1;
+  \  
+  \  . Z:0 ptr:80 val:9 a:0 v:0
+  
 \ To simplify program flow some control structures
 \ will be defined, they work a little differently than the
 \ Forth ones, as they must be given an address instead of
@@ -2245,10 +2320,12 @@ assembler.1 -order
 :a opEmit tos PUT t' opDrop JMP (a);
 
 \ Subtraction and addition need no real explanation, just note
-\ that they are relatively fast to execute in this machine.
+\ that they are relatively fast to execute on this machine.
 \
-:a - r0 {sp} iLOAD tos r0 SUB r0 tos MOV --sp ;a ( n n -- n )
-:a + r0 {sp} iLOAD r0 tos ADD --sp ;a ( n n -- n )
+\ The both jump to "opDrop" to finish the job.
+\
+:a - tos {sp} iSUB t' opDrop JMP (a);
+:a + tos {sp} iADD t' opDrop JMP (a);
 
 \ "opExit", which is used to make "exit", deserves some
 \ explanation, it implements a "return", as part of the

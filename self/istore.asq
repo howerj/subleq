@@ -1,0 +1,18 @@
+a; b; b1; b2; v;
+val v;
+ptr a; a b1; a b2; a b;
+b1:0 b2:0;
+a b;
+v b:0;
+
+a; c; v;
+val2 v;
+ptr a;
+a c;
+v c:0;
+
+
+80 -1;
+0 0 -1;
+
+. Z:0 ptr:80 val:9 val2:99 a:0 v:0
