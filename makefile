@@ -107,7 +107,7 @@ self.dec:
 	sed -i '/^$$/d' $@
 
 debug.o: debug.c subleq.cma
-	${CC} -std=gnu99 -Wall -Wextra $< -c -o $@
+	${CC} -std=gnu99 -Wall -Wextra -pedantic $< -c -o $@
 
 debug: debug.o
 

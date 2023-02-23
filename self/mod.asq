@@ -5,7 +5,7 @@
 start:
 
 
-ta; tb; tc; td; zr;
+ta; tb; tc; td; zr; negged;
 
 b ta;
 ta tb;
@@ -19,6 +19,7 @@ zr tb negate;
 zr zr noneg;
 negate:
   tb zr; zr td; tb; td tb;
+  or negged;
 noneg:
 
 c;
@@ -43,14 +44,14 @@ fix:
   or c;        # c--
 nofix:
 
+# negged nego: nonego:
 
 # Output values and halt
 c -1;
 tc -1;
+negged -1;
 0 0 -1;
 
-. ta:0 tb:0 tc:0 td:0 a:128 b:1024 c:0 zr:0 nr:-1 or:1
-
-
-
-
+. ta:0 tb:0 tc:0 td:0 c:0 zr:0 nr:-1 or:1 negged:0
+. a:128   b:-1024
+#. a:32768 b:-65537 

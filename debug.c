@@ -9,6 +9,21 @@
  * twice, there's a lot of it!), and examples for mini-languages
  * and the like.
  *
+ * There is a lot that could be done to improve this program,
+ * but it is large enough as it is, somethings include:
+ *
+ * - Better testing.
+ * - Assembler Macros.
+ * - Better named locations and import/export of assembler
+ *   labels allowing a primitive form of linking.
+ * - Gather more information from the environment when a program
+ *   is running, such as which cells are modified (which we do
+ *   partially).
+ * - Handling other One Instruction Set Computer Instructions,
+ *   such as modifications to SUBLEQ, and SUBNEG.
+ * - An option to run with a faster and simpler VM, perhaps
+ *   16-bit only.
+ *
  * See:
  *
  * - <https://montcs.bloomu.edu/Information/LowLevel/DOS-Debug.html> 
@@ -21,9 +36,6 @@
 #define EMAIL   "howe.r.j.89@gmail.com"
 #define LICENSE "Public Domain / Unlicense for code only"
 #define VERSION "1.0"
-/* TODO:
- * - add named breakpoints from assembler
- * - Gather more information about running environment (which cells are modified, etc). */
 
 #include <assert.h>
 #include <ctype.h>
@@ -77,7 +89,7 @@ static int term_getch(FILE *in) {
 	if (!n)
 		return -1;
 	errno = 0;
-	while ((n = read(fd, &r, 1)) < 0) {
+	while (read(fd, &r, 1) < 0) {
 		if (errno == EAGAIN || errno == EINTR)
 			continue;
 		else
@@ -101,11 +113,11 @@ static void term_sleep_ms(unsigned ms) {
 extern int getch(void);
 extern int putch(int c);
 static int term_getch(FILE *in) { assert(in); return in == stdin ? getch() : fgetc(in); }
-static int term_putch(const int c, FILE *out) { return out == stdout ? putch(c) : fputc(c, out); }
+static int term_putch(const int c, FILE *out) { int r = out == stdout ? putch(c) : fputc(c, out); if (fflush(out) < 0) return -1; return r; }
 static void term_sleep_ms(unsigned ms) { usleep((unsigned long)ms * 1000); }
 #else
 static int term_getch(FILE *in) { assert(in); return fgetc(in); }
-static int term_putch(const int c, FILE *out) { return fputc(c, out); }
+static int term_putch(const int c, FILE *out) { int r = fputc(c, out); if (fflush(out) < 0) return -1; return r; }
 static void term_sleep_ms(unsigned ms) { (void)ms; }
 #endif
 #endif /** __unix__ **/
@@ -159,6 +171,13 @@ static int sys_getopt(sys_getopt_t *opt, const int argc, char *const argv[], con
 	assert(opt);
 	assert(fmt);
 	assert(argv);
+	/* NB. Could use multi-character values for enumeration
+	 * values, such as:
+	 *
+	 * enum { BADARG_E = 'ARG', BADCH_E = 'CH', BADIO_E = 'IO', };
+	 *
+	 * Which is a neat trick.
+	 */
 	enum { BADARG_E = ':', BADCH_E = '?', BADIO_E = 'i', };
 
 	if (!(opt->init)) {
@@ -349,8 +368,8 @@ typedef struct {
 
 typedef struct {
 	int matches[IMAX];
-	int set[9];
-	uint64_t v[9];
+	int set[10];
+	uint64_t v[10];
 	unsigned char z_reg[SZ], one_reg[SZ], neg1_reg[SZ];
 	clock_t start, end;
 	int64_t cnt[IMAX];
@@ -433,7 +452,7 @@ static int validop(int operation) {
 	return 0;
 }
 
-static int add(label_t *lbs, size_t lables, const char *name, uint64_t location, int unique, int operation) {
+static int reserve_label(label_t *lbs, size_t lables, const char *name, uint64_t location, int unique, int operation) {
 	assert(lbs);
 	if ((strlen(name) + 1) > MAX_NAME)
 		return -1;
@@ -486,13 +505,13 @@ static int add_error(asm_t *a, const char *name, int r) {
 static int add_label(asm_t *a, const char *name, uint64_t location) {
 	assert(a);
 	assert(name);
-	return add_error(a, name, add(a->lb, MAX_LABELS, name, location, 1, '='));
+	return add_error(a, name, reserve_label(a->lb, MAX_LABELS, name, location, 1, '='));
 }
 
 static int add_hole(asm_t *a, const char *name, uint64_t location, int operation) {
 	assert(a);
 	assert(name);
-	return add_error(a, name, add(a->holes, MAX_HOLES, name, location, 0, operation));
+	return add_error(a, name, reserve_label(a->holes, MAX_HOLES, name, location, 0, operation));
 }
 
 static int add_copy(asm_t *a, uint64_t from, uint64_t to) {
@@ -545,24 +564,33 @@ static int resolve(asm_t *a) {
 	return 0;
 }
 
-static int dump(asm_t *a, int mod3) {
+static uint64_t L(subleq_t *s, uint64_t a) {
+	assert(s);
+	assert(s->sz);
+	return a % s->sz;
+}
+
+static int dump(asm_t *a, FILE *out, uint64_t start, uint64_t length, int mod3, int nl) {
 	assert(a);
-	for (size_t i = 0; i < a->apc; i++) {
-		if (mod3 && i && (i % 3) == 0)
-			if (fprintf(a->out, "\n") < 0)
+	assert(out);
+	/* We could use "pnum" to print out in different bases, we would
+	 * then also need to accept different bases when loading files, and
+	 * perhaps allow input at the command line to be consistent. */
+	for (size_t i = 0; i < length; i++) {
+		if (nl && mod3 && i && (i % 3) == 0)
+			if (fprintf(out, "\n") < 0)
 				return -1;
 		char *sgn = "";
-		unsigned long v = a->m[i];
+		unsigned long v = a->m[L(a, i + start)];
 		if (HI(a->N) & v) {
 			v = -v;
 			v &= msk(a->N);
 			sgn = "-";
 		}
-		/* TODO: Use pnum */
-		if (fprintf(a->out, "%s%lu%c", sgn, v, mod3 ? ' ' : '\n') < 0)
+		if (fprintf(out, "%s%lu%c", sgn, v, (!nl || mod3) ? ' ' : '\n') < 0)
 			return -1;
 	}
-	if (fprintf(a->out, "\n") < 0)
+	if (fprintf(out, "\n") < 0)
 		return -1;
 	return 0;
 }
@@ -609,7 +637,7 @@ static int inner(asm_t *a) {
 	case EOF: return EOI;
 	default:
 		if (isalnum(ch)) {
-			int number = isdigit(ch);
+			int num = isdigit(ch);
 			int colon = 0;
 			a->name[0] = ch;
 			for (size_t i = 1;;i++) {
@@ -620,9 +648,9 @@ static int inner(asm_t *a) {
 				ch = fgetc(a->in);
 				if (ch == EOF)
 					break;
-				int check = number ? isdigit(ch) : isalnum(ch); 
+				int check = num ? isdigit(ch) : isalnum(ch); 
 				if (!check) {
-					if (!number && ch == ':') {
+					if (!num && ch == ':') {
 						colon = 1;
 					} else if (ungetc(ch, a->in) < 0) {
 						return error(a, "ungetc failed");
@@ -632,10 +660,10 @@ static int inner(asm_t *a) {
 				if (!colon)
 					a->name[i] = ch;
 			}
-			if (number)
+			if (num)
 				a->number = strtol(a->name, NULL, 0) & msk(a->N);
 			/* key words, if any, would go here...*/
-			return number ? NUMBER : (colon ? COLON : LABEL);
+			return num ? NUMBER : (colon ? COLON : LABEL);
 		} else {
 			char c[2] = { ch, };
 			char *e = isgraph(ch) ? c : "non-graphic";
@@ -665,7 +693,7 @@ static int unget(asm_t *a) {
 	return 0;
 }
 
-static int end(int token) {
+static int end_token(int token) {
 	return token == EOL || token == SEMI || token == EOI || token == EXCLAIM;
 }
 
@@ -678,7 +706,7 @@ static int assemble(asm_t *a, int output) {
 		int t = lexer(a);
 		if (t == DOT) { dot = 1; continue; }
 		if (t == EOL) { dot = 0; }
-		if (end(t)) {
+		if (end_token(t)) {
 			switch (cnt) {
 			case 0: break;
 			case 1: 
@@ -738,7 +766,7 @@ static int assemble(asm_t *a, int output) {
 				if (add_hole(a, a->name, a->apc + cnt, op) < 0)
 					return -1;
 			} else {
-				n = n + (op == '+' ? ll : ll);
+				n = n + (op == '+' ? ll : -ll);
 			}
 		} else if (t == QUESTION) {
 			uint64_t val = a->apc + cnt + 1;
@@ -749,7 +777,7 @@ static int assemble(asm_t *a, int output) {
 		} else if (t == SEP) {
 			continue;
 		} else {
-			return error(a, "Invalid token %d/%c", t, t);
+			return error(a, "Invalid token %d/'%c'", t, t);
 		}
 
 		t = lexer(a);
@@ -773,7 +801,7 @@ static int assemble(asm_t *a, int output) {
 		return error(a, "Resolving labels failed");
 	if (copy(a) < 0)
 		return error(a, "Copying locations failed");
-	return output ? dump(a, 1) : 0;
+	return output ? dump(a, a->out, 0, a->apc, 1, 0) : 0;
 }
 
 static int assembly_help(FILE *out) {
@@ -884,7 +912,8 @@ static int pnum(uint64_t n, int base, int pad_char, int nbits, int sign, FILE *o
 			return -1;
 	char a[66] = { 0, }; /* 64 (base = 2, 64 bit number) + ASCII NUL + '-' (although not needed) */
 	const int len = itoa(a, n, base);
-	/* TODO: Fix padding, if numeric (eg. '0') then sign goes before negate */
+	/* Note that when printing with padding other than space, putting
+	 * the sign here looks odd, we might want to fix that. */
 	if (negate && sign)
 		if (fputc('-', out) < 0)
 			return -1;
@@ -893,22 +922,18 @@ static int pnum(uint64_t n, int base, int pad_char, int nbits, int sign, FILE *o
 	return len + negate;
 }
 
-static int tracer(subleq_t *s, const char *fmt, ...) {
+static int cprint(subleq_t *s, FILE *out, va_list args, const char *fmt) {
 	assert(s);
-	assert(fmt);
+	assert(out);
 	va_list ap;
-	FILE *out = s->trace;
-	if (s->tron <= 0 || out == NULL)
-		return 0;
-	va_start(ap, fmt);
+	va_copy(ap, args);
 
-	/* TODO: turn into snprintf like function then use throughout interpreter */
 	const int base = s->base ? s->base : 10, pad = s->trace_zero_padding ? '0' : ' ', plables = s->tron > 1;
 	for (int ch = 0; (ch = *fmt++);) {
 		if (ch == '%') {
 			ch = *fmt++;
 			switch (ch) {
-			case 's': { char *s = va_arg(ap, char*); if (fputs(s, out) < 0) goto fail; } break;
+			case 's': { char *t = va_arg(ap, char*); if (fputs(t, out) < 0) goto fail; } break;
 			case 'c': { 
 				char c = va_arg(ap, int); 
 				if (fputc(c, out) < 0)
@@ -922,7 +947,7 @@ static int tracer(subleq_t *s, const char *fmt, ...) {
 						if ((long)b->location == l) {
 							int len = strlen(b->name);
 							int max = nchars(msk(s->N), base) + 1;
-							for (int i = 0; i < (max - len); i++)
+							for (int j = 0; j < (max - len); j++)
 								if (fputc(' ', out) < 0)
 									goto fail;
 							if (fputs(b->name, out) < 0)
@@ -937,9 +962,10 @@ static int tracer(subleq_t *s, const char *fmt, ...) {
 						goto fail;
 				}
 			} break;
+			case 'x': /* fall-through */
 			case 'd': {
 				long v = va_arg(ap, long);
-				if (pnum(v, base, pad, s->N, 1, out) < 0)
+				if (pnum(v, ch == 'x' ? 16 : base, pad, s->N, 1, out) < 0)
 					goto fail;
 			} break;
 			case 'i': { 
@@ -962,11 +988,18 @@ fail:
 	return -1;
 }
 
-/* Using a custom print function might help, being able to
- * select the base we print out for decimals as well as alignment
- * and leading zeros globally, with respect to the bit-width
- * of the machine, would improve things. Perhaps I should make
- * a logging library that I can reuse... */
+static int tracer(subleq_t *s, const char *fmt, ...) {
+	assert(s);
+	assert(fmt);
+	if (s->tron <= 0 || s->trace == NULL)
+		return 0;
+	va_list ap;
+	va_start(ap, fmt);
+	const int r = cprint(s, s->trace, ap, fmt);
+	va_end(ap);
+	return r;
+}
+
 static int printer(subleq_t *s, const char *fmt, ...) {
 	assert(s);
 	assert(s->out);
@@ -974,21 +1007,11 @@ static int printer(subleq_t *s, const char *fmt, ...) {
 	FILE *out = s->trace;
 	if (!out)
 		return 0;
-	int r = 0;
 	va_list ap;
 	va_start(ap, fmt);
-	if (vfprintf(out, fmt, ap) < 0) {
-		s->error = -1;
-		r = -1;
-	}
+	const int r = cprint(s, out, ap, fmt);
 	va_end(ap);
 	return r;
-}
-
-static uint64_t L(subleq_t *s, uint64_t a) {
-	assert(s);
-	assert(s->sz);
-	return a % s->sz;
 }
 
 static void asserts_for_cmd(subleq_t *s, int argc, char **argv) {
@@ -1074,10 +1097,10 @@ static int cmd_breakp_clear(subleq_t *s, int argc, char **argv) {
 
 static int cmd_breakp_list(subleq_t *s, int argc, char **argv) {
 	asserts_for_cmd(s, argc, argv);
-	printer(s, "pc=%ld cycles=%ld bps: ", (long)s->pc, (long)s->count);
+	printer(s, "pc=%d cycles=%d bps: ", (long)s->pc, (long)s->count);
 	for (size_t i = 0; i < s->sz; i++)
 		if (s->meta[i] & META_BPS)
-			printer(s, "%ld ", (long)i);
+			printer(s, "%d ", (long)i);
 	printer(s, "\n");
 	return 0;
 }
@@ -1093,24 +1116,24 @@ static int cmd_store(subleq_t *s, int argc, char **argv) {
 static int cmd_read(subleq_t *s, int argc, char **argv) {
 	asserts_for_cmd(s, argc, argv);
 	const uint64_t loc = number(argv[1]);
-	printer(s, "%ld\n", (long)s->m[L(s, loc)]);
+	printer(s, "%d\n", (long)s->m[L(s, loc)]);
 	return 0;
 }
 
-/* TODO: Merge with dump? */
 static int subleq_save(subleq_t *s, uint64_t start, uint64_t len, const char *file) {
 	assert(s);
 	assert(file);
 	FILE *f = fopen(file, "wb");
 	if (!f)
 		return -1;
-	for (size_t i = 0; i < len; i++) {
+	int r = dump(s, f, start, len, 0, 1);
+	/*for (size_t i = 0; i < len; i++) {
 		if (fprintf(f, "%ld\n", (long)s->m[L(s, i + start)]) < 0)
 			return -2;
-	}
+	}*/
 	if (fclose(f) < 0)
 		return -3;
-	return 0;
+	return r < 0 ? -4: r;
 }
 
 typedef struct {
@@ -1258,7 +1281,7 @@ static int cmd_compare(subleq_t *s, int argc, char **argv) {
 		const long la = s->m[a];
 		const long lb = s->m[b];
 		if (la != lb)
-			printer(s, "%05ld:%05ld - %05ld:%05ld\n", a, la, b, lb);
+			printer(s, "%d:%d - %d:%d\n", a, la, b, lb);
 	}
 	return 0;
 }
@@ -1282,7 +1305,7 @@ static int cmd_register(subleq_t *s, int argc, char **argv) {
 	const long a = s->m[L(s, pc + 0)];
 	const long b = s->m[L(s, pc + 1)];
 	const long c = s->m[L(s, pc + 2)];
-	printer(s, "pc=%05ld, a=%05ld, b=%05ld, c=%05ld, N=%d, load=%ld\n", pc, a, b, c, (int)s->N, (long)s->load);
+	printer(s, "pc=%d, a=%d, b=%d, c=%d, N=%d, load=%d\n", pc, a, b, c, (int)s->N, (long)s->load);
 	return 0;
 }
 
@@ -1296,7 +1319,7 @@ static int cmd_search(subleq_t *s, int argc, char **argv) {
 		for (size_t j = 0; j < length; j++) {
 			const long addr = L(s, start + j);
 			if (find == (long)s->m[addr])
-				printer(s, "%05ld:%05ld\n", addr, find);
+				printer(s, "%d:%d\n", addr, find);
 		}
 	}
 
@@ -1356,9 +1379,9 @@ static int subleq_getch(subleq_t *s) {
 static int match(subleq_t *s, uint64_t *n, int sz, uint64_t pc, const char *st, ...) {
 	va_list ap;
 	int r = 0, i = 0, j = 0;
-	for (int i = 0; i < 9; i++) {
-		s->o.set[i] = 0;
-		s->o.v[i] = 0;
+	for (int k = 0; k < 10; k++) {
+		s->o.set[k] = 0;
+		s->o.v[k] = 0;
 	}
 	va_start(ap, st);
 	for (i = 0, j = 0; st[j] && i < sz; j++) {
@@ -1425,9 +1448,10 @@ static int optimizer(subleq_t *s, uint64_t pc) {
 		case 0: s->o.z_reg[i] = 1; break;
 		case 1: s->o.one_reg[i] = 1; break;
 		/*case 0xFFFF: s->o.neg1_reg[i] = 1; break;*/
+		default:
+			if (msk(s->N) == s->m[i])
+				s->o.neg1_reg[i] = 1;
 		}
-		if (msk(s->N) == s->m[i])
-			s->o.neg1_reg[i] = 1;
 	}
 
 	for (uint64_t i = 0; i < pc; i++) {
@@ -1647,9 +1671,9 @@ static int cmd_disassemble(subleq_t *s, int argc, char **argv) {
 			const long a = s->m[L(s, i + 0)];
 			const long b = s->m[L(s, i + 1)];
 			const long c = s->m[L(s, i + 2)];
-			printer(s, "%05ld: %s %05ld %05ld %05ld\n", (long)i, name, a, b, c);
+			printer(s, "%d: %s %d %d %d\n", (long)i, name, a, b, c);
 		} else {
-			printer(s, "%05ld: %s s=%05ld d=%05ld\n", (long)i, name, (long)im->s, (long)im->d); 
+			printer(s, "%d: %s s=%d d=%d\n", (long)i, name, (long)im->s, (long)im->d); 
 		}
 		inc = instruction_increment[instruction];
 		if (inc <= 0)
@@ -1705,25 +1729,25 @@ static int cmd_output(subleq_t *s, int argc, char **argv) {
 
 static int cmd_hex(subleq_t *s, int argc, char **argv) {
 	UNUSED(argc);
-	long a = strtol(argv[1], NULL, 0);
-	long b = strtol(argv[2], NULL, 0);
+	const long a = strtol(argv[1], NULL, 0);
+	const long b = strtol(argv[2], NULL, 0);
 
-	long sub = a - b;
-	long add = a + b;
-	long mul = a * b;
-	long div = a / (b ? b : 1);
+	const long sub = a - b;
+	const long add = a + b;
+	const long mul = a * b;
+	const long div = a / (b ? b : 1);
 
-	printer(s, "hex: 0x%05lx 0x%05lx add=%05lx sub=%05lx mul=%05lx div=%05lx\n", a, b, add, sub, mul, div);
-	printer(s, "dec:   %05ld   %05ld add=%05ld sub=%05ld mul=%05ld div=%05ld\n", a, b, add, sub, mul, div);
+	printer(s, "hex: %x    %x add= %x sub= %x mul= %x div= %x\n", a, b, add, sub, mul, div);
+	printer(s, "sys:%d   %d add=%d sub=%d mul=%d div=%d\n", a, b, add, sub, mul, div);
 
-	long and = a & b;
-	long or  = a | b;
-	long xor = a ^ b; 
-	long ina = ~a;
-	long inb = ~b;
+	const long and = a & b;
+	const long or  = a | b;
+	const long xor = a ^ b; 
+	const long ina = ~a;
+	const long inb = ~b;
 
-	printer(s, "hex: 0x%05lx 0x%05lx and=%05lx or=%05lx xor=%05lx ~a=%05lx ~b=%05lx\n", a, b, and, or, xor, ina, inb);
-	printer(s, "dec:   %05ld   %05ld and=%05ld or=%05ld xor=%05ld ~a=%05ld ~b=%05ld\n", a, b, and, or, xor, ina, inb);
+	printer(s, "hex: %x    %x and= %x  or= %x xor= %x  ~a= %x ~b= %x\n", a, b, and, or, xor, ina, inb);
+	printer(s, "sys:%d   %d and=%d  or=%d xor=%d  ~a=%d ~b=%d\n", a, b, and, or, xor, ina, inb);
 
 	return 0;
 }
@@ -1749,8 +1773,14 @@ the following program will run SUBLEQ programs:\n\n\
 \t#include <stdio.h>\n\
 \tint main(int x,char**v){FILE*f=fopen(v[1],\"r\");short p=0,m[1<<16],*i=m;\n\
 \twhile(fscanf(f,\"%%hd\",i++)>0);for(;p>=0;){int a=m[p++],b=m[p++],c=m[p++];\n\
-\ta<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])<=0?p=c:0;}}\n\
-\n\n\
+\ta<0?m[b]=getchar():b<0?putchar(m[a]):(m[b]-=m[a])<=0?p=c:0;}}\n\n\
+Unless specified the input files consist of decimal text values,\n\
+one value per cell. For example this program prints 'Hi':\n\n\
+\t9 -1 3\n\
+\t10 -1 6\n\
+\t0 0 -1\n\
+\t72 105\n\
+\n\
 Options:\n\n\
 \t-h             Display this help message and exit.\n\
 \t-H             Display the assembler help and exit.\n\
@@ -1762,6 +1792,7 @@ Options:\n\n\
 \t-c num         Run for 'num' cycles before halting into debugger.\n\
 \t-b break-point Add break point.\n\
 \t-s file.dec    Save to file after running.\n\
+\t-B file.bin    Save to binary file after running.\n\
 \t-a file.asq    Assemble a file and dump it to standard out.\n\
 \t-A file.asq    Assemble a file into a memory.\n\
 \t-n num (8-64)  Set SUBLEQ VM to bit-width, inclusive.\n\
@@ -1769,6 +1800,10 @@ Options:\n\n\
 \t-S num         Change memory size, max size is %ld.\n\
 \t-R num (2-36)  Change input and output radix.\n\
 \t-x forth,hi,echo,halt,self    Load example image from internal storage.\n\
+\t-o opt=bool    Set a boolean option to either 'true' or 'false'.\n\
+\t               Flags are: 'asm-print-label' 'optimize' 'exit-on-escape'\n\
+\t               'exit-on-cycles' 'debug' 'stats' 'non-blocking' 'debug-on-io'\n\
+\t               'debug-on-jump' 'debug-on-halt' 'trace-zero-pad'.\n\
 \n";
 	if (fprintf(out, help_string, PROJECT, AUTHOR, EMAIL, REPO, VERSION, (long)SZ) < 0)
 		return -1;
@@ -1792,6 +1827,9 @@ typedef struct {
 	int (*fn)(subleq_t *s, int argc, char **argv);
 } subleq_debug_command_t;
 
+/* Missing are commands to change the command line options, where applicable. For
+ * example the output radix could be change at runtime, the bit-width *could*,
+ * but doing that does not make sense. */
 static subleq_debug_command_t cmds[] = {
 	{ .name = "assemble",   .alt = "a", .fn = cmd_assemble,     .fmt = "sn|s", .help = "Assemble SUBLEQ program at location", },
 	{ .name = "break",      .alt = "b", .fn = cmd_breakp,       .fmt = "s+",   .help = "Add a break-point", },
@@ -1840,10 +1878,20 @@ static int cmd_help(subleq_t *s, int argc, char **argv) {
 
 static int debug_help(subleq_t *s) {
 	assert(s);
-	printer(s, "      name alt -- description\n");
+	printer(s, "       name alt -- description\n");
 	subleq_debug_command_t *d = NULL;
 	for (int i = 0; (d = &cmds[i])->fn; i++) {
-		printer(s, "% 10s   %s -- %s\n", d->name, d->alt ? d->alt : " ",  d->help);
+		char n[12] = { 0, };
+		size_t l = strlen(d->name);
+		assert(l < (sizeof (n) - 1));
+		memset(n, ' ', sizeof (n) - 1);
+		memcpy(n + (sizeof (n) - 1) - l, d->name, l);
+		n[sizeof (n) - 1] = 0;
+		printer(s, "%s   %s -- %s\n", n, d->alt ? d->alt : " ",  d->help);
+		/* printer does not support "% 10s", otherwise use:
+
+		   printer(s, "% 10s   %s -- %s\n", d->name, d->alt ? d->alt : " ",  d->help);
+		*/
 	}
 	return 0;
 }
@@ -1929,8 +1977,8 @@ static int subleq_break(subleq_t *s, int instruction) {
 		if (instruction == PUT || instruction == GET)
 			return 1;
 		if (instruction == SUBLEQ) {
-			/*if (a == -1 || b == -1) {
-			}*/
+			/*if (a == -1 || b == -1)
+				return 1;*/
 		}
 	}
 	return 0;
@@ -1957,7 +2005,7 @@ static int subleq(subleq_t *s) {
 		if (s->pc >= SZ || (s->pc == msk(s->N))) {
 			if (s->debug_on_halt) {
 				if (command(s) < 0)
-					return 0;
+					break;
 				s->pc = L(s, s->pc);
 			} else {
 				break;
@@ -1973,11 +2021,11 @@ static int subleq(subleq_t *s) {
 				if (s->exit_on_cycles)
 					break;
 				if (command(s) < 0)
-					return 0;
+					break;
 			}
 		} else if (subleq_break(s, instruction)) {
 			if (command(s) < 0)
-				return 0;
+				break;
 		}
 
 		s->o.cnt[instruction/*% MAX*/]++;
@@ -2000,7 +2048,7 @@ static int subleq(subleq_t *s) {
 				if (ch == ESCAPE) {
 					s->debug = 1;
 					if (s->exit_on_escape)
-						return 0;
+						goto end;
 					s->pc -= 3; /* redo instruction */
 					s->count--;
 				} else {
@@ -2013,10 +2061,6 @@ static int subleq(subleq_t *s) {
 					s->error = -1;
 					return -1;
 				}
-				if (fflush(s->out) < 0) {
-					s->error = -1;
-					return -1;
-				}
 			} else {
 				uint64_t r = s->m[lb] - s->m[la];
 				r &= msk(s->N);
@@ -2024,7 +2068,7 @@ static int subleq(subleq_t *s) {
 				if (r & HI(s->N) || r == 0) {
 					tracer(s, "%c ", s->pc == c ? '=' : '!');
 					if (s->pc != c)
-						s->debug = s->debug_on_jump;
+						s->debug = s->debug || s->debug_on_jump;
 					s->pc = c;
 				}
 				s->max = MAX(lb, s->max);
@@ -2033,40 +2077,60 @@ static int subleq(subleq_t *s) {
 			}
 		} break;
 		/* NB. We might be able to run more programs
-			* correctly if we disable these instructions if
-			* a write occurs within the bounds of an
-			* instruction macro, this would slow things down
-			* however. */
-		case JMP: s->pc = d; m[src] = 0; s->debug = s->debug_on_jump; break;
-		case MOV: m[d]	= m[src]; s->pc += inc;   break;
+		* correctly if we disable these instructions if
+		* a write occurs within the bounds of an
+		* instruction macro, this would slow things down
+		* however. */
+		case JMP: s->pc = d; m[src] = 0; s->debug = s->debug || s->debug_on_jump; break;
+		case MOV: m[d]	= m[src]; s->pc += inc; break;
 		case ADD: m[d] += m[src]; s->pc += inc; break;
 		case DOUBLE: m[d] <<= 1; s->pc += inc; break;
 		case LSHIFT: m[d] <<= src; s->pc += inc * src; break;
 		case SUB: m[d] -= m[src]; s->pc += inc; break;
 		case ZERO: m[d] = 0; s->pc += inc; break;
-		case IJMP: s->pc = m[d]; s->debug = s->debug_on_jump; break;
-		case ILOAD: m[d] = m[L(s, m[src])]; s->pc += inc;
-			break;
-		case ISTORE: m[L(s, m[d])] = m[src]; s->pc += inc;
-			break;
+		case IJMP: s->pc = m[d]; s->debug = s->debug || s->debug_on_jump; break;
 		case PUT:
-			if (term_putch(m[im[L(s, s->pc)].s], s->out) < 0)
+			if (term_putch(m[src], s->out) < 0)
 				return -1;
 			s->pc += inc;
 			break;
+		/* ILOAD is now used in the Forth image to perform a GET,
+		 * and GET is unused, so it must now perform that function, 
+		 * ISTORE cannot be used for a PUT (well, not correctly
+		 * anyway), so does not handle it. */
+		case ISTORE: m[L(s, m[d])] = m[src]; s->pc += inc; break;
+		case ILOAD: {
+				const uint64_t l = L(s, m[src]);
+				if (l == msk(s->N)) {
+					const int ch = subleq_getch(s) & msk(s->N);
+					if (ch == ESCAPE) {
+						s->debug = 1;
+						s->count--;
+						if (s->exit_on_escape)
+							goto end;
+					} else {
+						m[d] = (-ch) & msk(s->N);
+						s->pc += inc;
+					}
+				} else {
+					m[d] = m[L(s, m[src])]; 
+					s->pc += inc;
+				}
+				break;
+		}
 		case GET: {
 			const int ch = subleq_getch(s) & msk(s->N); 
 			if (ch == ESCAPE) {
 				s->debug = 1;
 				s->count--;
 				if (s->exit_on_escape)
-					return 0;
+					goto end;
 			} else {
-				m[im[s->pc].d] = ch;
+				m[d] = ch;
 				s->pc += inc; 
 			}
 		} break;
-		case HALT: s->pc |= msk(s->N); break;
+		case HALT: s->pc |= HI(s->N); break;
 		case INC: m[d]++; s->pc += inc; break;
 		case DEC: m[d]--; s->pc += inc; break;
 		case INV: m[d] = ~m[d]; s->pc += inc; break;
@@ -2075,6 +2139,7 @@ static int subleq(subleq_t *s) {
 		}
 		tracer(s, "\n");
 	}
+end:
 	s->o.end = clock();
 	if (s->stats)
 		if (report(s) < 0)
@@ -2189,7 +2254,7 @@ static int set_option(subleq_t *s, char *kv) {
 
 int main(int argc, char **argv) {
 	sys_getopt_t opt = { .init = 0, .error = stdout, };
-	char *save = NULL, *bsave;
+	char *save = NULL, *bsave = NULL;
 	subleq_t s = { 
 		.N = 16, .sz = SZ,
 		.in = stdin, .out = stdout, .trace = stderr,
@@ -2236,7 +2301,7 @@ int main(int argc, char **argv) {
 
 	for (size_t i = 0; i < s.sz; i++)
 		if (s.meta[i] & META_PRN)
-			if (printer(&s, "%02ld:%02ld\n", (long)i, (long)s.m[i]) < 0)
+			if (printer(&s, "%d:%d\n", (long)i, (long)s.m[i]) < 0)
 				return 4;
 
 	if (save)
