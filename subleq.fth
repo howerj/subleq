@@ -1339,7 +1339,13 @@ defined eforth [if] system -order [then]
 \ off as zero, as mentioned, and should end back up as zero
 \ by the end of the instruction. It is not an instruction, but
 \ is used to build one. The same with "NADDR", which compiles
-\ the next memory location into the current cell.
+\ the next memory location into the current cell. "A," is an
+\ alias for "Z". "V," uses the next cell for the same purpose.
+\
+\ For each macro the precondition is that the first two
+\ cells in the image are zero and as a postcondition the macro
+\ must leave those cells as zero, being able to use them as
+\ temporary storage within the macro.
 \
 \ "HALT" is our first instruction, "0 0 -1" will always halt
 \ the machine. This will be used to implement the Forth word
@@ -1424,8 +1430,8 @@ defined eforth [if] system -order [then]
 \
 
 :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
-:m V, 1 t, ;m ( -- : Address 1 also contains 0, temp location )
 :m A, 0 t, ;m ( -- : Synonym for 'Z', temporary location )
+:m V, 1 t, ;m ( -- : Address 1 also contains 0, temp location )
 :m NADDR there 2/ 1+ t, ;m ( --, jump to next cell )
 :m HALT 0 t, 0 t, -1 t, ;m ( --, Halt but do not catch fire )
 :m JMP 2/ Z Z t, ;m ( a --, Jump to location )
@@ -1437,10 +1443,8 @@ defined eforth [if] system -order [then]
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
-:m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( a a -- )
 :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
-
-:m iADD ( a a -- )
+:m iADD ( a a -- : indirect add )
    2/ t, A, NADDR
    2/ t, V, NADDR
    there 2/ 7 + dup dup t, t, NADDR
@@ -1448,69 +1452,59 @@ defined eforth [if] system -order [then]
    V, 0 t, NADDR
    A, A, NADDR
    V, V, NADDR ;m
-:m iSUB ( a a -- )
+:m iSUB ( a a -- : indirect sub )
    2/ t, A, NADDR
    2/ >r
    there 2/ 7 + dup dup t, t, NADDR
    A,   t, NADDR
    r> t, 0 t, NADDR
    A, A, NADDR ;m
+\ The previous version of "iSTORE" leveraged the "MOV" macro
+\ and produced a larger indirect store.
+\
+\        :m iSTORE ( a a -- )
+\          swap >r there 2/ 24 + 2dup 2* MOV 
+\          2dup 1+ 2* MOV 7 + 2* MOV r> 0 MOV ;m
+\
+\ The version below is smaller, and will execute faster,
+\ even if the definition is larger.
+\
+:m iSTORE ( a a -- : Indirect Store )
+  2/ t, A, NADDR
+  there 2/ 3 4 * + dup t, t, NADDR
+  there 2/ $A + dup t, t, NADDR
+  A, there 2/ 5 + t, NADDR
+  A, there 2/ 3 + t, NADDR
+  0 t, 0 t, NADDR
+  2/ t, V, NADDR
+  there 2/ 7 + dup dup t, t, NADDR
+  A,   t, NADDR
+  V, 0 t, NADDR
+  
+  A, A, NADDR
+  V, V, NADDR
+  ;m
+  
+\ An attempt at a more efficient "iLOAD" was made, however it
+\ is exactly the same size as the previous definition:
+\
+\       :m iLOAD
+\          2/ t, A, NADDR
+\          there 2/ 6 + dup t, t,  NADDR ( [q] = 0 )
+\          A, there 2/ 2 + t, NADDR 
+\          0 t, V, NADDR
+\          2/ dup dup t, t, NADDR
+\          V, t, NADDR
+\          A, A, NADDR
+\          V, V, NADDR ;m
+\ 
+\ So original is kept in. The main problem lies in the fact
+\ that we cannot load or store to a cell, we can only subtract
+\ from it, thus we have to zero that cell before hand.
+\ 
 
-\ :m iSTORE ( a a -- )
-\   swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 7 + 2* MOV
-\   r> 0 MOV ;m
+:m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( a a -- )
 
-
-  :m iSTORE
-     2/ t, A, NADDR
-     there 2/ 3 4 * + dup t, t, NADDR
-     there 2/ $A + dup t, t, NADDR
-     A, there 2/ 5 + t, NADDR
-     A, there 2/ 3 + t, NADDR
-     0 t, 0 t, NADDR
-     2/ t, V, NADDR
-     there 2/ 7 + dup dup t, t, NADDR
-     A,   t, NADDR
-     V, 0 t, NADDR
-  
-     A, A, NADDR
-     V, V, NADDR
-     ;m
-  
-  
-  \  a; b; b1; b2; v;
-  \  val v;
-  \  ptr a; a b1; a b2; a b;
-  \  b1:0 b2:0;
-  \  a b;
-  \  v b:0;
-  \  
-  \  a; c; v;
-  \  val2 v;
-  \  ptr a;
-  \  a c;
-  \  v c:0;
-  \  
-  \  
-  \  80 -1;
-  \  0 0 -1;
-  \  
-  \  . Z:0 ptr:80 val:9 val2:99 a:0 v:0
-  \  
-  
-  
-  \  a; v;
-  \  ptr a;
-  \  val v;
-  \  b;
-  \  a b;
-  \  v b:0;
-  \  
-  \  80 -1;
-  \  0 0 -1;
-  \  
-  \  . Z:0 ptr:80 val:9 a:0 v:0
-  
 \ To simplify program flow some control structures
 \ will be defined, they work a little differently than the
 \ Forth ones, as they must be given an address instead of
@@ -5760,7 +5754,7 @@ system[ user tup =cell tallot ]system
 \ it must be converted first before it can be compiled into the
 \ words body.
 \
-: compile, align 2/ , ;  ( xt -- )
+: compile, ( align <- called by "," ) 2/ , ;  ( xt -- )
 
 \ "?found" is called at the end of "interpret" if a word has
 \ not be found in the dictionary or is not a number, it prints
@@ -7013,6 +7007,18 @@ root[
 \ straight to the new definition, or just to save newly defined
 \ words into a new image. This might be easier for some than
 \ meta-compiling a new image.
+\
+\ "." is used to print out the value stored at an address,
+\ which is signed, but using:
+\
+\        6 lit u.r
+\
+\ Makes for a more ordered dump (although it prints unsigned
+\ values), the number '6' should be replaced depending on what
+\ base you are using (and can be calculated by performing the
+\ integer logarithm in the base you are using on the maximum
+\ value stored in a single cell, 65535, and adding one for
+\ extra padding, and another if dealing with signed values).
 \
 
 :to dump aligned ( a u -- : display section of memory )

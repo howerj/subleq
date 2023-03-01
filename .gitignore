@@ -18,3 +18,4 @@ eforth.fth
 nbit
 save
 subleq
+if

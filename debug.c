@@ -351,7 +351,7 @@ static const uint64_t instruction_increment[] = {
 	[ADD] = 9, [DOUBLE] = 9, [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
 	[ZERO] = 3, [IJMP] = 15/*Disassembly only*/, [ILOAD] = 24,
 	[IADD] = 21, [ISUB] = 15,
-	[ISTORE] = 48, [PUT] = 3, [GET] = 3, [HALT] = 3/*Disassembly only*/,
+	[ISTORE] = 36, [PUT] = 3, [GET] = 3, [HALT] = 3/*Disassembly only*/,
 	[INC] = 3, [DEC] = 3, [INV] = 21,
 };
 
@@ -803,7 +803,7 @@ static int assemble(asm_t *a, int output) {
 		return error(a, "Resolving labels failed");
 	if (copy(a) < 0)
 		return error(a, "Copying locations failed");
-	return output ? dump(a, a->out, 0, a->apc, 1, 0) : 0;
+	return output ? dump(a, a->out, 0, a->apc, 1, 1) : 0;
 }
 
 static int assembly_help(FILE *out) {
@@ -1441,7 +1441,7 @@ static uint64_t get(optimizer_t *o, char var) {
  * SUBLEQ instructions against known instruction macros.
  * It is essentially a disassembler. It is liable not to work 
  * for every case, but will do so for the code that *I* want to 
- * speed up. */
+ * speed up. It is *very* brittle. */
 static int optimizer(subleq_t *s, uint64_t pc) {
 	assert(s);
 
@@ -1463,15 +1463,10 @@ static int optimizer(subleq_t *s, uint64_t pc) {
 		for (size_t j = 0; j < DEPTH; j++)
 			n[j] = s->m[L(s, i + j)];
 
-		/* Largest instructions *must* go first */
-
-		/* TODO: Fix this to match new ISTORE */
-		if (match(s, n, DEPTH, i, "00> !Z> Z0> ZZ> 11> ?Z> Z1> ZZ> 22> ?Z> Z2> ZZ> 33> !Z> Z3> ZZ>", &q0, &q1) == 1
-			&& get(&s->o, '0') == (i+(3*12))
-			&& get(&s->o, '1') == (i+(3*12)+1)) {
+		if (match(s, n, DEPTH, i, "0Z> 11> 22> Z3> Z4> ZZ> 56> 77> Z7> 6Z> ZZ> 66>") == 1) {
 			s->im[L(s, i)].instruction = ISTORE;
-			s->im[L(s, i)].d = L(s, q0);
-			s->im[L(s, i)].s = L(s, q1);
+			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
+			s->im[L(s, i)].s = L(s, get(&s->o, '5'));
 			s->o.matches[ISTORE]++;
 			continue;
 		}
@@ -2336,5 +2331,6 @@ int main(int argc, char **argv) {
 	
 	return r < 0 ? 6 : 0;
 }
+
 
 
