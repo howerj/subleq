@@ -674,6 +674,33 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 only forth definitions hex
 
+\ There are some options that can be configured at compile
+\ time which, for example, can make the image smaller or
+\ enable/disable certain features.
+\
+\ "opt.multi", "opt.editor", "opt.info" turn on/off groups
+\ of words being compiled into the target image, they are all
+\ optional and are not required for self-hosting the image.
+\
+\ "opt.generate-c" puts a comma in between the numbers in the
+\ target image when it is outputted instead of a space, this
+\ makes including the file in a C program easier.
+\
+\ The "opt.sys" constant will be described more later, it
+\ contains flags that control features in the system.
+\
+1 constant opt.multi  ( Add in large "pause" primitive )
+1 constant opt.editor ( Add in Text Editor )
+1 constant opt.info ( Add info printing function )
+0 constant opt.generate-c ( Generate C code )
+
+: sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
+: sys.cksum    2 or ; ( bit #2 = turn checksumming on )
+: sys.info     4 or ; ( bit #4 = print info msg on startup )
+: sys.eof      8 or ; ( bit #8 = die if received EOF )
+
+0 sys.cksum sys.eof sys.echo-off constant opt.sys
+
 \ ## Order!
 \
 \ If you are not well versed with the vocabulary words, it 
@@ -949,8 +976,11 @@ defined eforth [if]
 \ standard, usable state, after compilation is complete.
 \
 
-0 constant cgen
-cgen [if] :m msep 2C emit ;m [else] :m msep A emit ;m [then]
+opt.generate-c [if] 
+  :m msep 2C emit ;m ( -- : emit "," as separator )
+[else] 
+  :m msep A emit ;m  ( -- : emit space as separator )
+[then]
 :m mdump taligned ( a u -- )
   begin ?dup
   while swap dup @ limit #dec msep tcell + swap tcell -
@@ -1688,7 +1718,7 @@ meta.1 +order definitions
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
   -1 t,            \ system entry point
-  B tvar {options} \ bit #1=echo off, #2 = checksum on,
+opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
                    \ #4=info, #8=die on EOF
   0 tvar primitive \ any address lower must be a VM primitive
   =stksz half tvar stacksz \ must contain $80
@@ -2313,14 +2343,6 @@ assembler.1 -order
 \
 :a opEmit tos PUT t' opDrop JMP (a);
 
-\ Subtraction and addition need no real explanation, just note
-\ that they are relatively fast to execute on this machine.
-\
-\ The both jump to "opDrop" to finish the job.
-\
-:a - tos {sp} iSUB t' opDrop JMP (a);
-:a + tos {sp} iADD t' opDrop JMP (a);
-
 \ "opExit", which is used to make "exit", deserves some
 \ explanation, it implements a "return", as part of the
 \ call/returns you find in most instruction sets. It restores
@@ -2537,6 +2559,24 @@ assembler.1 -order
 :a op0<
    tos r0 MOV tos ZERO
    r0 -if tos NG1! then r0 INC r0 -if tos NG1! then ;a
+
+\ Less-Thank-Or-Equal to Zero, the only primitive comparison
+\ operator native to this machine.
+\
+\       :a leq0 
+\         Z tos 2/ t, there 2/ 4 + t,
+\         tos 2/ dup t, t, vm 2/ t,
+\         tos ONE! ;a
+\
+\
+
+\ Subtraction and addition need no real explanation, just note
+\ that they are relatively fast to execute on this machine.
+\
+\ The both jump to "opDrop" to finish the job.
+\
+:a - tos {sp} iSUB t' opDrop JMP (a);
+:a + tos {sp} iADD t' opDrop JMP (a);
 
 \ "rshift" is implemented as a virtual machine instruction,
 \ but "lshift" is not as it can be implemented in Forth
@@ -2784,7 +2824,6 @@ assembler.1 -order
 \
 \
 
-
 :a opDivMod
   r0 {sp} iLOAD
   r2 ZERO
@@ -2877,7 +2916,8 @@ assembler.1 -order
 \ and stores in Forth code (which is far more compact) instead.
 \
 
-:a pause
+opt.multi [if]
+:a pause ( -- : pause and switch task )
   {single} if vm JMP then \ Do nothing if single-threaded mode
   r0 {up} iLOAD \ load next task pointer from user storage
   r0 if
@@ -2895,6 +2935,9 @@ assembler.1 -order
     {rp} r0 iLOAD r0 INC
     {sp} r0 iLOAD r0 INC \ we're all golden
   then ;a
+[else]
+:m pause ;m ( -- [disabled] )
+[then]
 
 \ The following assembly routine is one way adding support for
 \ assembly routines callable from within the Forth interpreter
@@ -3235,6 +3278,7 @@ there 2/ primitive t!
 :to 0> op0> ; ( n -- f : signed greater than zero )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
+( :to leq0 leq0 ; )
 
 \ If "opAsm" is defined, so should this:
 \
@@ -3426,7 +3470,7 @@ system[
 \ ")" is defined here, it can be used as a "no-operation"
 \ instruction. This word will be better described later on.
 
-:to ) ; immediate
+:to ) ; immediate ( -- : NOP, terminate comment )
 
 \ We need "over" (formerly a VM instruction) to implement
 \ some of the logical operators using "mux".
@@ -6577,7 +6621,7 @@ root[
 \
 
 :s (marker) r> 2* @+ h? ! cell+ @ get-current ! ;s compile-only
-: create postpone : drop postpone [ compile (var)
+: create state @ >r postpone : drop r> state ! compile (var)
    get-current ! ;
 :to variable create #0 , ;
 :to constant create cell negate allot compile (const) , ;
@@ -7588,10 +7632,14 @@ root[
 \
 :r eforth 0109 lit ;r ( --, version )
 
-:s info cr ( --, print system info )
-  ." eForth v1.9, Public Domain,"  here . cr
-  ." Richard James Howe, howe.r.j.89@gmail.com" cr
-  ." https://github.com/howerj/subleq" cr ;s
+opt.info [if]
+  :s info cr ( --, print system info )
+    ." eForth v1.9, Public Domain,"  here . cr
+    ." Richard James Howe, howe.r.j.89@gmail.com" cr
+    ." https://github.com/howerj/subleq" cr ;s
+[else]
+  :s info ;s ( --, [disabled] print system info )
+[then]
 
 \ ## Task Initialization
 \
@@ -7972,12 +8020,14 @@ root[
 \ launching.
 \
 
+opt.multi [if]
 :s task: ( "name" -- : create a named task )
   create here b/buf allot 2/ task-init ;s
 :s activate ( xt task-address -- : start task executing xt )
   dup task-init
   dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
   r> this @ >r dup 2/ this ! r> swap ! ;s ( link in task )
+[then]
 
 \ "wait" and "signal" belong as a pair, they do not require
 \ a tasks to work, and work on arbitrary memory locations,
@@ -7997,9 +8047,11 @@ root[
 \ resource.
 \
 
+opt.multi [if]
 :s wait ( addr -- : wait for signal )
   begin pause @+ until #0 swap ! ;s
 :s signal this swap ! ;s ( addr -- : signal to wait )
+[then]
 
 \ "single" and "multi" turn off and on multitasking. This
 \ can be used to prevent other tasks from interrupting the
@@ -8007,8 +8059,10 @@ root[
 \ multiple threads from interfering with each other.
 \
 
+opt.multi [if]
 :s single #1 {single} lit ! ;s ( -- : disable other tasks )
 :s multi  #0 {single} lit ! ;s ( -- : enable multitasking )
+[then]
 
 \ "send" and "receive" are a pair of words like "wait" and
 \ "signal", they are used to send a message from one thread
@@ -8025,6 +8079,7 @@ root[
 \ communication.
 \
 
+opt.multi [if]
 :s send ( msg task-addr -- : send message to task )
   this over {sender} lit +
   begin pause @+ 0= until
@@ -8033,6 +8088,7 @@ root[
   begin pause {sender} up @ until
   {message} up @ {sender} up @
   #0 {sender} up ! ;s
+[then]
 
 \ That completes the multitasking section, there are only a
 \ handful of words on top of the base that the Forth system
@@ -8180,6 +8236,7 @@ root[
 \ necessary, complications which are not needed.
 \
 
+opt.editor [if]
 : editor {editor} lit #1 set-order ; ( Micro BLOCK editor )
 :e q only forth ;e ( -- : exit back to Forth interpreter )
 :e ? scr @ . ;e ( -- : print block number of current block )
@@ -8196,6 +8253,7 @@ root[
 :e x scr @ block b/buf blank l ;e ( -- : erase current block )
 :e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit
    blank l ;e ( line -- : delete line )
+[then]
 
 \ # Last word defined
 \

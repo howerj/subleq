@@ -1325,7 +1325,6 @@ static int cmd_search(subleq_t *s, int argc, char **argv) {
 		}
 	}
 
-
 	return 0;
 }
 
@@ -2166,6 +2165,7 @@ static int subleq_examples(subleq_t *s, const char *name) {
 	assert(name);
 	uint64_t *load = NULL;
 	size_t nelems = 0;
+
 	if (!strcmp(name, "forth") || !strcmp(name, "eforth")) {
 		static uint64_t eforth_image[] = {
 #include "subleq.cma"
@@ -2218,8 +2218,8 @@ static int subleq_examples(subleq_t *s, const char *name) {
 #endif
 	/* An image that performed introspection into the
 	 * SUBLEQ machine; machine width, arithmetic type (twos,
-	 * ones compliment) and more would be useful, it does not 
-	 * exist yet though. */
+	 * ones compliment) and more, then printed it out, would 
+	 * be useful, it does not exist yet though. */
 	if (!load)
 		return -1;
 	for (size_t i = 0; i < nelems; i++)
