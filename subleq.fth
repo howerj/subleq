@@ -689,9 +689,10 @@ only forth definitions hex
 \ The "opt.sys" constant will be described more later, it
 \ contains flags that control features in the system.
 \
-1 constant opt.multi  ( Add in large "pause" primitive )
-1 constant opt.editor ( Add in Text Editor )
-1 constant opt.info ( Add info printing function )
+1 constant opt.multi      ( Add in large "pause" primitive )
+1 constant opt.editor     ( Add in Text Editor )
+1 constant opt.info       ( Add info printing function )
+0 constant opt.allocate   ( Add in "allocate"/"free" )
 0 constant opt.generate-c ( Generate C code )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
@@ -2560,14 +2561,15 @@ assembler.1 -order
    tos r0 MOV tos ZERO
    r0 -if tos NG1! then r0 INC r0 -if tos NG1! then ;a
 
+:a leq0 
+  Z tos 2/ t, there 2/ 4 + t,
+  tos 2/ dup t, t, vm 2/ t,
+  tos ONE! ;a
+
 \ Less-Thank-Or-Equal to Zero, the only primitive comparison
 \ operator native to this machine.
 \
-\       :a leq0 
-\         Z tos 2/ t, there 2/ 4 + t,
-\         tos 2/ dup t, t, vm 2/ t,
-\         tos ONE! ;a
-\
+
 \
 
 \ Subtraction and addition need no real explanation, just note
@@ -3278,7 +3280,7 @@ there 2/ primitive t!
 :to 0> op0> ; ( n -- f : signed greater than zero )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
-( :to leq0 leq0 ; )
+:to leq0 leq0 ;
 
 \ If "opAsm" is defined, so should this:
 \
@@ -3958,8 +3960,43 @@ system[
 \ subtraction.
 \
 
-: > - 0> ;    ( n1 n2 -- f : signed greater than )
-: < swap > ;  ( n1 n2 -- f : signed less than )
+\        int leq0(uint16_t a) {
+\          return ((int16_t)a) <= (int16_t)0;
+\        }
+\        
+\        int s_less(uint16_t a, uint16_t b) {
+\          const int a0 = leq0(a);
+\          const int b0 = leq0(b);
+\          if (a0 && !b0)
+\            return 1;
+\          if (!a0 && b0)
+\            return 0;
+\          if (a0 && b0) {
+\            if (!leq0(a + 1) && leq0(b + 1))
+\              return 0;
+\          }
+\          const int l = leq0((uint16_t)(a - b));
+\          return l ? leq0((uint16_t)((a + 1) - b)) : 0;
+\        }
+\        
+
+: <
+   2dup leq0 swap leq0 if
+     if
+       2dup 1+ leq0 swap 1+ leq0 if else if 2drop #0 exit then then
+     else 2drop #-1 exit then \ a0 && !b0
+   else
+     if 2drop #0 exit then \ !a0 && b0
+   then 
+   2dup - leq0 if
+     swap 1+ swap - leq0 if #-1 exit then
+     #0 exit
+   then
+   2drop #0 ;
+
+\ : > - 0> ;    ( n1 n2 -- f : signed greater than )
+\ : < swap > ;  ( n1 n2 -- f : signed less than )
+: > swap < ;    ( n1 n2 -- f : signed greater than )
 : = - 0= ;    ( u1 u2 -- f : equality )
 : <> = 0= ;   ( u1 u2 -- f : inequality )
 : 0<> 0= 0= ; ( n -- f : not equal to zero )
@@ -4052,6 +4089,8 @@ system[
 \ without any care for cell alignment.
 \ - "cells" is used to convert a number of cells into the
 \ number of bytes those cells take up.
+\ - "cell-" is used to decrement an address by a single cell,
+\ it used to be missing, but 
 \
 \ The words are trivial, "cell-" is missing because it is not
 \ used but is easy enough to define.
@@ -4060,6 +4099,7 @@ system[
 : cell #2 ;   ( -- u : push bytes in cells to stack )
 : cell+ cell + ; ( a -- a : increment address by cell width )
 : cells 2* ;     ( u -- u : multiply # of cells to get bytes )
+: cell- cell - ;
 
 \ "execute" takes an "execution token", which is just a fancy
 \ name for an address of a function, and then executes that
@@ -7065,7 +7105,7 @@ root[
 \ extra padding, and another if dealing with signed values).
 \
 
-:to dump aligned ( a u -- : display section of memory )
+: dump aligned ( a u -- : display section of memory )
   begin ?dup
   while swap @+ . cell+ swap cell -
   repeat drop ;
@@ -8253,6 +8293,153 @@ opt.editor [if]
 :e x scr @ block b/buf blank l ;e ( -- : erase current block )
 :e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit
    blank l ;e ( line -- : delete line )
+[then]
+
+
+\ # Optional Dynamic Memory Allocation
+\
+\ This section contains an optional dynamic memory allocator,
+\ that has been adapted to compile under the meta-compiler, it
+\ is complicated code that is worth not implementing yourself
+\ but borrowing it from somewhere else, this allocator came
+\ from here:
+\
+\        Dynamic Memory Allocation package
+\        this code is an adaptation of the routines by
+\        Dreas Nielson, 1990; Dynamic Memory Allocation;
+\        Forth Dimensions, Volume. XII, No. 3, pp. 17-27
+\        See: <http://www.forth.org/fd/FD-V12N4.pdf>.
+\
+\ There is a lot of good Forth code in the publications
+\ "Forth Dimensions" (and the German "Vierte Dimensions"). See
+\ <http://www.forth.org/fd/FDcover.html> for more information.
+\
+\ This code is not an example of "good" Forth code as it keeps
+\ many items on the stack and uses "pick" to access those
+\ items, however it works, is compact, easy to integrate and
+\ portable. For those reasons even those it eschews good Forth
+\ practice it is good code.
+\
+\ Example uses include, including initialization: 
+\ 
+\       system +order
+\       $400 constant #pool
+\       create pool #pool allot
+\ 
+\       pool #pool arena!
+\       pool #pool dump
+\       40 allocate throw .s
+\       80 allocate throw .s 
+\       swap free throw .s 
+\       20 allocate throw .s cr
+\       pool #pool dump
+\ 
+\ BUG:
+\ - This implementation seems to overwrite its control
+\ structures when the arena gets too full. 
+\ TODO: 
+\ - Allow calculations of free space. 
+\ - Fix bugs
+\ - Make 'free' more robust, do bound checking
+\ - RESIZE
+\ - Put freelist within arena
+\ - Allow freelist to be specified with "(allocate)",
+\   "(free)", "(resize)" and "(arena)"
+\ - calloc option / calloc
+\ - Documentation
+\ - Test framework 
+\ - Allow zero length allocations?
+\ - Fix comparison bugs (general SUBLEQ eForth issue)
+\ 
+
+opt.allocate [if]
+
+system[
+  ( pointer to beginning of free space )
+  variable freelist 0 t, ( 0 t' freelist t! )
+  variable length
+
+  : default $F800 lit $400 lit ;
+  : arena! ( start-addr len -- : initialize memory pool )
+    dup $80 lit u< if -B lit throw then ( arena too small )
+    dup length !
+    2dup erase
+    over dup freelist ! #0 swap ! swap cell+ ! ;
+  : .arena 
+    ." arena:" freelist 2@ u. u. cr 
+    freelist @ length @ dump ;
+\  : bound $10 lit + freelist @ cell+ @ u> ;
+
+]system
+
+: .a .arena ;
+: arena?
+   freelist @ 0= if drop #0 exit then 
+   >r freelist @ dup length @ + r> within ;
+: >size 
+  dup arena? 0= if -3B lit throw then
+  cell - @ cell - ;
+
+( allocate n bytes, return pointer to block and result flag,  )
+( zero for success, check to see if pool has been initialized )
+: allocate ( u -- addr ior : dynamic allocation of 'u' bytes ) 
+  ( freelist @ 0= if drop #0 -3B lit exit then )
+  aligned
+  freelist @ 0= if default arena! then
+  dup 0= ( over bound or ) if drop #0 -3B lit exit then
+  cell+ freelist dup
+  begin
+  while dup @ cell+ @ #2 pick u<
+    if 
+      @ @ dup ( get new link )
+    else   
+      dup @ cell+ @ #2 pick - #2 cells max dup #2 cells =
+      if 
+        drop dup @ dup @ rot !
+      else  
+        2dup swap @ cell+ ! swap @ +
+      then
+      2dup ! cell+ #0 ( store size, bump pointer )
+    then              ( and set exit flag )
+  repeat
+  nip dup 0= -3B lit and ;
+
+( free space at ptr, return status, zero for success )
+: free ( ptr -- ior : free pointer return by "allocate" ) 
+  dup 0= ?exit
+  dup arena? 0= if drop -3C lit exit then
+
+  cell- dup @ swap 2dup cell+ ! freelist dup
+  begin
+    dup 3 lit pick u< and
+  while
+    @ dup @
+  repeat
+
+  dup @ dup 3 lit pick ! ?dup
+  if 
+    dup 3 lit pick 5 lit pick + =
+    if 
+      dup cell+ @ 4 lit pick + 3 lit pick cell+ ! @ #2 pick !
+    else  
+      drop 
+    then
+  then
+  dup cell+ @ over + #2 pick =
+  if  
+    over cell+ @ over cell+ dup @ rot + swap ! swap @ swap !
+  else 
+    !
+  then
+  drop #0 ; \ this code always returns a success flag
+
+\ : resize ( a-addr1 u -- a-addr2 ior ) 
+\   dup 0= if drop free exit then
+\   over 0= if nip allocate exit then exit
+\   over >size u< if 2drop #0 exit then
+\   allocate if drop -3D lit exit then dup >r
+\   over >size cmove r> #0 ;
+
 [then]
 
 \ # Last word defined
@@ -10029,9 +10216,7 @@ variable seed ( NB. Could be mixed with keyboard input )
   dup  9 rshift xor
   dup  7 lshift xor
   dup seed ! ;
-: cell- 2 - ;
 : rpick rp@ swap - 1- 2* @ ;
-: cell- cell - ; ( a -- a )
 : umin 2dup swap u< if swap then drop ; ( u u -- u )
 : umax 2dup      u< if swap then drop ; ( u u -- u )
 : off false swap ! ; ( a -- )
@@ -10594,6 +10779,498 @@ ook <ok> !
 : ingest ( a u -- : opposite of 'dump', load nums into mem )
   cell / for aft integer? over ! cell+ then next drop ; 
 
+\ ## Floating Point Implementation
+\ 
+\ This section contains the original source for the floating
+\ point module:
+\ 
+\ Vierte Dimension Vol.2, No.4 1986
+\ 
+\ 
+\ 	A FAST HIGH-LEVEL FLOATING POINT
+\ 
+\ 		Robert F. Illyes
+\ 
+\ 		     ISYS
+\ 	       PO Box 2516, Sta. A
+\ 	       Champaign, IL 61820
+\ 	       Phone: 217/359-6039
+\ 
+\ If binary normalization and rounding are used, a fast
+\ single-precision FORTH floating point can be built with
+\ accuracy adequate for many applications. The creation
+\ of such high-level floating points has become of more
+\ than academic interest with the release of the Novix
+\ FORTH chip. The FORTH-83 floating point presented here
+\ is accurate to 4.8 digits. Values may range from about
+\ 9E-4933 to about 5E4931. This floating point may be
+\ used without fee provided the copyright notice and
+\ associated information in the source are included.
+\ 
+\ FIXED VS. FLOATING POINT
+\ 
+\ FORTH programmers have traditionally favored fixed over
+\ floating point. A fixed point application is harder to
+\ write. The range of each value must be known and
+\ considered carefully, if adequate accuracy is to be
+\ maintained and overflow avoided. But fixed point
+\ applications are much more compact and often much
+\ faster than floating point (in the absence of floating
+\ point hardware).
+\ 
+\ The debate of fixed vs. floating point is at least as
+\ old as the ENIAC, the first electronic digital
+\ computer. John von Neumann used fixed point on the
+\ ENIAC. He felt that the detailed understanding of
+\ expressions required by fixed point was desirable, and
+\ that fixed point was well worth the extra time (1).
+\ 
+\ But computers are no longer the scarce resource that
+\ they once were, and the extra programming time is often
+\ more costly than any advantages offered by fixed point.
+\ For getting the most out of the least hardware,
+\ however, fixed point will always be the technique of
+\ choice.
+\ 
+\ Fixed point arithmetic represents a real number as a
+\ ratio of integers, with an implicit divisor. This
+\ implicit divisor may be thought of as the
+\ representation of unity. If unity were represented by
+\ 300, for example, 2.5 would be represented by 750.
+\ 
+\ To multiply 2.5 by 3.5, with all values representing
+\ unity as ten, one would evaluate
+\ 
+\ 		     25 * 35
+\ 		     -------
+\ 		       10
+\ 
+\ The ten is called a scale factor, and the division by
+\ ten is called a scaling operation. This expression is
+\ obviously inefficient, requiring both a division and a
+\ multiplication to accomplish a multiplication.
+\ 
+\ Most scaling operations can, however, be eliminated by
+\ a little algebraic manipulation. In the case of the sum
+\ of two squares, for example, where A and B are fixed
+\ point integers and unity is represented by the integer
+\ U,
+\ 
+\       A * A   B * B           (A * A)+(B * B)
+\       ----- + -----    -->    ---------------
+\ 	U       U                    U
+\ 
+\ In addition to the elimination of a division by U, the
+\ right expression is more accurate. Each division can
+\ introduce some error, and halving the number of
+\ divisions halves the worst-case error.
+\ 
+\ DECIMAL VS. BINARY NORMALIZATION
+\ 
+\ A floating point number consists of two values, an
+\ exponent and a mantissa. The mantissa may represent
+\ either an integer or a fraction. The exponent and the
+\ mantissa are related to each other in the same way as
+\ the value and power of ten in scientific notation are
+\ related.
+\ 
+\ A mantissa is always kept as large as possible. This
+\ process is called normalization. The following
+\ illustrates the action of decimal normalization with an
+\ unsigned integer mantissa:
+\ 
+\ 	 Value       Stack representation
+\ 	       4
+\ 
+\ 	 5 * 10         50000  0  --
+\ 	       3
+\ 	   * 10          7000  0  --
+\ 	       3
+\ 	   * 10         50000 -1  --
+\ 
+\ The smallest the mantissa can become is 6554. If a
+\ mantissa of 6553 is encountered, normalization requires
+\ that it be made 65530, and that the exponent be
+\ decremented. It follows that the worst-case error in
+\ representing a real number is half of 1 part in 6554,
+\ or 1 part in 13108. The error is halved because of the
+\ rounding of the real number to the nearest floating
+\ point value.
+\ 
+\ Had we been using binary normalization, the smallest
+\ mantissa would have been 32768, and the worst case
+\ error in representation would have been 1 part 65536,
+\ or 1/5 that of decimal normalization. LOG10(65536) is
+\ 4.8, the accuracy in decimal digits.
+\ 
+\ As with fixed point, scaling operations are required by
+\ floating point. With decimal normalization, this takes
+\ the form of division and multiplication by powers of
+\ ten. Unlike fixed point, no simple algebraic
+\ manipulation will partly eliminate the scale factors.
+\ Consequently there are twice as many multiplications
+\ and divisions as the floating point operators would
+\ seem to imply. Due to the presence of scaling in 73% of
+\ decimally normalized additions (2), the amount is
+\ actually somewhat over twice.
+\ 
+\ With binary normalization, by contrast, this extra
+\ multiplication effectively disappears. The scaling by
+\ a power of two can usually be handled with a single
+\ shift and some stack manipulation, all fast operations.
+\ 
+\ Though a decimally normalized floating point can be
+\ incredibly small (3), a binary normalized floating
+\ point has 1/5 the error and is about twice as fast.
+\ 
+\ It should be mentioned that the mantissa should be
+\ multiples of 2 bytes if the full speed advantage of
+\ binary normalization is to be available. Extra shifting
+\ and masking operations are necessary with odd byte
+\ counts when using the 2-byte arithmetic of FORTH.
+\ 
+\ NUMBER FORMAT AND ARITHMETIC
+\ 
+\ This floating point package uses an unsigned single
+\ precision fraction with binary normalization,
+\ representing values from 1/2 to just under 1. The high
+\ bit of the fraction is always set.
+\ 
+\ The sign of the floating point number is carried in the
+\ high bit of the single precision exponent, The
+\ remaining 15 bits of the exponent represent a power of
+\ 2 in excess 4000 hex. The use of excess 4000 permits
+\ the calculation of the sign as an automatic outcome of
+\ exponent arithmetic in multiplication and division.
+\ 
+\ A zero floating point value is represented by both a
+\ zero fraction and a zero exponent. Any operation that
+\ produces a zero fraction also zeros the exponent.
+\ 
+\ The exponent is carried on top of the fraction , so the
+\ sign may be tested by the phrase DUP 0< and zero by the
+\ phrase DUP 0= .
+\ 
+\ The FORTH-83 Double Number Extension Word Set is
+\ required. Floating point values are used with the "2"
+\ words: 2CONSTANT, 2@, 2DUP, etc.
+\ 
+\ There is no checking for exponent overflow or underflow
+\ after arithmetic operation, nor is division by zero
+\ checked for. The rationale for this is the same as with
+\ FORTH integer arithmetic. By requiring that the user
+\ add any such tests, 1) all arithmetic isn't slowed by
+\ tests that are only sometimes needed and 2) the way in
+\ which errors are resolved may be determined by the
+\ user. The extremely large exponent range makes exponent
+\ overflow and underflow quite unlikely, of course.
+\ 
+\ All of the arithmetic is rounding. The failure to round
+\ is the equivalent of throwing a bit of accuracy away.
+\ The representational accuracy of 4.8 digits will be
+\ quickly lost without rounding arithmetic.
+\ 
+\ The following words behave like their integer
+\ namesakes:
+\ 
+\      F+  F-  F*  F/  F2*  F2/  FABS  FNEGATE  F<
+\ 
+\ Single precision integers may be floated by FLOAT, and
+\ produced from floating point by FIX and INT, which are
+\ rounding and truncating, respectively. DFLOAT floats a
+\ double precision integer.
+\ 
+\ NUMBER INPUT AND OUTPUT
+\ 
+\ Both E and F formats are supported. A few illustrations
+\ should suffice to show their usage. An underscore
+\ indicates the point at which the return key is pressed.
+\ PLACE determines the number of places to the right of
+\ the decimal point for output only.
+\ 
+\ 	   12.34  F      F. _ 12.340
+\ 	   12.34  F      E. _ 1.234E1
+\ 	   .033 E -1002  E. _ 3.300E-1004
+\ 
+\ 	   4 PLACES
+\ 
+\ 	   2. F -3. F F/ F. _ -0.6667
+\ 	   2. F -3. F F/ E. _ -6.6667E-1
+\ 
+\ F and E will correctly float any input string
+\ representing a signed double precision number. There
+\ may be as many as 9 digits to the right of the decimal
+\ point. Numbers input by E are accurate to over 4
+\ digits. F is accurate to the full 4.8 digits if there
+\ are no digits to the right of the decimal point.
+\ Conversion is slightly less accurate with zeros to the
+\ right of the decimal point because a division by a
+\ power of ten must be added to the input conversion
+\ process.
+\ 
+\ F and E round the input value to the nearest floating
+\ point value. So a sixth digit will often allow a more
+\ accurately rounded conversion, even thought the result
+\ is only accurate to 4.8 digits. There is no advantage
+\ to including trailing zeros, however. In many floating
+\ points, this extra accuracy can only be achieved by the
+\ inconvenient procedure of entering the values as
+\ hexadecimal integers.
+\ 
+\ Only the leftmost 5 digits of the F. output are
+\ significant. F. displays values from 32767 to -32768,
+\ with up to 4 additional places to the right of the
+\ decimal point. The algorithm for F. avoids double
+\ rounding by using integer rather than floating point
+\ multiplication to scale by a power of ten. This gives
+\ as much accuracy as possible at the expense of a
+\ somewhat limited range. Since a higher limit on size
+\ would display digits that are not significant, this
+\ range limit does not seem at all undesirable.
+\ 
+\ Like E input, E. is accurate to somewhat over 4 digits.
+\ The principal source of inaccuracy is the function EXP,
+\ which calculates powers of 2.
+\ 
+\ The following extended fraction is used by EXP. It
+\ gives the square root of 2 to the x power. The result
+\ must be squared to get 2 to the x.
+\ 
+\ 		      2x
+\ 	 1 + ---------------------------
+\ 			      57828
+\ 	     34.668 - x - --------------
+\ 					2
+\ 			  2001.18 + (2x)
+\ 
+\ In order to do E format I/O conversion, one must be
+\ able to evaluate the expressions
+\ 
+\ 	 a   a/log10(2)        b    b*log10(2)
+\        10 = 2           and   2 = 10
+\ 
+\ These log expressions may be easily evaluated with
+\ great precision by applying a few fixed point
+\ techniques. First, a good rational approximation to
+\ log10(2) is needed.
+\ 
+\ 	    log10(2)     = .3010299957
+\ 	    4004 / 13301 = .3010299978
+\ 
+\ The following code will convert an integer power of
+\ ten, assumed to be on the stack, into a power of 2:
+\ 
+\ 	       13301 4004 */MOD >R
+\ 	       FLOAT 4004 FLOAT F/ EXP
+\ 	       R> +
+\ 
+\ The first line divides the power of ten by log10(2) and
+\ pushes the quotient on the return stack. The quotient
+\ is the integer part of the power of two.
+\ 
+\ The second line finds the fractional part of the power
+\ of two by dividing the remainder by the divisor. This
+\ floating point fractional part is evaluated using EXP.
+\ 
+\ The third line adds the integer power of two into the
+\ exponent of the floating point value of the fractional
+\ part, completing the conversion.
+\ 
+\ The inverse process is used to convert a power of 2 to
+\ a power of ten.
+\ 
+\ FORTH-83 LIMITATIONS
+\ 
+\ Perhaps the most serious deficiency in the FORTH-83
+\ with extensibility as its pre-eminent feature, it is
+\ surprisingly difficult to write standard code that will
+\ alter the processing of numeric input strings by the
+\ interpreter and compiler.
+\ 
+\ It is usually a simple matter to replace the system
+\ conversion word (usually called NUMBER) with a routine
+\ of ones choice. But there if no simple standard way of
+\ doing this. The interpreter, compiler and abort
+\ language are all interwoven, and may all have to be
+\ replaced if a standard solution is sought.
+\ 
+\ This floating point package assumes that double
+\ precision integers are generated if the numeric input
+\ string contains a period, and that a word PLACES can be
+\ written that will leave the number of digits to the
+\ right of the period. This does not seem to be
+\ guaranteed by FORTH-83, although it may be safely
+\ assumed on most systems that include double precision.
+\ 
+\ If you know how this part of your system works, you
+\ will probably want to eliminate the words E and F, and
+\ instead force floating point conversion of any input
+\ string containing a period. Double precision integers
+\ could still be generated by using a comma or other
+\ punctuation.
+\ 
+\ It is suggested that future FORTH standards include the
+\ word NUMBER, which is a vector to the current input
+\ numeric word.
+\ 
+\ It is also suggested that the Double Number Extension
+\ Wordset specification include a requirement that the
+\ interpreter and compiler be able to accept input
+\ strings specifying double precision values.
+\ 
+\ COMMENTS ON THE FOLLOWING CODE
+\ 
+\ The words ". and "- leave the ASCII values for period
+\ and minus, respectively. Replace these with whatever
+\ language you prefer for insertion of ASCII values.
+\ 
+\ The size of F+ can be considerably reduced at the
+\ expense of quite a lot of execution speed. Think twice
+\ before you simplify it.
+\ 
+\ The normalizing word NORM expects the stack value under
+\ the exponent to be a double precision signed integer.
+\ It leaves a normalized floating point number, rounding
+\ the double precision integer into the fraction.
+\ 
+\ ALIGN and RALIGN expect an integer shift count with an
+\ unsigned double precision number beneath. They leave
+\ double precision unsigned integer results. At least one
+\ shift is always performed. RALIGN rounds after
+\ alignment.
+\ 
+\ UM/ divides an unsigned double precision number by an
+\ unsigned single precision number, and rounds the single
+\ precision quotient.
+\ 
+\ ZERO forces a floating point value with a zero fraction
+\ to also have a zero exponent.
+\ 
+\ FSIGN applies the sign of the stack value under the
+\ exponent to the exponent. The double precision integer
+\ under an exponent is left unsigned.
+\ 
+\ FEXP evaluates a power of e. It is included because it
+\ is a trivial but useful application of EXP.
+\ 
+\ GET converts the next word in the input stream into a
+\ single precision signed integer.
+\ 
+\ REFERENCES
+\ 
+\ 1. Von Neumann, J., John von Neumann Collected Works,
+\ vol. 5, p.113.
+\ 
+\ 2. Knuth, D. K., The Art of Computer Programming,
+\ second edition, vol. 2, pp. 238,9.
+\ 
+\ 3. Tracy, M., Zen Floating Point, 1984 FORML Conference
+\ Proceedings, pp. 33-35.
+\ 
+
+( FORTH-83 FLOATING POINT.
+  ----------------------------------
+  COPYRIGHT 1985 BY ROBERT F. ILLYES
+
+	PO BOX 2516, STA. A
+	CHAMPAIGN, IL 61820
+	PHONE: 217/826-2734  )     HEX
+
+: ZERO  OVER 0= IF DROP 0 THEN ;
+: FNEGATE 8000 XOR ZERO ;
+: FABS  7FFF AND ;
+: NORM  >R 2DUP OR
+	IF BEGIN DUP 0< NOT
+	   WHILE D2* R> 1- >R
+	   REPEAT SWAP 0< - ?DUP
+	   IF R> ELSE 8000 R> 1+ THEN
+	ELSE R> DROP THEN ;
+
+: F2*   1+ ZERO ;
+: F*    ROT + 4000 - >R UM* R> NORM ;
+: FSQ   2DUP F* ;
+
+: F2/   1- ZERO ;
+: UM/   DUP >R UM/MOD SWAP R>
+	OVER 2* 1+ U< SWAP 0< OR - ;
+: F/    ROT SWAP - 4000 + >R
+	0 ROT ROT 2DUP U<
+	IF   UM/ R> ZERO
+	ELSE >R D2/ FABS R> UM/ R> 1+
+	THEN ;
+
+: ALIGN 20 MIN 0 DO D2/ LOOP ;
+: RALIGN 1- ?DUP IF ALIGN THEN
+	1 0 D+ D2/ ;
+: FSIGN FABS OVER 0< IF >R DNEGATE R>
+	8000 OR THEN ;
+
+: F+    ROT 2DUP >R >R FABS SWAP FABS -
+	DUP IF DUP 0<
+		IF   ROT SWAP  NEGATE
+		     R> R> SWAP >R >R
+		THEN 0 SWAP RALIGN
+	THEN SWAP 0 R> R@ XOR 0<
+	IF   R@ 0< IF 2SWAP THEN D-
+	     R> FSIGN ROT SWAP NORM
+	ELSE D+ IF 1+ 2/ 8000 OR R> 1+
+		ELSE R> THEN THEN ;
+
+: F-    FNEGATE F+ ;
+: F<    F- 0< SWAP DROP ;
+
+( FLOATING POINT INPUT/OUTPUT ) DECIMAL
+
+CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
+	  ,100 , ,            1,000 , ,
+	10,000 , ,          100,000 , ,
+     1,000,000 , ,       10,000,000 , ,
+   100,000,000 , ,    1,000,000,000 , ,
+
+: TENS  2* 2* LITERAL + 2@ ;     HEX
+: PLACES PL ! ;
+: SHIFTS FABS 4010 - DUP 0< NOT
+	ABORT" TOO BIG" NEGATE ;
+: F#    >R PL @ TENS DROP UM* R> SHIFTS
+	RALIGN PL @ ?DUP IF 0 DO # LOOP
+	". HOLD THEN #S ROT SIGN ;
+: TUCK  SWAP OVER ;
+: F.    TUCK <# F# #> TYPE SPACE ;
+: DFLOAT 4020 FSIGN NORM ;
+: F     DFLOAT POINT TENS DFLOAT F/ ;
+: FCONSTANT F 2CONSTANT ;
+
+: FLOAT DUP 0< DFLOAT ;
+: -+    DROP SWAP 0< IF NEGATE THEN ;
+: FIX   TUCK 0 SWAP SHIFTS RALIGN -+ ;
+: INT   TUCK 0 SWAP SHIFTS  ALIGN -+ ;
+
+1.      FCONSTANT ONE DECIMAL
+34.6680 FCONSTANT X1
+-57828. FCONSTANT X2
+2001.18 FCONSTANT X3
+1.4427  FCONSTANT X4
+
+: EXP   2DUP INT DUP >R FLOAT F-
+	F2* X2 2OVER FSQ X3 F+ F/
+	2OVER F2/ F-     X1 F+ F/
+	ONE F+ FSQ R> + ;
+: FEXP  X4 F* EXP ;
+: GET   BL WORD DUP 1+ C@ "- = TUCK -
+	0 0 ROT CONVERT DROP -+ ;
+: E     F GET >R R@ ABS 13301 4004 */MOD
+	>R FLOAT 4004 FLOAT F/ EXP R> +
+	R> 0< IF F/ ELSE F* THEN ;
+
+: E.    TUCK FABS 16384 TUCK -
+	4004 13301 */MOD >R
+	FLOAT 4004 FLOAT F/ EXP F*
+	2DUP ONE F<
+	IF 10 FLOAT F* R> 1- >R THEN
+	<# R@ ABS 0 #S R> SIGN 2DROP
+	"E HOLD F# #>     TYPE SPACE ;
+
+
 \ ## Future Direction and Additional tasks.
 \
 \ There is still a lot that could be done with this system,
@@ -10861,4 +11538,6 @@ ook <ok> !
 \ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
 \
 
-:Qa€kb€kbqa
+
+
+

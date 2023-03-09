@@ -43,10 +43,7 @@ int s_less(uint16_t a, uint16_t b) {
 			return 0;
 	}
 	const int l = leq0((uint16_t)(a - b));
-	if (l) {
-		return leq0((uint16_t)((a + 1) - b));
-	}
-	return l;
+	return l ? leq0((uint16_t)((a + 1) - b)) : 0;
 }
 
 int s_more(uint16_t a, uint16_t b) {
@@ -62,9 +59,9 @@ static const char *yn(int y) { return y ? "YES" : " NO"; }
 static int number(const char *n) { return strtol(n, NULL, 0); }
 
 static cmp_t  compares[] = {
-	{ .name = "==", .original = o_eq,   .subleq = s_eq,   },
+//	{ .name = " <", .original = o_less, .subleq = s_less, },
 	{ .name = " >", .original = o_more, .subleq = s_more, },
-	{ .name = " <", .original = o_less, .subleq = s_less, },
+	{ .name = "==", .original = o_eq,   .subleq = s_eq,   },
 };
 static const size_t len = NELEMS(compares);
 
