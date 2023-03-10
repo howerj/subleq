@@ -2552,6 +2552,7 @@ assembler.1 -order
 \ when they deal with extreme values like "\$8000 1 \<", 
 \ "\$8002 1 \<" works fine.
 \
+\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
 
 :a op0=
    tos r0 MOV tos NG1!
@@ -3960,6 +3961,8 @@ system[
 \ subtraction.
 \
 
+\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
+\
 \        int leq0(uint16_t a) {
 \          return ((int16_t)a) <= (int16_t)0;
 \        }
@@ -3983,7 +3986,7 @@ system[
 : <
    2dup leq0 swap leq0 if
      if
-       2dup 1+ leq0 swap 1+ leq0 if else if 2drop #0 exit then then
+       2dup 1+ leq0 swap 1+ leq0 if drop else if 2drop #0 exit then then
      else 2drop #-1 exit then \ a0 && !b0
    else
      if 2drop #0 exit then \ !a0 && b0
@@ -6661,7 +6664,10 @@ root[
 \
 
 :s (marker) r> 2* @+ h? ! cell+ @ get-current ! ;s compile-only
-: create state @ >r postpone : drop r> state ! compile (var)
+\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
+\ : create state @ >r postpone : drop r> state ! compile (var)
+\   get-current ! ;
+: create postpone : drop postpone [ compile (var)
    get-current ! ;
 :to variable create #0 , ;
 :to constant create cell negate allot compile (const) , ;
@@ -8295,8 +8301,7 @@ opt.editor [if]
    blank l ;e ( line -- : delete line )
 [then]
 
-
-\ # Optional Dynamic Memory Allocation
+\ # Dynamic Memory Allocation
 \
 \ This section contains an optional dynamic memory allocator,
 \ that has been adapted to compile under the meta-compiler, it
@@ -8337,6 +8342,7 @@ opt.editor [if]
 \ BUG:
 \ - This implementation seems to overwrite its control
 \ structures when the arena gets too full. 
+\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
 \ TODO: 
 \ - Allow calculations of free space. 
 \ - Fix bugs

@@ -109,6 +109,9 @@ self.dec:
 debug.o: debug.c subleq.cma
 	${CC} -std=gnu99 -Wall -Wextra -pedantic $< -c -o $@
 
+float: gforth.dec
+	cat self/float.fth /dev/stdin | ./subleq $<
+
 debug: debug.o
 
 clean:
