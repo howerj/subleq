@@ -1,24 +1,42 @@
+\ FORTH Floating point package
+\
+\ TODO: "100." fails (gives 1000.0), "100.0" works
+\ TODO: Using "num." instead of "num.num" causes problems:
+\        3276. f f. ( prints 3276.000 )
+\        10. f f.   ( prints 17.000 )
+\        10.0 f f.   ( prints 10.000 )
+\ TODO: Change base to 10 for I/O, then restore, alternatively
+\       print out in other bases?
+\ TODO: Hide words that should not be exported / put in 
+\       different vocab
+\ TODO: More invalid checks? +-INF, NAN?
+\ TODO: Meta-compilation
+\ TODO: Documentation
+\ TODO: Integrate into base system?
+\ NB. Input is finicky, requires "dpl" to be set, so
+\ "fone e 1" will not work, but "1.0 e 1" will.
+\
+\ TODO: Get with negatives fails
+\ TODO: Documentation
+\ TODO: Add back in unit test framework?
+
+
 : debug source type ."  ok" cr ; <ok> @ ' debug <ok> !
 constant okok
+decimal
+only forth definitions
 
-only forth definitions system +order
-
-\ Create anonymous namespace:
 : anonymous get-order 1+ here 1 cells allot swap set-order ;
-: undefined? bl word find nip 0= ; ( "name", -- f: Is word not in search order? )
-: defined? undefined? 0= ;       ( "name", -- f: Is word in search order? )
-: ?\ 0= if postpone \ then ;    ( f --, <string>| : conditional compilation )
-\ undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
-undefined? 1+!  ?\ : 1+! 1 swap +! ;
+: 1+! 1 swap +! ;
 : arshift ( n u -- n : arithmetic right shift )
   2dup rshift >r swap $8000 and
   if $10 swap - -1 swap lshift else drop 0 then r> or ;
 : d2* over $8000 and >r 2* swap 2* swap r> if 1 or then ;
 : d2/ dup      1 and >r 2/ swap 2/ r> if $8000 or then swap ;
 : d- dnegate d+ ;
-\ : d= rot = -rot = and ;
+: d= rot = -rot = and ;
 : d0= or 0= ;
-\ : d0<> d0= 0= ;
+: d0<> d0= 0= ;
 : 2swap >r -rot r> -rot ;
 : dabs s>d if dnegate then ;   ( d -- ud )
 : 2over ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
@@ -29,73 +47,13 @@ undefined? 1+!  ?\ : 1+! 1 swap +! ;
 : 2literal swap postpone literal postpone literal ; immediate
 : +- 0< if negate then ; ( n n -- n : copy sign )
 : m* 2dup xor 0< >r abs swap abs um* r> if dnegate then ; ( n n -- d )
-\ : /string over min rot over + -rot - ;  ( b u1 u2 -- b u : advance string u2 )
+: /string over min rot over + -rot - ;  ( b u1 u2 -- b u : advance string u2 )
 : sm/rem ( dl dh nn -- rem quo: symmetric division )
   over >r >r          ( dl dh nn -- dl dh,      R: -- dh nn )
   dabs r@ abs um/mod  ( dl dh    -- rem quo,    R: dh nn -- dh nn )
   r> r@ xor +- swap r> +- swap ;
 : */mod ( a b c -- rem a*b/c : use double precision intermediate value )
     >r m* r> sm/rem ;
-
-\    : square dup * ;
-\    \ From: https://en.wikipedia.org/wiki/Integer_square_root
-\    \ This function computes the integer square root of a number.
-\    : sqrt ( n -- u : integer square root )
-\      s>d  if -$B throw then ( does not work for signed values )
-\      dup 2 < if exit then      ( return 0 or 1 )
-\      dup                       ( u u )
-\      2 rshift recurse 2*       ( u sc : 'sc' == unsigned small candidate )
-\      dup                       ( u sc sc )
-\      1+ dup square             ( u sc lc lc^2 : 'lc' == unsigned large candidate )
-\      >r rot r> <               ( sc lc bool )
-\      if drop else nip then ;   ( return small or large candidate respectively )
-\    
-\    : log ( u base -- u : compute the integer logarithm of u in 'base' )
-\      >r
-\      dup 0= if -$B throw then ( logarithm of zero is an error )
-\      0 swap
-\      begin
-\        swap 1+ swap r@ / dup 0= ( keep dividing until 'u' is 0 )
-\      until
-\      drop 1- rdrop ;
-\    
-\    : log2 2 log ; ( u -- u : compute the integer logarithm of u in base )
-\    
-\    \ http://forth.sourceforge.net/algorithm/bit-counting/index.html
-\    : count-bits ( number -- bits )
-\      dup $5555 and swap 1 rshift $5555 and +
-\      dup $3333 and swap 2 rshift $3333 and +
-\      dup $0F0F and swap 4 rshift $0F0F and +
-\      $FF mod ;
-\    
-\    \ http://forth.sourceforge.net/algorithm/firstbit/index.html
-\    : first-bit ( number -- first-bit )
-\      dup   1 rshift or
-\      dup   2 rshift or
-\      dup   4 rshift or
-\      dup   8 rshift or
-\      dup $10 rshift or
-\      dup   1 rshift xor ;
-\    
-\    : gray-encode dup 1 rshift xor ; ( gray -- u )
-\    : gray-decode ( u -- gray )
-\    \ dup $10 rshift xor ( <- 32 bit )
-\      dup   8 rshift xor 
-\      dup   4 rshift xor
-\      dup   2 rshift xor 
-\      dup   1 rshift xor ;
-\    
-\    : binary $2 base ! ;
-\    
-\ http://forth.sourceforge.net/algorithm/unprocessed/valuable-algorithms.txt
-\ : -m/mod over 0< if dup    >r +       r> then u/mod ;         ( d +n - r q )
-\ :  m/     dup 0< if negate >r dnegate r> then -m/mod swap drop ; ( d n - q )
-
-\ From comp.lang.forth:
-\ : du/mod ( ud1 ud2 -- udrem udquot )  \ b/d = bits/double
-\   0 0 2rot b/d 0 do 2 pick over 2>r d2* 2swap d2* r>
-\  0< 1 and m+ 2dup 7 pick 7 pick du< 0= r> 0< or if 5 pick
-\  5 pick d- 2swap 1 m+ else 2swap then loop 2rot 2drop ; 
 
 \ ========================= CORDIC CODE =======================================
 
@@ -170,17 +128,18 @@ only forth definitions system +order
 : f2dup fover fover ;  ( f1 f2 -- f1 f2 f1 f2 )
 : fdrop 2drop ;        ( f -- )
 : fnip fswap fdrop ;   ( f1 f2 -- f2 )
-: fnegate $8000 xor zero ;                  ( f -- f )
-: fabs  $7FFF and ;                         ( f -- f )
+: fnegate $8000 xor zero ;  ( f -- f )
+: fabs  $7FFF and ;         ( f -- f )
 : fsign fabs over 0< if >r dnegate r> $8000 or then ;
-: f2* 1+ zero ;                          ( f -- f )
+: f2* 1+ zero ;             ( f -- f )
 : f*  rot + $4000 - >r um* r> norm ;     ( f f -- f )
 : fsq fdup f* ;                          ( f -- f )
 : f2/ 1- zero ;                          ( f -- f )
 : um/ dup >r um/mod swap r> over 2* 1+ u< swap 0< or - ; ( ud u -- u )
 : f0= zero d0= ;                       ( f -- f )
+: floats 2* cells ;   ( u -- u )
+: float+ 1 floats + ; ( a -- a )
 
-\ TODO: More invalid checks? +-INF, NAN?
 
 : f/    
 \       fdup f0= if -44 throw then
@@ -204,19 +163,16 @@ only forth definitions system +order
 : f- fnegate f+ ; ( f1 f2 -- t : floating point subtract )
 : f< f- 0< nip ;  ( f1 f2 -- t : floating point less than )
 : f> fswap f< ;   ( f1 f2 -- t : floating point greater than )
-: f>= f> 0= ;
-: f<= f< 0= ;
-: f0> 0 0 f> ;
-: f0< 0 0 f< ;
-: f0<= f0> 0= ;
-: f0>= f0< 0= ;
-
-
+: f>= f> 0= ;     ( f1 f2 -- t : )
+: f<= f< 0= ;   ( f1 f2 -- t : )
+: f0> 0 0 f> ;   ( f1 f2 -- t : )
+: f0< 0 0 f< ;   ( f1 f2 -- t : )
+: f0<= f0> 0= ;   ( f1 f2 -- t : )
+: f0>= f0< 0= ;   ( f1 f2 -- t : )
 : fmin f2dup f< if fdrop exit then fnip ; ( f1 f2 -- f : min of two floats )
 : fmax f2dup f> if fdrop exit then fnip ; ( f1 f2 -- f : max of two floats )
 
 ( floating point input/output ) 
-decimal
 
 create precision 3 , 
           .001 , ,        .010 , ,
@@ -225,29 +181,30 @@ create precision 3 ,
       1000.000 , ,   10000.000 , ,
     100000.000 , , 1000000.000 , ,
 
-: floats 2* cells ;   ( u -- u )
-: float+ 1 floats + ; ( a -- a )
+: base? base @ $A <> if -$28 throw then ; ( -- : check base )
 : tens 2* cells  [ precision cell+ ] literal + 2@ ;     
-: set-precision dup 0 $5 within if precision ! exit then -$2B throw ; ( +n -- )
+: set-precision dup 0 5 within if precision ! exit then -$2B throw ; ( +n -- )
 : shifts fabs $4010 - s>d invert if -$2B throw then negate ;
-: f#    base @ $A <> if -$28 throw then
+: f#    base?
         >r precision @ tens drop um* r> shifts
         ralign precision @ ?dup if for aft # then next
         [char] . hold then #s rot sign ;
 
-\ TODO: Detect single point number entry and correct for it
-\ : point dpl @ dup 0< if drop 0 then ;
 : f.    tuck <# f# #> type space ;
 : d>f $4020 fsign norm ;           ( d -- f : double to float )
-: f     d>f dpl @ tens d>f f/ ;    ( d -- f : formatted double to float )
+\ NB. 'f' and 'e' require "dpl" to be set correctly!
+: f 
+   base?
+   dpl @ 0< if s>d 0 dpl ! then ( input was single number )
+   d>f dpl @ tens d>f f/ ;    ( n|d -- f : formatted double to float )
 : fconstant f 2constant ;          ( "name" , f --, Run Time: -- f )
 : fliteral  f postpone 2literal ; immediate ( f --, Run Time: -- f )
 : s>f   s>d d>f ;                  ( n -- f )
 : -+    drop swap 0< if negate then ;
-: fix   tuck 0 swap shifts ralign -+ ;
-: f>s   tuck 0 swap shifts lalign -+ ; ( f -- n )
+: fix   tuck 0 swap shifts ralign -+ ; ( f -- n : float to int, rounding )
+: f>s   tuck 0 swap shifts lalign -+ ; ( f -- n : float to int, truncating )
 
-1. fconstant fone decimal
+1.0 fconstant fone decimal
 
 : exp   2dup f>s dup >r s>f f-     ( f -- f : raise 2.0 to the power of 'f' )
         f2* [ -57828. ] fliteral 2over fsq [ 2001.18 ] fliteral f+ f/
@@ -257,15 +214,8 @@ create precision 3 ,
 
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 
-\ TODO: Fix "get"
 : get   bl word dup 1+ c@ [char] - = tuck -
         0 0 rot convert drop ( -$18 and throw ) -+ ;
-
-\ NB. Input is finicky, requires "dpl" to be set, so
-\ "fone e 1" will not work, but "1.0 e 1" will.
-\
-\ TODO: Get with negatives fails
-\ TODO: Documentation
 
 : e     f get >r r@ abs 13301 4004 */mod
         >r s>f 4004 s>f f/ exp r> +
@@ -299,13 +249,13 @@ create precision 3 ,
 : floor  f>s s>f ; ( f -- f )
 : fround fix s>f ; ( f -- f )
 : ftuck fover fswap ; ( f1 f2 -- f2 f1 f2 )
+: fmod f2dup f/ floor f* f- ;
 
 anonymous definitions
 
 \ TODO: The quadrants are all fucked up, otherwise sin/cos
 \ "work", in that the curves look alright, albeit flipped
 
-: fmod f2dup f/ floor f* f- ;
 : >cordic     [ 16384. ] fliteral f* f>s ;   ( f -- n )
 : cordic> s>f [ 16384. ] fliteral f/ ;       ( n -- f )
 : quadrant fdup                   f0< 4 and >r
@@ -325,7 +275,7 @@ anonymous definitions
 
 forth-wordlist current ! 
 
-\ @warning fsincos still needs a lot of work, and simplifying
+\ TODO: fsincos still needs a lot of work, and simplifying
 : fsincos 2pi fmod fdup quadrant >r (fsincos) r@ >cos fswap r> >sin fswap ;
 : fsin fsincos fdrop ; ( rads -- sin )
 : fcos fsincos fnip  ; ( rads -- cos )

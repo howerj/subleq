@@ -2553,6 +2553,8 @@ assembler.1 -order
 \ "\$8002 1 \<" works fine.
 \
 \ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
+\ * Cleanup operators
+\ * Documentation
 
 :a op0=
    tos r0 MOV tos NG1!
@@ -2561,7 +2563,6 @@ assembler.1 -order
 :a op0<
    tos r0 MOV tos ZERO
    r0 -if tos NG1! then r0 INC r0 -if tos NG1! then ;a
-
 :a leq0 
   Z tos 2/ t, there 2/ 4 + t,
   tos 2/ dup t, t, vm 2/ t,
@@ -7531,6 +7532,13 @@ root[
 \ "thru" and "screens" for loading a block range and listing
 \ a block range are listed in the appendix.
 \
+\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
+\
+\ TODO: Implement "buffer", make better block system with four
+\ block buffers, a "transfer" word with an execution vector
+\ that takes "block flag1 flag2" (block num, read, write flags)
+\ that can access all memory. Also make "move" and use in
+\ block editor, as it is faster.
 
 ( system[ variable dirty ]system )
 : b/buf 400 lit ; ( -- u : size of the block buffer )
@@ -8339,13 +8347,9 @@ opt.editor [if]
 \       20 allocate throw .s cr
 \       pool #pool dump
 \ 
-\ BUG:
-\ - This implementation seems to overwrite its control
-\ structures when the arena gets too full. 
 \ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
 \ TODO: 
 \ - Allow calculations of free space. 
-\ - Fix bugs
 \ - Make 'free' more robust, do bound checking
 \ - RESIZE
 \ - Put freelist within arena
@@ -8401,7 +8405,10 @@ system[
     else   
       dup @ cell+ @ #2 pick - #2 cells max dup #2 cells =
       if 
-        drop dup @ dup @ rot !
+        drop dup @ dup @ rot
+        ( prevent freelist address from being overwritten )
+        dup freelist = if 2drop 2drop #0 -3B lit exit then 
+        !
       else  
         2dup swap @ cell+ ! swap @ +
       then
@@ -8438,6 +8445,9 @@ system[
     !
   then
   drop #0 ; \ this code always returns a success flag
+
+\ : allocate freelist (allocate) ;
+\ : free freelist (free) ;
 
 \ : resize ( a-addr1 u -- a-addr2 ior ) 
 \   dup 0= if drop free exit then
