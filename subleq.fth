@@ -2531,48 +2531,30 @@ assembler.1 -order
    r0 if r0 DEC r0 {rp} iSTORE t' opJump JMP then
    ip INC --rp ;a
 
-\ The comparison operators are tricky to get right,
-\ and are still not completely right, however they do a good
-\ enough job. The built in operators are all for signed
-\ comparison. Unsigned is synthesized in Forth code later
-\ on. They use some of the "if" statement constructs made
-\ in the assembler section to shunt the right constant in
-\ if the result is true or false. Forth booleans are
-\ different from booleans in language like C, in C true is
-\ non-zero but comparison operators yield one on true, on false
-\ zero is produced. In Forth zero is produced on false, whilst
-\ for true -1 is produced. This might seem odd, but -1 is
-\ "all bits set", and allows the boolean to be used with
-\ the bitwise logical operators as a mask.
+\ The comparison operators are tricky to get right, we build
+\ upon "leq0" and "op0=", which are relatively easy to get
+\ correct, in the Forth code to fully implement "\<" and later
+\ "u\<". Note that the assembly versions of "if" hide a version
+\ of "0=" in them that does not quite work for all values, so
+\ we have to correct for that in our definition of "op0=".
 \
-\ "op0\>" is used to make the Forth word "0\>", and "op0=" the
-\ Forth word "0=", and so on. 
+\ In Forth booleans are represented by "0" and "-1" (or all
+\ bits-set) instead of "0" and "1" in languages like C. In
+\ Forth this allows the returned boolean to be used as a mask
+\ with the logical operators. "0=" returns "0" and "-1" as
+\ it implements the standard Forth word "0=", "leq0" however
+\ returns "0" and "1" as a non-standard Forth word, this is
+\ so "leq0" can be used on the output of "leq0", which it could
+\ not be if standard Forth booleans were returns by it.
 \
-\ NB. There are some bugs with the comparison operators 
-\ when they deal with extreme values like "\$8000 1 \<", 
-\ "\$8002 1 \<" works fine.
-\
-\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
-\ * Cleanup operators
-\ * Documentation
 
-:a op0=
+:a op0= ( n -- f : not equal to zero )
    tos r0 MOV tos NG1!
    r0 if tos ZERO then r0 DEC r0 +if tos ZERO then ;a
-:a op0> tos +if tos NG1! vm JMP then tos ZERO ;a
-:a op0<
-   tos r0 MOV tos ZERO
-   r0 -if tos NG1! then r0 INC r0 -if tos NG1! then ;a
-:a leq0 
+:a leq0 ( n -- 0|1 : less than or equal to zero )
   Z tos 2/ t, there 2/ 4 + t,
   tos 2/ dup t, t, vm 2/ t,
   tos ONE! ;a
-
-\ Less-Thank-Or-Equal to Zero, the only primitive comparison
-\ operator native to this machine.
-\
-
-\
 
 \ Subtraction and addition need no real explanation, just note
 \ that they are relatively fast to execute on this machine.
@@ -3213,8 +3195,6 @@ there 2/ primitive t!
 :m >r opToR ;m ( -- : compile opTorR into the dictionary )
 :m r> opFromR ;m ( -- : compile opFromR into the dictionary )
 :m 0= op0= ;m ( -- : compile op0= into the dictionary )
-:m 0< op0< ;m ( -- : compile op0< into the dictionary )
-:m 0> op0> ;m ( -- : compile op0> into the dictionary )
 :m mux opMux ;m ( -- : compile opMux into the dictionary )
 :m exit opExit ;m ( -- : compile opExit into the dictionary )
 
@@ -3278,11 +3258,9 @@ there 2/ primitive t!
 :so [!] [!] ;s ( u vma -- : store to -VM Address- )
 :to sp! sp! ; ( a -- ??? : set the variable stack location )
 :to 0= op0= ; ( n -- f : equal to zero )
-:to 0< op0< ; ( n -- f : signed less than zero )
-:to 0> op0> ; ( n -- f : signed greater than zero )
+:so leq0 leq0 ;s ( n -- 0|1 : less than or equal to zero )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
-:to leq0 leq0 ;
 
 \ If "opAsm" is defined, so should this:
 \
@@ -3947,6 +3925,7 @@ system[
 \
 \ As we do not have those facilities we make use of the
 \ comparisons operators we made for the Forth Virtual Machine.
+\
 \ Using the signed comparison operators to do unsigned
 \ comparison is a little more involved, as is doing the
 \ opposite, however if we stay within one class it is easy
@@ -3961,8 +3940,8 @@ system[
 \ implement various comparisons by checking flags set after
 \ subtraction.
 \
-
-\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
+\ The first operator we will implement is "\<", it is
+\ equivalent to the C code:
 \
 \        int leq0(uint16_t a) {
 \          return ((int16_t)a) <= (int16_t)0;
@@ -3983,11 +3962,30 @@ system[
 \          return l ? leq0((uint16_t)((a + 1) - b)) : 0;
 \        }
 \        
+\ There are many corner cases that have to be dealt with. It
+\ is easy to perform a Less-Than-Or-Equals-To-Zero on a SUBLEQ
+\ machine, and to perform subtraction. It would seem like
+\ implementing the basic comparison operators with those
+\ operators would be the fastest, simplest and smallest
+\ solution. While it is all three, it is also not correct,
+\ failing for comparing large negative values.
+\
+\ The simple but buggy solution is:        
+\
+\        : > - 0> ;    ( n1 n2 -- f : signed greater than )
+\        : < swap > ;  ( n1 n2 -- f : signed less than )
+\
+\ With "0\>" being implemented as a VM instruction (as the
+\ inverse of Less-Than-Or-Equal-To-Zero, which is easy to
+\ compute). Instead we implement "leq0" as a VM instruction
+\ and build upon that.
+\
 
 : <
    2dup leq0 swap leq0 if
      if
-       2dup 1+ leq0 swap 1+ leq0 if drop else if 2drop #0 exit then then
+       2dup 1+ leq0 swap 1+ leq0 
+       if drop else if 2drop #0 exit then then
      else 2drop #-1 exit then \ a0 && !b0
    else
      if 2drop #0 exit then \ !a0 && b0
@@ -3998,16 +3996,16 @@ system[
    then
    2drop #0 ;
 
-\ : > - 0> ;    ( n1 n2 -- f : signed greater than )
-\ : < swap > ;  ( n1 n2 -- f : signed less than )
-: > swap < ;    ( n1 n2 -- f : signed greater than )
-: = - 0= ;    ( u1 u2 -- f : equality )
-: <> = 0= ;   ( u1 u2 -- f : inequality )
-: 0<> 0= 0= ; ( n -- f : not equal to zero )
-: 0<= 0> 0= ; ( n -- f : less than or equal to zero )
-: 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
-: >= < 0= ;   ( n1 n2 -- f : greater than or equal to )
-: <= > 0= ;   ( n1 n2 -- f : less than or equal to )
+: = - 0= ;     ( u1 u2 -- f : equality )
+: <> = 0= ;    ( u1 u2 -- f : inequality )
+: > swap < ;   ( n1 n2 -- f : signed greater than )
+: 0> leq0 0= ; ( n -- f : greater than zero )
+: 0< #0 < ;
+: 0<> 0= 0= ;  ( n -- f : not equal to zero )
+: 0<= 0> 0= ;  ( n -- f : less than or equal to zero )
+: 0>= 0< 0= ;  ( n1 n2 -- f : greater or equal to zero )
+: >= < 0= ;    ( n1 n2 -- f : greater than or equal to )
+: <= > 0= ;    ( n1 n2 -- f : less than or equal to )
 
 \ The unsigned words are defined in terms of each other once
 \ one of them has been defined, they are a bit awkward as they
@@ -6665,10 +6663,8 @@ root[
 \
 
 :s (marker) r> 2* @+ h? ! cell+ @ get-current ! ;s compile-only
-\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
-\ : create state @ >r postpone : drop r> state ! compile (var)
-\   get-current ! ;
-: create postpone : drop postpone [ compile (var)
+\ ======================= TODO ================================
+: create state @ >r postpone : drop r> state ! compile (var)
    get-current ! ;
 :to variable create #0 , ;
 :to constant create cell negate allot compile (const) , ;
@@ -7532,13 +7528,33 @@ root[
 \ "thru" and "screens" for loading a block range and listing
 \ a block range are listed in the appendix.
 \
-\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
+\ ======================= TODO ================================
 \
-\ TODO: Implement "buffer", make better block system with four
+\ Implement "buffer", make better block system with four
 \ block buffers, a "transfer" word with an execution vector
 \ that takes "block flag1 flag2" (block num, read, write flags)
 \ that can access all memory. Also make "move" and use in
 \ block editor, as it is faster.
+\
+\ From:
+\
+\ <https://groups.google.com/g/comp.lang.forth/c/f5-xM_cl2S8>
+\
+\ Also:
+\
+\        : copy-block ( from to -- ) 
+\          swap block swap buffer 1024 move update ; 
+\
+\ Versus:
+\
+\        1024 buffer: tmp
+\        
+\        : copy-block ( u.block-from u.block-to -- )
+\        swap block tmp 1024 move
+\        tmp swap buffer 1024 move
+\        update
+\        save-buffers \ it's optional
+\        ; 
 
 ( system[ variable dirty ]system )
 : b/buf 400 lit ; ( -- u : size of the block buffer )
@@ -8226,6 +8242,10 @@ opt.multi [if]
 \ Missing are words to perform searching, replacing, and 
 \ swapping lines. A rudimentary help message might be useful.
 \
+\ A command to enter a mode to enter 16 consecutive lines
+\ would aid in editing larger amounts of text. Perhaps empty
+\ lines would exit this mode early.
+\
 \ They are all easy to add, but are not necessary. The
 \ fact that execute, "e", calls "q" might cause problems when
 \ trying to put words into different vocabularies, but it is
@@ -8347,8 +8367,8 @@ opt.editor [if]
 \       20 allocate throw .s cr
 \       pool #pool dump
 \ 
-\ ==== TODO === TODO ==== TODO ==== TODO === TODO ==== TODO ===
-\ TODO: 
+\ ======================= TODO ================================
+\
 \ - Allow calculations of free space. 
 \ - Make 'free' more robust, do bound checking
 \ - RESIZE
