@@ -14,25 +14,44 @@
 \ NB. Input is finicky, requires "dpl" to be set, so
 \ "fone e 1" will not work, but "1.0 e 1" will.
 \
-\ TODO: Documentation
 \ TODO: Add back in unit test framework?
 \ missing: f**, facos, fln, facosh, falog, fasin, fasinh, 
-\ fatan, fatan2, fatanh, fsqrt, 
+\ fatan, fatan2, fatanh, fsqrt, finv,
 \
 \
-\ https://stackoverflow.com/questions/3581528/how-is-the-square-root-function-implemented
-\ https://stackoverflow.com/questions/4541130/definitions-of-sqrt-sin-cos-pow-etc-in-cmath?noredirect=1&lq=1
-\ https://forth-standard.org/standard/float/
+\ SQRT: https://stackoverflow.com/questions/3581528/
+\ MATH: https://stackoverflow.com/questions/4541130/
+\ FORTH: https://forth-standard.org/standard/float/
 \
 
 
-only forth definitions decimal
-: debug source type ."  ok" cr ; <ok> @ ' debug <ok> !
-constant okok
+only forth definitions decimal system +order
+\ <ok> @ constant okok
+\ : debug source type ."  ok" cr ; 
+\ ' debug <ok> !
 
+
+: undefined? bl word find nip 0= ; ( "name", -- f: Is word not in search order? )
+: defined? undefined? 0= ; ( "name", -- f: Is word defined ? )
+undefined? postpone [if] 
+  : postpone [compile] [compile] ; immediate 
+[then] 
+: ?\ 0= if postpone \ then ;    ( f --, <string>| : conditional compilation )
+
+undefined? 0<   ?\ : 0< 0 < ;
+undefined? 1-   ?\ : 1- 1 - ;
+undefined? 2*   ?\ : 2* 1 lshift ;
+undefined? 2/   ?\ : 2/ 1 rshift ;
+\ undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
+undefined? 1+!  ?\ : 1+! 1 swap +! ;
+\ undefined? -throw ?\ : -throw negate throw ;
+undefined? dnegate ?\ : dnegate invert >r invert 1 um+ r> + ; 
+undefined? d+ ?\ : d+ >r swap >r um+ r> + r> + ; 
+undefined? s>d ?\ : s>d dup 0< ;
+undefined? 2>r ?\ : 2>r r> swap >r swap >r >r ; 
+undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ; 
 
 : anonymous get-order 1+ here 1 cells allot swap set-order ;
-: 1+! 1 swap +! ;
 : arshift ( n u -- n : arithmetic right shift )
   2dup rshift >r swap $8000 and
   if $10 swap - -1 swap lshift else drop 0 then r> or ;
@@ -67,7 +86,7 @@ create lookup ( 16 values )
 $3243 , $1DAC , $0FAD , $07F5 , $03FE , $01FF , $00FF , $007F ,
 $003F , $001F , $000F , $0007 , $0003 , $0001 , $0000 , $0000 ,
 
-$26DD constant cordic_1K $6487 constant pi/2
+$26DD constant cordic_1K $6487 constant fhpi
 
 variable tx 0 tx ! variable ty 0 ty ! variable tz 0 tz !
 variable x  0  x ! variable y  0  y ! variable z  0  z !
@@ -187,8 +206,8 @@ create ftable 3 ,
 : f- fnegate f+ ; ( f1 f2 -- t : floating point subtract )
 : f< f- 0< nip ; ( f1 f2 -- t : floating point less than )
 : f> fswap f< ;  ( f1 f2 -- t : floating point greater than )
-: f>= f> 0= ;    ( f1 f2 -- t : FP greater or equal )
-: f<= f< 0= ;    ( f1 f2 -- t : FP less than or equal )
+: f>= f< 0= ;    ( f1 f2 -- t : FP greater or equal )
+: f<= f> 0= ;    ( f1 f2 -- t : FP less than or equal )
 : f0> 0 0 f> ;   ( f1 f2 -- t : FP greater than zero )
 : f0< 0 0 f< ;   ( f1 f2 -- t : FP less than zero )
 : f0<= f0> 0= ;  ( f1 f2 -- t : FP less than or equal to zero )
@@ -196,40 +215,46 @@ create ftable 3 ,
 : fmin f2dup f< if fdrop exit then fnip ; ( f1 f2 -- f : min )
 : fmax f2dup f> if fdrop exit then fnip ; ( f1 f2 -- f : max )
 : d>f $4020 fsign norm ;  ( d -- f : double to float )
-: s>f s>d d>f ;           ( n -- f )
+: s>f s>d d>f ;           ( n -- f : single to float )
 
-: f#    base?
-        >r precision tens drop um* r> shifts
-        ralign precision ?dup if for aft # then next
-        [char] . hold then #s rot sign ;
+: f# 
+  base?
+  >r precision tens drop um* r> shifts
+  ralign precision ?dup if for aft # then next
+  [char] . hold then #s rot sign ;
 
 : f. tuck <# f# #> type space ;
 \ NB. 'f' and 'e' require "dpl" to be set correctly!
 system +order
 : f 
    base?
-   1 ?depth ( NB. 2 ?depth if following line missing )
+\   1 ?depth ( NB. 2 ?depth if following line missing )
    dpl @ 0< if s>d 0 dpl ! then ( input was single number )
    d>f dpl @ tens d>f f/ ;    ( n|d -- f : formatted double to float )
 system -order
-: fconstant f 2constant ;          ( "name" , f --, Run Time: -- f )
+: fconstant f 2constant ; ( "name" , f --, Run Time: -- f )
 : fliteral  f postpone 2literal ; immediate ( f --, Run Time: -- f )
-: -+    drop swap 0< if negate then ;
-: fix   tuck 0 swap shifts ralign -+ ; ( f -- n : float to int, rounding )
-: f>s   tuck 0 swap shifts lalign -+ ; ( f -- n : float to int, truncating )
+: -+ drop swap 0< if negate then ;
+: fix tuck 0 swap shifts ralign -+ ; ( f -- n : f>s rounding )
+: f>s tuck 0 swap shifts lalign -+ ; ( f -- n : f>s truncate )
 : floor  f>s s>f ; ( f -- f )
 : fround fix s>f ; ( f -- f )
-: fmod f2dup f/ floor f* f- ;
+: fmod f2dup f/ floor f* f- ; ( f1 f2 -- f )
 
 1.0 fconstant fone decimal
+
+: f1+ fone f+ ; ( f -- f )
+: f1- fone f- ; ( f -- f )
+: finv fone fswap f/ ; ( f -- f )
 
 : exp ( f -- f : raise 2.0 to the power of 'f' )
  2dup f>s dup >r s>f f-     
  f2* [ -57828.0 ] fliteral 2over fsq [ 2001.18 ] fliteral f+ f/
  2over f2/ f- [ 34.6680 ] fliteral f+ f/
- fone f+ fsq r> + ;
+ f1+ fsq r> + ;
 : fexp  ( f -- f : raise e to the power of 'f' )
-  [ 1.4427 ] fliteral f* exp ; 
+  [ 1.4427 ( = log2(e) ] fliteral f* exp ; 
+\ : f** flog2 f* exp ;
 : get ( "123" -- : get a single signed number )
   bl word dup 1+ c@ [char] - = tuck -
   0 0 rot convert drop ( -$18 and throw ) -+ ;
@@ -248,124 +273,99 @@ system -order
 
 \ "fexpm1" needs implementing better
 : fexpm1 fexp fone f- ;                      ( f -- f : e raised to 'f' less 1 )
-: fsinh fexpm1 fdup fdup fone f+ f/ f+ f2/ ; ( f -- fsinh : hyperbolic sine )
+: fsinh fexpm1 fdup fdup f1+ f/ f+ f2/ ; ( f -- fsinh : hyperbolic sine )
 : fcosh fexp   fdup fone fswap f/ f+ f2/ ;   ( f -- fcosh : hyperbolic cosine )
 : fsincosh fdup fsinh fswap fcosh ;          ( f -- sinh cosh )
 : ftanh fsincosh f/ ;                        ( f -- ftanh : hyperbolic tangent )
 \ : fln fone f- flnp1 ;
 
-3.14159265 fconstant pi
-1.57079632 fconstant pi/2
-6.28318530 fconstant 2pi
-2.71828182 fconstant euler
+3.14159265 fconstant fpi
+1.57079632 fconstant fhpi
+6.28318530 fconstant f2pi
+2.71828182 fconstant fe
 
-: >deg [ pi f2* ] 2literal f/ [  360.0 ] fliteral f* ; ( rad -- deg )
-: >rad [  360.0 ] fliteral f/ [ pi f2* ] 2literal f* ; ( deg -- rad )
+: >deg [ fpi f2* ] 2literal f/ [   360.0 ] fliteral f* ; ( rad -- deg )
+: >rad [   360.0 ] fliteral f/ [ fpi f2* ] 2literal f* ; ( deg -- rad )
 
 \ anonymous definitions
 
-\ TODO: The quadrants are all fucked up, otherwise sin/cos
-\ "work", in that the curves look alright, albeit flipped
+: >cordic     [ 16384.0 ] fliteral f* f>s ; ( f -- n )
+: cordic> s>f [ 16384.0 ] fliteral f/ ;     ( n -- f )
 
-: >cordic     [ 16384. ] fliteral f* f>s ; ( f -- n )
-: cordic> s>f [ 16384. ] fliteral f/ ;     ( n -- f )
-: quadrant fdup                   f0< 4 and >r
-           fabs 2pi fmod fdup pi   f< 1 and >r 
-                 pi fmod      pi/2 f> 2 and r> r> or or ;
-: >sin dup 3 and >r 4 and if fnegate r> -1 >r >r else r> 0 >r >r  then
-          r@ 3 = r@ 2 = or if fnegate fone f+ then
-          r@ 0 = r@ 2 = or if fnegate then 
-          rdrop r> if fnegate then ;
+: quadrant 
+  fdup fhpi f< if fdrop 0 exit then 
+  fdup  fpi f< if fdrop 1 exit then 
+      [ fpi fhpi f+ ] 2literal f< if 2 exit then 
+  3 ;
+: >sin >r
+  r@ 0 = if rdrop exit then
+  r@ 1 = if rdrop exit then
+  r@ 2 = if fnegate rdrop exit then
+  rdrop fnegate ;
+: >cos >r
+  r@ 0 = if rdrop exit then
+  r@ 1 = if fnegate rdrop exit then
+  r@ 2 = if fnegate rdrop exit then
+  rdrop ; 
+: scfix >r 
+  r@ 0 = if rdrop exit then
+  r@ 1 = if fnegate fpi f+ rdrop exit then
+  r@ 2 = if rdrop exit then
+  rdrop fnegate f2pi f+ ;
 
-: >cos 3 and >r
-         r@ 3 = r@ 2 = or if fnegate fone f+ then
-         r@ 0 = r@ 3 = or if fnegate then 
-         rdrop ;
+: (fsincos) fhpi fmod >cordic cordic >r cordic> r> cordic> ; 
+: fsincos 
+   fdup f0< >r
+   fabs
 
-: (fsincos) pi/2 fmod >cordic cordic >r cordic> r> cordic> ; 
+   f2pi fmod fdup quadrant dup >r scfix (fsincos) r@ >cos fswap r> >sin fswap
+   r> if ( fdup f0< if fnegate then ) fswap fnegate fswap then ;
 
 \ forth-wordlist current ! 
 
-\ TODO: fsincos still needs a lot of work, and simplifying
-: fsincos 2pi fmod fdup quadrant >r (fsincos) r@ >cos fswap r> >sin fswap ;
 : fsin fsincos fdrop ; ( rads -- sin )
 : fcos fsincos fnip  ; ( rads -- cos )
 : ftan fsincos f/ ; ( rads -- tan )
 
-only forth definitions
+nly forth definitions
    
-\ : fpow ( f u -- f : raise 'f' to an integer power )
-\       ?dup 0= if fdrop fone exit then
-\       >r fdup r> 1- for aft fover f* then next fnip ;
-
-\ https://stackoverflow.com/questions/9799041/
-\ https://en.wikipedia.org/wiki/Taylor_series
-
-
-: .q f. ." <-> " source type cr ;
-0. f         fsin .q
-pi 0.25 f f* fsin .q
-pi/2         fsin .q
-pi           fsin .q
-
-0. f         fcos .q
-pi 0.25 f f* fcos .q
-pi/2         fcos .q
 
 : sins
-  2pi fnegate
+  f2pi fnegate
   begin
-    fdup 2pi f<
+    fdup f2pi f<
   while
     fdup fdup f. [char] , emit space fsincos fswap f. [char] , emit space f. cr
-    [ 2pi 50.0 f f/ ] 2literal f+
+    [ f2pi 50.0 f f/ ] 2literal f+
   repeat fdrop ;
-
-    
 
 : quads 
   [ 0.0 ] fliteral 
   begin
-    fdup 2pi f<
+    fdup f2pi f<
   while
     fdup fdup f. [char] : emit quadrant . cr
-    [ 2pi 50.0 f f/ ] 2literal f+
+    [ f2pi 50.0 f f/ ] 2literal f+ 
   repeat fdrop ;
 
-\ : fcos
-\    fone  ( rads -- f )
-\    fover    fsq [   2. ] fliteral f/ f-
-\    fover 4 fpow [  24. ] fliteral f/ f+
-\    fswap 6 fpow [ 720. ] fliteral f/ f- ;
-\ 
-\ : fsin
-\   fabs fdup 2pi fmod quadrant >r 2pi fmod
-\   fdup ( rads -- f )
-\   fdup  3 fpow [    6. ] fliteral f/ f- 
-\   fover 5 fpow [  120. ] fliteral f/ f+ 
-\   fswap 7 fpow [ 5040. ] fliteral f/ f- 
-\ 
-\    r> dup >r 1 and if [char] X emit then
-\           r> 2 and if [char] Y emit then ; 
-\ 
-\ 
-\ : .q f. ." <-> " source type cr ;
-\ 
-\ 0. f         fsin .q
-\ pi 0.25 f f* fsin .q
-\ pi/2         fsin .q
-\ pi 0.75 f f* fsin .q
-\ pi           fsin .q
-\ 2pi          fsin .q
-\ 
-\ 
-\ : fsincos fdup fsin fswap fcos ; ( rads -- sin cos )
-\ : ftan fsincos f/ ;              ( rads -- tan )
-\ 
 
-okok <ok> !
+system +order
+\ okok <ok> !
+
+only forth definitions decimal
 .( DONE ) cr
 
 
-
-
+\ : fstep ( X S/2 -- X+1 )
+\   2>r fdup fsq 2r> f* [ 1.5 ] fliteral fswap f- f* ;
+\ : fsqrt
+\   fdup 0< if fdrop -43 throw then
+\   f2/ fdup
+\   16 for aft ftuck fstep then next fnip
+\   finv
+\ ;
+\ 
+\ 
+\ 4.0 f fsqrt f. cr
+\ 2.0 f fsqrt f. cr
+\ .s
