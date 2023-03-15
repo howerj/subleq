@@ -5,8 +5,6 @@
 \        3276. f f. ( prints 3276.000 )
 \        10. f f.   ( prints 17.000 )
 \        10.0 f f.   ( prints 10.000 )
-\ TODO: Hide words that should not be exported / put in 
-\       different vocab
 \ TODO: Meta-compilation
 \ TODO: Documentation
 \ TODO: Optional FP stack?
@@ -30,13 +28,12 @@ only forth definitions decimal system +order
 \ : debug source type ."  ok" cr ; 
 \ ' debug <ok> !
 
-
-: undefined? bl word find nip 0= ; ( "name", -- f: Is word not in search order? )
+: undefined? bl word find nip 0= ; ( "name", -- f )
 : defined? undefined? 0= ; ( "name", -- f: Is word defined ? )
 undefined? postpone [if] 
   : postpone [compile] [compile] ; immediate 
 [then] 
-: ?\ 0= if postpone \ then ;    ( f --, <string>| : conditional compilation )
+: ?\ 0= if postpone \ then ; ( f --, <string>| : cond. comp. )
 
 undefined? 0<   ?\ : 0< 0 < ;
 undefined? 1-   ?\ : 1- 1 - ;
@@ -44,14 +41,16 @@ undefined? 2*   ?\ : 2* 1 lshift ;
 undefined? 2/   ?\ : 2/ 1 rshift ;
 \ undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
 undefined? 1+!  ?\ : 1+! 1 swap +! ;
-\ undefined? -throw ?\ : -throw negate throw ;
 undefined? dnegate ?\ : dnegate invert >r invert 1 um+ r> + ; 
 undefined? d+ ?\ : d+ >r swap >r um+ r> + r> + ; 
 undefined? s>d ?\ : s>d dup 0< ;
 undefined? 2>r ?\ : 2>r r> swap >r swap >r >r ; 
 undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ; 
+undefined? /string ?\ : /string over min rot over + -rot - ;  
+\ /string ( b u1 u2 -- b u : advance string u2 )
 
 : anonymous get-order 1+ here 1 cells allot swap set-order ;
+: convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 : arshift ( n u -- n : arithmetic right shift )
   2dup rshift >r swap $8000 and
   if $10 swap - -1 swap lshift else drop 0 then r> or ;
@@ -70,16 +69,16 @@ undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ;
 : 2variable create 0 , 0 , ; \ does> ;
 : 2literal swap postpone literal postpone literal ; immediate
 : +- 0< if negate then ; ( n n -- n : copy sign )
-: m* 2dup xor 0< >r abs swap abs um* r> if dnegate then ; ( n n -- d )
-: /string over min rot over + -rot - ;  ( b u1 u2 -- b u : advance string u2 )
+: m* ( n n -- d ) 
+  2dup xor 0< >r abs swap abs um* r> if dnegate then ; 
 : sm/rem ( dl dh nn -- rem quo: symmetric division )
-  over >r >r          ( dl dh nn -- dl dh,      R: -- dh nn )
-  dabs r@ abs um/mod  ( dl dh    -- rem quo,    R: dh nn -- dh nn )
+  over >r >r         ( dl dh nn -- dl dh,   R: -- dh nn )
+  dabs r@ abs um/mod ( dl dh    -- rem quo, R: dh nn -- dh nn )
   r> r@ xor +- swap r> +- swap ;
-: */mod ( a b c -- rem a*b/c : use double precision intermediate value )
+: */mod ( a b c -- rem a*b/c : double prec. intermediate val )
     >r m* r> sm/rem ;
 
-\ ========================= CORDIC CODE =======================================
+\ ==================== CORDIC CODE ============================
 
 anonymous definitions
 create lookup ( 16 values )
@@ -94,7 +93,7 @@ variable d  0  d ! variable k  0  k !
 
 forth-wordlist current ! 
 
-( CORDIC: valid in range -pi/2 to pi/2, arguments are in fixed )
+( CORDIC: valid in range -pi/2 to pi/2, arguments in fixed )
 ( point format with 1 = 16384, angle is given in radians.  )
 : cordic ( angle -- sine cosine )
   z ! cordic_1K x ! 0 y ! 0 k !
@@ -112,9 +111,9 @@ forth-wordlist current !
 
 only forth definitions
 
-\ ========================= CORDIC CODE =======================================
+\ ==================== CORDIC CODE ============================
 
-\ ========================= FLOATING POINT CODE ===============================
+\ ================ FLOATING POINT CODE ========================
 
 \ This floating point library has been adapted from one found 
 \ in Vierte Dimensions Vol.2, No.4 1986, it should be free to 
@@ -132,7 +131,7 @@ only forth definitions system +order
 
 : fabs  $7FFF and ;   ( f -- f )
 
-\ anonymous definitions
+anonymous definitions
 create ftable 3 , 
           .001 , ,        .010 , ,
           .100 , ,       1.000 , ,
@@ -140,23 +139,25 @@ create ftable 3 ,
       1000.000 , ,   10000.000 , ,
     100000.000 , , 1000000.000 , ,
 
-: zero  over 0= if drop 0 then ; ( f -- f : zero exponent if mantissa is )
-: norm  >r 2dup or               ( f -- f : normalize input float )
-        if begin s>d invert
-           while d2* r> 1- >r
-           repeat swap 0< - ?dup
-           if r> else $8000 r> 1+ then
-        else r> drop then ;
+: zero ( f -- f : zero exponent if mantissa is )
+  over 0= if drop 0 then ; 
+: norm >r 2dup or   ( f -- f : normalize input float )
+  if begin s>d invert
+    while d2* r> 1- >r
+    repeat swap 0< - ?dup
+    if r> else $8000 r> 1+ then
+  else r> drop then ;
 : lalign $20 min for aft d2/ then next ;
 : ralign 1- ?dup if lalign then 1 0 d+ d2/ ;
 : tens 2* cells  [ ftable cell+ ] literal + 2@ ;     
-: set-precision dup 0 5 within if ftable ! exit then -$2B throw ; ( +n -- )
 : shifts fabs $4010 - s>d invert if -$2B throw then negate ;
 : base? base @ $A <> if -$28 throw then ; ( -- : check base )
 : unaligned? dup 1 and = if -$9 throw then ; ( -- : check ptr )
+: -+ drop swap 0< if negate then ;
 
-\ forth-wordlist current !
+forth-wordlist current !
 
+: set-precision dup 0 5 within if ftable ! exit then -$2B throw ; ( +n -- )
 : precision ftable @ ; ( -- u )
 : f@ unaligned? 2@ ;  ( a -- f )
 : f! unaligned? 2! ;  ( f a -- )
@@ -169,6 +170,7 @@ create ftable 3 ,
 : f2dup fover fover ; ( f1 f2 -- f1 f2 f1 f2 )
 : frot 2>r fswap 2r> fswap ; ( f1 f2 f3 -- f2 f3 f1 )
 : fdrop 2drop ;       ( f -- )
+: f2drop fdrop fdrop ; ( f1 f2 -- )
 : fnip fswap fdrop ;  ( f1 f2 -- f2 )
 : fnegate $8000 xor zero ;  ( f -- f )
 : fsign fabs over 0< if >r dnegate r> $8000 or then ;
@@ -181,7 +183,6 @@ create ftable 3 ,
 : float+ 1 floats + ; ( a -- a )
 : ftuck fover fswap ; ( f1 f2 -- f2 f1 f2 )
 : um/ dup >r um/mod swap r> over 2* 1+ u< swap 0< or - ; ( ud u -- u )
-: convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 
 : f/ ( f1 f2 == f1/f2 : floating point division )
   fdup f0= if -44 throw then
@@ -208,6 +209,7 @@ create ftable 3 ,
 : f> fswap f< ;  ( f1 f2 -- t : floating point greater than )
 : f>= f< 0= ;    ( f1 f2 -- t : FP greater or equal )
 : f<= f> 0= ;    ( f1 f2 -- t : FP less than or equal )
+: f= d= ;        ( f1 f2 -- t : FP exact equality )
 : f0> 0 0 f> ;   ( f1 f2 -- t : FP greater than zero )
 : f0< 0 0 f< ;   ( f1 f2 -- t : FP less than zero )
 : f0<= f0> 0= ;  ( f1 f2 -- t : FP less than or equal to zero )
@@ -223,18 +225,17 @@ create ftable 3 ,
   ralign precision ?dup if for aft # then next
   [char] . hold then #s rot sign ;
 
-: f. tuck <# f# #> type space ;
+: f. tuck <# f# #> type space ; ( f -- )
 \ NB. 'f' and 'e' require "dpl" to be set correctly!
 system +order
 : f 
    base?
-\   1 ?depth ( NB. 2 ?depth if following line missing )
+\  1 ?depth ( NB. 2 ?depth if following line missing )
    dpl @ 0< if s>d 0 dpl ! then ( input was single number )
    d>f dpl @ tens d>f f/ ;    ( n|d -- f : formatted double to float )
 system -order
 : fconstant f 2constant ; ( "name" , f --, Run Time: -- f )
 : fliteral  f postpone 2literal ; immediate ( f --, Run Time: -- f )
-: -+ drop swap 0< if negate then ;
 : fix tuck 0 swap shifts ralign -+ ; ( f -- n : f>s rounding )
 : f>s tuck 0 swap shifts lalign -+ ; ( f -- n : f>s truncate )
 : floor  f>s s>f ; ( f -- f )
@@ -243,15 +244,16 @@ system -order
 
 1.0 fconstant fone decimal
 
-: f1+ fone f+ ; ( f -- f )
-: f1- fone f- ; ( f -- f )
-: finv fone fswap f/ ; ( f -- f )
+: f1+ fone f+ ; ( f -- f : increment FP number )
+: f1- fone f- ; ( f -- f : decrement FP number )
+: finv fone fswap f/ ; ( f -- f : FP 1/x )
 
 : exp ( f -- f : raise 2.0 to the power of 'f' )
- 2dup f>s dup >r s>f f-     
- f2* [ -57828.0 ] fliteral 2over fsq [ 2001.18 ] fliteral f+ f/
- 2over f2/ f- [ 34.6680 ] fliteral f+ f/
- f1+ fsq r> + ;
+  2dup f>s dup >r s>f f-     
+  f2* [ -57828.0 ] fliteral 
+  2over fsq [ 2001.18 ] fliteral f+ f/
+  2over f2/ f- [ 34.6680 ] fliteral f+ f/
+  f1+ fsq r> + ;
 : fexp  ( f -- f : raise e to the power of 'f' )
   [ 1.4427 ( = log2(e) ] fliteral f* exp ; 
 \ : f** flog2 f* exp ;
@@ -284,10 +286,10 @@ system -order
 6.28318530 fconstant f2pi
 2.71828182 fconstant fe
 
-: >deg [ fpi f2* ] 2literal f/ [   360.0 ] fliteral f* ; ( rad -- deg )
-: >rad [   360.0 ] fliteral f/ [ fpi f2* ] 2literal f* ; ( deg -- rad )
+: fdeg [ fpi f2* ] 2literal f/ [   360.0 ] fliteral f* ; ( rad -- deg )
+: frad [   360.0 ] fliteral f/ [ fpi f2* ] 2literal f* ; ( deg -- rad )
 
-\ anonymous definitions
+anonymous definitions
 
 : >cordic     [ 16384.0 ] fliteral f* f>s ; ( f -- n )
 : cordic> s>f [ 16384.0 ] fliteral f/ ;     ( n -- f )
@@ -314,21 +316,20 @@ system -order
   rdrop fnegate f2pi f+ ;
 
 : (fsincos) fhpi fmod >cordic cordic >r cordic> r> cordic> ; 
-: fsincos 
+
+forth-wordlist current ! 
+
+: fsincos ( rads -- sin cos )
    fdup f0< >r
    fabs
-
-   f2pi fmod fdup quadrant dup >r scfix (fsincos) r@ >cos fswap r> >sin fswap
-   r> if ( fdup f0< if fnegate then ) fswap fnegate fswap then ;
-
-\ forth-wordlist current ! 
-
+   f2pi fmod fdup quadrant dup >r scfix (fsincos) 
+   r@ >cos fswap r> >sin fswap
+   r> if fswap fnegate fswap then ;
 : fsin fsincos fdrop ; ( rads -- sin )
 : fcos fsincos fnip  ; ( rads -- cos )
 : ftan fsincos f/ ; ( rads -- tan )
 
-nly forth definitions
-   
+
 
 : sins
   f2pi fnegate
@@ -355,17 +356,43 @@ system +order
 only forth definitions decimal
 .( DONE ) cr
 
+\ TODO: Test
+: f~ ( f1 f2 f3 -- flag )
+  fdup f0> if 2>r f- fabs 2r> f< exit then
+  fdup f0= if fdrop f= exit then
+  fabs 2>r f2dup f+ 2r> f* 2>r f- 2r> f< ;
 
-\ : fstep ( X S/2 -- X+1 )
-\   2>r fdup fsq 2r> f* [ 1.5 ] fliteral fswap f- f* ;
-\ : fsqrt
-\   fdup 0< if fdrop -43 throw then
-\   f2/ fdup
-\   16 for aft ftuck fstep then next fnip
-\   finv
-\ ;
-\ 
-\ 
-\ 4.0 f fsqrt f. cr
-\ 2.0 f fsqrt f. cr
-\ .s
+: fsqrt
+  fdup f0< if fdrop -43 throw then
+  fdup f0= if fdrop 0 0 exit then
+  ( fone ) fdup f2/
+  16 for aft 
+  f2dup fsq fswap f- fover f2* f/ f-
+  then next
+  fnip ;
+ 
+.s cr
+256.0 f fsqrt f. cr
+100.0 f fsqrt f. cr
+81.0 f fsqrt f. cr
+10.0 f fsqrt f. cr
+9.0 f fsqrt f. cr
+4.0 f fsqrt f. cr
+3.0 f fsqrt f. cr
+2.5 f fsqrt f. cr
+2.0 f fsqrt f. cr
+1.5 f fsqrt f. cr
+1.0 f fsqrt f. cr
+0.5 f fsqrt f. cr
+0.1 f fsqrt f. cr
+0.0 f fsqrt f. cr
+.s
+
+\ 200 f fsq f. -> Error
+: disp e. ;
+: tsqrt
+  for aft 
+  r@ dup * s>f fdup disp ." <-> " fsqrt disp cr
+  then next ;
+
+only forth definitions
