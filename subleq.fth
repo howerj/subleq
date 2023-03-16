@@ -5414,7 +5414,7 @@ system[ user tup =cell tallot ]system
 \ The ".r" word is missing, this word acts the same as
 \ "u.r" but displays signed values.
 \
-: u.r >r #0 <# #s #>  r> over - bl banner type ; ( u r -- )
+: u.r >r #0 <# #s #> r> over - bl banner type ; ( u r -- )
 : u. space #0 u.r ; ( u -- : unsigned numeric output )
 
 \ "(.)" bypasses all of the standard Forth mechanisms for

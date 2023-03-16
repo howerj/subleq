@@ -16,6 +16,7 @@
 \ missing: f**, facos, fln, facosh, falog, fasin, fasinh, 
 \ fatan, fatan2, fatanh, fsqrt, finv,
 \
+\ Add things from <https://github.com/howerj/q>?
 \
 \ SQRT: https://stackoverflow.com/questions/3581528/
 \ MATH: https://stackoverflow.com/questions/4541130/
@@ -24,9 +25,9 @@
 
 
 only forth definitions decimal system +order
-\ <ok> @ constant okok
-\ : debug source type ."  ok" cr ; 
-\ ' debug <ok> !
+ <ok> @ constant okok
+ : debug source type ."  ok" cr ; 
+ ' debug <ok> !
 
 : undefined? bl word find nip 0= ; ( "name", -- f )
 : defined? undefined? 0= ; ( "name", -- f: Is word defined ? )
@@ -46,8 +47,11 @@ undefined? d+ ?\ : d+ >r swap >r um+ r> + r> + ;
 undefined? s>d ?\ : s>d dup 0< ;
 undefined? 2>r ?\ : 2>r r> swap >r swap >r >r ; 
 undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ; 
-undefined? /string ?\ : /string over min rot over + -rot - ;  
-\ /string ( b u1 u2 -- b u : advance string u2 )
+undefined? /string ?\ : /string over min rot over + -rot - ;
+\  /string ( b u1 u2 -- b u : advance string u2 )
+
+: banner >r begin dup 0> while r@ emit 1- repeat drop rdrop ; ( +n c -- )
+: spaces bl banner ;
 
 : anonymous get-order 1+ here 1 cells allot swap set-order ;
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
@@ -95,6 +99,7 @@ forth-wordlist current !
 
 ( CORDIC: valid in range -pi/2 to pi/2, arguments in fixed )
 ( point format with 1 = 16384, angle is given in radians.  )
+\ TODO: Extend to arc-{sin,cos} with new table and mode.
 : cordic ( angle -- sine cosine )
   z ! cordic_1K x ! 0 y ! 0 k !
   $10 begin ?dup while
@@ -157,7 +162,8 @@ create ftable 3 ,
 
 forth-wordlist current !
 
-: set-precision dup 0 5 within if ftable ! exit then -$2B throw ; ( +n -- )
+: set-precision ( +n -- : set FP decimals printed out )
+  dup 0 5 within if ftable ! exit then -$2B throw ; 
 : precision ftable @ ; ( -- u )
 : f@ unaligned? 2@ ;  ( a -- f )
 : f! unaligned? 2! ;  ( f a -- )
@@ -224,15 +230,16 @@ forth-wordlist current !
   >r precision tens drop um* r> shifts
   ralign precision ?dup if for aft # then next
   [char] . hold then #s rot sign ;
+: f.r >r tuck <# f# #> r> over - spaces type ; ( f +n -- )
+: f. space 0 f.r ; ( f -- : output floating point )
 
-: f. tuck <# f# #> type space ; ( f -- )
 \ NB. 'f' and 'e' require "dpl" to be set correctly!
 system +order
-: f 
+: f ( n|d -- f : formatted double to float )
    base?
 \  1 ?depth ( NB. 2 ?depth if following line missing )
    dpl @ 0< if s>d 0 dpl ! then ( input was single number )
-   d>f dpl @ tens d>f f/ ;    ( n|d -- f : formatted double to float )
+   d>f dpl @ tens d>f f/ ;    
 system -order
 : fconstant f 2constant ; ( "name" , f --, Run Time: -- f )
 : fliteral  f postpone 2literal ; immediate ( f --, Run Time: -- f )
@@ -264,21 +271,23 @@ system -order
   f get >r r@ abs 13301 4004 */mod
   >r s>f 4004 s>f f/ exp r> +
   r> 0< if f/ else f* then ;
-: e. ( f -- : output scientific notation )
+: e.r ( f +n -- : output scientific notation )
+  >r
   tuck fabs 16384 tuck -
   4004 13301 */mod >r
   s>f 4004 s>f f/ exp f*
   2dup fone f<
   if 10 s>f f* r> 1- >r then
   <# r@ abs 0 #s r> sign 2drop
-  [char] e hold f# #> type space ;
+  [char] e hold f# #> r> over - spaces type ;
+: e. space 0 e.r ;
 
 \ "fexpm1" needs implementing better
-: fexpm1 fexp fone f- ;                      ( f -- f : e raised to 'f' less 1 )
+: fexpm1 fexp fone f- ; ( f -- f : e raised to 'f' less 1 )
 : fsinh fexpm1 fdup fdup f1+ f/ f+ f2/ ; ( f -- fsinh : hyperbolic sine )
-: fcosh fexp   fdup fone fswap f/ f+ f2/ ;   ( f -- fcosh : hyperbolic cosine )
-: fsincosh fdup fsinh fswap fcosh ;          ( f -- sinh cosh )
-: ftanh fsincosh f/ ;                        ( f -- ftanh : hyperbolic tangent )
+: fcosh fexp fdup fone fswap f/ f+ f2/ ; ( f -- fcosh : hyperbolic cosine )
+: fsincosh fdup fsinh fswap fcosh ; ( f -- sinh cosh )
+: ftanh fsincosh f/ ; ( f -- ftanh : hyperbolic tangent )
 \ : fln fone f- flnp1 ;
 
 3.14159265 fconstant fpi
@@ -299,21 +308,11 @@ anonymous definitions
   fdup  fpi f< if fdrop 1 exit then 
       [ fpi fhpi f+ ] 2literal f< if 2 exit then 
   3 ;
-: >sin >r
-  r@ 0 = if rdrop exit then
-  r@ 1 = if rdrop exit then
-  r@ 2 = if fnegate rdrop exit then
-  rdrop fnegate ;
-: >cos >r
-  r@ 0 = if rdrop exit then
-  r@ 1 = if fnegate rdrop exit then
-  r@ 2 = if fnegate rdrop exit then
-  rdrop ; 
+: >sin 2 4 within if fnegate then ;
+: >cos 1 3 within if fnegate then ;
 : scfix >r 
-  r@ 0 = if rdrop exit then
   r@ 1 = if fnegate fpi f+ rdrop exit then
-  r@ 2 = if rdrop exit then
-  rdrop fnegate f2pi f+ ;
+  r> 3 = if fnegate f2pi f+ then ;
 
 : (fsincos) fhpi fmod >cordic cordic >r cordic> r> cordic> ; 
 
@@ -329,26 +328,15 @@ forth-wordlist current !
 : fcos fsincos fnip  ; ( rads -- cos )
 : ftan fsincos f/ ; ( rads -- tan )
 
-
-
 : sins
   f2pi fnegate
   begin
     fdup f2pi f<
   while
-    fdup fdup f. [char] , emit space fsincos fswap f. [char] , emit space f. cr
+    fdup fdup f. [char] , emit space fsincos 
+    fswap f. [char] , emit space f. cr
     [ f2pi 50.0 f f/ ] 2literal f+
   repeat fdrop ;
-
-: quads 
-  [ 0.0 ] fliteral 
-  begin
-    fdup f2pi f<
-  while
-    fdup fdup f. [char] : emit quadrant . cr
-    [ f2pi 50.0 f f/ ] 2literal f+ 
-  repeat fdrop ;
-
 
 system +order
 \ okok <ok> !
@@ -374,25 +362,28 @@ only forth definitions decimal
 .s cr
 256.0 f fsqrt f. cr
 100.0 f fsqrt f. cr
-81.0 f fsqrt f. cr
-10.0 f fsqrt f. cr
-9.0 f fsqrt f. cr
-4.0 f fsqrt f. cr
-3.0 f fsqrt f. cr
-2.5 f fsqrt f. cr
-2.0 f fsqrt f. cr
-1.5 f fsqrt f. cr
-1.0 f fsqrt f. cr
-0.5 f fsqrt f. cr
-0.1 f fsqrt f. cr
-0.0 f fsqrt f. cr
+ 81.0 f fsqrt f. cr
+ 10.0 f fsqrt f. cr
+  9.0 f fsqrt f. cr
+  4.0 f fsqrt f. cr
+  3.0 f fsqrt f. cr
+  2.5 f fsqrt f. cr
+  2.0 f fsqrt f. cr
+  1.5 f fsqrt f. cr
+  1.0 f fsqrt f. cr
+  0.5 f fsqrt f. cr
+  0.1 f fsqrt f. cr
+  0.0 f fsqrt f. cr
 .s
 
 \ 200 f fsq f. -> Error
 : disp e. ;
 : tsqrt
   for aft 
-  r@ dup * s>f fdup disp ." <-> " fsqrt disp cr
+  r@ dup * s>f fdup disp ."  <->" fsqrt disp cr
   then next ;
 
+10 tsqrt
+
 only forth definitions
+
