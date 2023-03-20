@@ -9,6 +9,7 @@
 \ TODO: Documentation
 \ TODO: Optional FP stack?
 \ TODO: Integrate into base system?
+\ TODO: Replace "if NUM throw then" with "NUM and throw"
 \ NB. Input is finicky, requires "dpl" to be set, so
 \ "fone e 1" will not work, but "1.0 e 1" will.
 \
@@ -50,9 +51,13 @@ undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ;
 undefined? /string ?\ : /string over min rot over + -rot - ;
 \  /string ( b u1 u2 -- b u : advance string u2 )
 
-: banner >r begin dup 0> while r@ emit 1- repeat drop rdrop ; ( +n c -- )
-: spaces bl banner ;
 
+1 cells 8 * constant #bits
+1 #bits 1- lshift constant #msb
+
+: banner ( +n c -- : print a character 'n' times )
+  >r begin dup 0> while r@ emit 1- repeat drop rdrop ; 
+: spaces bl banner ; ( +n  -- : print space 'n' times )
 : anonymous get-order 1+ here 1 cells allot swap set-order ;
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 : arshift ( n u -- n : arithmetic right shift )
@@ -82,6 +87,61 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 : */mod ( a b c -- rem a*b/c : double prec. intermediate val )
     >r m* r> sm/rem ;
 
+\ From: https://en.wikipedia.org/wiki/Integer_square_root
+\ This function computes the integer square root of a number.
+\
+\ 'sc': unsigned small candidate
+\ 'lc': unsigned large candidate
+\
+: sqrt ( n -- u : integer square root )
+  s>d  if -$B throw then ( does not work for signed values )
+  dup 2 < if exit then   ( return 0 or 1 )
+  dup                    ( u u )
+  2 rshift recurse 2*    ( u sc )
+  dup                    ( u sc sc )
+  1+ dup square          ( u sc lc lc^2 )
+  >r rot r> <            ( sc lc bool )
+  if drop else nip then ; ( return small or large candidate )
+
+: log ( u base -- u : the integer logarithm of u in 'base' )
+  >r
+  dup 0= if -$B throw then ( logarithm of zero is an error )
+  0 swap
+  begin
+    swap 1+ swap r@ / dup 0= ( keep dividing until 'u' is 0 )
+  until
+  drop 1- rdrop ;
+
+: clz ( u -- : count leading zeros )
+  ?dup 0= if #bits exit then
+  #msb  0 >r begin
+   2dup and 0=
+  while
+   r> 1+ >r
+   2/
+  repeat
+  2drop
+  r> ;
+
+( : log2 2 log ; ( u -- u : binary integer logarithm )
+: log2 ?dup 0= -11 and throw clz #bits swap - 1- ; ( u -- u )
+
+\ <forth.sourceforge.net/algorithm/bit-counting/index.html>
+: count-bits ( number -- bits )
+  dup $5555 and swap 1 rshift $5555 and +
+  dup $3333 and swap 2 rshift $3333 and +
+  dup $0F0F and swap 4 rshift $0F0F and +
+  $FF mod ;
+
+\ <forth.sourceforge.net/algorithm/firstbit/index.html>
+: first-bit ( number -- first-bit )
+  dup   1 rshift or
+  dup   2 rshift or
+  dup   4 rshift or
+  dup   8 rshift or
+  dup $10 rshift or
+  dup   1 rshift xor ;
+
 \ ==================== CORDIC CODE ============================
 
 anonymous definitions
@@ -99,11 +159,11 @@ forth-wordlist current !
 
 ( CORDIC: valid in range -pi/2 to pi/2, arguments in fixed )
 ( point format with 1 = 16384, angle is given in radians.  )
-\ TODO: Extend to arc-{sin,cos} with new table and mode.
+\ TODO: Extend to arc-{sin,cos} with new mode.
 : cordic ( angle -- sine cosine )
   z ! cordic_1K x ! 0 y ! 0 k !
   $10 begin ?dup while
-    z @ 0< d !
+    rotate @ if z @ else y @ negate then 0< d !
     x @ y @ k @ arshift d @ xor d @ - - tx !
     y @ x @ k @ arshift d @ xor d @ - + ty !
     z @ k @ cells lookup + @ d @ xor d @ - - tz !
@@ -136,7 +196,7 @@ only forth definitions system +order
 
 : fabs  $7FFF and ;   ( f -- f )
 
-anonymous definitions
+\ anonymous definitions
 create ftable 3 , 
           .001 , ,        .010 , ,
           .100 , ,       1.000 , ,
@@ -146,7 +206,7 @@ create ftable 3 ,
 
 : zero ( f -- f : zero exponent if mantissa is )
   over 0= if drop 0 then ; 
-: norm >r 2dup or   ( f -- f : normalize input float )
+: norm >r 2dup or  ( normalize input float )
   if begin s>d invert
     while d2* r> 1- >r
     repeat swap 0< - ?dup
@@ -165,30 +225,31 @@ forth-wordlist current !
 : set-precision ( +n -- : set FP decimals printed out )
   dup 0 5 within if ftable ! exit then -$2B throw ; 
 : precision ftable @ ; ( -- u )
-: f@ unaligned? 2@ ;  ( a -- f )
-: f! unaligned? 2! ;  ( f a -- )
+: f@ unaligned? 2@ ;  ( a -- r )
+: f! unaligned? 2! ;  ( r a -- )
 : falign align ;      ( -- )
 : faligned aligned ;  ( a -- a )
 : fdepth depth ;      ( -- u )
-: fdup 2dup ;         ( f -- f f )
-: fswap 2swap ;       ( f1 f2 -- f2 f1 )
-: fover 2over ;       ( f1 f2 -- f1 f2 f1 )
-: f2dup fover fover ; ( f1 f2 -- f1 f2 f1 f2 )
-: frot 2>r fswap 2r> fswap ; ( f1 f2 f3 -- f2 f3 f1 )
-: fdrop 2drop ;       ( f -- )
-: f2drop fdrop fdrop ; ( f1 f2 -- )
-: fnip fswap fdrop ;  ( f1 f2 -- f2 )
-: fnegate $8000 xor zero ;  ( f -- f )
+: fdup 2dup ;         ( r -- r r )
+: fswap 2swap ;       ( r1 r2 -- r2 r1 )
+: fover 2over ;       ( r1 r2 -- r1 r2 r1 )
+: f2dup fover fover ; ( r1 r2 -- r1 r2 r1 r2 )
+: ftuck fover fswap ; ( r1 r2 -- r2 r1 r2 )
+: frot 2>r fswap 2r> fswap ; ( r1 r2 r3 -- r2 r3 r1 )
+: fdrop 2drop ;       ( r -- )
+: f2drop fdrop fdrop ; ( r1 r2 -- )
+: fnip fswap fdrop ;  ( r1 r2 -- r2 )
+: fnegate $8000 xor zero ;  ( r -- r )
 : fsign fabs over 0< if >r dnegate r> $8000 or then ;
-: f2* 1+ zero ;       ( f -- f )
-: f*  rot + $4000 - >r um* r> norm ;     ( f f -- f )
-: fsq fdup f* ;       ( f -- f )
-: f2/ 1- zero ;       ( f -- f )
-: f0= zero d0= ;      ( f -- f )
+: f2* 1+ zero ;       ( r -- r : FP times by two )
+: f2/ 1- zero ;       ( r -- r : FP divide by two )
+: f*  rot + $4000 - >r um* r> norm ; ( r r -- r )
+: fsq fdup f* ;       ( r -- r : FP square )
+: f0= zero d0= ;      ( r -- r : FP equal to zero )
 : floats 2* cells ;   ( u -- u )
 : float+ 1 floats + ; ( a -- a )
-: ftuck fover fswap ; ( f1 f2 -- f2 f1 f2 )
-: um/ dup >r um/mod swap r> over 2* 1+ u< swap 0< or - ; ( ud u -- u )
+: um/ ( ud u -- u )
+  dup >r um/mod swap r> over 2* 1+ u< swap 0< or - ; 
 
 : f/ ( f1 f2 == f1/f2 : floating point division )
   fdup f0= if -44 throw then
@@ -210,20 +271,20 @@ forth-wordlist current !
   else d+ if  1+ 2/ $8000 or r> 1+
     else r> then then ;
 
-: f- fnegate f+ ; ( f1 f2 -- t : floating point subtract )
-: f< f- 0< nip ; ( f1 f2 -- t : floating point less than )
-: f> fswap f< ;  ( f1 f2 -- t : floating point greater than )
-: f>= f< 0= ;    ( f1 f2 -- t : FP greater or equal )
-: f<= f> 0= ;    ( f1 f2 -- t : FP less than or equal )
-: f= d= ;        ( f1 f2 -- t : FP exact equality )
-: f0> 0 0 f> ;   ( f1 f2 -- t : FP greater than zero )
-: f0< 0 0 f< ;   ( f1 f2 -- t : FP less than zero )
-: f0<= f0> 0= ;  ( f1 f2 -- t : FP less than or equal to zero )
-: f0>= f0< 0= ;  ( f1 f2 -- t : FP more than or equal to zero )
-: fmin f2dup f< if fdrop exit then fnip ; ( f1 f2 -- f : min )
-: fmax f2dup f> if fdrop exit then fnip ; ( f1 f2 -- f : max )
-: d>f $4020 fsign norm ;  ( d -- f : double to float )
-: s>f s>d d>f ;           ( n -- f : single to float )
+: f- fnegate f+ ; ( r1 r2 -- t : floating point subtract )
+: f< f- 0< nip ; ( r1 r2 -- t : floating point less than )
+: f> fswap f< ;  ( r1 r2 -- t : floating point greater than )
+: f>= f< 0= ;    ( r1 r2 -- t : FP greater or equal )
+: f<= f> 0= ;    ( r1 r2 -- t : FP less than or equal )
+: f= d= ;        ( r1 r2 -- t : FP exact equality )
+: f0> 0 0 f> ;   ( r1 r2 -- t : FP greater than zero )
+: f0< 0 0 f< ;   ( r1 r2 -- t : FP less than zero )
+: f0<= f0> 0= ;  ( r1 r2 -- t : FP less than or equal to zero )
+: f0>= f0< 0= ;  ( r1 r2 -- t : FP more than or equal to zero )
+: fmin f2dup f< if fdrop exit then fnip ; ( r1 r2 -- f : min )
+: fmax f2dup f> if fdrop exit then fnip ; ( r1 r2 -- f : max )
+: d>f $4020 fsign norm ;  ( d -- r : double to float )
+: s>f s>d d>f ;           ( n -- r : single to float )
 
 : f# 
   base?
@@ -241,27 +302,27 @@ system +order
    dpl @ 0< if s>d 0 dpl ! then ( input was single number )
    d>f dpl @ tens d>f f/ ;    
 system -order
-: fconstant f 2constant ; ( "name" , f --, Run Time: -- f )
-: fliteral  f postpone 2literal ; immediate ( f --, Run Time: -- f )
-: fix tuck 0 swap shifts ralign -+ ; ( f -- n : f>s rounding )
-: f>s tuck 0 swap shifts lalign -+ ; ( f -- n : f>s truncate )
-: floor  f>s s>f ; ( f -- f )
-: fround fix s>f ; ( f -- f )
-: fmod f2dup f/ floor f* f- ; ( f1 f2 -- f )
+: fconstant f 2constant ; ( "name" , r --, Run Time: -- r )
+: fliteral  f postpone 2literal ; immediate ( r --, Run Time: -- r )
+: fix tuck 0 swap shifts ralign -+ ; ( r -- n : f>s rounding )
+: f>s tuck 0 swap shifts lalign -+ ; ( r -- n : f>s truncate )
+: floor  f>s s>f ; ( r -- r )
+: fround fix s>f ; ( r -- r )
+: fmod f2dup f/ floor f* f- ; ( r1 r2 -- f )
 
 1.0 fconstant fone decimal
 
-: f1+ fone f+ ; ( f -- f : increment FP number )
-: f1- fone f- ; ( f -- f : decrement FP number )
-: finv fone fswap f/ ; ( f -- f : FP 1/x )
+: f1+ fone f+ ; ( r -- r : increment FP number )
+: f1- fone f- ; ( r -- r : decrement FP number )
+: finv fone fswap f/ ; ( r -- r : FP 1/x )
 
-: exp ( f -- f : raise 2.0 to the power of 'f' )
+: exp ( r -- r : raise 2.0 to the power of 'r' )
   2dup f>s dup >r s>f f-     
   f2* [ -57828.0 ] fliteral 
   2over fsq [ 2001.18 ] fliteral f+ f/
   2over f2/ f- [ 34.6680 ] fliteral f+ f/
   f1+ fsq r> + ;
-: fexp  ( f -- f : raise e to the power of 'f' )
+: fexp  ( r -- r : raise e to the power of 'r' )
   [ 1.4427 ( = log2(e) ] fliteral f* exp ; 
 \ : f** flog2 f* exp ;
 : get ( "123" -- : get a single signed number )
@@ -271,7 +332,7 @@ system -order
   f get >r r@ abs 13301 4004 */mod
   >r s>f 4004 s>f f/ exp r> +
   r> 0< if f/ else f* then ;
-: e.r ( f +n -- : output scientific notation )
+: e.r ( r +n -- : output scientific notation )
   >r
   tuck fabs 16384 tuck -
   4004 13301 */mod >r
@@ -295,8 +356,8 @@ system -order
 6.28318530 fconstant f2pi
 2.71828182 fconstant fe
 
-: fdeg [ fpi f2* ] 2literal f/ [   360.0 ] fliteral f* ; ( rad -- deg )
-: frad [   360.0 ] fliteral f/ [ fpi f2* ] 2literal f* ; ( deg -- rad )
+: fdeg f2pi f/ [ 360.0 ] fliteral f* ; ( rad -- deg )
+: frad [ 360.0 ] fliteral f/ f2pi f* ; ( deg -- rad )
 
 anonymous definitions
 
@@ -386,4 +447,22 @@ only forth definitions decimal
 10 tsqrt
 
 only forth definitions
+
+
+: filog2 ( r -- u : Floating point integer logarithm )
+  zero
+  fdup fone f< -42 and throw
+  ( norm ) nip $4001 - ;
+
+: ff . space  ;
+1 e 2 fdup  0 f f~ ff
+1 e 2 fdup  1 f f~ ff
+1 e 2 fdup -1 f f~ ff
+1 e 2 fdup fnegate  0 f f~ ff
+1 e 2 fdup fnegate  1 f f~ ff
+1 e 2 fdup fnegate -1 f f~ ff
+1 e 2 fdup fnegate fswap  0 f f~ ff
+1 e 2 fdup fnegate fswap  1 f f~ ff
+1 e 2 fdup fnegate fswap -1 f f~ ff
+
 

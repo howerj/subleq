@@ -8373,8 +8373,6 @@ opt.editor [if]
 \ - Make 'free' more robust, do bound checking
 \ - RESIZE
 \ - Put freelist within arena
-\ - Allow freelist to be specified with "(allocate)",
-\   "(free)", "(resize)" and "(arena)"
 \ - calloc option / calloc
 \ - Documentation
 \ - Test framework 
@@ -8386,38 +8384,38 @@ opt.allocate [if]
 
 system[
   ( pointer to beginning of free space )
-  variable freelist 0 t, ( 0 t' freelist t! )
-  variable length
+  variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 
+  : >length #2 cells + ;
   : default $F800 lit $400 lit ;
   : arena! ( start-addr len -- : initialize memory pool )
-    dup $80 lit u< if -B lit throw then ( arena too small )
-    dup length !
+    >r dup $80 lit u< if -B lit throw then ( arena too small )
+    dup r@ >length !
     2dup erase
-    over dup freelist ! #0 swap ! swap cell+ ! ;
+    over dup r> ! #0 swap ! swap cell+ ! ;
   : .arena 
     ." arena:" freelist 2@ u. u. cr 
-    freelist @ length @ dump ;
+    freelist @ freelist >length @ dump ;
 \  : bound $10 lit + freelist @ cell+ @ u> ;
 
 ]system
 
 : .a .arena ;
-: arena?
-   freelist @ 0= if drop #0 exit then 
-   >r freelist @ dup length @ + r> within ;
-: >size 
-  dup arena? 0= if -3B lit throw then
+: arena? ( ptr freelist -- f )
+   dup >r @ 0= if rdrop drop #0 exit then 
+   r> swap >r dup >r @ dup r> >length @ + r> within ;
+: >size ( ptr freelist -- size )
+  over swap arena? 0= if -3B lit throw then
   cell - @ cell - ;
 
 ( allocate n bytes, return pointer to block and result flag,  )
 ( zero for success, check to see if pool has been initialized )
-: allocate ( u -- addr ior : dynamic allocation of 'u' bytes ) 
-  ( freelist @ 0= if drop #0 -3B lit exit then )
+: (allocate) ( u -- addr ior : dynamic allocation of 'u' bytes ) 
+  >r
   aligned
-  freelist @ 0= if default arena! then
-  dup 0= ( over bound or ) if drop #0 -3B lit exit then
-  cell+ freelist dup
+  r@ @ 0= if default r@ arena! then
+  dup 0= ( over bound or ) if rdrop drop #0 -3B lit exit then
+  cell+ r@ dup
   begin
   while dup @ cell+ @ #2 pick u<
     if 
@@ -8427,7 +8425,7 @@ system[
       if 
         drop dup @ dup @ rot
         ( prevent freelist address from being overwritten )
-        dup freelist = if 2drop 2drop #0 -3B lit exit then 
+        dup r@ = if rdrop 2drop 2drop #0 -3B lit exit then 
         !
       else  
         2dup swap @ cell+ ! swap @ +
@@ -8435,14 +8433,15 @@ system[
       2dup ! cell+ #0 ( store size, bump pointer )
     then              ( and set exit flag )
   repeat
-  nip dup 0= -3B lit and ;
+  rdrop nip dup 0= -3B lit and ;
 
 ( free space at ptr, return status, zero for success )
-: free ( ptr -- ior : free pointer return by "allocate" ) 
-  dup 0= ?exit
-  dup arena? 0= if drop -3C lit exit then
+: (free) ( ptr freelist -- ior : free pointer from "allocate" ) 
+  >r
+  dup 0= if rdrop #0 exit then
+  dup r@ arena? 0= if rdrop drop -3C lit exit then
 
-  cell- dup @ swap 2dup cell+ ! freelist dup
+  cell- dup @ swap 2dup cell+ ! r> dup
   begin
     dup 3 lit pick u< and
   while
@@ -8464,17 +8463,17 @@ system[
   else 
     !
   then
-  drop #0 ; \ this code always returns a success flag
+  drop #0 ;
 
-\ : allocate freelist (allocate) ;
-\ : free freelist (free) ;
+: allocate freelist (allocate) ; ( u -- ptr ior )
+: free freelist (free) ; ( ptr -- ior )
 
 \ : resize ( a-addr1 u -- a-addr2 ior ) 
 \   dup 0= if drop free exit then
 \   over 0= if nip allocate exit then exit
-\   over >size u< if 2drop #0 exit then
+\   over freelist >size u< if 2drop #0 exit then
 \   allocate if drop -3D lit exit then dup >r
-\   over >size cmove r> #0 ;
+\   over freelist >size cmove r> #0 ;
 
 [then]
 
