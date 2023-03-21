@@ -694,6 +694,7 @@ only forth definitions hex
 1 constant opt.info       ( Add info printing function )
 0 constant opt.allocate   ( Add in "allocate"/"free" )
 0 constant opt.generate-c ( Generate C code )
+0 constant opt.better-see ( Replace 'see' with better version )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -736,6 +737,10 @@ defined (order) 0= [if]
   then ;
 : -order get-order (order) nip set-order ; ( wid -- )
 : +order dup >r -order get-order r> swap 1+ set-order ;
+[then]
+
+defined [unless] 0= [if]
+: [unless] 0= postpone [if] ; immediate
 [then]
 
 \ You will notice some code is only executed for gforth,
@@ -7042,8 +7047,9 @@ root[
 \ even if it is a hidden word, analyze each cell to determine 
 \ whether it is a call or a VM instruction (and print out the 
 \ word name if it is a call), and decompile calls to "opJumpZ", 
-\ "opUp", "opNext", "opJump" and "opPush", all of which
-\ contain data and not instructions in the cell after them.
+\ "(up)", "(user)", "(var)", "(const)" and "(push)", all of 
+\ which contain data and not instructions in the cell after 
+\ them.
 \
 \ However, as we have the source here, not much is gained
 \ from this, it would just be an intellectual exercise.
@@ -7052,11 +7058,174 @@ root[
 \ the ideas described here are dealt with in more detail.
 \
 
+opt.better-see [unless]
 :to see token find ?found cr ( --, "name" : decompile  word )
   begin @+ =unnest lit <>
   while @+ . cell+ here over < if drop exit then
   repeat @ u. ;
+[then]
 
+\ ## Advanced version of "see"
+\
+\ This is a more advanced version of "see", it is a much better
+\ decompiler, but also much more complex. It could still use 
+\ more work, but then again any decompiler that cannot 
+\ reproduce the source code it is decompiling could use more 
+\ work.
+\ 
+\ We start by defining "ndrop",  "ndrop" is a non standard but 
+\ common word for removing a variable number of items from the
+\ variable stack. 
+\
+
+opt.better-see [if] ( Start conditional compilation )
+
+:s ndrop for aft drop then next ;s ( x0...xn n -- )
+
+\ "validate" takes a pointer to a prospective match, the "pwd"
+\ *could* be a pointer to the word that CFA belongs to, if
+\ we can move from the "pwd" to the "cfa" and the two addresses
+\ are equal, then we have a match, that CFA belongs to that
+\ PWD. If it does, then we move to the name field prior,
+\ otherwise zero is returned.
+\
+:s validate ( pwd cfa -- nfa | 0 )
+   over cfa <> if drop #0 exit then nfa ;s
+
+\ "cfa?" goes through the linked list of words in a vocabulary
+\ and attempts to find a pair of pointers for which the Code
+\ Field Address (CFA) it is given lies between those two
+\ pointers. As there might be other words defined with other
+\ vocabularies within that pointer range, it must then validate
+\ the match by calling "validate". If found, it returns the
+\ Name Field Address (NFA) of the word which matches the given
+\ CFA, otherwise it returns zero.
+\
+:s cfa? ( wid cfa -- nfa | 0 : search for CFA in a wordlist )
+  cells >r
+  begin
+    dup
+  while
+    dup @ over r@ -rot within
+    if dup @ r@ validate ?dup if rdrop nip exit then then
+    @
+  repeat rdrop ;s
+
+\ "name" attempts to find a Code Field Address within the
+\ dictionary, it is just a loop over all of the vocabularies
+\ in the dictionary for which it calls "cfa?". It uses "ndrop"
+\ to get rid of the remaining items vocabularies returned by
+\ "get-order" if the CFA has been found.
+\
+\ The original eForth had a different name for "cfa?" and 
+\ "name", one was called "\>name" which was most analogous to
+\ "cfa?".
+\
+:s name ( cwf -- a | 0 : search for CFA in the dictionary )
+  >r
+  get-order
+  begin
+    dup
+  while
+    swap r@ cfa? ?dup if
+      >r 1- ndrop r> rdrop exit then
+  1- repeat rdrop ;s
+
+\ "decompile" takes an instruction "u" and an address of where
+\ the decompilation is currently taking place, "a". It decides
+\ what to do based on the current instruction, and it might
+\ modify the address give, for example by moving over an
+\ operand of the given instruction. The default behavior is
+\ to print the instruction out as a number and do nothing with
+\ the address (the address given should already point to the
+\ cell after "u").
+\
+\ The word is just a table actions to take if specific
+\ instructions are found. For example if "=push", for "opPush",
+\ is found, it must print out a string containing "push" and
+\ then the contents of the next cell. Strings are only a little
+\ more complex, it must print out the string and skip over that
+\ string. If none of those actions match, then it attempt to
+\ look up what the possible word definition is with "name", and
+\ as mentioned if that fails, it just prints out "u".
+\
+
+:s decompile ( a u -- a )
+  dup =jumpz lit = if 
+    drop ."  jumpz " cell+ dup @ 2* u. exit 
+  then
+
+  dup =jump  lit = if 
+    drop ."  jump  " cell+ dup @ 2* u. exit 
+  then
+
+  dup =next  lit = if 
+    drop ."  next  " cell+ dup @ 2* u. exit 
+  then
+
+  dup to' (up) half lit = if drop
+     ."  (up) " cell+ dup @ u. exit 
+  then
+
+  dup to' (push) half lit = if drop
+     ."  (push) " cell+ dup @ u. exit 
+  then
+
+  dup to' (user) half lit = if drop
+     ."  (user) " cell+ @ u. drop $7FFF lit exit 
+  then
+
+  dup to' (const) half lit = if drop
+     ."  (const) " cell+ @ u. drop $7FFF lit exit 
+  then
+
+  dup to' (var) half lit = if drop
+     ."  (var) " cell+ dup u. ."  -> " @ . $7FFF lit exit 
+  then
+
+  dup to' .$ half lit = if drop ."  ." [char] " emit space
+    cell+ count 2dup type [char] " emit + aligned
+  exit then
+
+  dup to' ($) half lit = if drop ."  $" [char] "
+  emit space
+    cell+ count 2dup type [char] " emit + aligned
+  exit then
+  primitive lit @ over u> if ."  VM    " 2* else
+    dup name ?dup if space count 1F lit and type drop exit then
+  then
+  u. ;s
+
+\ These two words, "compile-only?" and "immediate?" tell us
+\ whether a word is compile-only or immediate respectively,
+\ all they do is analyze a specific bit a pointer to a given
+\ word header. Nothing complex.
+\
+:s compile-only? nfa 20 lit swap @ and 0<> ;s ( pwd -- f )
+:s immediate? nfa 40 lit swap @ and 0<> ;s ( pwd -- f )
+
+\ This is the more complex version of "see", it will attempt
+\ to print the code in a form that resembles the source as
+\ much as possible, but it falls short of that a bit.
+\
+\ We could improve the stop conditions by using "(find)"
+\ as it gives us a better range for the likely positions of
+\ when a word starts and ends.
+:to see token dup ." : " count type cr find ?found
+  dup >r cfa
+  begin dup @ =unnest lit <>
+  while 
+    dup dup 5 lit u.r ."  | "
+    @ decompile cr cell+ here over u< if drop exit then
+  repeat drop ."  ;"
+  r> dup immediate? if ."  immediate" then
+  compile-only? if ."  compile-only" then cr ;
+
+[then] ( End conditional compilation of entire section )
+
+\
+\ ## Dump
+\
 \ "dump" is another utility, it dumps out a section of memory
 \ cell by cell. Much like the output from "see" the
 \ implementations differ greatly in the quality of the output
@@ -8355,6 +8524,8 @@ opt.editor [if]
 \
 \ Example uses include, including initialization: 
 \ 
+\ TODO FIX EXAMPLE 
+\ 
 \       system +order
 \       $400 constant #pool
 \       create pool #pool allot
@@ -8370,14 +8541,12 @@ opt.editor [if]
 \ ======================= TODO ================================
 \
 \ - Allow calculations of free space. 
-\ - Make 'free' more robust, do bound checking
 \ - RESIZE
 \ - Put freelist within arena
 \ - calloc option / calloc
 \ - Documentation
 \ - Test framework 
 \ - Allow zero length allocations?
-\ - Fix comparison bugs (general SUBLEQ eForth issue)
 \ 
 
 opt.allocate [if]
@@ -8396,7 +8565,6 @@ system[
   : .arena 
     ." arena:" freelist 2@ u. u. cr 
     freelist @ freelist >length @ dump ;
-\  : bound $10 lit + freelist @ cell+ @ u> ;
 
 ]system
 
@@ -8410,11 +8578,11 @@ system[
 
 ( allocate n bytes, return pointer to block and result flag,  )
 ( zero for success, check to see if pool has been initialized )
-: (allocate) ( u -- addr ior : dynamic allocation of 'u' bytes ) 
+: (allocate) ( u -- addr ior : dynamic allocate of 'u' bytes ) 
   >r
   aligned
   r@ @ 0= if default r@ arena! then
-  dup 0= ( over bound or ) if rdrop drop #0 -3B lit exit then
+  dup 0= if rdrop drop #0 -3B lit exit then
   cell+ r@ dup
   begin
   while dup @ cell+ @ #2 pick u<
@@ -9705,134 +9873,7 @@ it being run.
 \         | FFB4 | -76  | WRITE-LINE                          |
 \
 \
-\ ## Advanced version of "see"
-\
-\ This is a more advanced version of "see", it is a much better
-\ decompiler, but also much more complex. It could still use 
-\ more work, but then again any decompiler that cannot 
-\ reproduce the source code it is decompiling could use more 
-\ work. A very advanced decompiler would allow us to ship a 
-\ Forth image without the source code, which would be a neat 
-\ feature. This would require cooperation from both the Forth 
-\ implementation which most likely have to be restructured to 
-\ aid this, and a more advanced and complex decompiler.
-\
-\ We start by defining "ndrop" and "within", "ndrop" is a non
-\ standard but common word for removing a variable number of
-\ items from the variable stack. "within" is a standard word
-\ for determining whether a variable is within a certain range.
-\
-:s ndrop for aft drop then next ;s ( x0...xn n -- )
 
-\ "validate" takes a pointer to a prospective match, the "pwd"
-\ *could* be a pointer to the word that CFA belongs to, if
-\ we can move from the "pwd" to the "cfa" and the two addresses
-\ are equal, then we have a match, that CFA belongs to that
-\ PWD. If it does, then we move to the name field prior,
-\ otherwise zero is returned.
-\
-:s validate ( pwd cfa -- nfa | 0 )
-   over cfa <> if drop #0 exit then nfa ;s
-
-\ "cfa?" goes through the linked list of words in a vocabulary
-\ and attempts to find a pair of pointers for which the Code
-\ Field Address (CFA) it is given lies between those two
-\ pointers. As there might be other words defined with other
-\ vocabularies within that pointer range, it must then validate
-\ the match by calling "validate". If found, it returns the
-\ Name Field Address (NFA) of the word which matches the given
-\ CFA, otherwise it returns zero.
-\
-:s cfa? ( wid cfa -- nfa | 0 : search for CFA in a wordlist )
-  cells >r
-  begin
-    dup
-  while
-    dup @ over r@ -rot within
-    if dup @ r@ validate ?dup if rdrop nip exit then then
-    @
-  repeat rdrop ;s
-
-\ "name" attempts to find a Code Field Address within the
-\ dictionary, it is just a loop over all of the vocabularies
-\ in the dictionary for which it calls "cfa?". It uses "ndrop"
-\ to get rid of the remaining items vocabularies returned by
-\ "get-order" if the CFA has been found.
-\
-\ The original eForth had a different name for "cfa?" and 
-\ "name", one was called "\>name" which was most analogous to
-\ "cfa?".
-\
-:s name ( cwf -- a | 0 : search for CFA in the dictionary )
-  >r
-  get-order
-  begin
-    dup
-  while
-    swap r@ cfa? ?dup if
-      >r 1- ndrop r> rdrop exit then
-  1- repeat rdrop ;s
-
-\ "decompile" takes an instruction "u" and an address of where
-\ the decompilation is currently taking place, "a". It decides
-\ what to do based on the current instruction, and it might
-\ modify the address give, for example by moving over an
-\ operand of the given instruction. The default behavior is
-\ to print the instruction out as a number and do nothing with
-\ the address (the address given should already point to the
-\ cell after "u").
-\
-\ The word is just a table actions to take if specific
-\ instructions are found. For example if "=push", for "opPush",
-\ is found, it must print out a string containing "push" and
-\ then the contents of the next cell. Strings are only a little
-\ more complex, it must print out the string and skip over that
-\ string. If none of those actions match, then it attempt to
-\ look up what the possible word definition is with "name", and
-\ as mentioned if that fails, it just prints out "u".
-\
-:s decompile ( a u -- a )
-  dup =jumpz lit = if drop ."  jumpz " cell+ dup @ . exit then
-  dup =jump  lit = if drop ."  jump  " cell+ dup @ . exit then
-\  dup =push  lit = if drop ."  push  " cell+ dup @ . exit then
-  dup =next  lit = if drop ."  next  " cell+ dup @ . exit then
-  \ "(var)", "(const)" and "(user)", "(up)", need adding, as
-  \ well as dealing with "create"/"does\>", and better control 
-  \ structure handling.
-  dup to' .$ half lit = if drop ."  ." [char] " emit space
-    cell+ count 2dup type [char] " emit + aligned
-  exit then
-  dup to' ($) half lit = if drop ."  $" [char] "
-  emit space
-    cell+ count 2dup type [char] " emit + aligned
-  exit then
-  primitive lit @ over > if ."  VM    " else
-    dup name ?dup if space count 1F lit and type drop exit then
-  then
-  . ;s
-
-\ These two words, "compile-only?" and "immediate?" tell us
-\ whether a word is compile-only or immediate respectively,
-\ all they do is analyze a specific bit a pointer to a given
-\ word header. Nothing complex.
-\
-:s compile-only? nfa 20 lit swap @ and 0<> ;s ( pwd -- f )
-:s immediate? nfa 40 lit swap @ and 0<> ;s ( pwd -- f )
-
-\ This is the more complex version of "see", it will attempt
-\ to print the code in a form that resembles the source as
-\ much as possible, but it falls short of that a bit.
-\
-\ We could improve the stop conditions by using "(find)"
-\ as it gives us a better range for the likely positions of
-\ when a word starts and ends.
-:to see token dup ." : " count type cr find ?found
-  dup >r cfa
-  begin dup @ =unnest lit <>
-  while dup @ decompile cr cell+ here over < if drop exit then
-  repeat drop ."  ;"
-  r> dup immediate? if ."  immediate" then
-  compile-only? if ."  compile-only" then cr ;
 
 \ ## ASCII Art Diagram: Interpreter Control Flow
 \
