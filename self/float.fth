@@ -1,12 +1,6 @@
-\ FORTH Floating point package
+\ Forth Floating point package.
 \
-\ TODO: "100." fails (gives 1000.0), "100.0" works
-\ TODO: Using "num." instead of "num.num" causes problems:
-\        3276. f f. ( prints 3276.000 )
-\        10. f f.   ( prints 17.000 )
-\        10.0 f f.   ( prints 10.000 )
 \ TODO: Meta-compilation
-\ TODO: Documentation
 \ TODO: Optional FP stack?
 \ TODO: Integrate into base system?
 \ TODO: Replace "if NUM throw then" with "NUM and throw"
@@ -14,14 +8,12 @@
 \ "fone e 1" will not work, but "1.0 e 1" will.
 \
 \ TODO: Add back in unit test framework?
-\ missing: f**, facos, fln, facosh, falog, fasin, fasinh, 
-\ fatan, fatan2, fatanh, fsqrt, finv,
-\
-\ Add things from <https://github.com/howerj/q>?
+\ missing: facos falog fasin fatan fatan2 
 \
 \ SQRT: https://stackoverflow.com/questions/3581528/
 \ MATH: https://stackoverflow.com/questions/4541130/
 \ FORTH: https://forth-standard.org/standard/float/
+\ FIXED POINT FUN: <https://github.com/howerj/q>
 \
 
 
@@ -58,24 +50,25 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 : banner ( +n c -- : print a character 'n' times )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ; 
 : spaces bl banner ; ( +n  -- : print space 'n' times )
-: anonymous get-order 1+ here 1 cells allot swap set-order ;
+: anonymous ( -- )
+  get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 : arshift ( n u -- n : arithmetic right shift )
   2dup rshift >r swap $8000 and
   if $10 swap - -1 swap lshift else drop 0 then r> or ;
 : d2* over $8000 and >r 2* swap 2* swap r> if 1 or then ;
 : d2/ dup      1 and >r 2/ swap 2/ r> if $8000 or then swap ;
-: d- dnegate d+ ;
-: d= rot = -rot = and ;
-: d0= or 0= ;
-: d0<> d0= 0= ;
-: 2swap >r -rot r> -rot ;
+: d- dnegate d+ ; ( d d -- d )
+: d= rot = -rot = and ; ( d d -- f )
+: d0= or 0= ; ( d -- f )
+: d0<> d0= 0= ; ( d -- f )
+: 2swap >r -rot r> -rot ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 )
 : dabs s>d if dnegate then ;   ( d -- ud )
 : 2over ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
   >r >r 2dup r> swap >r swap r> r> -rot ;
-: 2, , , ;
-: 2constant create 2, does> 2@ ;
-: 2variable create 0 , 0 , ; \ does> ;
+: 2, , , ; ( n n -- )
+: 2constant create 2, does> 2@ ; ( d --, Run: -- d )
+: 2variable create 0 , 0 , ; \ does> ; ( d --, Run: -- a )
 : 2literal swap postpone literal postpone literal ; immediate
 : +- 0< if negate then ; ( n n -- n : copy sign )
 : m* ( n n -- d ) 
@@ -93,6 +86,7 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 \ 'sc': unsigned small candidate
 \ 'lc': unsigned large candidate
 \
+: square dup * ;
 : sqrt ( n -- u : integer square root )
   s>d  if -$B throw then ( does not work for signed values )
   dup 2 < if exit then   ( return 0 or 1 )
@@ -144,18 +138,18 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 
 \ ==================== CORDIC CODE ============================
 
-anonymous definitions
+system +order definitions
 create lookup ( 16 values )
 $3243 , $1DAC , $0FAD , $07F5 , $03FE , $01FF , $00FF , $007F ,
 $003F , $001F , $000F , $0007 , $0003 , $0001 , $0000 , $0000 ,
 
-$26DD constant cordic_1K $6487 constant fhpi
+$26DD constant cordic_1K $6487 constant hpi
 
 variable tx 0 tx ! variable ty 0 ty ! variable tz 0 tz !
 variable x  0  x ! variable y  0  y ! variable z  0  z !
 variable d  0  d ! variable k  0  k !
 
-forth-wordlist current ! 
+only forth definitions system +order
 
 ( CORDIC: valid in range -pi/2 to pi/2, arguments in fixed )
 ( point format with 1 = 16384, angle is given in radians.  )
@@ -163,7 +157,7 @@ forth-wordlist current !
 : cordic ( angle -- sine cosine )
   z ! cordic_1K x ! 0 y ! 0 k !
   $10 begin ?dup while
-    rotate @ if z @ else y @ negate then 0< d !
+    z @ 0< d !
     x @ y @ k @ arshift d @ xor d @ - - tx !
     y @ x @ k @ arshift d @ xor d @ - + ty !
     z @ k @ cells lookup + @ d @ xor d @ - - tz !
@@ -173,8 +167,6 @@ forth-wordlist current !
   repeat y @ x @ ;
 : sin cordic drop ; ( rad/16384 -- sin : fixed-point sine )
 : cos cordic nip ;  ( rad/16384 -- cos : fixed-point cosine )
-
-only forth definitions
 
 \ ==================== CORDIC CODE ============================
 
@@ -196,8 +188,8 @@ only forth definitions system +order
 
 : fabs  $7FFF and ;   ( f -- f )
 
-\ anonymous definitions
-create ftable 3 , 
+system definitions
+create ftable 4 , 
           .001 , ,        .010 , ,
           .100 , ,       1.000 , ,
         10.000 , ,     100.000 , ,
@@ -220,7 +212,7 @@ create ftable 3 ,
 : unaligned? dup 1 and = if -$9 throw then ; ( -- : check ptr )
 : -+ drop swap 0< if negate then ;
 
-forth-wordlist current !
+only forth definitions system +order
 
 : set-precision ( +n -- : set FP decimals printed out )
   dup 0 5 within if ftable ! exit then -$2B throw ; 
@@ -271,14 +263,16 @@ forth-wordlist current !
   else d+ if  1+ 2/ $8000 or r> 1+
     else r> then then ;
 
+0 0 2constant fzero ( -- r : floating point zero )
+
 : f- fnegate f+ ; ( r1 r2 -- t : floating point subtract )
 : f< f- 0< nip ; ( r1 r2 -- t : floating point less than )
 : f> fswap f< ;  ( r1 r2 -- t : floating point greater than )
 : f>= f< 0= ;    ( r1 r2 -- t : FP greater or equal )
 : f<= f> 0= ;    ( r1 r2 -- t : FP less than or equal )
 : f= d= ;        ( r1 r2 -- t : FP exact equality )
-: f0> 0 0 f> ;   ( r1 r2 -- t : FP greater than zero )
-: f0< 0 0 f< ;   ( r1 r2 -- t : FP less than zero )
+: f0> fzero f> ;   ( r1 r2 -- t : FP greater than zero )
+: f0< fzero f< ;   ( r1 r2 -- t : FP less than zero )
 : f0<= f0> 0= ;  ( r1 r2 -- t : FP less than or equal to zero )
 : f0>= f0< 0= ;  ( r1 r2 -- t : FP more than or equal to zero )
 : fmin f2dup f< if fdrop exit then fnip ; ( r1 r2 -- f : min )
@@ -295,13 +289,13 @@ forth-wordlist current !
 : f. space 0 f.r ; ( f -- : output floating point )
 
 \ NB. 'f' and 'e' require "dpl" to be set correctly!
-system +order
+
 : f ( n|d -- f : formatted double to float )
    base?
 \  1 ?depth ( NB. 2 ?depth if following line missing )
    dpl @ 0< if s>d 0 dpl ! then ( input was single number )
    d>f dpl @ tens d>f f/ ;    
-system -order
+
 : fconstant f 2constant ; ( "name" , r --, Run Time: -- r )
 : fliteral  f postpone 2literal ; immediate ( r --, Run Time: -- r )
 : fix tuck 0 swap shifts ralign -+ ; ( r -- n : f>s rounding )
@@ -324,10 +318,10 @@ system -order
   f1+ fsq r> + ;
 : fexp  ( r -- r : raise e to the power of 'r' )
   [ 1.4427 ( = log2(e) ] fliteral f* exp ; 
-\ : f** flog2 f* exp ;
+: falog [ 3.3219 ( = log2(10) ] fliteral f* exp ; ( r -- r )
 : get ( "123" -- : get a single signed number )
   bl word dup 1+ c@ [char] - = tuck -
-  0 0 rot convert drop ( -$18 and throw ) -+ ;
+  0 0 rot convert drop ( should throw if not number... ) -+ ;
 : e ( f "123" -- usage "1.23 e 10", input scientific notation )
   f get >r r@ abs 13301 4004 */mod
   >r s>f 4004 s>f f/ exp r> +
@@ -343,7 +337,6 @@ system -order
   [char] e hold f# #> r> over - spaces type ;
 : e. space 0 e.r ;
 
-\ "fexpm1" needs implementing better
 : fexpm1 fexp fone f- ; ( f -- f : e raised to 'f' less 1 )
 : fsinh fexpm1 fdup fdup f1+ f/ f+ f2/ ; ( f -- fsinh : hyperbolic sine )
 : fcosh fexp fdup fone fswap f/ f+ f2/ ; ( f -- fcosh : hyperbolic cosine )
@@ -351,15 +344,19 @@ system -order
 : ftanh fsincosh f/ ; ( f -- ftanh : hyperbolic tangent )
 \ : fln fone f- flnp1 ;
 
-3.14159265 fconstant fpi
-1.57079632 fconstant fhpi
-6.28318530 fconstant f2pi
-2.71828182 fconstant fe
+( Define some useful constants )
+3.14159265 fconstant fpi    \ PI
+1.57079632 fconstant fhpi   \ Half PI
+6.28318530 fconstant f2pi   \ 2*PI
+2.71828182 fconstant fe     \ e
+0.69314718 fconstant fln2   \ ln(2.0)  (natural log of 2)
+2.30258509 fconstant fln10  \ ln(10.0) (natural log of 10)
 
 : fdeg f2pi f/ [ 360.0 ] fliteral f* ; ( rad -- deg )
 : frad [ 360.0 ] fliteral f/ f2pi f* ; ( deg -- rad )
 
-anonymous definitions
+\ anonymous definitions
+system +order definitions
 
 : >cordic     [ 16384.0 ] fliteral f* f>s ; ( f -- n )
 : cordic> s>f [ 16384.0 ] fliteral f/ ;     ( n -- f )
@@ -377,7 +374,7 @@ anonymous definitions
 
 : (fsincos) fhpi fmod >cordic cordic >r cordic> r> cordic> ; 
 
-forth-wordlist current ! 
+only forth definitions system +order
 
 : fsincos ( rads -- sin cos )
    fdup f0< >r
@@ -389,21 +386,10 @@ forth-wordlist current !
 : fcos fsincos fnip  ; ( rads -- cos )
 : ftan fsincos f/ ; ( rads -- tan )
 
-: sins
-  f2pi fnegate
-  begin
-    fdup f2pi f<
-  while
-    fdup fdup f. [char] , emit space fsincos 
-    fswap f. [char] , emit space f. cr
-    [ f2pi 50.0 f f/ ] 2literal f+
-  repeat fdrop ;
-
-system +order
+\ system +order
 \ okok <ok> !
 
-only forth definitions decimal
-.( DONE ) cr
+only forth definitions system +order decimal
 
 \ TODO: Test
 : f~ ( f1 f2 f3 -- flag )
@@ -413,56 +399,76 @@ only forth definitions decimal
 
 : fsqrt
   fdup f0< if fdrop -43 throw then
-  fdup f0= if fdrop 0 0 exit then
-  ( fone ) fdup f2/
+  fdup f0= if fdrop fzero exit then
+  fone 
   16 for aft 
-  f2dup fsq fswap f- fover f2* f/ f-
+    f2dup fsq fswap f- fover f2* f/ f-
   then next
   fnip ;
- 
-.s cr
-256.0 f fsqrt f. cr
-100.0 f fsqrt f. cr
- 81.0 f fsqrt f. cr
- 10.0 f fsqrt f. cr
-  9.0 f fsqrt f. cr
-  4.0 f fsqrt f. cr
-  3.0 f fsqrt f. cr
-  2.5 f fsqrt f. cr
-  2.0 f fsqrt f. cr
-  1.5 f fsqrt f. cr
-  1.0 f fsqrt f. cr
-  0.5 f fsqrt f. cr
-  0.1 f fsqrt f. cr
-  0.0 f fsqrt f. cr
-.s
-
-\ 200 f fsq f. -> Error
-: disp e. ;
-: tsqrt
-  for aft 
-  r@ dup * s>f fdup disp ."  <->" fsqrt disp cr
-  then next ;
-
-10 tsqrt
-
-only forth definitions
-
 
 : filog2 ( r -- u : Floating point integer logarithm )
   zero
-  fdup fone f< -42 and throw
+  fdup fzero f<= -42 and throw
   ( norm ) nip $4001 - ;
 
-: ff . space  ;
-1 e 2 fdup  0 f f~ ff
-1 e 2 fdup  1 f f~ ff
-1 e 2 fdup -1 f f~ ff
-1 e 2 fdup fnegate  0 f f~ ff
-1 e 2 fdup fnegate  1 f f~ ff
-1 e 2 fdup fnegate -1 f f~ ff
-1 e 2 fdup fnegate fswap  0 f f~ ff
-1 e 2 fdup fnegate fswap  1 f f~ ff
-1 e 2 fdup fnegate fswap -1 f f~ ff
+: fhypot f2dup f> if fswap then
+  fabs ftuck fswap f/ fsq f1+ fsqrt f* ;
+ 
+only forth definitions system +order
 
+: sins
+  f2pi fnegate
+  begin
+    fdup f2pi f<
+  while
+    fdup fdup f. [char] , emit space fsincos 
+    fswap f. [char] , emit space f. cr
+    [ f2pi 50.0 f f/ ] 2literal f+
+  repeat fdrop ;
+ 
 
+\ <en.wikipedia.org/wiki/Arithmetic%E2%80%93geometric_mean>
+: agm f2dup f* fsqrt 2>r f+ f2/ 2r> fswap ; ( r1 r2 -- r1 r2 )
+
+12 constant #steps
+
+\ ln(x) = (pi / (2*M(1, (2^(2-m))/ x))) - (m*ln(2))
+\
+\ m = number of steps in M
+\ M = Arithmetic-Geometric Mean, defined as:
+\
+\     a0 = x
+\     g0 = y
+\     a_(n+1) = 1/2 * (a_n + g_n)
+\     g_(n+1) = sqrt(a_n * g_n)
+\
+\ As m -> INF, a_n = g_n.
+\
+: fln
+  [ 2 #steps - s>f exp ] 2literal fswap f/ 
+  fone fswap 
+  #steps for aft agm then next f+ fpi 
+  fswap f/ [ #steps s>f fln2 f* ] 2literal f- ;
+: flnp1 fone f+ fln ;
+
+\ An Alternate "flog2":
+\
+\        : flog2
+\          [ 2 #steps - s>f exp ] 2literal fswap f/ 
+\          fone fswap 
+\          #steps for aft agm then next f+ fln2 f* fpi 
+\          fswap f/ [ #steps s>f ] 2literal f- ;
+
+: flog2 fln fln2 f/ ; ( r -- r : base  2 logarithm )
+: flog fln fln10 f/ ; ( r -- r : base 10 logarithm )
+: f** fswap flog2 f* exp ; ( r1 r2 -- r : pow[r1, r2] )
+
+: fatanh ( r1 -- r2 : atanh, -1 < r1 < 1 )
+  fdup f1+ fswap fone fswap f- f/ fln f2/ ;
+: facosh ( r1 -- r2 : acosh, 1 <= r1 < INF )
+  fdup fsq f1- fsqrt f+ fln ; 
+: fasinh fdup fsq f1+ fsqrt f+ fln ; ( r -- r )
+: fdepth depth 2/ ; ( -- n : number of floats, approximate )
+ 
+system -order
+.( DONE ) cr

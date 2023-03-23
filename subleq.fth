@@ -5476,6 +5476,7 @@ system[ user tup =cell tallot ]system
 \
 
 : >number ( ud b u -- ud b u : convert string to number )
+  dup 0= ?exit
   begin
     2dup 2>r drop c@ radix           ( get next character )
     ( digit? -> ) >r [char] 0 - 9 lit over <
