@@ -8,7 +8,7 @@
 \ "fone e 1" will not work, but "1.0 e 1" will.
 \
 \ TODO: Add back in unit test framework?
-\ missing: facos falog fasin fatan fatan2 
+\ missing: facos fasin fatan fatan2 
 \
 \ SQRT: https://stackoverflow.com/questions/3581528/
 \ MATH: https://stackoverflow.com/questions/4541130/
@@ -226,8 +226,9 @@ only forth definitions system +order
 : fswap 2swap ;       ( r1 r2 -- r2 r1 )
 : fover 2over ;       ( r1 r2 -- r1 r2 r1 )
 : f2dup fover fover ; ( r1 r2 -- r1 r2 r1 r2 )
-: ftuck fover fswap ; ( r1 r2 -- r2 r1 r2 )
+: ftuck fdup 2>r fswap 2r> ; ( r1 r2 -- r2 r1 r2 )
 : frot 2>r fswap 2r> fswap ; ( r1 r2 r3 -- r2 r3 r1 )
+: -frot frot frot ;
 : fdrop 2drop ;       ( r -- )
 : f2drop fdrop fdrop ; ( r1 r2 -- )
 : fnip fswap fdrop ;  ( r1 r2 -- r2 )
@@ -263,7 +264,7 @@ only forth definitions system +order
   else d+ if  1+ 2/ $8000 or r> 1+
     else r> then then ;
 
-0 0 2constant fzero ( -- r : floating point zero )
+0 0 2constant fzero 
 
 : f- fnegate f+ ; ( r1 r2 -- t : floating point subtract )
 : f< f- 0< nip ; ( r1 r2 -- t : floating point less than )
@@ -337,20 +338,19 @@ only forth definitions system +order
   [char] e hold f# #> r> over - spaces type ;
 : e. space 0 e.r ;
 
-: fexpm1 fexp fone f- ; ( f -- f : e raised to 'f' less 1 )
-: fsinh fexpm1 fdup fdup f1+ f/ f+ f2/ ; ( f -- fsinh : hyperbolic sine )
-: fcosh fexp fdup fone fswap f/ f+ f2/ ; ( f -- fcosh : hyperbolic cosine )
+: fexpm1 fexp fone f- ; ( r1 -- r2 : e raised to 'r1' less 1 )
+: fsinh fexpm1 fdup fdup f1+ f/ f+ f2/ ; ( r -- fsinh : h-sin )
+: fcosh fexp fdup fone fswap f/ f+ f2/ ; ( r -- fcosh : h-cos )
 : fsincosh fdup fsinh fswap fcosh ; ( f -- sinh cosh )
 : ftanh fsincosh f/ ; ( f -- ftanh : hyperbolic tangent )
-\ : fln fone f- flnp1 ;
 
 ( Define some useful constants )
-3.14159265 fconstant fpi    \ PI
-1.57079632 fconstant fhpi   \ Half PI
-6.28318530 fconstant f2pi   \ 2*PI
-2.71828182 fconstant fe     \ e
-0.69314718 fconstant fln2   \ ln(2.0)  (natural log of 2)
-2.30258509 fconstant fln10  \ ln(10.0) (natural log of 10)
+ 3.14159265 fconstant fpi    \ PI
+ 1.57079632 fconstant fhpi   \ Half PI
+ 6.28318530 fconstant f2pi   \ 2*PI
+ 2.71828182 fconstant fe     \ e
+ 0.69314718 fconstant fln2   \ ln(2.0)  (natural log of 2)
+ 2.30258509 fconstant fln10  \ ln(10.0) (natural log of 10)
 
 : fdeg f2pi f/ [ 360.0 ] fliteral f* ; ( rad -- deg )
 : frad [ 360.0 ] fliteral f/ f2pi f* ; ( deg -- rad )
@@ -412,7 +412,7 @@ only forth definitions system +order decimal
   ( norm ) nip $4001 - ;
 
 : fhypot f2dup f> if fswap then
-  fabs ftuck fswap f/ fsq f1+ fsqrt f* ;
+  fabs 2>r fdup 2r> fswap f/ fsq f1+ fsqrt f* ;
  
 only forth definitions system +order
 
@@ -470,5 +470,52 @@ only forth definitions system +order
 : fasinh fdup fsq f1+ fsqrt f+ fln ; ( r -- r )
 : fdepth depth 2/ ; ( -- n : number of floats, approximate )
  
+fone 2variable cnt
+fzero 2variable sqr
+fzero 2variable xx
+1 variable dir
+ 
+\ TODO: make fpick, and remove as many variables as possible
+\ TODO: Get this working for values near one...
+: fatan ( r -- r )
+\  fdup f0< >r fabs
+  \ TODO: Return fhpi or -fhpi if 'r' is too big
+  fdup fsq sqr 2! xx 2! fone cnt 2! 1 dir ! fhpi
+  10 for aft 
+    xx 2@ cnt 2@ f* finv 
+    dir @ if f- 0 dir !
+    else f+ 1 dir ! then
+    xx 2@ sqr 2@ f* xx 2!
+    cnt 2@ [ 2.0 f ] 2literal f+ cnt 2!
+  then next 
+\ r> if fnegate then 
+  ;
+
+\ TODO: Testing
+\
+\ x  > 0         =>  arctan(y/x)
+\ y >= 0, x < 0  =>  arctan(y/x) + pi
+\ y  < 0, x < 0  =>  arctan(y/x) - pi
+\ y  > 0, x = 0  =>  pi/2
+\ y  < 0, x = 0  => -pi/2
+\ y  = 0, x = 0  =>  undefined
+: fatan2 ( r1=y r2=x -- r3 )
+  fdup f0> if f/ fatan exit then
+  fdup f0< if fover f0< if
+       f/ fatan fpi f+
+     else
+       f/ fatan fpi f-
+     then
+     exit
+  then
+  fdrop
+  fdup f0> if fdrop fhpi exit then
+  fdup f0< if fdrop [ fhpi fnegate ] 2literal exit then
+  -46 throw ;
+\ facos, fasin
+
+: fasin fdup fsq fone fswap f- fsqrt f/ fatan ;
+: facos fasin fhpi fswap f- ;
+
 system -order
 .( DONE ) cr
