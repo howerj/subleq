@@ -9328,6 +9328,8 @@ it being run.
 \
 \ It is meant to match on these instruction macros:
 \
+\ ======================= TODO ================================
+\
 \        :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
 \        :m NADDR there 2/ 1+ t, ;m 
 \        :m HALT 0 t, 0 t, -1 t, ;m 
@@ -10280,6 +10282,8 @@ int main(int argc, char **argv) {
 \ includes some missing standard Forth words, and the major
 \ things that are missing - do loops and case.
 \
+\ ======================= TODO ================================
+\ This should be a compile time option.
 \
 <ok> @ ' ) <ok> !
 : debug source type ."  ok" cr ; ' debug <ok> !
@@ -10327,13 +10331,11 @@ variable seed ( NB. Could be mixed with keyboard input )
 : 4drop 2drop 2drop ; ( n1 n2 n3 n4 -- )
 : trip dup dup ; ( n -- n n n )
 : log  >r 0 swap ( u base -- u : integer logarithm )
-  begin swap 1+ swap r@ / dup 0= until
-  drop 1- rdrop ;
+  begin swap 1+ swap r@ / dup 0= until drop 1- rdrop ;
 : log2 0 swap ( u -- u : integer logarithm in base 2 )
-  begin swap 1+ swap   2/ dup 0= until
-  drop 1- ;
+  begin swap 1+ swap 2/ dup 0= until drop 1- ;
 : average um+ 2 um/mod nip ; ( u u -- u )
-: <=> 2dup > if 2drop -1 exit then < ;
+: <=> 2dup > if 2drop -1 exit then < ; 
 : bounds over + swap ;
 : 2, , , ; ( n n -- )
 : d< rot 2dup >                    ( d -- f )

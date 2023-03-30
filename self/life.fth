@@ -1,8 +1,9 @@
 \ ## Conways Game of Life
 \ 
-\ A [Conways Games Of Life][] in a few screens, adapted to this Forth:
+\ A Conways Games Of Life in a few screens, adapted to 
+\ this Forth:
 \ 
-\ Adapted from: http://wiki.c2.com/?ForthBlocks
+\ From: http://wiki.c2.com/?ForthBlocks
 
 ( NB. Bitwise ops must be masked off on non 16-bit machines )
 : crc ( b u -- u : calculate ccitt-ffff CRC )
