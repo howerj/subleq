@@ -40,11 +40,16 @@
 \ floating point numbers. A separate floating point stack,
 \ holding say 8 floating point values, could be made. It could
 \ even be made into a compile time option, using the words that
-\ store
+\ store their items on the stack and redefining them. If this
+\ option were to be chosen the floating point stack should be
+\ made to be thread local.
 \
 \ TODO: Meta-compilation and integrate into base system?
 \ TODO: Negative 0 = Positive 0? 
 \ TODO: Add back in unit test framework?
+\ TODO: Make "precision" a user variable
+\ TODO: Depth checks
+\ TODO: Under/overflow checks
 \
 \ NB. Input is finicky, requires "dpl" to be set, so
 \ "fone e 1" will not work, but "1.0 e 1" will.
@@ -74,6 +79,7 @@ undefined? postpone [if]
 
 undefined? 0<   ?\ : 0< 0 < ;
 undefined? 1-   ?\ : 1- 1 - ;
+undefined? 2+   ?\ : 2+ 2 + ;
 undefined? 2*   ?\ : 2* 1 lshift ;
 undefined? 2/   ?\ : 2/ 1 rshift ;
 \ undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
@@ -121,6 +127,7 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
   r> r@ xor +- swap r> +- swap ;
 : */mod ( a b c -- rem a*b/c : double prec. intermediate val )
   >r m* r> sm/rem ;
+: d>s drop ; ( d -- n : convert dubs to single )
 
 \ From: https://en.wikipedia.org/wiki/Integer_square_root
 \ This function computes the integer square root of a number.
@@ -150,7 +157,7 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 
 : clz ( u -- : count leading zeros )
   ?dup 0= if #bits exit then
-  #msb  0 >r begin
+  #msb 0 >r begin
    2dup and 0=
   while
    r> 1+ >r 2/
@@ -160,7 +167,6 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 ( : log2 2 log ; ( u -- u : binary integer logarithm )
 : log2 ?dup 0= -11 and throw clz #bits swap - 1- ; ( u -- u )
 
-\ TODO Move to another file?
 \ <forth.sourceforge.net/algorithm/bit-counting/index.html>
 : count-bits ( number -- bits )
   dup $5555 and swap 1 rshift $5555 and +
@@ -238,10 +244,13 @@ only forth definitions system +order
 \
 only forth definitions system +order
 
-: fabs  $7FFF and ;   ( f -- f )
+: fabs $7FFF and ; ( f -- f )
 
 system definitions
-create ftable 4 , 
+
+variable (precision) 4 (precision) !
+
+create ftable
           .001 , ,        .010 , ,
           .100 , ,       1.000 , ,
         10.000 , ,     100.000 , ,
@@ -258,7 +267,7 @@ create ftable 4 ,
   else r> drop then ;
 : lalign $20 min for aft d2/ then next ;
 : ralign 1- ?dup if lalign then 1 0 d+ d2/ ;
-: tens 2* cells  [ ftable cell+ ] literal + 2@ ;     
+: tens 2* cells ftable + 2@ ;     
 : shifts fabs $4010 - s>d invert if -$2B throw then negate ;
 : base? base @ $A <> -$28 and throw ; ( -- : check base )
 : unaligned? dup 1 and = -$9 and throw ; ( -- : check ptr )
@@ -270,8 +279,8 @@ only forth definitions system +order
 \ there is no separate floating point stack.
 
 : set-precision ( +n -- : set FP decimals printed out )
-  dup 0 5 within if ftable ! exit then -$2B throw ; 
-: precision ftable @ ; ( -- u : precision of FP values )
+  dup 0 5 within if (precision) ! exit then -$2B throw ; 
+: precision (precision) @ ; ( -- u : precision of FP values )
 : f@ unaligned? 2@ ;  ( a -- r : fetch FP value )
 : f! unaligned? 2! ;  ( r a -- : store FP value )
 : falign align ;      ( -- : align the dict. to store a FP )
@@ -293,7 +302,7 @@ only forth definitions system +order
 : f2/ 1- zero ;       ( r -- r : FP divide by two )
 : f*  rot + $4000 - >r um* r> norm ; ( r r -- r )
 : fsq fdup f* ;       ( r -- r : FP square )
-: f0= zero d0= ;      ( r -- r : FP equal to zero )
+: f0= fabs zero d0= ; ( r -- r : FP equal to zero [incl -0.0] )
 : floats 2* cells ;   ( u -- u )
 : float+ 1 floats + ; ( a -- a : increment addr by one float )
 : um/ ( ud u -- u : ud/u and round )
@@ -333,6 +342,8 @@ only forth definitions system +order
 : f0>= f0< 0= ;  ( r1 r2 -- t : FP more than or equal to zero )
 : fmin f2dup f< if fdrop exit then fnip ; ( r1 r2 -- f : min )
 : fmax f2dup f> if fdrop exit then fnip ; ( r1 r2 -- f : max )
+: fwithin ( r1 r2 r3 -- f : r2 <= r1 < r3 )
+  frot ftuck f>= >r f<= r> and ; 
 : d>f $4020 fsign norm ;  ( d -- r : double to float )
 : s>f s>d d>f ;           ( n -- r : single to float )
 
@@ -521,39 +532,46 @@ only forth definitions system +order
   fdup fsq f1- fsqrt f+ fln ; 
 : fasinh fdup fsq f1+ fsqrt f+ fln ; ( r -- r )
 : fdepth depth 2/ ; ( -- n : number of floats, approximate )
- 
-\ TODO: Tidy up, remove some variables
-
+: 2pick dup >r pick r> 2+ pick swap ;
+: fpick floats 2pick ;
 
 system +order definitions
 
-fone 2variable fatan.cnt
-fzero 2variable fatan.sqr
-fzero 2variable fatan.x 
-1 variable fatan.dir
- 
-: fatan-hi ( r -- r )
-  fdup fsq fatan.sqr 2! fatan.x 2! fone fatan.cnt 2! 
-  1 fatan.dir ! 
-  fhpi
-  10 for aft 
-    fatan.x 2@ fatan.cnt 2@ f* finv 
-    fatan.dir @ if f- 0 fatan.dir !
-    else f+ 1 fatan.dir ! then
-    fatan.x 2@ fatan.sqr 2@ f* fatan.x 2!
-    fatan.cnt 2@ [ 2.0 f ] 2literal f+ fatan.cnt 2!
-  then next ;
-
-\ Approximate atan in range (0, 1], with a fair bit of error.
+\ N.B This is a better version of atan where x > 1, but it
+\ is larger and uses global variables
+\
+\        2variable fatan.cnt
+\        2variable fatan.sqr
+\        2variable fatan.x 
+\        variable fatan.dir
+\         
+\        : fatan-hi ( r -- r )
+\          fdup fsq fatan.sqr 2! fatan.x 2! fone fatan.cnt 2! 
+\          1 fatan.dir ! 
+\          fhpi
+\          10 for aft 
+\            fatan.x 2@ fatan.cnt 2@ f* finv 
+\            fatan.dir @ if f- 0 fatan.dir !
+\            else f+ 1 fatan.dir ! then
+\            fatan.x 2@ fatan.sqr 2@ f* fatan.x 2!
+\            fatan.cnt 2@ [ 2.0 f ] 2literal f+ fatan.cnt 2!
+\          then next ;
+\
+\ This version of "atan" is much faster, It approximates atan 
+\ in range (0, 1], with a fair bit of error. We can then use
+\ that to make an atan which deals with values greater than
+\ one.
 \
 \ See <https://stackoverflow.com/questions/42537957/>
 \
 
 : fatan-lo fdup fsq fdup 
-   [ 0.07765095 ( = A ) ] fliteral f* 
+   [  0.07765095 ( = A ) ] fliteral f* 
    [ -0.28743447 ( = B ) ] fliteral f+ f* 
-   [ 0.99518168 ( pi/4 - A - B ) ] fliteral f+ f* ;
+   [  0.99518168 ( pi/4 - A - B ) ] fliteral f+ f* ;
 
+\ atan(x) = pi/2 - atan(1/x)
+: fatan-hi finv fatan-lo fhpi fswap f- ;
 
 only forth definitions system +order
 
@@ -625,7 +643,6 @@ only forth definitions system +order
   create immediate align here 2 cells + ,
   0 parse dup , scopy 2drop
   does> 2@ swap evaluate ;
-
 
 system -order
 .( DONE ) cr

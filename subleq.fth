@@ -27,12 +27,12 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ finally the Forth interpreter itself, based on the eForth
 \ family of the Forth programming language. This system is
 \ self-hosted, which means it can be used to create new,
-\ modified, systems. Also contained is a description of how 
-\ this system works, how the internals of a Forth interpreter 
-\ works, and the difficulties and trade-offs involved in 
-\ targeting such an anemic CPU architecture, called SUBLEQ, 
-\ which is an esoteric, impractical, single instruction CPU. If 
-\ you can port a Forth to SUBLEQ, then you can port a Forth 
+\ modified, systems. Also contained is a description of how
+\ this system works, how the internals of a Forth interpreter
+\ works, and the difficulties and trade-offs involved in
+\ targeting such an anemic CPU architecture, called SUBLEQ,
+\ which is an esoteric, impractical, single instruction CPU. If
+\ you can port a Forth to SUBLEQ, then you can port a Forth
 \ implementation to anything. There is a saying about Forth,
 \ "Forth is Sudoku for programmers", I think it sums up my
 \ relationship with the language perfectly and this project.
@@ -124,7 +124,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ ## Glossary of Terms
 \
-\ Whilst you should be familiar with common Forth and 
+\ Whilst you should be familiar with common Forth and
 \ programming terms, the following terms should be describe
 \ in more detail to avoid confusion.
 \
@@ -143,25 +143,25 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ present when compiling Forth words.
 \ * "meta-compilation", another word for cross-compilation
 \ but using Forth instead, distinct from the more widely
-\ known Computer Science term. The reason for this difference 
-\ is that Forth evolved within the microcomputer scene, which 
-\ was very distinct from the academic scene in the 1980s and 
+\ known Computer Science term. The reason for this difference
+\ is that Forth evolved within the microcomputer scene, which
+\ was very distinct from the academic scene in the 1980s and
 \ prior. The term seems to have been mistranslated somewhat.
 \ * "word" in the context of Forth means "A forth function",
 \ the term "word" is used because a Forth function consists of
 \ space delimited characters that usually form a single
 \ descriptive word as a name. Words form vocabularies and
 \ vocabularies form the dictionary.
-\ * "cell" is used as a term because "word" is already used 
+\ * "cell" is used as a term because "word" is already used
 \ for Forth functions. It is used to refer to a memory location
 \ that is of the computers natural width, on a 16-bit machine a
-\ single cell is a 16-bit location, aligned on a 2 byte 
-\ boundary. On this SUBLEQ machine the smallest addressable 
-\ unit is the cell, not the byte, byte access will have to be 
+\ single cell is a 16-bit location, aligned on a 2 byte
+\ boundary. On this SUBLEQ machine the smallest addressable
+\ unit is the cell, not the byte, byte access will have to be
 \ simulated.
 \ * "Target Dictionary", the dictionary in the image we will
 \ be assembling, this is distinct from the words used for
-\ meta-compilation, and the words made in the meta-compiler 
+\ meta-compilation, and the words made in the meta-compiler
 \ used to refer to memory locations of defined words within
 \ in the Target Dictionary.
 \
@@ -221,7 +221,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ The stack refers to the variable stack, and to the number of
 \ items the word consumes or produces. The description is
-\ usually laconic, as there is little room on screen for it 
+\ usually laconic, as there is little room on screen for it
 \ given historical terminal character widths, the
 \ word name itself should offer some clue as to what it does,
 \ and the word should be short, ideally a single line, so it
@@ -312,10 +312,10 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ operation (the other two main categories include bit
 \ manipulation instructions and architectures build
 \ around a MOVE instruction called Transport Triggered
-\ Architectures). The arithmetic architecture feel closet to a 
-\ real machine whilst at the same time being far away from 
-\ them. As you will find out, it would not take much to 
-\ radically improve the efficiency of the system with extra 
+\ Architectures). The arithmetic architecture feel closet to a
+\ real machine whilst at the same time being far away from
+\ them. As you will find out, it would not take much to
+\ radically improve the efficiency of the system with extra
 \ instructions for bit-manipulation, perhaps even as little as
 \ one (such as an instruction set that could perform SUBLEQ and
 \ a NAND, or SUBLEQ and a Right Shift).
@@ -334,7 +334,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ SUBLEQ, and OISC systems generally, feel like they
 \ are close to and perhaps belong to the same category
 \ as Esoteric Programming Languages and Turing Tar-pits,
-\ languages that are technically Turing complete, 
+\ languages that are technically Turing complete,
 \ but are incredibly difficult to use and are only ever used
 \ as a puzzle to satisfy intellectual curiosity.
 \
@@ -385,7 +385,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ which can be argued back and forth to no effect and with
 \ nothing learned.
 \
-\ eForth aims at a minimal and viable (runs fast enough) 
+\ eForth aims at a minimal and viable (runs fast enough)
 \ solution.
 \
 \ ## A little about SUBLEQ
@@ -395,7 +395,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ it difficult? As mentioned it is a single instruction
 \ machine, each instruction consisting of three operands; "A",
 \ "B", and "C". Each operand is stored in a single cell, in
-\ this implementation the cell size is 16-bits, which is 
+\ this implementation the cell size is 16-bits, which is
 \ important. A SUBLEQ machine that uses sizes other than
 \ this, or bignums, will not work.
 \
@@ -413,7 +413,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ 3. Subtract A from B, and store the result back to cell B.
 \    If the result is less than or equal to zero, jump to the
 \    location pointed to by C. Otherwise advance the program
-\    counter to the next instruction (or over the three 
+\    counter to the next instruction (or over the three
 \    operands) and execute from there.
 \
 \ This machine does not specify I/O, it could be memory mapped
@@ -466,10 +466,10 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ <https://howerj.github.io/subleq.htm>
 \
-\ Also note, the SUBLEQ machine has no way of saving to disk 
-\ (or mass storage as it is sometimes known) and the only 
-\ peripherals it offers are inputting and outputting a single 
-\ byte. This does not hold us back during cross compilation, 
+\ Also note, the SUBLEQ machine has no way of saving to disk
+\ (or mass storage as it is sometimes known) and the only
+\ peripherals it offers are inputting and outputting a single
+\ byte. This does not hold us back during cross compilation,
 \ as you will see.
 \
 \ The image is passed to the program simulating the machine
@@ -582,18 +582,18 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ system could be accommodated for.
 \
 \ A system that used bignums would be yet another difficulty,
-\ arbitrary precision numbers do not overflow, and the fact 
-\ that integer overflow is used by this implementation to 
-\ implement a fast (for SUBLEQ machines) bitwise operations 
+\ arbitrary precision numbers do not overflow, and the fact
+\ that integer overflow is used by this implementation to
+\ implement a fast (for SUBLEQ machines) bitwise operations
 \ causes problems for those bignum machine. Instead
 \ the bitwise operations would have to be re-engineered around
 \ multiplication and division instead of bit by bit testing
 \ of the topmost bit (which indicates a number is negative,
-\ an easy test for a SUBLEQ machine). It might instead be 
+\ an easy test for a SUBLEQ machine). It might instead be
 \ easier to simulate a 16-bit SUBLEQ machine on an N-bit
 \ architecture, where N is greater than 16, falling back to
 \ direct evaluation if we detect we are running on a 16-bit
-\ machine (and thus do not need the simulator), something 
+\ machine (and thus do not need the simulator), something
 \ similar could be done for machines that used bignums.
 \
 \ ## Meta-compilation (Cross compilation with Forth)
@@ -705,9 +705,9 @@ only forth definitions hex
 
 \ ## Order!
 \
-\ If you are not well versed with the vocabulary words, it 
-\ would help that you become so, as we will be using the Forth 
-\ vocabulary word set to create words for the meta-compiler, 
+\ If you are not well versed with the vocabulary words, it
+\ would help that you become so, as we will be using the Forth
+\ vocabulary word set to create words for the meta-compiler,
 \ and for the target dictionary and assembler.
 \
 \ This is one of the advantages of explaining a Forth written
@@ -795,7 +795,7 @@ wordlist constant target.only.1 ( target only word set )
 defined eforth [if] system +order [then]
 meta.1 +order definitions
 
-\ Some system constants are defined: 
+\ Some system constants are defined:
 
 \ * "=cell" is the size of a cell in bytes, for our 16-bit
 \  machine it is "2", if we want to allocate a cell within the
@@ -806,7 +806,7 @@ meta.1 +order definitions
 \ storing a line, this like the return and variable stacks are
 \ stored within a threads memory area. Do not increase this
 \ value without adjusting the rest of memory areas.
-\ * "=stksz", each of the stacks, the variable and return 
+\ * "=stksz", each of the stacks, the variable and return
 \ stacks are this size. It is stored within thread memory, one
 \ of the stacks grows upwards and the other downwards and they
 \ are arranged so it one of the stacks overflows it will end
@@ -816,13 +816,13 @@ meta.1 +order definitions
 \ * "=thread", this contains the location of the first thread
 \ we setup, there must always be at least one thread running.
 \ Each thread is a 1024 byte block and is aligned (although it
-\ does not have to be) on a 1024 block boundary. The first 
+\ does not have to be) on a 1024 block boundary. The first
 \ thread is located at the end of main memory, which is a good
 \ place to put it, but it interacts poorly with the SUBLEQ
 \ machine in the appendix that saves the image after running
 \ (it still works). A consequence of the thread size being
-\ 1024 bytes and 1024 byte aligned is that if we had a block 
-\ system that could swap out to mass storage we could 
+\ 1024 bytes and 1024 byte aligned is that if we had a block
+\ system that could swap out to mass storage we could
 \ potentially swap out unused threads. This goes for any
 \ data structure with the same properties, the block system
 \ is like the poor-mans Memory Management Unit (MMU).
@@ -841,16 +841,16 @@ FC00 constant =thread \ Initial start of thread area
 000D constant =cr     \ Carriage Return character value
 007F constant =del    \ Delete character
 
-\ Now we need to create an area to store the new image in, 
-\ called "tflash", and clear it. The image generated is not 
-\ that big. We will need under 16KiB (although we are cutting 
+\ Now we need to create an area to store the new image in,
+\ called "tflash", and clear it. The image generated is not
+\ that big. We will need under 16KiB (although we are cutting
 \ it close).
 \
 
 create tflash tflash size cells allot size erase
 
 \ "tdp" is the Target Dictionary Pointer, "there" (pronounced
-\ "T-here" for "target-here") will return the contents of it 
+\ "T-here" for "target-here") will return the contents of it
 \ when it is defined. "t" is usually used as a prefix to mean
 \ "target" in this implementation.
 \
@@ -968,7 +968,7 @@ defined eforth [if]
 \
 \ A line ending is used instead of a space as it makes the
 \ diff tools recognize similar sections in the SUBLEQ image,
-\ instead of a single giant line changing if only one or two 
+\ instead of a single giant line changing if only one or two
 \ cells have changed. This makes an otherwise binary image
 \ (albeit stored in a textual format) play better with version
 \ control systems such as "git", or "svn".
@@ -982,9 +982,9 @@ defined eforth [if]
 \ standard, usable state, after compilation is complete.
 \
 
-opt.generate-c [if] 
+opt.generate-c [if]
   :m msep 2C emit ;m ( -- : emit "," as separator )
-[else] 
+[else]
   :m msep A emit ;m  ( -- : emit space as separator )
 [then]
 :m mdump taligned ( a u -- )
@@ -1010,18 +1010,18 @@ opt.generate-c [if]
 \ block used to store the tasks variable and return stacks,
 \ buffers, and also USER variables - task specific or thread
 \ local storage. "lallot" keeps track of an offset into thread
-\ local storage ("tlocal") for those USER variables. "tuser" 
-\ can be used to allocate a cell in local storage space, and 
-\ assign a name for that space in the meta-compiler, which when 
-\ run will compile that offset into the target image. There is 
-\ a limited amount of space within each thread, so user 
+\ local storage ("tlocal") for those USER variables. "tuser"
+\ can be used to allocate a cell in local storage space, and
+\ assign a name for that space in the meta-compiler, which when
+\ run will compile that offset into the target image. There is
+\ a limited amount of space within each thread, so user
 \ variables should not be allocated freely.
 \
 \ USER variables are thread-local variables, there is an
 \ instance of a USER variable for each thread that has been
 \ created.
 \
-\ "local?" fetches the local value. 
+\ "local?" fetches the local value.
 \
 \ "tvar" is a more conventional variable, however, much like
 \ "tuser" the name is not copied into the target dictionary.
@@ -1074,23 +1074,23 @@ opt.generate-c [if]
 \ "voc-last" is used as "tlast" is swapped in and out depending
 \ on the vocabulary used, whereas "voc-last" is not.
 \
-:m compile-only voc-last @ tnfa t@ 20 or voc-last @ tnfa t! ;m 
-:m immediate   voc-last @ tnfa t@ 40 or voc-last @ tnfa t! ;m 
+:m compile-only voc-last @ tnfa t@ 20 or voc-last @ tnfa t! ;m
+:m immediate   voc-last @ tnfa t@ 40 or voc-last @ tnfa t! ;m
 
 \ "half" and "double" are just synonyms for "2/" and "2\*", it
 \ is much easier to know you are calling the correct version of
-\ the words when they have different names. During 
-\ meta-compilation we will need to convert from Forth to VM 
-\ addresses using these two words when setting execution 
+\ the words when they have different names. During
+\ meta-compilation we will need to convert from Forth to VM
+\ addresses using these two words when setting execution
 \ tokens.
 \
 
 :m half dup 1 and abort" unaligned" 2/ ;m ( a -- a )
 :m double 2* ;m ( a -- a )
 
-\ Some more conditional code is needed due to the differences 
-\ between the implementations of the single quote, "'", on the 
-\ two different Forth implementations used to compile this 
+\ Some more conditional code is needed due to the differences
+\ between the implementations of the single quote, "'", on the
+\ two different Forth implementations used to compile this
 \ program.
 \
 \ "\>body" works (correctly) only on words defined with
@@ -1127,8 +1127,8 @@ defined eforth [if]
 \ "tcksum" is used to calculate the checksum over the part of
 \ the image that is checked. At the end of the meta-compilation
 \ process this value is calculated and poked into the target
-\ image. The corresponding word in the target used at runtime 
-\ is called "cksum". The algorithm only uses addition, which 
+\ image. The corresponding word in the target used at runtime
+\ is called "cksum". The algorithm only uses addition, which
 \ makes for a weak form of checksum, but it is easy to compute.
 \
 
@@ -1167,8 +1167,8 @@ defined eforth [if]
 \ the Forth word name fields are stored. In this Forth
 \ implementation they are stored conjoined with the words
 \ themselves, as with other Forth implementations such as
-\ JonesForth. This simplifies the system conceptually and 
-\ means code and the names form one contiguous block, which has 
+\ JonesForth. This simplifies the system conceptually and
+\ means code and the names form one contiguous block, which has
 \ some advantages.
 \
 \ However most Forth implementations have a separate Forth name
@@ -1176,17 +1176,17 @@ defined eforth [if]
 \ erase the names for words, which may no longer be needed,
 \ it is even possible to erase all of the word names and keep
 \ the code intact which is not possible in this implementation,
-\ although separate storage is less compact than a conjoined 
-\ system. Both systems can be designed to use the same amount 
+\ although separate storage is less compact than a conjoined
+\ system. Both systems can be designed to use the same amount
 \ of memory, with caveats.
 \
 \ The word "thead" makes a header for a word in the target, it
 \ writes a pointer to the previously defined word making a link
 \ in the dictionaries linked list, parses the next word in the
 \ input stream, and copies that name into the target dictionary
-\ with "tpack", making sure to align the Dictionary Pointer for 
-\ the code generation stage. 
-\ 
+\ with "tpack", making sure to align the Dictionary Pointer for
+\ the code generation stage.
+\
 \ "thead" is not called directly, but is called by
 \ "header", which saves and restores the "\>in" variable, this
 \ is done so that the name we just parsed from the input stream
@@ -1385,7 +1385,7 @@ defined eforth [if] system -order [then]
 \
 \ "HALT" is our first instruction, "0 0 -1" will always halt
 \ the machine. This will be used to implement the Forth word
-\ "bye", but it is also useful for debugging the lower levels 
+\ "bye", but it is also useful for debugging the lower levels
 \ when the Forth VM had to be built.
 \
 \ "JMP" accepts a Forth Address, converts it to a Cell Address,
@@ -1442,7 +1442,7 @@ defined eforth [if] system -order [then]
 \ after the "MOV", which also contains a "Z Z NADDR", both
 \ must be present, the first to clear the "Z" register (which
 \ may or may not perform the jump depending on what was in "Z")
-\ and the second which will always jump, as the "Z" register 
+\ and the second which will always jump, as the "Z" register
 \ has been previously zeroed.
 \
 \ "iSTORE" is the most complex of all of these single
@@ -1459,7 +1459,7 @@ defined eforth [if] system -order [then]
 \ their use implementing "+" and "-" which operate on the
 \ variable stack (and thus have to do indirection).
 \
-\ There are under twenty macro instructions in the base 
+\ There are under twenty macro instructions in the base
 \ assembler; I/O, Loads/Stores, and arithmetic. The conditional
 \ instruction macros will be defined in the next section. That
 \ the instruction number is so small is remarkable.
@@ -1499,7 +1499,7 @@ defined eforth [if] system -order [then]
 \ and produced a larger indirect store.
 \
 \        :m iSTORE ( a a -- )
-\          swap >r there 2/ 24 + 2dup 2* MOV 
+\          swap >r there 2/ 24 + 2dup 2* MOV
 \          2dup 1+ 2* MOV 7 + 2* MOV r> 0 MOV ;m
 \
 \ The version below is smaller, and will execute faster,
@@ -1516,28 +1516,28 @@ defined eforth [if] system -order [then]
   there 2/ 7 + dup dup t, t, NADDR
   A,   t, NADDR
   V, 0 t, NADDR
-  
+
   A, A, NADDR
   V, V, NADDR
   ;m
-  
+
 \ An attempt at a more efficient "iLOAD" was made, however it
 \ is exactly the same size as the previous definition:
 \
 \       :m iLOAD
 \          2/ t, A, NADDR
 \          there 2/ 6 + dup t, t,  NADDR ( [q] = 0 )
-\          A, there 2/ 2 + t, NADDR 
+\          A, there 2/ 2 + t, NADDR
 \          0 t, V, NADDR
 \          2/ dup dup t, t, NADDR
 \          V, t, NADDR
 \          A, A, NADDR
 \          V, V, NADDR ;m
-\ 
+\
 \ So original is kept in. The main problem lies in the fact
 \ that we cannot load or store to a cell, we can only subtract
 \ from it, thus we have to zero that cell before hand.
-\ 
+\
 
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( a a -- )
 
@@ -1549,9 +1549,9 @@ defined eforth [if] system -order [then]
 \ structured programming paradigm. Programming in straight
 \ assembler sucks.
 \
-\ In Forth "if" pulls an item off of the variable stack to test 
-\ again, however the assembler version of "if" instead reads 
-\ (and does not modify) a memory location, so it must be used 
+\ In Forth "if" pulls an item off of the variable stack to test
+\ again, however the assembler version of "if" instead reads
+\ (and does not modify) a memory location, so it must be used
 \ like so:
 \
 \        <location> if ... then
@@ -1620,8 +1620,8 @@ meta.1 +order definitions
 
 \ If we were to implement the ASSEMBLER words then we would put
 \ all of the words defined in this section into an assembler
-\ vocabulary in the target. An added complication is getting 
-\ the VM to JMP to the newly defined word because of how the 
+\ vocabulary in the target. An added complication is getting
+\ the VM to JMP to the newly defined word because of how the
 \ Forth VM works, which might require a new primitive to do so,
 \ a hypothetical concern as we will not be implementing this
 \ feature, and a concern that will make more sense later when
@@ -1631,7 +1631,7 @@ meta.1 +order definitions
 \
 \ There is not a lot in this section in terms logic, it nearly
 \ all allocation of variables. They will be described, however
-\ they are registers for the VM and locations of Forth 
+\ they are registers for the VM and locations of Forth
 \ variables, context is required to understand them.
 \
 \ This section also contains the first instruction to
@@ -1655,7 +1655,7 @@ meta.1 +order definitions
 \ and others), and virtual machine registers ("w", "x", and
 \ others).
 \
-\ The variables that are worth noting now are; "h", 
+\ The variables that are worth noting now are; "h",
 \ "primitive", "{options}", "{up}", and "check".
 \
 \ * "h" contains the dictionary pointer, as used by "here",
@@ -1693,7 +1693,7 @@ meta.1 +order definitions
 \ Using the C implementation that uses non-blocking input means
 \ an error code is returned if there is no input, by clearing
 \ bit 4 is means that instead of the system calling HALT it
-\ passes the error code up. The default SUBLEQ implementation 
+\ passes the error code up. The default SUBLEQ implementation
 \ does blocking input, so we want this bit set normally.
 \
 \ On some systems turning on non-blocking mode also enables
@@ -1707,17 +1707,17 @@ meta.1 +order definitions
 \ a successful checksum calculation.
 \
 \ Some Forth implementations like to be noisy and print out
-\ a banner, the behavior is obnoxious as it prevents the Forth 
-\ from being used like a standard Unix utility with commands 
-\ piped into the interpreter, and output printed to standard 
-\ output (which is how the meta-compilation works, almost) 
-\ unless extra complication is added to determine whether the 
-\ program is talking to an interactive terminal or not (on Unix 
-\ systems the function call "isatty" does this). 
+\ a banner, the behavior is obnoxious as it prevents the Forth
+\ from being used like a standard Unix utility with commands
+\ piped into the interpreter, and output printed to standard
+\ output (which is how the meta-compilation works, almost)
+\ unless extra complication is added to determine whether the
+\ program is talking to an interactive terminal or not (on Unix
+\ systems the function call "isatty" does this).
 \
-\ This complication is not needed if by default the verbose 
-\ banner is not printed out, which is the case here. If you 
-\ need or want it to be printed out, this option can 
+\ This complication is not needed if by default the verbose
+\ banner is not printed out, which is the case here. If you
+\ need or want it to be printed out, this option can
 \ be enabled.
 \
 
@@ -1769,11 +1769,11 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   0 tvar {single}   \ is multi processing off?
   0 tvar {user}     \ Number of locals assigned
 
-\ Most of the following are thread local variables, with the 
-\ exception of "ip" and "tos", the stack variables "{rp}" and 
-\ "{sp}" and the initial stack positions "{rp0}" and "{rp0}", 
-\ which are only stored in thread local storage on a task 
-\ switch. All words defined with "tuser" are locations of 
+\ Most of the following are thread local variables, with the
+\ exception of "ip" and "tos", the stack variables "{rp}" and
+\ "{sp}" and the initial stack positions "{rp0}" and "{rp0}",
+\ which are only stored in thread local storage on a task
+\ switch. All words defined with "tuser" are locations of
 \ memory relative to thread local storage.
 \
 \ The stacks pointers "{rp}" and "{sp}" themselves point into
@@ -1811,7 +1811,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \
 \ Ideally these meta-compiler macros would be defined along
 \ with the other meta-compiler words, however they require
-\ the locations of constants which are in the target image to 
+\ the locations of constants which are in the target image to
 \ be known, such as "one" or "neg1", which have only just been
 \ defined. This will happen throughout, the definitions of
 \ meta-compiler words that require knowledge of a Forth
@@ -1896,11 +1896,11 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \
 \ The way the Forth VM determines whether an instruction is a
 \ call or a VM instruction to jump to is by assuming any
-\ address bellow a value contained in a variable called 
-\ "primitive" (which will be set later) is a VM instruction, 
+\ address bellow a value contained in a variable called
+\ "primitive" (which will be set later) is a VM instruction,
 \ anything above that is something that is called instead, as
-\ it is a Forth function. This is done because all that is 
-\ needed to test this is a subtraction and jump, all of which 
+\ it is a Forth function. This is done because all that is
+\ needed to test this is a subtraction and jump, all of which
 \ the SUBLEQ machine can do easily.
 \
 \ There are three main types of threaded code interpreters;
@@ -1922,7 +1922,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \ and "swap" are primitives, "square", "pythagoras" and "isqrt"
 \ are functions. What would the code potentially look like?
 \ The Forth compiler, an interactive and lightweight compiler,
-\ must generate the code on-the-fly. There are multiple ways 
+\ must generate the code on-the-fly. There are multiple ways
 \ it could do this.
 \
 \ One way would be something like this:
@@ -1977,7 +1977,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \                Assembly instructions...
 \                Jump to VM
 \
-\         
+\
 \         -----  END OF VM INSTRUCTIONS  -----
 \               SUPER IMPORTANT BARRIER!
 \
@@ -1987,7 +1987,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \        instead of calling it!
 \
 \
-\        ISQRT:  
+\        ISQRT:
 \                Integer Square root implementation...
 \                Address of exit
 \        SQUARE:
@@ -2022,7 +2022,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \ In this interpreter, the VM determines whether to perform
 \ a call or a jump by seeing if the address belongs to one
 \ of the built in VM instructions by comparing to see if the
-\ address if less than the address contained in "primitive" 
+\ address if less than the address contained in "primitive"
 \ (a unique feature of this VM). It is not, as "SQUARE" is not
 \ a primitive, it is a defined function. As this is the case,
 \ the return stack point "{rp} is incremented, "ip" (which
@@ -2037,7 +2037,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \ we do an indirect jump to it. We still copy "ip" to "w",
 \ indirect load through "w", and increment "ip" after. However,
 \ instead of doing a simulated call, we do an indirect jump
-\ through the contents of "w", or a double indirect through 
+\ through the contents of "w", or a double indirect through
 \ "w".
 \
 \ At the end of the assembler routine that implements "DUP"
@@ -2052,8 +2052,8 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \ the address of "SWAP". You can see how this will proceed.
 \
 \ The VM also contains code to detect and prevent the image
-\ from running on a SUBLEQ machine that is not a 16-bit one, as 
-\ the image will not work correctly if it is. 
+\ from running on a SUBLEQ machine that is not a 16-bit one, as
+\ the image will not work correctly if it is.
 \
 \ It detects the width of the VM using arithmetic
 \ properties of the VM that can only be maintained given
@@ -2092,8 +2092,8 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 
 err-str 2/ tvar err-str-addr
 
-\ This prints the error message if we are not on the 
-\ right machine width, 16-bit SUBLEQ machines allowed only. 
+\ This prints the error message if we are not on the
+\ right machine width, 16-bit SUBLEQ machines allowed only.
 \ The test and jump to here is in the "start" routine.
 \
 
@@ -2120,7 +2120,7 @@ label: die
 \ instruction after "start" is finished.
 \
 \ The checksum code could be moved here to enable (nearly)
-\ the entire image to be checked, it would not be too 
+\ the entire image to be checked, it would not be too
 \ difficult to do.
 \
 
@@ -2130,13 +2130,13 @@ label: start         \ System Entry Point
 \ This routine doubles "w" until it becomes negative, which
 \ will happen on twos compliment machines upon reaching the
 \ maximum bit-width.
-\ 
+\
 \ This routine really should be much closer to the beginning
 \ of the file, before (many of, but not all of) the variable
 \ declarations as we have a limited number of bytes to work
-\ with (bytes that are addressable that is) when on machines 
+\ with (bytes that are addressable that is) when on machines
 \ with smaller bit widths than 16.
-\ 
+\
 
   r1 ONE!
   r0 ONE!
@@ -2203,14 +2203,14 @@ assembler.1 -order
 \ in assembler to make things faster, as the resulting image
 \ would be too big. It is also harder to code in assembly, than
 \ in Forth. The eForth model just has about thirty primitives,
-\ which we will aim to emulate, other Forth implementations 
+\ which we will aim to emulate, other Forth implementations
 \ have hundreds, some pedagogical ones have fewer.
 \
-\ If this was on a more conventional architecture we would want 
-\ about thirty base primitive instruction to implement a 
-\ reasonably efficient Forth, we would want assembly routines 
-\ for things like multiplication, division, basic stack 
-\ manipulation, and the like. We will need more just to 
+\ If this was on a more conventional architecture we would want
+\ about thirty base primitive instruction to implement a
+\ reasonably efficient Forth, we would want assembly routines
+\ for things like multiplication, division, basic stack
+\ manipulation, and the like. We will need more just to
 \ maintain some level of speed. Although it should be noted
 \ that eForth eschews implementing multiplication and division
 \ in terms of assembly primitives to keep the system much more
@@ -2225,7 +2225,7 @@ assembler.1 -order
 \ instructions in the VM is sort of hidden from the view
 \ of the programmer, for example the "MOV" macro word is
 \ comprised of four SUBLEQ instructions, an indirect load
-\ more, each VM cycle takes multiples of those macros, so you 
+\ more, each VM cycle takes multiples of those macros, so you
 \ end up spending more time in the VM than you think you would.
 \
 \ Other routines like "pause", "exit", or "opEmit", have to be
@@ -2233,20 +2233,20 @@ assembler.1 -order
 \ be too tricky or impossible.
 \
 \ We have around forty primitives, more than is ideal, but it
-\ is necessary given the nature of this system. Performance 
-\ critical words have to be implemented as primitives 
-\ otherwise the system would be far too slow. 
+\ is necessary given the nature of this system. Performance
+\ critical words have to be implemented as primitives
+\ otherwise the system would be far too slow.
 \
 \ It is partly a matter of philosophy and partly a matter of
 \ engineering concerns as to what goes where. It is best to
-\ keep the set of primitives as minimal as possible, as if this 
-\ Forth were to be ported to a new platform, all of these 
+\ keep the set of primitives as minimal as possible, as if this
+\ Forth were to be ported to a new platform, all of these
 \ routines would have to be rewritten. (It "is best" because
 \ the author values portability).
-\ 
-\ One of the reasons eForth was so portable is because there 
-\ were a small set of primitive words that it required, most 
-\ of eForth was written in eForth, a higher level and more 
+\
+\ One of the reasons eForth was so portable is because there
+\ were a small set of primitive words that it required, most
+\ of eForth was written in eForth, a higher level and more
 \ portable language than assembly is.
 \
 \ ## The Assembly Primitives in Detail
@@ -2297,7 +2297,7 @@ assembler.1 -order
 \
 \ That will be corrected later, but these two form the core
 \ of those words. It does mean that the Forth implementation
-\ can address less memory than is potentially available to the 
+\ can address less memory than is potentially available to the
 \ SUBLEQ machine. The SUBLEQ machine can address approximately
 \ 65536 cells, or 128kiB, however the Forth can address
 \ 65536 bytes, or 64kiB. Note the word "approximately", some
@@ -2307,15 +2307,15 @@ assembler.1 -order
 :a [@] tos tos iLOAD ;a
 :a [!] r0 {sp} iLOAD r0 tos iSTORE --sp t' opDrop JMP (a);
 
-\ "opEmit" (and formerly "opKey") perform the I/O functions, 
-\ of which there are only two support by the SUBLEQ 
+\ "opEmit" (and formerly "opKey") perform the I/O functions,
+\ of which there are only two support by the SUBLEQ
 \ architecture, get an octet of input and output one. Only
 \ one of those, output, is coded in assembly and that is
 \ "opEmit". It is possible to implement input directly in
 \ Forth with the "\[@\]" primitive.
 \
 \ "opEmit", called by "emit", outputs a single byte. It is
-\ always blocking. "opKey" (no longer used) accepts a single 
+\ always blocking. "opKey" (no longer used) accepts a single
 \ byte of input and returns negative on error. Depending on the
 \ implementation the negative can mean "no byte has been
 \ received yet" (it is non-blocking) or it can mean "End Of
@@ -2380,20 +2380,20 @@ assembler.1 -order
 \ site does not have to be pushed to the return stack.
 \
 \ The way this would be implemented is the word that will
-\ compile "opExit" into the dictionary would need to look at 
-\ the previously compiled word (and perhaps some 
-\ meta-information) and check if it is a function call, if so, 
-\ it can change it to a jump. We will not do this optimization 
-\ in this Forth. The optimizer has to either be aware of cells 
-\ that might look like calls but are not (think compiled 
-\ numbers) and also be aware not to cross control structure 
-\ boundaries, or alternatively the programmer has to 
+\ compile "opExit" into the dictionary would need to look at
+\ the previously compiled word (and perhaps some
+\ meta-information) and check if it is a function call, if so,
+\ it can change it to a jump. We will not do this optimization
+\ in this Forth. The optimizer has to either be aware of cells
+\ that might look like calls but are not (think compiled
+\ numbers) and also be aware not to cross control structure
+\ boundaries, or alternatively the programmer has to
 \ selectively apply the optimization themselves which is
 \ error prone.
 \
 \ These next words are for stack manipulation, mainly return
-\ stack manipulation like "opExit", words that warrant more 
-\ explanation than the implementations of instructions like 
+\ stack manipulation like "opExit", words that warrant more
+\ explanation than the implementations of instructions like
 \ "swap", mainly due to what they are used for.
 \
 \ "r@" is especially useful, it is used often in "for...next"
@@ -2457,8 +2457,8 @@ assembler.1 -order
 \
 \ Will be compiled to something that looks like this:
 \
-\ 
-\        <word header not shown> 
+\
+\        <word header not shown>
 \         0: opJumpZ
 \         1: 12
 \         2: (push)
@@ -2490,7 +2490,7 @@ assembler.1 -order
   r2 ZERO
   tos if r2 NG1! then tos DEC tos +if r2 NG1! then
   tos {sp} iLOAD --sp
-  r2 if ip INC vm JMP then (fall-through); 
+  r2 if ip INC vm JMP then (fall-through);
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
 
 \ "opNext" is the only other control structure instruction
@@ -2498,14 +2498,14 @@ assembler.1 -order
 \ be noted that the exception mechanism of throw/catch does
 \ not need to be implemented as an instruction, which is also
 \ part of the control structure word set even if it is not
-\ thought as being so. For the sake of efficiency "opNext" 
-\ is implemented as an instruction. It could actually be 
-\ implemented in higher level Forth using return stack 
-\ manipulation. 
+\ thought as being so. For the sake of efficiency "opNext"
+\ is implemented as an instruction. It could actually be
+\ implemented in higher level Forth using return stack
+\ manipulation.
 \
-\ It is used as part of the definite looping mechanism 
-\ available in eForth, which is the "for...next" construct, it 
-\ is odd construct, but easy to implement and fast. Much like 
+\ It is used as part of the definite looping mechanism
+\ available in eForth, which is the "for...next" construct, it
+\ is odd construct, but easy to implement and fast. Much like
 \ "opJump" a jump destination follows the "opNext" instruction.
 \
 \ The "for...next" loop if given N will run for N + 1 times,
@@ -2526,7 +2526,7 @@ assembler.1 -order
 \        2: address of .
 \        3: opNext 1
 \
-\ And if run with 2, such as "2 example", would produce the 
+\ And if run with 2, such as "2 example", would produce the
 \ output "2 1 0".
 \
 \ "opJump" is reused by "opNext" to save space.
@@ -2574,7 +2574,7 @@ assembler.1 -order
 \ with little performance loss compared to "rshift", division
 \ by even a power of two is slow on a SUBLEQ machine.
 \
-\ It works bit by bit, shifting right by a variable number of 
+\ It works bit by bit, shifting right by a variable number of
 \ bits, building up the results one bit at a time and doubling
 \ the "x" and "tos" registers.
 \
@@ -2583,17 +2583,17 @@ assembler.1 -order
 \ a single bit as the result is produced in reverse order.
 \
 \ As is common for all bitwise operations on the SUBLEQ
-\ machine barring "invert", they are expensive to compute. If 
-\ the SUBLEQ machine could have any extra instructions a 
-\ bitwise multiplexor and left and right shifts would be them. 
-\ You could gain back a lot in terms of efficiency just from 
+\ machine barring "invert", they are expensive to compute. If
+\ the SUBLEQ machine could have any extra instructions a
+\ bitwise multiplexor and left and right shifts would be them.
+\ You could gain back a lot in terms of efficiency just from
 \ those three extra additions (although another contender would
 \ be load and store instructions).
 \
-\ "rshift" works by looping for each bit in a 16-bit value less 
+\ "rshift" works by looping for each bit in a 16-bit value less
 \ one bit, and it tests whether the topmost bit is set (a
 \ cheap operation on twos compliment SUBLEQ machines, as the
-\ top bit is set when the value is negative). 
+\ top bit is set when the value is negative).
 \
 \ If the topmost bit is set, then one is added to an
 \ accumulator register ("x" in this case), "x" will be our
@@ -2614,7 +2614,7 @@ assembler.1 -order
 \
 \ In each cycle, "x" is first doubled, but as it starts as
 \ zero, this is has no effect initially, if the top most bit of
-\ "tos" is non-zero then 1 is added to "x", then "tos" is 
+\ "tos" is non-zero then 1 is added to "x", then "tos" is
 \ doubled, until completion.
 \
 \ The algorithms for "AND", "OR", and "XOR" are similar.
@@ -2638,14 +2638,14 @@ assembler.1 -order
   repeat
   r1 tos MOV ;a
 
-\ This single primitive, "opMux", implements bitwise 
+\ This single primitive, "opMux", implements bitwise
 \ multiplexing, also known as "mux". It is a Universal Gate,
 \ much like NAND and NOR are (well, it is universal if we have
 \ access to the constants zero and one).
 \
 \ Previous iterations of this project implement the bitwise
-\ operators in full, in SUBLEQ assembly, and those 
-\ implementations along with the description are still 
+\ operators in full, in SUBLEQ assembly, and those
+\ implementations along with the description are still
 \ available in the appendix.
 \
 \ However implementing "and", "or" and "xor" takes up a lot
@@ -2655,7 +2655,7 @@ assembler.1 -order
 \
 \ The Forth code that implements those operators using "mux"
 \ is shown later on, this section will describe how "mux" is
-\ implement, and what it does. Unlike the normal boolean 
+\ implement, and what it does. Unlike the normal boolean
 \ operators multiplex takes three arguments, which we will
 \ call "a", "b" and "sel" ("sel" being short for select).
 \
@@ -2705,7 +2705,7 @@ assembler.1 -order
 \        5 A 0 mux ( returns A )
 \
 \ You can see that the operator is quite simple, and it is
-\ descriptive, it multiplexes between two values. 
+\ descriptive, it multiplexes between two values.
 \
 \ Multiplexors are more familiar to electronic engineers than
 \ to programmers, and especially those familiar with the
@@ -2717,13 +2717,13 @@ assembler.1 -order
 \ shown later.
 \
 \ On to how the code works, much like "rshift", it operates
-\ bit by bit, checking the topmost bit, if the value is 
+\ bit by bit, checking the topmost bit, if the value is
 \ negative then we known that the top bit is set (or the
 \ entire value is zero, which we must account and correct for).
 \
 \ We can shift bits to the left by adding the value we want to
 \ shift to itself, which doubles it.
-\ 
+\
 \ Using the topmost bit check and the doubling technique we
 \ have a way accomplish what we need to do. Although this will
 \ only work on SUBLEQ machines that implements twos compliment
@@ -2743,13 +2743,13 @@ assembler.1 -order
     tos r5 MOV r6 ZERO
     r5 -if r6 NG1! then r5 INC r5 -if r6 NG1! then
 
-    r6 -if 
+    r6 -if
       r4 r7 MOV r5 ZERO
       r7 -if r5 ONE! then r7 INC r7 -if r5 ONE! then
       r5 r1 ADD
     then
     r6 INC
-    r6 if  
+    r6 if
       r3 r7 MOV r5 ZERO
       r7 -if r5 ONE! then r7 INC r7 -if r5 ONE! then
       r5 r1 ADD
@@ -2798,18 +2798,18 @@ assembler.1 -order
 \
 \        if D = 0 then throw() end
 \        Q := 0 -- Initialize quotient and remainder to zero
-\        R := 0                  
+\        R := 0
 \        -- Where n is the number of bits in N
-\        for i := n - 1 .. 0 do  
+\        for i := n - 1 .. 0 do
 \          R := R << 1 -- Left-shift R by 1 bit
-\          -- Set the least-significant bit of R 
+\          -- Set the least-significant bit of R
 \          -- equal to bit i of the numerator
-\          R(0) := N(i) 
+\          R(0) := N(i)
 \          if R >= D then
 \            R := R - D
 \            Q(i) := 1
 \          end
-\        end 
+\        end
 \
 \ (from <https://en.wikipedia.org/wiki/Division_algorithm>)
 \
@@ -2821,7 +2821,7 @@ assembler.1 -order
   begin
     r1 ONE!
     r0 -if r1 ZERO then
-    r1 
+    r1
   while
     r2 INC
     tos r0 SUB
@@ -2842,16 +2842,16 @@ assembler.1 -order
 \ it is possible to implement or approximate peripherals
 \ and other systems.
 \
-\ We will see that later on with the delay loop based "ms", and 
-\ with the fake Forth Block system. "pause" and the eForth 
-\ system however implements a usable multitasking system of a 
-\ type which is more common in embedded control systems than on 
-\ desktop computers. 
+\ We will see that later on with the delay loop based "ms", and
+\ with the fake Forth Block system. "pause" and the eForth
+\ system however implements a usable multitasking system of a
+\ type which is more common in embedded control systems than on
+\ desktop computers.
 \
-\ As the multitasking is not preemptive we do not need a way 
-\ of handling interrupts. The multitasking system has 
-\ interactions with the Input/Output layer which is blocking in 
-\ the default C implementation of the SUBLEQ machine, and it 
+\ As the multitasking is not preemptive we do not need a way
+\ of handling interrupts. The multitasking system has
+\ interactions with the Input/Output layer which is blocking in
+\ the default C implementation of the SUBLEQ machine, and it
 \ also interacts with the USER variables.
 \
 \ Each Forth task, of which there is guaranteed to be at least
@@ -2938,7 +2938,7 @@ opt.multi [if]
 \ assembly control structures like "-if", were placed in an
 \ assembly vocabulary in the target system. One thing that you
 \ see in Forth systems from the 1980s is the liberal use of
-\ assembly (usually for the 6502 or Z80 processors) for 
+\ assembly (usually for the 6502 or Z80 processors) for
 \ routines that needed speed, usually control structures or
 \ arithmetic operations such as division.
 \
@@ -2992,7 +2992,7 @@ there 2/ primitive t!
 \ * ":t"/";t":  Define a word in the target dictionary.
 \ * ":to": Define a word in the target dictionary, but
 \ do not make it available directly by putting it in the search
-\ order during meta-compilation, the word is instead put into 
+\ order during meta-compilation, the word is instead put into
 \ the "target.only.1" dictionary of the meta-compiler.
 \ * ":s"/";s": Define a word in the system dictionary
 \ * ":so": The same as ":to", except there is no
@@ -3062,8 +3062,8 @@ there 2/ primitive t!
 \
 
 :m munorder target.only.1 -order talign ;m
-:m (;t) 
-   CAFE <> if abort" Unstructured" then 
+:m (;t)
+   CAFE <> if abort" Unstructured" then
    munorder ;m
 :m ;t (;t) opExit ;m
 :m :s tlast @ {system} t@ tlast ! F00D :t drop 0 ;m
@@ -3091,7 +3091,7 @@ there 2/ primitive t!
 \ normal Forth compilation, but are just running exclusively
 \ in command mode, except when defining new meta-compilation
 \ words with ":m" and ";m". That is ":t" does not change the
-\ state variable in the host Forth. 
+\ state variable in the host Forth.
 \
 
 :m : :t ;m ( -- ???, "name" : start cross-compilation )
@@ -3140,7 +3140,7 @@ there 2/ primitive t!
 \ been encountered in the Virtual Machine instruction section,
 \ but it decrements and tests that loop counter and jumps
 \ back to instruction after "\>r" if the counter is positive,
-\ if zero or negative it removes the counter from the return 
+\ if zero or negative it removes the counter from the return
 \ stack and continues on after the "next" statement.
 \
 \ These meta-compiled words do not take locations at cross
@@ -3155,7 +3155,7 @@ there 2/ primitive t!
 \ hole in the dictionary, modify it later on, push locations
 \ on to the stack for a word defined later to act on.
 \
-\ The section on Control Structures has more detail as to how 
+\ The section on Control Structures has more detail as to how
 \ the compilation of these is achieved.
 \
 
@@ -3191,7 +3191,7 @@ there 2/ primitive t!
 \ need the word "dup" to actually duplicate the top word on
 \ a stack, instead the new "dup" should compile a reference
 \ to "opDup" in newly defined words, so we are safe to define
-\ a new "dup". The same goes for the rest of these new words. 
+\ a new "dup". The same goes for the rest of these new words.
 \
 
 :m dup opDup ;m ( -- : compile opDup into the dictionary )
@@ -3225,10 +3225,10 @@ there 2/ primitive t!
 \ a single virtual machine instruction.
 \
 \ We want to make sure that we use references to the virtual
-\ machine instructions when we call functions such as 
-\ "+" or "xor" when we use them later in the program, so we 
-\ put those words in the "target.only.1" dictionary to make 
-\ sure they will not be found, but are still accessible if we 
+\ machine instructions when we call functions such as
+\ "+" or "xor" when we use them later in the program, so we
+\ put those words in the "target.only.1" dictionary to make
+\ sure they will not be found, but are still accessible if we
 \ need them.
 \
 \ The definitions looks odd, for example:
@@ -3249,7 +3249,7 @@ there 2/ primitive t!
 \
 \ There is not much else to say about these words. Some of them
 \ go into the system vocabulary, but should also not be
-\ referenced later on either. 
+\ referenced later on either.
 \
 
 :to + + ; ( n n -- n : addition )
@@ -3274,13 +3274,13 @@ there 2/ primitive t!
 \ However, if that is defined, then an entire assembly word-set
 \ should be as well, along with easily accessible constants
 \ such as the value of "opExit", and the locations of registers
-\ should as "tos", "ip", and ways of accessing the stack 
+\ should as "tos", "ip", and ways of accessing the stack
 \ pointers from assembly.
 \
 
 \ One of the earliest tricks I remember being taught when
 \ learning to program is shift left by one place is equivalent
-\ to adding that number to itself, "2\*" does this, "2\/" will 
+\ to adding that number to itself, "2\*" does this, "2\/" will
 \ be defined later, it is slightly more complex.
 \
 : 2* dup + ; ( u -- u : multiply by two )
@@ -3299,7 +3299,7 @@ there 2/ primitive t!
 \ the instruction "(push)" has to manipulate the return stack.
 \ Remember when calling a function the topmost return stack
 \ variable points to the next cell from which the word
-\ was stored. If we store the number in the next cell when 
+\ was stored. If we store the number in the next cell when
 \ compiling the number into a word definition, then by
 \ manipulating the return stack value to load from that address
 \ and then placing that return address back but incremented
@@ -3324,14 +3324,14 @@ there 2/ primitive t!
 \ Some other important meta-compiler words will be defined ones
 \ for making constants, variables and thread-local variables
 \ (called user variables) can now be defined. We will first
-\ define three words that will be used by the meta-compiler 
+\ define three words that will be used by the meta-compiler
 \ words we will define (they will also be used much later
 \ by the equivalent words defined in the target, in the
-\ section on "create" and "does\>"). Those words are "(var)", 
-\ "(const)" and "(user)", which are used by "variable", 
+\ section on "create" and "does\>"). Those words are "(var)",
+\ "(const)" and "(user)", which are used by "variable",
 \ "constant" and "user" respectively.
 \
-\ The bracket words work by manipulating the return stack value 
+\ The bracket words work by manipulating the return stack value
 \ doing three things when they are compiled into a new word by
 \ "variable", "constant" or "user".
 \
@@ -3345,13 +3345,13 @@ there 2/ primitive t!
 \
 \ "(up)" does a similar function to "(user)", and is then
 \ used in the meta-compiler word "up". It is also similar
-\ to "(push)", however it is used to access USER variables 
-\ instead, that is variables stored in the thread local store, 
-\ or to think of them another way, variables stored relative to 
-\ a tasks memory area. They are part of the cooperative 
-\ multitasking system. This instruction should be understood in 
-\ conjunction with "tuser", "pause" (defined later on in this 
-\ section) and the multitasking words defined towards the end 
+\ to "(push)", however it is used to access USER variables
+\ instead, that is variables stored in the thread local store,
+\ or to think of them another way, variables stored relative to
+\ a tasks memory area. They are part of the cooperative
+\ multitasking system. This instruction should be understood in
+\ conjunction with "tuser", "pause" (defined later on in this
+\ section) and the multitasking words defined towards the end
 \ of this document.
 \
 \ Where this function differs to "(push)" is that instead of
@@ -3389,21 +3389,21 @@ system[
 
 \ "1+" and "1-" do what they say, increment and decrement
 \ respectively. They are defined here as they are needed
-\ for the next few definitions. 
+\ for the next few definitions.
 
-\ "1+" is needed for our definition "(push)" so is defined 
+\ "1+" is needed for our definition "(push)" so is defined
 \ here, it also needs the constant '#1' to be defined, as
-\ does "1-".  
+\ does "1-".
 \
 : 1+ #1 + ; ( n -- n : increment value in cell )
 : 1- #1 - ; ( n -- n : decrement value in cell )
 
 \ "lit" is used to compile a literal into the dictionary, which
-\ will be pushed when run. Note again, we are not in command 
-\ mode when in between ":t" and ";t", and even if we were, it 
-\ would not do the correct action, the Forth we are running 
-\ this meta-compiler under would attempt to compile a number 
-\ given to it into the dictionary, but into its dictionary, and 
+\ will be pushed when run. Note again, we are not in command
+\ mode when in between ":t" and ";t", and even if we were, it
+\ would not do the correct action, the Forth we are running
+\ this meta-compiler under would attempt to compile a number
+\ given to it into the dictionary, but into its dictionary, and
 \ in a way that would not work in the target. We cannot modify
 \ the internals of the Forth used to compile this program,
 \ (or not the gforth interpreter and not in a portable way)
@@ -3467,12 +3467,12 @@ system[
 
 \ A common expression I find myself typing is "dup \>r",
 \ we could define a word that does this using "over" and
-\ some return stack manipulation, or with some of the other 
-\ stack words, however it is more clear (but results in a 
-\ slightly larger image) to type out the expression in its 
+\ some return stack manipulation, or with some of the other
+\ stack words, however it is more clear (but results in a
+\ slightly larger image) to type out the expression in its
 \ entirety. There is an element of style into what gets turned
 \ into its own word and what does not. As the author cannot
-\ think of a good name for the non-standard word 
+\ think of a good name for the non-standard word
 \ ("dupr", or "dup\>r", both of which are not clear) the word
 \ will be left out. The names of many of the Forth words
 \ could have the same things said against them, it is not
@@ -3489,9 +3489,9 @@ system[
 \ and then feeding them into "mux", it is a very versatile
 \ instruction.
 \
-\ The operation "invert" performs a bitwise invert, the only 
-\ bitwise operation we can perform easily. It uses the fact 
-\ that a subtraction using twos-compliment arithmetic is 
+\ The operation "invert" performs a bitwise invert, the only
+\ bitwise operation we can perform easily. It uses the fact
+\ that a subtraction using twos-compliment arithmetic is
 \ equivalent to the following:
 \
 \        b - a = b + ~a + 1
@@ -3502,8 +3502,8 @@ system[
 \
 \ The other bitwise operations will be much more difficult
 \ to implement. When making the system for the first time,
-\ getting those bitwise operators correct was the most onerous 
-\ task of bringing the system up, as a bug in those operators 
+\ getting those bitwise operators correct was the most onerous
+\ task of bringing the system up, as a bug in those operators
 \ makes everything else more difficult to debug.
 \
 
@@ -3518,15 +3518,15 @@ system[
 \ compliant (there is a different between right shift,
 \ arithmetic right shift and division that many do not care
 \ about and get confused between).
-\ 
+\
 \ "2/" is used to convert from a SUBLEQ VM address to an
-\ address understandable in Forth. 
-\ 
+\ address understandable in Forth.
+\
 \ "2\*" has a much simpler definition, instead of being defined
 \ in terms of "lshift" (which has not yet been defined) it
 \ just adds the number to be doubled to itself, as previously
 \ shown.
-\ 
+\
 : 2/ #1 rshift ; ( u -- u : divide by two )
 
 \ Notice how "@" and "!" divide the address by two, which drops
@@ -3597,7 +3597,7 @@ system[
 \ provided by a word with a name like "(name)", the word that
 \ executes the hook will be called just "name".
 \
-\ NB. "{cold}" should contain a cell address, not a Forth 
+\ NB. "{cold}" should contain a cell address, not a Forth
 \ address!
 \
 \ That is,
@@ -3628,7 +3628,7 @@ system[
   user <expect>  ( -- a : expect xt loc. )
   user <error>   ( -- a : <error> xt container. )
 ]system
-  
+
 :s <cold> {cold} lit ;s ( -- a : cold xt loc. )
 
 \ ### Forth Variables
@@ -3645,9 +3645,9 @@ system[
 \
 \ "current" contains the vocabulary for which newly defined
 \ words are to be added to. An example usage is in the meta
-\ compiler, It is used to place words in the "target.1", 
-\ "meta.1", "assembler.1" and "target.only.1" vocabularies. 
-\ "current" is not usually used directly however, but is used 
+\ compiler, It is used to place words in the "target.1",
+\ "meta.1", "assembler.1" and "target.only.1" vocabularies.
+\ "current" is not usually used directly however, but is used
 \ by words like "definitions".
 \
 
@@ -3656,13 +3656,13 @@ system[
 
 \ The word "this" allows us to access the USER task area,
 \ it pushes the pointer to that area onto the stack. The
-\ USER task is a 1024 byte block of memory, mentioned 
-\ previously, that has multiple stacks, buffers and variables 
+\ USER task is a 1024 byte block of memory, mentioned
+\ previously, that has multiple stacks, buffers and variables
 \ in it.
 \
 \ "this" can be use to get the task ID (which is the same as
-\ the tasks address), it can also be used for the 
-\ implementation of the word "pad". The pad location is an area 
+\ the tasks address), it can also be used for the
+\ implementation of the word "pad". The pad location is an area
 \ 960 bytes into the task area which is meant as a programmer
 \ utility that should contain a *small* section of memory for
 \ temporary usage.
@@ -3750,7 +3750,7 @@ system[
 
 \ As mentioned, "sp@" is defined in Forth, and it is defined
 \ here. It retrieves the variable stack position, and pushes
-\ it on to the variable stack. 
+\ it on to the variable stack.
 \
 : sp@ sp @ 1+ ; ( -- a : Fetch variable stack pointer )
 
@@ -3783,8 +3783,8 @@ system[
 \ You could use higher bases as a data interchange format,
 \ allowing binary data to be transferred as text with a
 \ processing and storage overhead. Bases 32 and 36 have
-\ advantages, as does base 16, explained in a little bit. The 
-\ lower the base the less dense the resulting string, which 
+\ advantages, as does base 16, explained in a little bit. The
+\ lower the base the less dense the resulting string, which
 \ means more overhead.
 \
 \ Base-64 is the most common way of encoding binary strings
@@ -3795,9 +3795,9 @@ system[
 \ if you so desired.
 \
 \ Base-32 has the advantage that it is a power two base, so
-\ a CODEC for it *could* be more efficiently implemented with 
-\ just shifts and masking (no multiplication is required), 
-\ Base-36 has the advantage that is the most dense encoding 
+\ a CODEC for it *could* be more efficiently implemented with
+\ just shifts and masking (no multiplication is required),
+\ Base-36 has the advantage that is the most dense encoding
 \ allowed in this scheme, but the CODEC will always be slower.
 \
 \ Base-16 is less dense than Base-32 but is easier to process,
@@ -3861,11 +3861,11 @@ system[
 \ detail about how the interpreter internals work.
 \
 \ Other eForth models instead store execution vectors for
-\ compilation and interpreting within the "state" variable, 
-\ this does make the system more flexible, but is not done here 
-\ for the sake of size.  "\<interpret\>" and "\<compile\>" are 
-\ two hooks, including others, that have been cut from this 
-\ implementation of eForth. 
+\ compilation and interpreting within the "state" variable,
+\ this does make the system more flexible, but is not done here
+\ for the sake of size.  "\<interpret\>" and "\<compile\>" are
+\ two hooks, including others, that have been cut from this
+\ implementation of eForth.
 \
 \ There is a trade-off, you could potentially put a
 \ hook in for every single defined word, but that would be too
@@ -3951,7 +3951,7 @@ system[
 \        int leq0(uint16_t a) {
 \          return ((int16_t)a) <= (int16_t)0;
 \        }
-\        
+\
 \        int s_less(uint16_t a, uint16_t b) {
 \          const int a0 = leq0(a);
 \          const int b0 = leq0(b);
@@ -3966,7 +3966,7 @@ system[
 \          const int l = leq0((uint16_t)(a - b));
 \          return l ? leq0((uint16_t)((a + 1) - b)) : 0;
 \        }
-\        
+\
 \ There are many corner cases that have to be dealt with. It
 \ is easy to perform a Less-Than-Or-Equals-To-Zero on a SUBLEQ
 \ machine, and to perform subtraction. It would seem like
@@ -3975,7 +3975,7 @@ system[
 \ solution. While it is all three, it is also not correct,
 \ failing for comparing large negative values.
 \
-\ The simple but buggy solution is:        
+\ The simple but buggy solution is:
 \
 \        : > - 0> ;    ( n1 n2 -- f : signed greater than )
 \        : < swap > ;  ( n1 n2 -- f : signed less than )
@@ -3989,12 +3989,12 @@ system[
 : <
    2dup leq0 swap leq0 if
      if
-       2dup 1+ leq0 swap 1+ leq0 
+       2dup 1+ leq0 swap 1+ leq0
        if drop else if 2drop #0 exit then then
      else 2drop #-1 exit then \ a0 && !b0
    else
      if 2drop #0 exit then \ !a0 && b0
-   then 
+   then
    2dup - leq0 if
      swap 1+ swap - leq0 if #-1 exit then
      #0 exit
@@ -4015,9 +4015,9 @@ system[
 \ The unsigned words are defined in terms of each other once
 \ one of them has been defined, they are a bit awkward as they
 \ depend on the signed comparison words to do the work, which
-\ is not normally how they are implemented, but necessary given 
-\ the constraints of the system. Unsigned comparison is used 
-\ less than signed, so speed is not too much of a concern, they 
+\ is not normally how they are implemented, but necessary given
+\ the constraints of the system. Unsigned comparison is used
+\ less than signed, so speed is not too much of a concern, they
 \ are here for completeness sake.
 \
 \ An alternative implementation of "u\<" is as follows:
@@ -4087,8 +4087,8 @@ system[
 \ does have to worry about the number of bytes that are in a
 \ cell on a given architecture. There are words within this
 \ implementation that assume a cell size of 2 for optimization
-\ reasons such as "aligned" but they are kept to a minimum, 
-\ that assumption is frowned upon because it negatively affects 
+\ reasons such as "aligned" but they are kept to a minimum,
+\ that assumption is frowned upon because it negatively affects
 \ portability.
 \
 \ - "cell" just pushes the size of a single cell in bytes.
@@ -4097,7 +4097,7 @@ system[
 \ - "cells" is used to convert a number of cells into the
 \ number of bytes those cells take up.
 \ - "cell-" is used to decrement an address by a single cell,
-\ it used to be missing, but 
+\ it used to be missing, but
 \
 \ The words are trivial, "cell-" is missing because it is not
 \ used but is easy enough to define.
@@ -4126,13 +4126,13 @@ system[
 \
 \ "@execute" is a merger of the common expression "@ execute"
 \ into one word, it saves a little space. In the original
-\ eForth it would perform the tests which are currently 
-\ commented out, that is "@execute" would check if the 
+\ eForth it would perform the tests which are currently
+\ commented out, that is "@execute" would check if the
 \ execution token was not null before executing the token. This
 \ is useful for some execution tokens, but is just as liable
 \ to cause problems with others, consider execution tokens
 \ that expect or produce values, the checks would not help
-\ there. It would be better to throw an error if the execution 
+\ there. It would be better to throw an error if the execution
 \ token is zero, a check which could be added in (and would
 \ involve moving the definition of "@execute" to after "throw".
 \
@@ -4255,7 +4255,7 @@ system[
 
 \ "cr" emits a newline, DOS style newlines are used instead
 \ of Unix style newlines, although that can be changed by
-\ removing the right constant and emit words. This could be 
+\ removing the right constant and emit words. This could be
 \ made to be an option, set in the "{options}" field, but is
 \ not at present as there is little need.
 \
@@ -4278,7 +4278,7 @@ system[
 \ "get-current"/"set-current" get the dictionary or vocabulary
 \ that is currently being used to append new word definitions
 \ to, which does not have to be one in the search order, but
-\ usual is. "last" gets the location of the last defined word 
+\ usual is. "last" gets the location of the last defined word
 \ in the dictionary.
 \
 \ See also "definitions".
@@ -4318,7 +4318,7 @@ system[
 \ Be warned though, this version of "pick" is slower but the
 \ main concern is its high stack usage, especially as systems
 \ with hardware stacks are likely to have small stacks,
-\ perhaps with even as low as eight values. The version of 
+\ perhaps with even as low as eight values. The version of
 \ "pick" above will quickly eat through that, overflow,
 \ and give incorrect results when the index is too high, the
 \ one below does not have that limitation as the stack can be
@@ -4361,7 +4361,7 @@ system[
 \
 \ "rshift" can be defined like so:
 \
-\         : rshift begin ?dup while 1- swap 2/ swap repeat ; 
+\         : rshift begin ?dup while 1- swap 2/ swap repeat ;
 \
 \ However in this Forth we implement "2/" with "rshift", and
 \ as you know we have implemented "rshift" in assembly instead.
@@ -4371,7 +4371,7 @@ system[
 \ ### Character Load / Store
 \
 \ The SUBLEQ machine can only do cell aligned loads and stores,
-\ This means we will have to make words that can perform 
+\ This means we will have to make words that can perform
 \ character or byte based access. For speed reasons this would
 \ be better done in assembly, but because of the complexity
 \ these words have been left as pure Forth.
@@ -4412,7 +4412,7 @@ system[
 \
 \ These words are also partially responsible for the Endianess
 \ of the system, the Endianess of how the meta-compiler writes
-\ values into the target also needs to be the same as the 
+\ values into the target also needs to be the same as the
 \ target.
 \
 
@@ -4421,7 +4421,7 @@ system[
    tuck @+ swap #1 and 0= FF lit xor
    >r over xor r> and xor swap ! ; ( c a -- character store )
 
-\ "c@+" is another space saving measure like "@+", but is also 
+\ "c@+" is another space saving measure like "@+", but is also
 \ useful to have around, and non-standard.
 \
 :s c@+ dup c@ ;s ( b -- b u : non-destructive 'c@' )
@@ -4512,7 +4512,7 @@ system[ user tup =cell tallot ]system
 \
 \ It takes an address and aligns that address to the next
 \ address on a two byte boundary (and on a 32-bit system this
-\ standard Forth word would align to a four byte boundary, on 
+\ standard Forth word would align to a four byte boundary, on
 \ 64-bit, 8 bytes).
 \
 \ For some example mappings:
@@ -4560,11 +4560,11 @@ system[ user tup =cell tallot ]system
 \
 \ On some platforms "," can be used to write an execution token
 \ into a word definition, but that is not portable, an
-\ execution token does not have the same representation as the 
-\ number that represents a call to a word that is compiled 
+\ execution token does not have the same representation as the
+\ number that represents a call to a word that is compiled
 \ within a word definition.
 \
-\ On this platform, using "," will fail when compiling 
+\ On this platform, using "," will fail when compiling
 \ execution tokens into the dictionary, and will most likely
 \ cause a crash or a reset. Instead "compile," is provided,
 \ which can convert in a platform specific way the execution
@@ -4597,8 +4597,8 @@ system[ user tup =cell tallot ]system
 \ for the length of the string, followed by the rest of the
 \ string. That is the traditional mechanism Forth used for
 \ strings, but it limits those strings to only containing
-\ 255 bytes plus the length byte, not a problem on the memory 
-\ constrained 16-bit microcomputers that Forth grew up on, 
+\ 255 bytes plus the length byte, not a problem on the memory
+\ constrained 16-bit microcomputers that Forth grew up on,
 \ and not a problem here either.
 \
 \ "count" can be used to extract the length of a string, but
@@ -4632,18 +4632,18 @@ system[ user tup =cell tallot ]system
 \
 \ As with the numeric output words, it may be useful to call
 \ "single" and "multi" at the start and end of this procedure,
-\ to help prevent garbled output in a multithreading 
+\ to help prevent garbled output in a multithreading
 \ environment.
 \
 
 : type ( a u -- : print out a string )
   begin dup while swap count emit swap 1- repeat 2drop ;
 
-\ "fill" is used to fill a section of memory with a repeated 
-\ byte, hence the name. More frequently "erase" is used, which 
+\ "fill" is used to fill a section of memory with a repeated
+\ byte, hence the name. More frequently "erase" is used, which
 \ does a fill but the byte being zero.
 \
-\ "cmove" is used to move one section of memory to another 
+\ "cmove" is used to move one section of memory to another
 \ section of memory. "move" is a cell by cell equivalent, but
 \ is missing as it is not used within this Forth.
 \
@@ -4683,10 +4683,10 @@ system[ user tup =cell tallot ]system
 \ * ".\$" is used to make counted strings that are always
 \ printed out.
 \
-\ The two meta-compiler string words '."' and '$"', use 
-\ "($)" and ".\$" then call "\$literal" to grab the string from 
-\ the input stream. Two words similar to the meta-compiler 
-\ versions will be defined later, after the parsing words have 
+\ The two meta-compiler string words '."' and '$"', use
+\ "($)" and ".\$" then call "\$literal" to grab the string from
+\ the input stream. Two words similar to the meta-compiler
+\ versions will be defined later, after the parsing words have
 \ been made.
 \
 \ How does "do\$" work? Let us see a compiled string:
@@ -4734,7 +4734,7 @@ system[ user tup =cell tallot ]system
 \
 \ It does all this in a short amount of code. It is not
 \ as complex as it sounds, it is more of a trick that has to
-\ be learned. "do\$" also has to convert to and from cell 
+\ be learned. "do\$" also has to convert to and from cell
 \ addresses with "2*" and "2/".
 \
 \ "do\$" is not a general purpose word, it should not be used
@@ -4763,7 +4763,7 @@ system[ user tup =cell tallot ]system
 \ "catch" and "throw", usually the author does not like
 \ exceptions in languages other than Forth (specifically C like
 \ languages, although the higher level the language is, the
-\ more acceptable they are), The author instead prefer other 
+\ more acceptable they are), The author instead prefer other
 \ mechanisms, or even just returning error codes.
 \
 \ As an aside about languages and error handling:
@@ -4805,7 +4805,7 @@ system[ user tup =cell tallot ]system
 \ by the outer interpreter, which has an exception handler of
 \ last resort.
 \
-\ The appendix contains a list of standard error codes some of 
+\ The appendix contains a list of standard error codes some of
 \ which are thrown by this interpreter.
 \
 \ While it can be tricky to get catch/throw correct, their
@@ -4835,8 +4835,8 @@ system[ user tup =cell tallot ]system
 \        <conditional> if <error-code> throw then
 \
 \ "if...then" generates slightly larger code on most Forth
-\ implementations, and also branches, than if "and" were used. 
-\ The source code is slightly larger, although immediately 
+\ implementations, and also branches, than if "and" were used.
+\ The source code is slightly larger, although immediately
 \ easier to read.
 \
 \ Using "and" works in Forth as conditionals return Forth
@@ -4850,7 +4850,7 @@ system[ user tup =cell tallot ]system
 \
 \ The implementation of "catch" and "throw" are close the
 \ the example implementations in the standards and notes,
-\ such as in the ANS Forth standard (available at 
+\ such as in the ANS Forth standard (available at
 \ <http://lars.nocrew.org/forth2012/exception/THROW.html>) and
 \ and the application note "Catch and Throw" by
 \ Michael Milendorf, Sun Microsystems from EuroForth 98.
@@ -4888,9 +4888,9 @@ system[ user tup =cell tallot ]system
     then ;
 
 \ Now we have "catch" and "throw", we can use them. The next
-\ chapter defines the more advanced arithmetic words of 
-\ division is one such word. Division will need a way to throw 
-\ if provided numbers outside the range for which the function 
+\ chapter defines the more advanced arithmetic words of
+\ division is one such word. Division will need a way to throw
+\ if provided numbers outside the range for which the function
 \ is valid (ie. if we try to divide by zero).
 \
 \ But there are short words that we will define first
@@ -4899,8 +4899,8 @@ system[ user tup =cell tallot ]system
 \ "abort" throws -1, which should not be caught by the
 \ exception handler of last resort in the "interpret" word, but
 \ will cause "interpret" to halt the system after printing
-\ -1 followed by a question mark. 
-\ 
+\ -1 followed by a question mark.
+\
 \ "(abort)" is used in a similar function later on
 \ that prints out a string, but is also conditional, only
 \ aborting and printing out the error message if given a non
@@ -4933,21 +4933,21 @@ system[ user tup =cell tallot ]system
 \ which are twice the normal width of a number, so on a 16-bit
 \ system a 32-bit value stored as two integers on the stack
 \ would be a "double". It comes from "double width" or
-\ "double precision". 
+\ "double precision".
 \
 \ It is usual for Forth implementations that target small
 \ or embedded system to not define the floating point word-set.
 \ The original Forth implementations predated widely available
-\ floating point units integrated into the CPU, and 
+\ floating point units integrated into the CPU, and
 \ implementing floating point arithmetic in software on a
 \ 16-bit system would be slow and take up limited memory
 \ space.
 \
-\ A lot of the decisions that went into Forth are a consequence 
-\ of the limited hardware on microcomputers available in the 
-\ 1980s and earlier. If starting from scratch software wise, 
-\ but with modern hardware, you would not create a language 
-\ like Forth. It is a product of its time, which in a way makes 
+\ A lot of the decisions that went into Forth are a consequence
+\ of the limited hardware on microcomputers available in the
+\ 1980s and earlier. If starting from scratch software wise,
+\ but with modern hardware, you would not create a language
+\ like Forth. It is a product of its time, which in a way makes
 \ it magical and timeless, but dated.
 \
 \ As the author was not sentient in the 1980s, it makes them
@@ -4975,9 +4975,9 @@ system[ user tup =cell tallot ]system
 \ the result of the addition and then the carry is pushed to
 \ the stack. Using this we can construct some double cell
 \ words, "um+" is a mixed word, it effectively produces a
-\ double cell number given two single cell numbers, the name of 
-\ the word closely follows the naming convention for Forth 
-\ words of these type, "um+" says "unsigned mixed addition", in 
+\ double cell number given two single cell numbers, the name of
+\ the word closely follows the naming convention for Forth
+\ words of these type, "um+" says "unsigned mixed addition", in
 \ effect.
 \
 \ The double cell words all have "d" in them, for example
@@ -5109,9 +5109,9 @@ system[ user tup =cell tallot ]system
 \ with.
 \
 \ "accept" is the word that calls these two words, "tap" and
-\ "ktap", and will finish processing when "cur" is equal to 
-\ "eot", which would mean the input buffer is full. "ktap" 
-\ takes advantage of that and uses that to force "accept" to 
+\ "ktap", and will finish processing when "cur" is equal to
+\ "eot", which would mean the input buffer is full. "ktap"
+\ takes advantage of that and uses that to force "accept" to
 \ exit when it encounters a newline.
 \
 \ "bot" is needed because when we delete characters we need to
@@ -5193,11 +5193,11 @@ system[ user tup =cell tallot ]system
 \ loop when the current cursor position exceeds the buffer
 \ length.
 \
-\ "tib" is a convenience word used for accessing the Terminal 
-\ Input Buffer. It is immediately used by "query", note that 
+\ "tib" is a convenience word used for accessing the Terminal
+\ Input Buffer. It is immediately used by "query", note that
 \ "query" also defines what our maximum length of a line is,
-\ this itself could be made into a variable so it can be 
-\ changed, but we gain little from that on such a limited 
+\ this itself could be made into a variable so it can be
+\ changed, but we gain little from that on such a limited
 \ system.
 \
 \ After "query" is completed it sets the index into the line
@@ -5255,10 +5255,10 @@ system[ user tup =cell tallot ]system
 \ "parse" is more fiddly than complex, it creates the string
 \ variables from which it will work from the Terminal Input
 \ Buffer and the "\>in" variable, then uses two calls to
-\ "look" to find the start and end of a word with "unmatch" and 
-\ "match" respectively. It then calculates a delta between the 
-\ unmatch and match which it adds to "\>in", meaning subsequent 
-\ calls to "parse" will skip over the section we have just 
+\ "look" to find the start and end of a word with "unmatch" and
+\ "match" respectively. It then calculates a delta between the
+\ unmatch and match which it adds to "\>in", meaning subsequent
+\ calls to "parse" will skip over the section we have just
 \ parsed.
 \
 \ After that it retrieves the beginning of the "unmatch"
@@ -5318,12 +5318,12 @@ system[ user tup =cell tallot ]system
 \
 \ The core of the numeric output system are the words
 \ "\<#", "#" and "#\>", for numeric input the main word
-\ is "\>number", which does the heavy lifting, and then the 
-\ secondary word "number?" which pre and post processes the 
+\ is "\>number", which does the heavy lifting, and then the
+\ secondary word "number?" which pre and post processes the
 \ results of "\>number".
 \
 \ All of the numeric I/O is affected by the "base" variable,
-\ which controls which base or radix we are operating in when 
+\ which controls which base or radix we are operating in when
 \ parsing numbers, and what base numbers are printed out in.
 \
 \ The output triplet words, "\<#", "#" and "#\>" operated on
@@ -5342,7 +5342,7 @@ system[ user tup =cell tallot ]system
 \ for a more fancy version of "list", but the complexity of
 \ that word has been reduced.
 \
-\ For the I/O words it might be worth calling the 
+\ For the I/O words it might be worth calling the
 \ multithreading words "single" and "multi" to disable
 \ multithreading and re-enable it after the output is complete,
 \ which could also be done for "type", to help prevent mangled
@@ -5369,11 +5369,11 @@ system[ user tup =cell tallot ]system
 : #> 2drop hld @ this =num lit + over - ; ( u -- b u )
 
 \ "extract" extracts (hence the name) a single number from
-\ a double cell, it should do this with the divide/modulo 
-\ number word called "um/mod", if we divide a number by the 
-\ base we are operating in then we can extract a single digit 
-\ from that number in the returned remainder argument, the 
-\ quotient is reused until it is zero and no more digits can be 
+\ a double cell, it should do this with the divide/modulo
+\ number word called "um/mod", if we divide a number by the
+\ base we are operating in then we can extract a single digit
+\ from that number in the returned remainder argument, the
+\ quotient is reused until it is zero and no more digits can be
 \ extracted from the number.
 \
 :s extract ( ud ud -- ud u : extract digit from number )
@@ -5408,7 +5408,7 @@ system[ user tup =cell tallot ]system
 
 \ "u.r" and "u." print out unsigned numbers, "u." prints out an
 \ unsigned number with a single space before it, "u.r" allows
-\ a variable number of spaces to be printed out This allows for 
+\ a variable number of spaces to be printed out This allows for
 \ the creation of right aligned numeric output.
 \
 \ A version of "u.r" that would allow a custom character to
@@ -5619,12 +5619,12 @@ system[ user tup =cell tallot ]system
 \ header is stored intertwined with the code.
 \
 \ "#vocs" is the constant that tells us the number of
-\ dictionaries we can load and search through at one time, 
-\ eight is usually the minimum, and on this system that is the 
-\ case, we can have a total of eight and minimum of zero 
-\ vocabularies active at any given period. It might be useful 
-\ to have zero vocabularies loaded to prevent the entering of 
-\ any words whilst executing a non-interactive program for 
+\ dictionaries we can load and search through at one time,
+\ eight is usually the minimum, and on this system that is the
+\ case, we can have a total of eight and minimum of zero
+\ vocabularies active at any given period. It might be useful
+\ to have zero vocabularies loaded to prevent the entering of
+\ any words whilst executing a non-interactive program for
 \ instance.
 \
 \ "(search)" will traverse a vocabulary looking for a word
@@ -5642,13 +5642,13 @@ system[ user tup =cell tallot ]system
 \ The word "compare" for testing string equality, required
 \ by "(search)", is also defined here.
 \
-\ "compare" exits early if the strings are not of equal length, 
-\ otherwise it compares the strings byte for byte and exits if 
-\ they are not equal. To keep the number of items on the stack 
-\ small we can use "for" to traverse both strings, given we now 
-\ know they are of equal length, and then use "count" to move 
-\ the string along and extract a byte. We use subtraction to 
-\ test whether the two are equal or not, and return that test 
+\ "compare" exits early if the strings are not of equal length,
+\ otherwise it compares the strings byte for byte and exits if
+\ they are not equal. To keep the number of items on the stack
+\ small we can use "for" to traverse both strings, given we now
+\ know they are of equal length, and then use "count" to move
+\ the string along and extract a byte. We use subtraction to
+\ test whether the two are equal or not, and return that test
 \ value much like the C "strcmp" function.
 \
 
@@ -5708,7 +5708,7 @@ system[ user tup =cell tallot ]system
 \
 \ The pair of words return two "PWD" fields when a word is
 \ found, the address of the previous word in the linked list
-\ which points to the found word and the word that has been 
+\ which points to the found word and the word that has been
 \ found.
 \
 \ This can help during decompilation to determine the last
@@ -5716,7 +5716,7 @@ system[ user tup =cell tallot ]system
 \ starts (assuming no "allot" happens in between the word
 \ definitions) where the last one ended. As a last resort the
 \ "here" pointer can be used as a maximum value to not
-\ decompile past. This can be used to find the start an end 
+\ decompile past. This can be used to find the start an end
 \ point of a word definition which is useful for decompilation.
 \
 
@@ -5758,7 +5758,7 @@ system[ user tup =cell tallot ]system
 \ The main word defined in this section is called "interpret",
 \ when given a counted string it will attempt to execute that
 \ string, and throw an error if it cannot. It must deal with
-\ compile only words (not shown in the diagram below), 
+\ compile only words (not shown in the diagram below),
 \ immediate words, numbers, and compile and command mode.
 \
 \ ![Interpreter Control Flow](img/flow.png)
@@ -5767,19 +5767,19 @@ system[ user tup =cell tallot ]system
 \
 \ Whilst the diagram shows the overall flow of "interpret", it
 \ leaves out a few states, the "compile-only" words is one as
-\ mentioned, another is processing double cell words which are 
+\ mentioned, another is processing double cell words which are
 \ a less well known feature of Forth.
 \
 \ On to the words themselves.
 \
 \ "(literal)" is to determine whether we should compile a
 \ number or push it on to the variable stack given the state of
-\ the interpreter, we do not need to make a version of 
-\ "(literal)" for double cell numbers as we can just call it 
-\ twice. "(literal)" is the word that will go into the 
-\ execution vector in "literal", "literal" is the word that 
-\ "interpret" actually uses. "literal" is an immediate word, as 
-\ it is often used within word definitions to compile a number 
+\ the interpreter, we do not need to make a version of
+\ "(literal)" for double cell numbers as we can just call it
+\ twice. "(literal)" is the word that will go into the
+\ execution vector in "literal", "literal" is the word that
+\ "interpret" actually uses. "literal" is an immediate word, as
+\ it is often used within word definitions to compile a number
 \ computed within that word definition, like this:
 \
 \        : example [ 2 2 + ] literal . cr ;
@@ -5789,8 +5789,8 @@ system[ user tup =cell tallot ]system
 \        : example 2 2 + . cr ;
 \
 \ Except that the computation of adding two numbers together is
-\ done in the first example during compilation and not during 
-\ runtime, making the first example more efficient and smaller 
+\ done in the first example during compilation and not during
+\ runtime, making the first example more efficient and smaller
 \ than the second example.
 \
 \ The reason that "literal" is vectored is so that when writing
@@ -5808,17 +5808,17 @@ system[ user tup =cell tallot ]system
 \ we have to use the "lit" mechanism, which is unfortunate but
 \ not world ending.
 \
-\ In order to define "(literal)" we will need to define 
+\ In order to define "(literal)" we will need to define
 \ "compile".
 \
 \ "compile" is a word that skips over the next compiled word
 \ in the instruction stream and instead compiles that word into
 \ the dictionary. It has some restrictions on what it can be
 \ used on, for example it will not work on immediate words on
-\ this platform as instead they will have already been 
-\ executed, and it will not work on literals, as they are not 
-\ words (and they take up two cells). "compile" does its job by 
-\ looking at the return stack value, copying it, and 
+\ this platform as instead they will have already been
+\ executed, and it will not work on literals, as they are not
+\ words (and they take up two cells). "compile" does its job by
+\ looking at the return stack value, copying it, and
 \ manipulating it.
 \
 \ A contrived example usage is:
@@ -5828,8 +5828,8 @@ system[ user tup =cell tallot ]system
 \        : z 2 2 x ;
 \
 \ In this case "y" and "z" are equivalent words, they both
-\ compute "4" at runtime. A more succinct way of explaining 
-\ "compile" is "compile compiles the next word into another 
+\ compute "4" at runtime. A more succinct way of explaining
+\ "compile" is "compile compiles the next word into another
 \ word via return stack manipulation".
 \
 
@@ -5958,7 +5958,7 @@ system[ user tup =cell tallot ]system
 \ * "words"
 \ * "eforth" (defined much later)
 \
-\ The other words which are needed by the system, but are not 
+\ The other words which are needed by the system, but are not
 \ needed in the root word-set are:
 \
 \ * "get-order"
@@ -5975,7 +5975,7 @@ system[ user tup =cell tallot ]system
 \ are useful (especially for meta-compilation) but are not
 \ necessary, so they are often viewed as superfluous.
 \
-\ When a Forth implementation does have multiple vocabularies, 
+\ When a Forth implementation does have multiple vocabularies,
 \ it usually has the following ones:
 \
 \ * "root", for the minimal set of Forth words.
@@ -6076,7 +6076,7 @@ system[ user tup =cell tallot ]system
 \ As an aside we could save space by creating a special word
 \ for variables that could be used in the meta-compiler, here
 \ we push a memory location for where the variable is
-\ stored in both "forth-wordlist" and "system", instead we 
+\ stored in both "forth-wordlist" and "system", instead we
 \ could use the cell used to store the address of a variable
 \ as the variable, the new utility word would then need to
 \ push the location of that memory location and exit the word
@@ -6141,7 +6141,7 @@ root[
 \
 
 :r words ( -- )
-  cr get-order 
+  cr get-order
   begin ?dup while swap ( dup u. ." : " ) @
     begin ?dup
     while dup nfa c@ 80 lit and 0= if dup .id then @
@@ -6193,12 +6193,12 @@ root[
 \ word, so the new word definition cannot be visible to the
 \ Forth interpreter until the conclusion of the word
 \ definition. This seems like it would prevent recursion and it
-\ does, which is why the "recurse" word was made. ":" sets a 
-\ variable called "{last}" as well, this will be used in 
-\ "recurse" as it contains the location of the last defined 
-\ word, well, really it points to the word that is *currently 
-\ being defined*, knowing this, "recurse" can compile a call 
-\ to the correct place (and it must be a call, not a jump, 
+\ does, which is why the "recurse" word was made. ":" sets a
+\ variable called "{last}" as well, this will be used in
+\ "recurse" as it contains the location of the last defined
+\ word, well, really it points to the word that is *currently
+\ being defined*, knowing this, "recurse" can compile a call
+\ to the correct place (and it must be a call, not a jump,
 \ unless certain constraints are met which are not checked for
 \ in this implementation). These problems do not apply to the
 \ meta-compiler, we can define recursive words without the
@@ -6213,7 +6213,7 @@ root[
 \ exit instruction into the dictionary following the word
 \ body. Note that it is also a compile only word, in some other
 \ Forth implementations it has been given some command mode
-\ semantics as well that are not related to its usual function, 
+\ semantics as well that are not related to its usual function,
 \ but not in this one.
 \
 \ "?unique", "?nul", "?len" are three words that do some tests,
@@ -6224,7 +6224,7 @@ root[
 \ words from being made. "?len" checks the length of a word to
 \ make sure it is not too long, the length of a Forth word is
 \ stored in the lower five bits of the first byte in the Name
-\ Field, the other three being used for flags, if the name is 
+\ Field, the other three being used for flags, if the name is
 \ too long, an exception is thrown.
 \
 \ Other eForth implementations provided "!csp" and "?csp":
@@ -6259,10 +6259,10 @@ root[
 \ stack and it must cooperate with ";" so ";" does not attempt
 \ to link something without a word header into the dictionary,
 \ it does that by making sure ":noname" is given a 0 instead
-\ of a word address which is treated specially by ';' and does 
-\ not link the zero address into the dictionary. ":noname" must 
-\ also make sure to push the right compiler security constant 
-\ to the stack as well. It is much simpler than ":" as it does 
+\ of a word address which is treated specially by ';' and does
+\ not link the zero address into the dictionary. ":noname" must
+\ also make sure to push the right compiler security constant
+\ to the stack as well. It is much simpler than ":" as it does
 \ not have to deal with adding new words into the dictionary.
 \
 \ Two new words which use "word" will also be defined, "char"
@@ -6324,9 +6324,9 @@ root[
 \ on.
 \
 \ Some Forth implementations of "'" return a zero value (and
-\ thus invalid) execution token when a word is not found, 
-\ which makes the word "defined" redundant, however this 
-\ behavior is not standard between all Forth programs and 
+\ thus invalid) execution token when a word is not found,
+\ which makes the word "defined" redundant, however this
+\ behavior is not standard between all Forth programs and
 \ should not be relied upon.
 \
 \ "recurse" is used to perform recursion. It does this by
@@ -6338,9 +6338,9 @@ root[
 \ word is completed with a ";", meaning that word is
 \ unavailable from within itself, unless by another mechanism.
 \ We have already encountered that behavior, it allows the
-\ redefinition of words using the previous definition, for 
-\ example we could introduce a temporary debug version of "+" 
-\ into source code with ": + .s + ;" and the previous 
+\ redefinition of words using the previous definition, for
+\ example we could introduce a temporary debug version of "+"
+\ into source code with ": + .s + ;" and the previous
 \ definition of "+" would be used within the new definition,
 \ being unaffected by the new definition.
 \
@@ -6385,8 +6385,8 @@ root[
 \
 \ "smudge" was used to hide and unhide a word definition during
 \ its creation to implement the word hiding feature described
-\ in the section on "recurse", this Forth implementation does 
-\ not use "smudge" and implements compilation slightly 
+\ in the section on "recurse", this Forth implementation does
+\ not use "smudge" and implements compilation slightly
 \ differently.
 \
 
@@ -6405,8 +6405,8 @@ root[
 \ words. Also note that all the words defined here are
 \ "immediate" and "compile-only" words. They push variables
 \ to the variable stack during compilation containing memory
-\ locations to be patched or used, and also push known 
-\ constants, so the compiler security within ":" and ";" can 
+\ locations to be patched or used, and also push known
+\ constants, so the compiler security within ":" and ";" can
 \ also detect mismatched control structures.
 \
 \ Missing from this Forth is the looping mechanism "do...loop"
@@ -6485,7 +6485,7 @@ root[
 \
 \ Note in the definition of "then" that jump destination is
 \ a cell address, not a byte address, in our example "6" is
-\ a cell address, the Forth address would be "12". 
+\ a cell address, the Forth address would be "12".
 \
 \ Given the information about how "if...then" work, you can
 \ then work out how the other, simple, constructs work, such
@@ -6496,7 +6496,7 @@ root[
 \ What is interesting is how "postpone" is used, and how new
 \ words like "while" and "repeat" interact with the previously
 \ defined words. "for...aft...then...next" will also need
-\ explanation as it uses "opNext", which is more complex. 
+\ explanation as it uses "opNext", which is more complex.
 \
 \ One common way in Forth to create new control structures,
 \ which are all immediate words, is to call "postpone" on the
@@ -6526,9 +6526,9 @@ root[
 \ is entirely optional.
 \ * "then...next" is run every loop iteration.
 \
-\ This means "for" must put the loop counter onto the return 
-\ stack, as with a normal "for...next" loop, however 
-\ "aft...then" must make an unconditional jump over it, and 
+\ This means "for" must put the loop counter onto the return
+\ stack, as with a normal "for...next" loop, however
+\ "aft...then" must make an unconditional jump over it, and
 \ "next" must be made to point to after "aft".
 \
 \ The example words:
@@ -6646,8 +6646,8 @@ root[
 \ Which has limited uses, but is more of a curiosity than
 \ anything. "does\>" compiles two words into the creating word
 \ that we are making, one to patch up the created word called
-\ "(comp)" to point to the second compiled in word "(does)" 
-\ which we use to redirect execution to continue after the 
+\ "(comp)" to point to the second compiled in word "(does)"
+\ which we use to redirect execution to continue after the
 \ "does\>".
 \
 \ "(comp)" can look at the last defined word and move to the
@@ -6669,12 +6669,11 @@ root[
 \
 
 :s (marker) r> 2* @+ h? ! cell+ @ get-current ! ;s compile-only
-\ ======================= TODO ================================
 : create state @ >r postpone : drop r> state ! compile (var)
    get-current ! ;
 :to variable create #0 , ;
 :to constant create cell negate allot compile (const) , ;
-:to user create cell negate allot compile (user) 
+:to user create cell negate allot compile (user)
     user? @ , #1 user? +! ;
 
 : >body cell+ ; ( a -- a : move to a create words body )
@@ -6749,7 +6748,7 @@ root[
 \ because it is important to understand and once it has, it
 \ will become obvious (which is almost tautological, "once
 \ you understand it, your will understand it", but the concept
-\ will just "click"), beforehand it looks like the code could 
+\ will just "click"), beforehand it looks like the code could
 \ not possibly work. To be be more explicit:
 \
 \            (1)         (2)
@@ -6765,7 +6764,7 @@ root[
 \              ":a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a"
 \
 \ As we have discussed how each of these instructions work
-\ previously in the VM instructions section, we will not 
+\ previously in the VM instructions section, we will not
 \ discuss what they do here.
 \
 
@@ -6780,14 +6779,14 @@ root[
 \ # Meta-compiler string words
 \
 \ These words are target only words, as the meta-compiler has
-\ versions of these words as well that are used (except for 
-\ *abort"*, however we still would not want to use this version 
-\ as these words only work correctly on a running target and 
+\ versions of these words as well that are used (except for
+\ *abort"*, however we still would not want to use this version
+\ as these words only work correctly on a running target and
 \ not in the meta-compiler).
 \
 \ These words are all string related words, all strings are
-\ in the range of 0 to 255 bytes in length as the length is 
-\ stored in a single byte, like all Forth strings traditionally 
+\ in the range of 0 to 255 bytes in length as the length is
+\ stored in a single byte, like all Forth strings traditionally
 \ were. Who needs more than 255 bytes for a string!?
 \
 \ The words do the following:
@@ -6823,8 +6822,8 @@ root[
 \ able to use them). For example with the ANSI terminal
 \ escape words being able to enter an Escape character into
 \ a string by specifying its numeric value, like so:
-\ 
-\        :s csi ." \x1B\x5B" ;s 
+\
+\        :s csi ." \x1B\x5B" ;s
 \
 \ Would shorten the definition (skip ahead to see it). Adding
 \ this capability in would complicate the implementation for
@@ -6911,7 +6910,7 @@ root[
 \        1 ?\ .( BRAVO )
 \         ( Only "BRAVO" is printed )
 \
-\ NB. ")" is defined earlier so it can be used as a 
+\ NB. ")" is defined earlier so it can be used as a
 \ "no-operation" word.
 \
 
@@ -6926,7 +6925,7 @@ root[
 \ and words are compiled into a word definitions body with
 \ the exception of immediate words, which are executed anyway.
 \
-\ The word "postpone" carves out an exception to that 
+\ The word "postpone" carves out an exception to that
 \ exception, it takes the next work in the input stream
 \ and compiles that word into the dictionary regardless of
 \ whether it is an immediate or normal word. We have just
@@ -6996,14 +6995,14 @@ root[
 \ word length is needed however. The 6th bit is used for
 \ the "immediate" bit. It is the word "interpret" that looks
 \ at this bit, "immediate" just needs to set it in the latest
-\ defined words header to make "interpret" treat it 
+\ defined words header to make "interpret" treat it
 \ as immediate.
 \
 \ "compile-only" works in the same way, except it sets a
 \ different bit. The flag is tested in "interpret".
 \
 \ "(nfa)" allows one to toggle any of the Name-Field-Address
-\ bits, it should be "set" and not "toggle" (that is, a 
+\ bits, it should be "set" and not "toggle" (that is, a
 \ version of "toggle" that uses "or" and not "xor"), but
 \ we should never call "immediate" or "compile-only" on a
 \ word twice anyway.
@@ -7045,11 +7044,11 @@ root[
 \
 \ A more advanced decompiler could print out the word
 \ header, whether the word is "compile-only", "immediate", or
-\ even if it is a hidden word, analyze each cell to determine 
-\ whether it is a call or a VM instruction (and print out the 
-\ word name if it is a call), and decompile calls to "opJumpZ", 
-\ "(up)", "(user)", "(var)", "(const)" and "(push)", all of 
-\ which contain data and not instructions in the cell after 
+\ even if it is a hidden word, analyze each cell to determine
+\ whether it is a call or a VM instruction (and print out the
+\ word name if it is a call), and decompile calls to "opJumpZ",
+\ "(up)", "(user)", "(var)", "(const)" and "(push)", all of
+\ which contain data and not instructions in the cell after
 \ them.
 \
 \ However, as we have the source here, not much is gained
@@ -7069,14 +7068,14 @@ opt.better-see [unless]
 \ ## Advanced version of "see"
 \
 \ This is a more advanced version of "see", it is a much better
-\ decompiler, but also much more complex. It could still use 
-\ more work, but then again any decompiler that cannot 
-\ reproduce the source code it is decompiling could use more 
+\ decompiler, but also much more complex. It could still use
+\ more work, but then again any decompiler that cannot
+\ reproduce the source code it is decompiling could use more
 \ work.
-\ 
-\ We start by defining "ndrop",  "ndrop" is a non standard but 
+\
+\ We start by defining "ndrop",  "ndrop" is a non standard but
 \ common word for removing a variable number of items from the
-\ variable stack. 
+\ variable stack.
 \
 
 opt.better-see [if] ( Start conditional compilation )
@@ -7118,7 +7117,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ to get rid of the remaining items vocabularies returned by
 \ "get-order" if the CFA has been found.
 \
-\ The original eForth had a different name for "cfa?" and 
+\ The original eForth had a different name for "cfa?" and
 \ "name", one was called "\>name" which was most analogous to
 \ "cfa?".
 \
@@ -7152,36 +7151,36 @@ opt.better-see [if] ( Start conditional compilation )
 \
 
 :s decompile ( a u -- a )
-  dup =jumpz lit = if 
-    drop ."  jumpz " cell+ dup @ 2* u. exit 
+  dup =jumpz lit = if
+    drop ."  jumpz " cell+ dup @ 2* u. exit
   then
 
-  dup =jump  lit = if 
-    drop ."  jump  " cell+ dup @ 2* u. exit 
+  dup =jump  lit = if
+    drop ."  jump  " cell+ dup @ 2* u. exit
   then
 
-  dup =next  lit = if 
-    drop ."  next  " cell+ dup @ 2* u. exit 
+  dup =next  lit = if
+    drop ."  next  " cell+ dup @ 2* u. exit
   then
 
   dup to' (up) half lit = if drop
-     ."  (up) " cell+ dup @ u. exit 
+     ."  (up) " cell+ dup @ u. exit
   then
 
   dup to' (push) half lit = if drop
-     ."  (push) " cell+ dup @ u. exit 
+     ."  (push) " cell+ dup @ u. exit
   then
 
   dup to' (user) half lit = if drop
-     ."  (user) " cell+ @ u. drop $7FFF lit exit 
+     ."  (user) " cell+ @ u. drop $7FFF lit exit
   then
 
   dup to' (const) half lit = if drop
-     ."  (const) " cell+ @ u. drop $7FFF lit exit 
+     ."  (const) " cell+ @ u. drop $7FFF lit exit
   then
 
   dup to' (var) half lit = if drop
-     ."  (var) " cell+ dup u. ."  -> " @ . $7FFF lit exit 
+     ."  (var) " cell+ dup u. ."  -> " @ . $7FFF lit exit
   then
 
   dup to' .$ half lit = if drop ."  ." [char] " emit space
@@ -7215,7 +7214,7 @@ opt.better-see [if] ( Start conditional compilation )
 :to see token dup ." : " count type cr find ?found
   dup >r cfa
   begin dup @ =unnest lit <>
-  while 
+  while
     dup dup 5 lit u.r ."  | "
     @ decompile cr cell+ here over u< if drop exit then
   repeat drop ."  ;"
@@ -7312,13 +7311,13 @@ opt.better-see [if] ( Start conditional compilation )
 \ extends LZSS to include a XOR command (LZSS has a "literal"
 \ and "copy" command). This command XORs a block with another
 \ block which may be either new or in the sliding dictionary
-\ (determined by the location of where to begin XOR'ing), 
+\ (determined by the location of where to begin XOR'ing),
 \ allowing partial matches to be encoded, placing a lot
 \ of work on the encoder. Instead of using XOR, which is
 \ expensive to compute on this system, a Subtract could be
 \ used instead.
 \
-\ Huffman coding might be yet another alternate way to achieve 
+\ Huffman coding might be yet another alternate way to achieve
 \ this similar results.
 \
 \ Image encryption or obfuscation could also be done, as an
@@ -7326,7 +7325,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ program was used as part of a game or a puzzle.
 \
 \ The meta-compiler calculates the checksum later on, and sets
-\ a known location to the checksum value. It is checked as 
+\ a known location to the checksum value. It is checked as
 \ part of the initial Forth word "(cold)".
 \
 
@@ -7341,10 +7340,10 @@ opt.better-see [if] ( Start conditional compilation )
 \ like "see", or "create", and in the parsing section, that
 \ we can manipulate the program input at runtime. We can do
 \ this in arbitrary ways, adding comments is one example. It
-\ is possible to make a word that implements another language, 
-\ for example BASIC or C, that would still *technically* be 
-\ part of the Forth language, however we have a far less 
-\ ambitious goal - the creation of a word-set for conditional 
+\ is possible to make a word that implements another language,
+\ for example BASIC or C, that would still *technically* be
+\ part of the Forth language, however we have a far less
+\ ambitious goal - the creation of a word-set for conditional
 \ evaluation of code.
 \
 \ This is will be like the "#ifdef" facility provided by the
@@ -7390,7 +7389,7 @@ opt.better-see [if] ( Start conditional compilation )
 \        [else] ( CODE ) [then]
 \
 \ Will not throw an error and the CODE section will not be
-\ executed. 
+\ executed.
 \
 \ Instead of defining these words it would have been possible
 \ to extend "if...else...then" to have run-time behavior
@@ -7400,7 +7399,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ depending on the compiler state, whilst sometimes necessary,
 \ is in the general case *bad*. It limits the use of the word
 \ and can complicate understanding the word and code that uses
-\ that word, what seems like something quite elegant at first 
+\ that word, what seems like something quite elegant at first
 \ creates complications.
 \
 
@@ -7420,11 +7419,11 @@ opt.better-see [if] ( Start conditional compilation )
 \ "sleep" is actually a complex one as it interacts with
 \ operating systems, the threading model, I/O blocking, and
 \ there are different optimizations that can be performed. The
-\ concept of real-time systems must be introduced and the 
-\ difference between hard and soft real-time systems, which we 
-\ will not cover. Saying "this function will sleep for X 
-\ milliseconds" does not fully answer questions around sleep. 
-\ There are also problems of jitter and drift, "sleep" is 
+\ concept of real-time systems must be introduced and the
+\ difference between hard and soft real-time systems, which we
+\ will not cover. Saying "this function will sleep for X
+\ milliseconds" does not fully answer questions around sleep.
+\ There are also problems of jitter and drift, "sleep" is
 \ actually quite a complex topic.
 \
 \ However, given that the underlying SUBLEQ machine does not
@@ -7502,17 +7501,17 @@ opt.better-see [if] ( Start conditional compilation )
 \ This will most likely work under Unix systems, and
 \ likely fail if done under Windows CMD.EXE (although a program
 \ called ANSICON can remedy that), as Windows' terminal program
-\ does not support ANSI escape codes, or more accurately it 
+\ does not support ANSI escape codes, or more accurately it
 \ depends on the version of windows and settings.
 \
 \ Standard Forths contain the words "at-xy" and "page" for
 \ controlling the cursor position and clearing the screen
 \ respectively, so these words are provided. Some interesting
-\ games can be made using just these two, limited terminal 
-\ words, but games nonetheless, games such as Hack, Chess, 
-\ Checkers, Sokoban, Conways Game Of Life, 2048, and 
+\ games can be made using just these two, limited terminal
+\ words, but games nonetheless, games such as Hack, Chess,
+\ Checkers, Sokoban, Conways Game Of Life, 2048, and
 \ Minesweeper. If non-blocking input is implemented
-\ games then a Tetris, Space Invaders, Pac-Man, Pong or Snake 
+\ games then a Tetris, Space Invaders, Pac-Man, Pong or Snake
 \ clones can be made.
 \
 \ The first column and row in "at-xy" is "1" and not "0".
@@ -7539,12 +7538,12 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \ Forth blocks are a neat concept, they are a minimal way of
 \ giving access to mass storage that even the most spartan
-\ system can provide, no file system is required, just the 
-\ ability to read and write blocks of data to non-volatile 
+\ system can provide, no file system is required, just the
+\ ability to read and write blocks of data to non-volatile
 \ storage.
 \
 \ Apart from in embedded systems, or as a building block for
-\ other words, the Forth block system is an obsolete way of
+\ other words, the Forth block system is a semi-obsolete way of
 \ interacting with mass-storage, as Forth kernels have moved
 \ on to providing a File Access Word set that is similar in
 \ design to the C file functions, "fopen", "fread", etcetera.
@@ -7552,7 +7551,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ Unfortunately the SUBLEQ machine in a quest for simplicity
 \ provides no mechanism for saving to non-volatile storage, it
 \ would be easy enough to add an interface which provides
-\ for this but that will not happen as there is little need for 
+\ for this but that will not happen as there is little need for
 \ it.
 \
 \ There are some Forth implementations that instead map the
@@ -7573,9 +7572,9 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \ It would be interesting to build a simple file system on top
 \ of the Forth Block mechanism, and a set of DOS like utilities
-\ for accessing and executing files on it.  It could also be 
-\ used to simulate a simple DOS like operating system within 
-\ this Forth system. The file system would also be portable, 
+\ for accessing and executing files on it.  It could also be
+\ used to simulate a simple DOS like operating system within
+\ this Forth system. The file system would also be portable,
 \ but limited. These possibilities will be described in more
 \ detail in the appendix, along with the possible of adding
 \ peripheral support for mass storage.
@@ -7605,14 +7604,14 @@ opt.better-see [if] ( Start conditional compilation )
 \ "block". If a block is marked as dirty and is to be evicted
 \ from the block buffers it is written back to mass storage
 \ before another block is loaded, otherwise the changes to
-\ that block are discarded. 
+\ that block are discarded.
 \
-\ Note that because this implementation of the block word set 
-\ just maps 1024 chunks of memory to each block the changes 
-\ are always reflected and there are no block transfers, this 
-\ is one feature of the system that could be changed to make 
-\ the behavior more consistent with other implementations, 
-\ however that this would require memory to store at least one, 
+\ Note that because this implementation of the block word set
+\ just maps 1024 chunks of memory to each block the changes
+\ are always reflected and there are no block transfers, this
+\ is one feature of the system that could be changed to make
+\ the behavior more consistent with other implementations,
+\ however that this would require memory to store at least one,
 \ preferably two, block buffers. It would not require any new
 \ peripheral support. We could also use the block system to
 \ access the full 65536 cells that are available to the SUBLEQ
@@ -7677,8 +7676,8 @@ opt.better-see [if] ( Start conditional compilation )
 \ Replacing "emit" with ".emit" in "list":
 \
 \         : within over - >r - r> u< ; ( u lo hi -- f )
-\         : .emit ( c -- ) 
-\           dup bl 7F lit within 0= if drop [char] . then 
+\         : .emit ( c -- )
+\           dup bl 7F lit within 0= if drop [char] . then
 \           emit ;
 \
 \ Renders "list" a little more forgiving when printing
@@ -7690,13 +7689,50 @@ opt.better-see [if] ( Start conditional compilation )
 \ least functional block implementation is:
 \
 \        : block 1024 * ;
-\ 
-\ A little too spartan. Switching between this version of 
+\
+\ A little too spartan. Switching between this version of
 \ "block" and one that can access all memory along with proper
 \ block buffers would be useful, however.
 \
 \ "thru" and "screens" for loading a block range and listing
 \ a block range are listed in the appendix.
+\
+\ Of note, assuming a proper buffered "block" implementation
+\ it is allowable by the ANS Forth standard for the system
+\ to have only one block buffer, this means to copy one
+\ block to another the following code:
+\
+\
+\        : copy-block ( from to -- )
+\          swap block swap buffer 1024 move update ;
+\
+\ From:
+\
+\ <https://groups.google.com/g/comp.lang.forth/c/f5-xM_cl2S8>
+\
+\ Will *not* work on all systems, instead a block of memory
+\ not under managed of the block system needs to be used, like
+\ so:
+\
+\        1024 buffer: buf
+\
+\        : copy-block ( u.block-from u.block-to -- )
+\          swap block buf 1024 move
+\          buf swap buffer 1024 move
+\          update
+\          save-buffers ( optional )  ;
+\
+\ With "buffer:" being defined as:
+\
+\        : buffer: create allot ; ( u "<name>" -- ; -- addr )
+\
+\ And "buffer" is similar to "block" except (on systems with
+\ mass storage) no transfer from mass storage is done when
+\ loading a block into a block buffer (this means if you just
+\ want to write to a block with no need to read from it, you
+\ should use "buffer" instead of "block", "buffer" is sometimes
+\ used to implement parts of the functionality of "block".
+\
 \
 \ ======================= TODO ================================
 \
@@ -7706,25 +7742,9 @@ opt.better-see [if] ( Start conditional compilation )
 \ that can access all memory. Also make "move" and use in
 \ block editor, as it is faster.
 \
-\ From:
 \
-\ <https://groups.google.com/g/comp.lang.forth/c/f5-xM_cl2S8>
 \
-\ Also:
-\
-\        : copy-block ( from to -- ) 
-\          swap block swap buffer 1024 move update ; 
-\
-\ Versus:
-\
-\        1024 buffer: tmp
-\        
-\        : copy-block ( u.block-from u.block-to -- )
-\        swap block tmp 1024 move
-\        tmp swap buffer 1024 move
-\        update
-\        save-buffers \ it's optional
-\        ; 
+
 
 ( system[ variable dirty ]system )
 : b/buf 400 lit ; ( -- u : size of the block buffer )
@@ -7784,9 +7804,9 @@ opt.better-see [if] ( Start conditional compilation )
 
 :s ok state @ ?exit ."  ok" cr ;s ( -- : okay prompt )
 
-\ "eval" goes through each word in a line until there are no 
-\ more and executes "interpret" for each word, it is sure to 
-\ check the stack depth after each call to "interpret" in an 
+\ "eval" goes through each word in a line until there are no
+\ more and executes "interpret" for each word, it is sure to
+\ check the stack depth after each call to "interpret" in an
 \ attempt to provide some kind of limited error detection.
 \
 \ It also prints out "ok", by executing the contents of
@@ -7795,7 +7815,7 @@ opt.better-see [if] ( Start conditional compilation )
 :s eval ( "word" -- )
    begin token c@+ while
      interpret #0 ?depth
-   repeat drop <ok> @execute ;s 
+   repeat drop <ok> @execute ;s
 
 \ ## Evaluate
 \
@@ -7808,7 +7828,7 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \ Now that we have "evaluate" we can use it to extend the block
 \ words...
-\ 
+\
 
 : evaluate ( a u -- : evaluate a string )
   get-input 2>r 2>r >r        ( save the current input state )
@@ -7851,7 +7871,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ to be enabled in the "{options}" variable for that to happen,
 \ it is not needed, but it means that information about
 \ the project is stored within it.
-\ 
+\
 \ It might be to refactor "info" into multiple words (if we
 \ had the space) to break down the information provided into
 \ a word for "author", and "version", such as this:
@@ -8060,11 +8080,11 @@ opt.info [if]
 \ upon in the article "Ed is the standard text editor"), and
 \ calls "bye" if the error was "-1", which is "abort". If not
 \ it calls "ini", but makes sure it will be called in case of
-\ an error next time instead of "bye", as "ini" sets 
-\ "\<error\>" to "bye". Another candidate for error handling is 
-\ the "\<ok\>" vector, instead of having a separate prompt 
-\ vector, that could also act as an error handler, as we never 
-\ want to print out "ok" when an error has occurred. To keep 
+\ an error next time instead of "bye", as "ini" sets
+\ "\<error\>" to "bye". Another candidate for error handling is
+\ the "\<ok\>" vector, instead of having a separate prompt
+\ vector, that could also act as an error handler, as we never
+\ want to print out "ok" when an error has occurred. To keep
 \ things conceptually simple, they are in separate vectors.
 \
 
@@ -8093,8 +8113,8 @@ opt.info [if]
 \       Forth image, it then toggles the 2nd bit making
 \       it so the image is not checked again (as adding
 \       new definitions modifies the image, calling "(cold)"
-\       again after defining new words would mean the checksum 
-\       would fail. If the checksum fails it prints an error 
+\       again after defining new words would mean the checksum
+\       would fail. If the checksum fails it prints an error
 \       messages and halts.
 \ 4. Calls "quit" to enter into the Forth interpreter loop.
 \
@@ -8155,9 +8175,9 @@ opt.info [if]
 \ again the network. You do not want the game to halt whilst
 \ you play a sound, nor do you want the graphics subsystem to
 \ stop when it is waiting for a keyboard press, you want
-\ everything to appear as if it is being computed all at the 
-\ same time, even on single CPU core systems (which are getting 
-\ are getting rarer nowadays even in the embedded computer 
+\ everything to appear as if it is being computed all at the
+\ same time, even on single CPU core systems (which are getting
+\ are getting rarer nowadays even in the embedded computer
 \ space).
 \
 \ Threading and different threading models "solve" this, and
@@ -8228,7 +8248,7 @@ opt.info [if]
 \ would become a book in of itself, threading and scheduling
 \ are the domain of operating systems. Books that deal with
 \ operating systems such as Unix, or real-time embedded systems
-\ are best consulted to get an understanding of this deep 
+\ are best consulted to get an understanding of this deep
 \ topic. Different approaches have different trade-offs, a
 \ scheduler for a real time system is very different from a
 \ preemptive one, likewise for single and multicore systems.
@@ -8237,7 +8257,7 @@ opt.info [if]
 \ addresses exclusively like this one.
 \
 \ One type of cooperative multithreading system that I am fond
-\ of using in the embedded realm is to use cooperative 
+\ of using in the embedded realm is to use cooperative
 \ multithreading and only fire an interrupt to signal an error
 \ if the allotted amount of time given to a task is exceeded,
 \ this cannot be done in this system because there is both no
@@ -8315,7 +8335,7 @@ opt.multi [if]
 \ is written into its task inbox, "{sender}". It then retrieves
 \ the value in "{sender}" and in "{message}".
 \
-\ This is a simple way to do limited inter-thread 
+\ This is a simple way to do limited inter-thread
 \ communication.
 \
 
@@ -8341,8 +8361,8 @@ opt.multi [if]
 \ # Forth Text / Block Editor
 \
 \ I love Forth blocks, they are simple to implement and
-\ simple to understand. They are of course an obsolete way of 
-\ doing things, suitable for a bygone era, or perhaps on some 
+\ simple to understand. They are of course an obsolete way of
+\ doing things, suitable for a bygone era, or perhaps on some
 \ limited embedded systems.
 \
 \ We can make a small, and usable, text editor
@@ -8361,7 +8381,7 @@ opt.multi [if]
 \ - <http://tunes.org/wiki/block_20editor.html>
 \ - <https://wiki.c2.com/?ForthBlocks>
 \
-\ Alternatively search for "FORTH BLOCK EDITOR" in your 
+\ Alternatively search for "FORTH BLOCK EDITOR" in your
 \ favorite internet search engine.
 \
 \ To make sure that these newly defined commands do not
@@ -8409,7 +8429,7 @@ opt.multi [if]
 \ * "x", erase the screen, replacing it with spaces
 \ * "d", delete a line, it takes a number as an argument
 \
-\ Missing are words to perform searching, replacing, and 
+\ Missing are words to perform searching, replacing, and
 \ swapping lines. A rudimentary help message might be useful.
 \
 \ A command to enter a mode to enter 16 consecutive lines
@@ -8456,16 +8476,16 @@ opt.multi [if]
 \ for "i", it inserts a line of text into a line at a location
 \ after making sure there are at least two items on the stack.
 \ The word "ia" does not do range checking on those variables
-\ unfortunately, a common "feature" of Forth. 
+\ unfortunately, a common "feature" of Forth.
 \
-\ It looks at the Terminal Input Buffer, with "\>in" and "tib", 
-\ copying the results into the location within the block 
-\ specified, and then skips over the line so it is not 
-\ executed. It also calls "update", which marks the current 
-\ block as dirty (as it has just been modified), this means the 
-\ block is automatically saved when moving to the next or 
-\ previous block. Of course, as there is no mass storage in 
-\ this SUBLEQ machine, so nothing is written to it, however it 
+\ It looks at the Terminal Input Buffer, with "\>in" and "tib",
+\ copying the results into the location within the block
+\ specified, and then skips over the line so it is not
+\ executed. It also calls "update", which marks the current
+\ block as dirty (as it has just been modified), this means the
+\ block is automatically saved when moving to the next or
+\ previous block. Of course, as there is no mass storage in
+\ this SUBLEQ machine, so nothing is written to it, however it
 \ is a nice feature for portabilities sake.
 \
 \ Most of the other commands are simple, they manipulate the
@@ -8476,7 +8496,7 @@ opt.multi [if]
 \ "scr" the user does not have to type "l" themselves. On
 \ slow connections (imagine you are talking to this Forth over
 \ a 300 baud modem) "l" should be removed, and it would be
-\ worth rewriting the code to draw and redraw only what is 
+\ worth rewriting the code to draw and redraw only what is
 \ necessary, complications which are not needed.
 \
 
@@ -8523,80 +8543,109 @@ opt.editor [if]
 \ portable. For those reasons even those it eschews good Forth
 \ practice it is good code.
 \
-\ Example uses include, including initialization: 
-\ 
-\ TODO FIX EXAMPLE 
-\ 
-\       system +order
-\       $400 constant #pool
-\       create pool #pool allot
-\ 
-\       pool #pool arena!
-\       pool #pool dump
-\       40 allocate throw .s
-\       80 allocate throw .s 
-\       swap free throw .s 
-\       20 allocate throw .s cr
-\       pool #pool dump
-\ 
-\ ======================= TODO ================================
+\ As there is a default arena that will be setup if none is
+\ specified you can use "allocate", "free" and "resize" without
+\ running any initialization code.
 \
-\ - Allow calculations of free space. 
-\ - RESIZE
-\ - Put freelist within arena
-\ - calloc option / calloc
-\ - Documentation
-\ - Test framework 
-\ - Allow zero length allocations?
-\ 
-
+\ There are a few things that could be improved with this
+\ implementation; putting the "freelist" variables within the
+\ arena, allowing the user to get more information about the
+\ allocation arena and already allocated pointers, an option
+\ to zero all allocated (but not resized!) pointers and
+\ of course more documentation and testing.
+\
+\ By default this code will not be compiled in to the target
+\ image to save on space as it is not needed for
+\ meta-compilation, and most Forth programs do not use these
+\ routines.
+\
+\ A rough overview of the dynamic memory allocation subsystem
+\ is that memory is managed by a free-list, with adjacent free
+\ blocks merged together when possible in "free". The variable
+\ "freelist" is a special case, it contains a node not within
+\ the arena being used for allocations.
+\
+\ Note that the memory allocator is global, does not call
+\ "pause" or interact with the multi-threading library in
+\ any way, nor does it need to in a cooperative multithreading
+\ environment.
+\
 opt.allocate [if]
 
 system[
+
+\ Here we define some helper words, most of which were not
+\ in the original system, "freelist", a variable, was however.
+\
+\ Nodes in the "freelist" are stored as a pointer to the next
+\ item in the list and a length of the free block, we also
+\ store the length of the entire allocated block after the
+\ two cells in "freelist", which can be accessed with
+\ "\>length".
+\
+\ * "pool" is the location of the default pool, located at
+\ address "$F800" (just before the first or main thread of
+\ execution) and is $400 bytes in size (or 1024 bytes).
+\ * "arena?" is used to check whether a pointer is within
+\ the given arena. There are other checks that could be
+\ done, for example it is possible to determine whether a
+\ pointer is within the list of items in the free-list (and
+\ hence not a valid pointer). It is possible to add these
+\ features in, which are not present in the Standard C library
+\ functions for memory management (which is a little too
+\ spartan, it is lacking much in the way of functionality
+\ such as being able to use custom allocators).
+\ * "\>size", after performing a basic check with "arena?"
+\ "\>size" gets the size of a pointer previously allocated
+\ with "allocate"/"(allocator)" (or "resize"/"(resize)". This
+\ is another feature missing from the standard C allocation
+\ functions.
+\ * "arena!" is used to initialize an arena and "freelist"
+\ variable so it can be used with the allocation functions.
+\
+
   ( pointer to beginning of free space )
-  variable freelist 0 t, 0 t, ( 0 t' freelist t! )
+variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 
-  : >length #2 cells + ;
-  : default $F800 lit $400 lit ;
-  : arena! ( start-addr len -- : initialize memory pool )
-    >r dup $80 lit u< if -B lit throw then ( arena too small )
-    dup r@ >length !
-    2dup erase
-    over dup r> ! #0 swap ! swap cell+ ! ;
-  : .arena 
-    ." arena:" freelist 2@ u. u. cr 
-    freelist @ freelist >length @ dump ;
-
-]system
-
-: .a .arena ;
-: arena? ( ptr freelist -- f )
-   dup >r @ 0= if rdrop drop #0 exit then 
-   r> swap >r dup >r @ dup r> >length @ + r> within ;
-: >size ( ptr freelist -- size )
+: >length #2 cells + ; ( freelist -- length-field )
+: pool $F800 lit $400 lit ; ( default memory pool )
+: arena! ( start-addr len -- : initialize memory pool )
+  >r dup $80 lit u< if -B lit throw then ( arena too small )
+  dup r@ >length !
+  2dup erase
+  over dup r> ! #0 swap ! swap cell+ ! ;
+: arena? ( ptr freelist -- f : is "ptr" within arena? )
+  dup >r @ 0= if rdrop drop #0 exit then
+  r> swap >r dup >r @ dup r> >length @ + r> within ;
+: >size ( ptr freelist -- size : get size of allocated ptr )
   over swap arena? 0= if -3B lit throw then
   cell - @ cell - ;
 
-( allocate n bytes, return pointer to block and result flag,  )
-( zero for success, check to see if pool has been initialized )
-: (allocate) ( u -- addr ior : dynamic allocate of 'u' bytes ) 
+\ "(allocate)", "(free)" and "(resize)" are defined, they
+\ perform the same functionality as "allocate", "free", and
+\ "resize" do, apart from the fact that it is possible to pass
+\ in a custom arena to allocate memory in.
+
+\ Allocate "u" bytes, return pointer to block and result flag,
+\ zero for success, check to see if pool has been initialized.
+: (allocate) ( u -- addr ior : dynamic allocate of 'u' bytes )
   >r
   aligned
-  r@ @ 0= if default r@ arena! then
-  dup 0= if rdrop drop #0 -3B lit exit then
+  r@ @ 0= if pool r@ arena! then ( init to default pool )
+  dup 0= if rdrop drop #0 -3B lit exit then ( not allowed )
   cell+ r@ dup
   begin
   while dup @ cell+ @ #2 pick u<
-    if 
+    if
       @ @ dup ( get new link )
-    else   
+    else
       dup @ cell+ @ #2 pick - #2 cells max dup #2 cells =
-      if 
+      if
         drop dup @ dup @ rot
         ( prevent freelist address from being overwritten )
-        dup r@ = if rdrop 2drop 2drop #0 -3B lit exit then 
+        dup r@ = if rdrop 2drop 2drop #0 -3B lit exit then
         !
-      else  
+      else
         2dup swap @ cell+ ! swap @ +
       then
       2dup ! cell+ #0 ( store size, bump pointer )
@@ -8604,8 +8653,9 @@ system[
   repeat
   rdrop nip dup 0= -3B lit and ;
 
-( free space at ptr, return status, zero for success )
-: (free) ( ptr freelist -- ior : free pointer from "allocate" ) 
+\ Free space at "ptr", return status, zero for success.
+
+: (free) ( ptr freelist -- ior : free pointer from "allocate" )
   >r
   dup 0= if rdrop #0 exit then
   dup r@ arena? 0= if rdrop drop -3C lit exit then
@@ -8618,33 +8668,83 @@ system[
   repeat
 
   dup @ dup 3 lit pick ! ?dup
-  if 
+  if
     dup 3 lit pick 5 lit pick + =
-    if 
+    if
       dup cell+ @ 4 lit pick + 3 lit pick cell+ ! @ #2 pick !
-    else  
-      drop 
+    else
+      drop
     then
   then
   dup cell+ @ over + #2 pick =
-  if  
+  if
     over cell+ @ over cell+ dup @ rot + swap ! swap @ swap !
-  else 
+  else
     !
   then
   drop #0 ;
 
+\ "(resize)" is used to implement "resize", except it takes
+\ a "freelist" as a parameter. It is similar to the C
+\ function "realloc", it can allocate new memory or
+\ alternatively free or resize an already allocated block of
+\ memory depending on the arguments given to it.
+\
+\ "(resize)" should free a block of memory if the new size
+\ is some fraction of what the currently allocated block is,
+\ but above some threshold to prevent needless reallocations.
+: (resize) ( a-addr1 u freelist -- a-addr2 ior )
+  >r
+  dup 0= if drop r> (free) exit then
+  over 0= if nip r> (allocate) exit then
+  2dup swap r@ >size u<= if drop #0 exit then
+  r@ (allocate) if drop -3D lit exit then
+  over r@ >size
+  #1 pick 3 lit pick >r >r cmove r> r> r>
+  (free) if drop -3D lit exit then #0 ;
+
+]system
+
+\ "allocate", "free", and "resize" are wrappers around
+\ "(allocate)", "(free)" and "(resize)", just passing those
+\ routines the address of the default memory arena. A larger
+\ system would perhaps allow for custom allocators using
+\ execution vectors instead of "(allocate)" or "(free)"
+\ directly. One reason to do this is to allow for faster
+\ and more efficient allocations where you know what the
+\ allocation patterns of some code but do not want to modify
+\ it.
+\
+\ For example, the following system:
+\
+\
+\        variable arena
+\        here constant start
+\        create $400 allot
+\        start arena !
+\
+\        : allocate ( u -- ptr ior )
+\           aligned arena @ >r arena +! r> #0 ;
+\        : free drop #0 ; ( u -- ior )
+\
+\ Will work fine given the following *assumption* that you do
+\ not need to allocate more than 1024 ($400 in hex) bytes
+\ before the task you need to complete is done. This special
+\ purpose allocator wastes less space and is faster to both
+\ allocate and free memory. Once the task is complete the
+\ arena can be reset, freeing all memory, by pointing the
+\ "arena" variable back to the "start" constant. It has
+\ obvious, serious, downsides, in that memory is not actually
+\ freed and that there is no error checking (allocations always
+\ succeed).
+\
+
 : allocate freelist (allocate) ; ( u -- ptr ior )
 : free freelist (free) ; ( ptr -- ior )
-
-\ : resize ( a-addr1 u -- a-addr2 ior ) 
-\   dup 0= if drop free exit then
-\   over 0= if nip allocate exit then exit
-\   over freelist >size u< if 2drop #0 exit then
-\   allocate if drop -3D lit exit then dup >r
-\   over freelist >size cmove r> #0 ;
+: resize freelist (resize) ; ( ptr u -- ptr ior )
 
 [then]
+
 
 \ # Last word defined
 \
@@ -8816,8 +8916,8 @@ it being run.
 \ have decided to go down a more informal route. I, Richard
 \ James Howe, have been an embedded software engineer in the
 \ automotive sector writing safety critical code in C and
-\ tooling in Python/Perl/C#, I currently work in the smart 
-\ energy sector. I have a degree in electronic engineering and 
+\ tooling in Python/Perl/C#, I currently work in the smart
+\ energy sector. I have a degree in electronic engineering and
 \ have had internships related to that. I also studied in
 \ Germany for a year as part of the Erasmus program.
 \
@@ -8833,10 +8933,10 @@ it being run.
 \ I currently reside in the UK.
 \
 \ The book was written for fun, it has next to no real
-\ commercial or proffesional value whatsoever but the entire 
-\ SUBLEQ eForth system was a lovely puzzle to crack. My next 
-\ big project will probably be my own Unix operating system in 
-\ a Pascal like language of my own design, or starting a 
+\ commercial or proffesional value whatsoever but the entire
+\ SUBLEQ eForth system was a lovely puzzle to crack. My next
+\ big project will probably be my own Unix operating system in
+\ a Pascal like language of my own design, or starting a
 \ business.
 \
 \ ## Fully Portable SUBLEQ machine written in C
@@ -8904,7 +9004,7 @@ it being run.
 \ that would require subtly different algorithms in the base
 \ image.
 \
-\ Making a ones compliment SUBLEQ machine would not be much 
+\ Making a ones compliment SUBLEQ machine would not be much
 \ harder.
 \
 \ The machine can address (almost) 65536 16-bit values, or
@@ -8924,13 +9024,13 @@ it being run.
 \
 \ ### SUBLEQ VM File Format
 \
-\ The arguments passed to the program are meant to be file 
+\ The arguments passed to the program are meant to be file
 \ names containing space delimited decimal values, one value
 \ for each cell. Multiple programs can be concatenated into
 \ one image which is then run, or programs and data. This
 \ behavior has some utility, but the implementation is this
 \ way as it is easy to extend the program to do this than any
-\ other reason. 
+\ other reason.
 \
 \ We could complicate the program by adding in command line
 \ parsing so options and file input and output could be
@@ -8978,7 +9078,7 @@ it being run.
 \        72
 \        105
 \        0
-\        
+\
 \ This has one advantage that if the program is modified and
 \ stored in version control many of the lines are likely to
 \ be the same, most version control systems calculate
@@ -8992,7 +9092,7 @@ it being run.
 \       fscanf(f, "%d", &d)
 \
 \ With the addition of a single character we can parse both
-\ the white-space delimited format, and formats that contain 
+\ the white-space delimited format, and formats that contain
 \ numbers separated white space and commas:
 \
 \       fscanf(f, "%d,", &d)
@@ -9015,7 +9115,7 @@ it being run.
 \
 \ This version machine is has a very different flavor compared
 \ to the previous one, this one automatically saves the memory
-\ of the device upon exit. This means interactive Forth 
+\ of the device upon exit. This means interactive Forth
 \ sessions can be saved and new images prepared. Care has to
 \ be taken not to corrupt the image, because the system will
 \ always save on exit!
@@ -9034,52 +9134,52 @@ it being run.
 \        #define L(X) ((X)%SZ)
 \        #define MAX(X, Y) ((X) < (Y) ? (Y) : (X))
 \        int main(int s, char **v) {
-\        	static uint16_t m[SZ];
-\        	uint16_t pc = 0, max = 0;
-\        	for (int i = 1, d = 0; i < s; i++) {
-\        		FILE *f = fopen(v[i], "r");
-\        		if (!f)
-\        			return 1;
-\        		while (fscanf(f, "%d,", &d) > 0)
-\        			m[(pc++)%SZ] = d;
-\        		if (fclose(f) < 0)
-\        			return 2;
-\        	}
-\        	max = pc;
-\        	for (pc = 0; !(pc & 0x8000);) {
-\        		uint16_t a = m[pc++];
-\        		uint16_t b = m[pc++];
-\        		uint16_t c = m[pc++];
-\        		if (a == 65535) {
-\        			m[b] = getchar();
-\        		} else if (b == 65535) {
-\        			if (putchar(m[a]) < 0)
-\        				return 3;
-\        			if (fflush(stdout) < 0)
-\        				return 4;
-\        		} else {
-\        			uint16_t r = m[b] - m[a];
-\        			max = MAX(max, b);
-\        			if (r & 32768 || r == 0)
-\        				pc = c;
-\        			m[b] = r;
-\        		}
-\        	}
-\        	if (s <= 1)
-\        		return 0;
-\        	FILE *f = fopen(v[s - 1], "w");
-\        	if (!f)
-\        		return 5;
-\        	for (int i = 0; i <= max; i++) {
-\        		const int p = (short)m[i];
-\        		if (fprintf(f, "%d\n", p) < 0) {
-\        			(void)fclose(f);
-\        			return 6;
-\        		}
-\        	}
-\        	if (fclose(f) < 0)
-\        		return 7;
-\        	return 0;
+\                static uint16_t m[SZ];
+\                uint16_t pc = 0, max = 0;
+\                for (int i = 1, d = 0; i < s; i++) {
+\                        FILE *f = fopen(v[i], "r");
+\                        if (!f)
+\                                return 1;
+\                        while (fscanf(f, "%d,", &d) > 0)
+\                                m[(pc++)%SZ] = d;
+\                        if (fclose(f) < 0)
+\                                return 2;
+\                }
+\                max = pc;
+\                for (pc = 0; !(pc & 0x8000);) {
+\                        uint16_t a = m[pc++];
+\                        uint16_t b = m[pc++];
+\                        uint16_t c = m[pc++];
+\                        if (a == 65535) {
+\                                m[b] = getchar();
+\                        } else if (b == 65535) {
+\                                if (putchar(m[a]) < 0)
+\                                        return 3;
+\                                if (fflush(stdout) < 0)
+\                                        return 4;
+\                        } else {
+\                                uint16_t r = m[b] - m[a];
+\                                max = MAX(max, b);
+\                                if (r & 32768 || r == 0)
+\                                        pc = c;
+\                                m[b] = r;
+\                        }
+\                }
+\                if (s <= 1)
+\                        return 0;
+\                FILE *f = fopen(v[s - 1], "w");
+\                if (!f)
+\                        return 5;
+\                for (int i = 0; i <= max; i++) {
+\                        const int p = (short)m[i];
+\                        if (fprintf(f, "%d\n", p) < 0) {
+\                                (void)fclose(f);
+\                                return 6;
+\                        }
+\                }
+\                if (fclose(f) < 0)
+\                        return 7;
+\                return 0;
 \        }
 \
 \ The last argument given is the one that is written to (it
@@ -9256,13 +9356,13 @@ it being run.
 \        #define SZ     (1<<16)
 \        #define L(X)   ((X)%SZ)
 \        #define HI(X)  (1ull << ((X) - 1))
-\        
+\
 \        static inline uint64_t msk(int n) {
-\          return n < 64 ? 
+\          return n < 64 ?
 \            (1ull << n) + 0xFFFFFFFFFFFFFFFFull :
 \            0xFFFFFFFFFFFFFFFFull;
 \        }
-\        
+\
 \        int main(int s, char **v) {
 \          if (s < 2)
 \            return 1;
@@ -9280,8 +9380,8 @@ it being run.
 \              return 4;
 \          }
 \          for (pc = 0; pc < SZ;) {
-\            uint64_t a = m[L(pc++)], 
-\               b = m[L(pc++)], 
+\            uint64_t a = m[L(pc++)],
+\               b = m[L(pc++)],
 \               c = m[L(pc++)];
 \            if (a == msk(N)) {
 \              m[L(b)] = getchar() & msk(N);
@@ -9303,7 +9403,7 @@ it being run.
 \
 \ This program is useful for testing the error messages printed
 \ out when the eForth image detects the wrong SUBLEQ cell width
-\ is in use. 
+\ is in use.
 \
 \ ## Recompiling Virtual Machine; The "Recompiler"
 \
@@ -9318,12 +9418,12 @@ it being run.
 \ but execution speed and not being generic is the goal.
 \
 \ The core of the system is a pattern matching mini-language
-\ that can match on sequences of SUBLEQ instructions and 
-\ extract values for further comparison. This is embodied in 
+\ that can match on sequences of SUBLEQ instructions and
+\ extract values for further comparison. This is embodied in
 \ the function "match", which is used by "optimizer".
 \
 \ It must be emphasized again, that this program is *brittle*,
-\ it works perfectly on the "eforth.dec" image that is 
+\ it works perfectly on the "eforth.dec" image that is
 \ generated but it will fail on arbitrary SUBLEQ programs.
 \
 \ It is meant to match on these instruction macros:
@@ -9331,21 +9431,21 @@ it being run.
 \ ======================= TODO ================================
 \
 \        :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
-\        :m NADDR there 2/ 1+ t, ;m 
-\        :m HALT 0 t, 0 t, -1 t, ;m 
+\        :m NADDR there 2/ 1+ t, ;m
+\        :m HALT 0 t, 0 t, -1 t, ;m
 \        :m JMP 2/ Z Z t, ;m ( a --, Jump to location )
 \        :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
 \        :m SUB swap 2/ t, 2/ t, NADDR ;m ( a a -- : subtract )
 \        :m NOOP Z Z NADDR ;m ( -- : No operation )
-\        :m ZERO dup 2/ t, 2/ t, NADDR ;m 
+\        :m ZERO dup 2/ t, 2/ t, NADDR ;m
 \        :m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
 \        :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
-\        :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR 
+\        :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR
 \           r> Z  t, NADDR Z Z NADDR ;m
-\        :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m 
-\        :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m 
+\        :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
+\        :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m
 \        :m iSTORE ( a a -- )
-\           swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV 
+\           swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV
 \           7 + 2* MOV r> 0 MOV ;m
 \
 \ If the above section differs in your version of the assembler
@@ -9355,7 +9455,7 @@ it being run.
 \
 \ On some systems this speeds execution up, on others it seems
 \ to slow it down. There is a lot in this program that could
-\ itself be optimized, it was written to demonstrate the 
+\ itself be optimized, it was written to demonstrate the
 \ concept and not for efficiency and speeds sake in of itself.
 \
 \
@@ -9373,10 +9473,10 @@ it being run.
 \         ZERO, PUT, GET, HALT,
 \         IJMP, ILOAD, ISTORE, INC, DEC,
 \         INV, DOUBLE, LSHIFT,
-\       
+\
 \         MAX
 \       };
-\       
+\
 \       static const char *names[] = {
 \         "SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
 \         "MOV    ", "ZERO   ", "PUT    ", "GET    ",
@@ -9384,12 +9484,12 @@ it being run.
 \         "INC    ", "DEC    ", "INV    ", "DOUBLE ",
 \         "LSHIFT ",
 \       };
-\       
+\
 \       typedef struct {
 \         int instruction;
 \         uint16_t m, s, d;
 \       } instruction_t;
-\       
+\
 \       typedef struct {
 \         int matches[MAX];
 \         int set[9];
@@ -9398,7 +9498,7 @@ it being run.
 \         clock_t start, end;
 \         int64_t cnt[MAX];
 \       } optimizer_t;
-\       
+\
 \       static int match(optimizer_t *o, uint16_t *n,
 \         int sz, uint16_t pc, const char *s, ...) {
 \         va_list ap;
@@ -9452,13 +9552,13 @@ it being run.
 \         va_end(ap);
 \         return r;
 \       }
-\       
+\
 \       static long get(optimizer_t *o, char var) {
 \         if (var < '0' || var > '9' || o->set[var - '0'] == 0)
 \           return -1;
 \         return o->v[var - '0'];
 \       }
-\       
+\
 \       /* This section pattern matches the code finding
 \        * sequences of SUBLEQ instructions against known
 \        * instruction macros.  It is essentially a
@@ -9467,7 +9567,7 @@ it being run.
 \        * speed up. */
 \       static int optimizer(optimizer_t *o,
 \           instruction_t *m, uint16_t pc) {
-\       
+\
 \         for (uint16_t i = 0; i < pc; i++) {
 \           switch (m[i].m) {
 \           case 0: o->z_reg[i] = 1; break;
@@ -9475,16 +9575,16 @@ it being run.
 \           case 0xFFFF: o->neg1_reg[i] = 1; break;
 \           }
 \         }
-\       
+\
 \         for (uint16_t i = 0; i < pc; i++) {
 \           uint16_t q0 = 0, q1 = 0;
 \           uint16_t n[DEPTH] = { 0, };
-\       
+\
 \           for (size_t j = 0; j < DEPTH; j++)
 \             n[j] = m[L(i + j)].m;
-\       
+\
 \           /* Largest instructions *must* go first */
-\       
+\
 \           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11>\
 \           ?Z> Z1> ZZ> 22> ?Z> Z2> ZZ> 33> !Z> Z3> ZZ>",
 \           &q0, &q1) == 1
@@ -9496,7 +9596,7 @@ it being run.
 \             o->matches[ISTORE]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11>\
 \           ?Z> Z1> ZZ>", &q0) == 1
 \               && get(o, '0') == (i + 15)) {
@@ -9506,7 +9606,7 @@ it being run.
 \             o->matches[ILOAD]++;
 \             continue;
 \           }
-\       
+\
 \           int shift = 0, l = 0, dest = 0;
 \           for (l = 0; l < DEPTH; l += 9) {
 \             if (match(o, n+l, DEPTH-l, i+l, "!Z>\
@@ -9531,8 +9631,8 @@ it being run.
 \             o->matches[LSHIFT]++;
 \             continue;
 \           }
-\       
-\       
+\
+\
 \           if (match(o, n, DEPTH, i, "00> 10> 11> 2Z>\
 \               Z1> ZZ> !1>", &q0) == 1
 \               && o->one_reg[q0]) {
@@ -9541,7 +9641,7 @@ it being run.
 \             o->matches[INV]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>",
 \           &q0) == 1
 \               && get(o, '0') == (i + (3*4) + 2)) {
@@ -9550,7 +9650,7 @@ it being run.
 \             o->matches[IJMP]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
 \           &q0) == 1) {
 \             m[L(i)].instruction = MOV;
@@ -9559,7 +9659,7 @@ it being run.
 \             o->matches[MOV]++;
 \             continue;
 \           }
-\       
+\
 \           /* We should match multiple ones in a row and
 \            * turn them into a left shift */
 \           if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
@@ -9571,7 +9671,7 @@ it being run.
 \             o->matches[DOUBLE]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
 \           &q0, &q1) == 1) {
 \             m[L(i)].instruction = ADD;
@@ -9580,21 +9680,21 @@ it being run.
 \             o->matches[ADD]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "00>") == 1) {
 \             m[L(i)].instruction = ZERO;
 \             m[L(i)].d = L(get(o, '0'));
 \             o->matches[ZERO]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "ZZ!", &q0) == 1
 \           && q0 >= SZ) {
 \             m[L(i)].instruction = HALT;
 \             o->matches[HALT]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "00!", &q0) == 1) {
 \             m[L(i)].instruction = JMP;
 \             m[L(i)].d = q0;
@@ -9602,21 +9702,21 @@ it being run.
 \             o->matches[JMP]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "N!>", &q0) == 1) {
 \             m[L(i)].instruction = GET;
 \             m[L(i)].d = L(q0);
 \             o->matches[GET]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "!N>", &q0) == 1) {
 \             m[L(i)].instruction = PUT;
 \             m[L(i)].s = L(q0);
 \             o->matches[PUT]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \             && q0 != q1 && o->neg1_reg[L(q0)]) {
 \             m[L(i)].instruction = INC;
@@ -9624,7 +9724,7 @@ it being run.
 \             o->matches[INC]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \             && q0 != q1 && o->one_reg[L(q0)]) {
 \             m[L(i)].instruction = DEC;
@@ -9632,7 +9732,7 @@ it being run.
 \             o->matches[DEC]++;
 \             continue;
 \           }
-\       
+\
 \           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \             && q0 != q1) {
 \             m[L(i)].instruction = SUB;
@@ -9641,13 +9741,13 @@ it being run.
 \             o->matches[SUB]++;
 \             continue;
 \           }
-\       
+\
 \           o->matches[SUBLEQ]++;
 \         }
 \         return 0;
 \       }
-\       
-\       
+\
+\
 \       static int report(optimizer_t *o) {
 \         double elapsed_s = (double)(o->end - o->start);
 \         elapsed_s /= CLOCKS_PER_SEC;
@@ -9659,7 +9759,7 @@ it being run.
 \         }
 \         static const char *rep_div =
 \         "+--------+--------+--------------+----------+\n";
-\       
+\
 \         if (fputs(rep_div, e) < 0)
 \           return -1;
 \         if (fprintf(e, "| Instr. | Subs.  | Instr. Cnt   |\
@@ -9669,27 +9769,27 @@ it being run.
 \           return -1;
 \         for (int i = 0; i < MAX; i++)
 \           if (fprintf(e, "| %s| % 6d | % 12"PRId64" |\
-\        % 7.1f%% |\n", 
-\               names[i], o->matches[i], o->cnt[i], 
+\        % 7.1f%% |\n",
+\               names[i], o->matches[i], o->cnt[i],
 \               100.0*((float)o->cnt[i])/(float)total) < 0)
 \             return 1;
 \         if (fputs(rep_div, e) < 0)
 \           return -1;
 \         if (fprintf(e, "| Totals | % 6d | % 12"PRId64" |\
-\                 |\n", 
+\                 |\n",
 \                    (int)subs, total) < 0)
 \           return -1;
 \         if (fputs(rep_div, e) < 0)
 \           return -1;
 \         if (fprintf(e, "|         EXECUTION TIME %.3f \
-\       SECONDS      |\n", 
+\       SECONDS      |\n",
 \                     elapsed_s) < 0)
 \           return -1;
 \         if (fputs(rep_div, e) < 0)
 \           return -1;
 \         return 0;
 \       }
-\       
+\
 \       int main(int s, char **v) {
 \         static instruction_t m[SZ];
 \         static optimizer_t o = { .matches = { 0, }, };
@@ -9704,7 +9804,7 @@ it being run.
 \           if (fclose(f) < 0)
 \             return 2;
 \         }
-\       
+\
 \         if (optimize)
 \           if (optimizer(&o, m, pc) < 0)
 \             return 1;
@@ -9782,13 +9882,13 @@ it being run.
 \             return 1;
 \         return 0;
 \       }
-\       
-\ A report is printed to standard error at the end of 
-\ execution.       
-\       
+\
+\ A report is printed to standard error at the end of
+\ execution.
+\
 \ ## Error Code list
 \
-\ This is a list of Standard Forth Error Codes, not all of 
+\ This is a list of Standard Forth Error Codes, not all of
 \ which are used by the application.
 \
 \         | Hex  | Dec  | Message                             |
@@ -9904,7 +10004,7 @@ it being run.
 \        |<-| Execute Word |  |   | Push Number onto Stack | |
 \        |  .--------------.  |   .------------------------. |
 \        |    ^               |                |             |
-\        ^    |               v                |             | 
+\        ^    |               v                |             |
 \        |    | (Yes)   .--------------------. |             v
 \        |    ----------| Is word immediate? | | .------------.
 \        |              .--------------------. | | Compile num|
@@ -9914,7 +10014,7 @@ it being run.
 \        |  .--------------------------------. | .------------.
 \        |  |    Compile Pointer to word     | |            |
 \        .--| in next available location in  | |            |
-\        |  |         the dictionary         | |            | 
+\        |  |         the dictionary         | |            |
 \        |  .--------------------------------. v            v
 \        |                                     |            |
 \        .----<-------<-------<-------<-------<------<------<.
@@ -9972,7 +10072,7 @@ it being run.
 #include <stdlib.h>
 #include <stdint.h>
 
-static int long_division(uint32_t n, uint32_t d, 
+static int long_division(uint32_t n, uint32_t d,
   uint32_t *quo, uint32_t *rem) {
   assert(quo);
   assert(rem);
@@ -10025,14 +10125,14 @@ int main(int argc, char **argv) {
 \ are all temporary registers, "NR" should contain negative
 \ one (or all bits set). If the third operand is missing the
 \ jump destination is the next instruction, or in the notation
-\ used here the jump address is "+1" (although that "+1" might 
+\ used here the jump address is "+1" (although that "+1" might
 \ be converted to a "+3" by the assembler to convert to cell
-\ address), the same goes for "+2"/"-2", they refer to the two 
-\ instructions forward or back, and not cell addresses. If only 
-\ one operand is present then the third operand is the usual 
-\ jump to next instruction, and the first operand is zeroed by 
-\ subtracting it from itself, eg. "subleq a" expands to 
-\ "subleq a a +1". The JMP instruction is the same as our JMP 
+\ address), the same goes for "+2"/"-2", they refer to the two
+\ instructions forward or back, and not cell addresses. If only
+\ one operand is present then the third operand is the usual
+\ jump to next instruction, and the first operand is zeroed by
+\ subtracting it from itself, eg. "subleq a" expands to
+\ "subleq a a +1". The JMP instruction is the same as our JMP
 \ instruction, ie. "JMP c" is "subleq Z Z c".
 \
 \ The code is not tested.
@@ -10175,9 +10275,9 @@ int main(int argc, char **argv) {
 \       1 + 1 = 2
 \
 \ None of the operators output should be one when the result is
-\ zero, XOR should output one when the result is equal to one, 
-\ OR when it is greater or equal to one, and AND should only be 
-\ one when the output is two. Otherwise the output should be 
+\ zero, XOR should output one when the result is equal to one,
+\ OR when it is greater or equal to one, and AND should only be
+\ one when the output is two. Otherwise the output should be
 \ zero for the new bit.
 \
 \ The following Stack Overflow question goes over this in more
@@ -10186,21 +10286,21 @@ int main(int argc, char **argv) {
 \ Making these operators fast is especially important, in all
 \ other Forth systems there is the reasonable expectation that
 \ these operators are fast, and that they operate in a
-\ single clock cycle, not so for the system. Subtraction and 
-\ addition are fast as usual, so some words later on have be 
+\ single clock cycle, not so for the system. Subtraction and
+\ addition are fast as usual, so some words later on have be
 \ rewritten to use arithmetic instead.
 \
 \ It is possible to do all kinds of optimizations with what
-\ are usually fast bitwise operations, for example, SWAR 
-\ operations or SIMD With A Register (SIMD stands for Single 
-\ Instruction Multiple Data). 
+\ are usually fast bitwise operations, for example, SWAR
+\ operations or SIMD With A Register (SIMD stands for Single
+\ Instruction Multiple Data).
 \
-\ The idea of SWAR optimizations is that you can process 
+\ The idea of SWAR optimizations is that you can process
 \ multiple N-bit operations (say 8-bit) on a machine capable of
-\ doing k\*N bit arithmetic (k = 2 for a 16-bit machine). 
+\ doing k\*N bit arithmetic (k = 2 for a 16-bit machine).
 \
 \ Unfortunately,
-\ these optimizations tend to be bit-wise heavy and more 
+\ these optimizations tend to be bit-wise heavy and more
 \ suitable for larger cell width systems anyway, but such
 \ optimizations are worth knowing about. We can do a very
 \ limited version of SWAR potentially in comparing Forth
@@ -10335,7 +10435,7 @@ variable seed ( NB. Could be mixed with keyboard input )
 : log2 0 swap ( u -- u : integer logarithm in base 2 )
   begin swap 1+ swap 2/ dup 0= until drop 1- ;
 : average um+ 2 um/mod nip ; ( u u -- u )
-: <=> 2dup > if 2drop -1 exit then < ; 
+: <=> 2dup > if 2drop -1 exit then < ;
 : bounds over + swap ;
 : 2, , , ; ( n n -- )
 : d< rot 2dup >                    ( d -- f )
@@ -10384,7 +10484,7 @@ variable seed ( NB. Could be mixed with keyboard input )
     dup . dup list 1+ key $D = if rdrop drop exit then
   next drop ;
 : thru over - for dup >r load r> 1+ next drop ; ( k1 k2 -- )
-: /string over min rot over + -rot - ; 
+: /string over min rot over + -rot - ;
 : ndrop for aft drop then next ; ( 0...n n -- )
 : unused $FFFF here - ; ( 65536 bytes available in this VM )
 : char+ 1+ ; ( b -- b )
@@ -10392,9 +10492,9 @@ variable seed ( NB. Could be mixed with keyboard input )
 : str< compare 0< ;
 : under over swap ; ( n1 n2 -- n1 n1 n2 )
 
-\ This version of Forth defines "mux" in SUBLEQ assembly, 
-\ previous versions did not and coded the bitwise routines in 
-\ assembly instead of using "mux", here "mux" is defined in 
+\ This version of Forth defines "mux" in SUBLEQ assembly,
+\ previous versions did not and coded the bitwise routines in
+\ assembly instead of using "mux", here "mux" is defined in
 \ Forth. Note that the mask here is inverted from the built in
 \ one.
 \
@@ -10405,10 +10505,10 @@ variable seed ( NB. Could be mixed with keyboard input )
 \
 : mux dup >r and swap r> invert and or ; ( x1 x2 mask -- x )
 
-\ "many" is an interesting word, it allows a line of code to be 
-\ executed an infinite number of times by postfixing it to the 
-\ end of the command. That is less interesting compared to the 
-\ way it does it, by manipulating the input line to make it so 
+\ "many" is an interesting word, it allows a line of code to be
+\ executed an infinite number of times by postfixing it to the
+\ end of the command. That is less interesting compared to the
+\ way it does it, by manipulating the input line to make it so
 \ it is executed again, the line is then re-parsed and executed
 \ again, including "many", which triggers another re-parsing
 \ and so on. It is a neat little word.
@@ -10451,35 +10551,35 @@ system +order definitions
 : (j) 4 rpick ; compile-only
 : (k) 7 rpick ; compile-only
 : (do) r> dup >r swap rot >r >r r+ >r ; compile-only
-: (?do) 
+: (?do)
    2dup <> if
      r> dup >r swap rot >r >r r+ >r exit
    then 2drop ; compile-only
-: (loop) 
+: (loop)
   r> r> 1+ r> 2dup <> if
     >r >r 2* @ >r exit \ NB. 2* and 2/ cause porting problems
   then >r 1- >r r+ >r ; compile-only
-: (+loop) 
+: (+loop)
    r> swap r> r> 2dup - >r
    2 pick r@ + r@ xor 0>=
    3 pick r> xor 0>= or if
      >r + >r 2* @ >r exit
    then >r >r drop r+ >r ; compile-only
 forth-wordlist +order definitions
-: unloop compile (unloop) ; immediate compile-only 
+: unloop compile (unloop) ; immediate compile-only
 : i compile r@ ; immediate compile-only
 : j compile (j) ; immediate compile-only
 : k compile (k) ; immediate compile-only
 : leave compile (leave) ; immediate compile-only
 : do compile (do) 0 , here ; immediate compile-only
 : ?do compile (?do) 0 , here ; immediate compile-only
-: loop 
-  compile (loop) dup 2/ , 
-  compile (unloop) 
+: loop
+  compile (loop) dup 2/ ,
+  compile (unloop)
   cell- here cell- 2/ swap ! ; immediate compile-only
-: +loop 
-  compile (+loop) dup 2/ , 
-  compile (unloop) 
+: +loop
+  compile (+loop) dup 2/ ,
+  compile (unloop)
   cell- here cell- 2/ swap ! ; immediate compile-only
 only forth definitions
 
@@ -10490,20 +10590,20 @@ only forth definitions
 \ minimum stack checks and magic numbers.
 \
 \ Example:
-\ 
+\
 \ struct
 \   byte: >b1
 \   byte: >b2
 \   cell: >w1
 \   cell: >w2
 \ size: /foo
-\ 
+\
 \ struct
 \   byte: >c1
 \   7 unused
 \   /foo field: >foo
 \ ;struct
-\ 
+\
 : struct 0 ;
 : field:  ( offset size -- offset' )
   create over , +
@@ -10516,10 +10616,10 @@ only forth definitions
 : size:  constant ;
 : ;struct drop ;
 
-\ Make a word called "mark" which when called erases 
+\ Make a word called "mark" which when called erases
 \ everything after it has been defined.
-: mark 
-  $" defined (mark) [if] (mark) [then] marker (mark) " 
+: mark
+  $" defined (mark) [if] (mark) [then] marker (mark) "
   count evaluate ;
 mark
 ' ) <ok> !
@@ -10544,7 +10644,7 @@ system +order
 ( NB. Bitwise ops must be masked off on non 16-bit machines )
 : crc ( b u -- u : calculate ccitt-ffff CRC )
   $FFFF >r begin ?dup while
-   over c@ r> swap 
+   over c@ r> swap
    ( CCITT polynomial $1021, or "x16 + x12 + x5 + 1" )
    over $8 rshift xor ( crc x )
    dup  $4 rshift xor ( crc x )
@@ -10587,14 +10687,14 @@ users -order
 <ok> ! login
 
 \ ## Sokoban
-\ 
+\
 \ This is a game of Sokoban, to play, type:
-\ 
-\ 	./embed sokoban.fth /dev/stdin
+\
+\       ./embed sokoban.fth /dev/stdin
 \       cat sokoban.fth /dev/stdin | ./subleq subleq.dec
-\ 
-\ On the command line. Four maps are provided, more can be 
-\ found online at <https://github.com/begoon/sokoban-maps>, 
+\
+\ On the command line. Four maps are provided, more can be
+\ found online at <https://github.com/begoon/sokoban-maps>,
 \ where the four maps were found.
 \
 \ * Author:  Richard James Howe
@@ -10630,7 +10730,7 @@ create rule 3 c, 0 c, 0 c, 0 c,
 : match              ( a a -- f )
   n1+ ( replace with umin of both counts? )
   count
-  for aft 
+  for aft
     count rot count rot <> if 2drop rdrop 0 exit then
   then next 2drop -1 ;
 
@@ -10736,23 +10836,23 @@ sokoban-wordlist +order
     show input ' command catch ?dup
   until finish ;
 
-decimal 47 maze!  
+decimal 47 maze!
 only forth definitions decimal
 editor x
- 1 i            XXXXX            
- 2 i            X   X            
- 3 i            X*  X            
- 4 i          XXX  *XXX          
- 5 i          X  *  * X          
+ 1 i            XXXXX
+ 2 i            X   X
+ 3 i            X*  X
+ 4 i          XXX  *XXX
+ 5 i          X  *  * X
  6 i        XXX X XXX X     XXXXXX
  7 i        X   X XXX XXXXXXX  ..X
  8 i        X *  *             ..X
  9 i        XXXXX XXXX X@XXXX  ..X
 10 i            X      XXX  XXXXXX
-11 i            XXXXXXXX         
-12 i       
+11 i            XXXXXXXX
+12 i
 n x
- 1 i       XXXXXXXXXXXX 
+ 1 i       XXXXXXXXXXXX
  2 i       X..  X     XXX
  3 i       X..  X *  *  X
  4 i       X..  X*XXXX  X
@@ -10762,18 +10862,18 @@ n x
  8 i         X *  * * * X
  9 i         X    X     X
 10 i         XXXXXXXXXXXX
-11 i      
+11 i
 n x
  1 i               XXXXXXXX
  2 i               X     @X
  3 i               X *X* XX
- 4 i               X *  *X 
- 5 i               XX* * X 
+ 4 i               X *  *X
+ 5 i               XX* * X
  6 i       XXXXXXXXX * X XXX
  7 i       X....  XX *  *  X
  8 i       XX...    *  *   X
  9 i       X....  XXXXXXXXXX
-10 i       XXXXXXXX        
+10 i       XXXXXXXX
 n x
  1 i                     XXXXXXXX
  2 i                     X  ....X
@@ -10782,12 +10882,12 @@ n x
  5 i          X ***X*  * X  ....X
  6 i          X  *     * X  ....X
  7 i          X ** X* * *XXXXXXXX
- 8 i       XXXX  * X     X      
- 9 i       X   X XXXXXXXXX      
-10 i       X    *  XX           
-11 i       X **X** @X           
-12 i       X   X   XX           
-13 i       XXXXXXXXX            
+ 8 i       XXXX  * X     X
+ 9 i       X   X XXXXXXXXX
+10 i       X    *  XX
+11 i       X **X** @X
+12 i       X   X   XX
+13 i       XXXXXXXXX
 q
 
 .( LOADED ) cr
@@ -10801,7 +10901,7 @@ ook <ok> !
 \ Calling this facility a bootloader might be overselling it,
 \ the word "ingest" essentially performs the opposite of this
 \ systems version of "dump". It retrieves a series of numbers
-\ represented in the current base and stores them at 
+\ represented in the current base and stores them at
 \ consecutive memory locations until either an error has
 \ occurred or the number of cells it is meant to write has
 \ been reached.
@@ -10834,7 +10934,7 @@ ook <ok> !
 \ it will do this until success.
 \ * "integer", gets a space delimited word from the input
 \ stream and then attempts to convert it into a number in the
-\ current input radix and either returns that number and 
+\ current input radix and either returns that number and
 \ signals success or it returns the word (as an address and
 \ length) and a flag indicating failure. "integer" returns a
 \ single cell number.
@@ -10856,25 +10956,25 @@ ook <ok> !
 : integer grab count number? nip ; ( <num> -- n f : get int. )
 : integer? integer 0= ( dpl @ 0>= or ) -$18 and throw ;
 : ingest ( a u -- : opposite of 'dump', load nums into mem )
-  cell / for aft integer? over ! cell+ then next drop ; 
+  cell / for aft integer? over ! cell+ then next drop ;
 
 \ ## Floating Point Implementation
-\ 
+\
 \ This section contains the original source for the floating
 \ point module:
-\ 
+\
 \ Vierte Dimension Vol.2, No.4 1986
-\ 
-\ 
-\ 	A FAST HIGH-LEVEL FLOATING POINT
-\ 
-\ 		Robert F. Illyes
-\ 
-\ 		     ISYS
-\ 	       PO Box 2516, Sta. A
-\ 	       Champaign, IL 61820
-\ 	       Phone: 217/359-6039
-\ 
+\
+\
+\         A FAST HIGH-LEVEL FLOATING POINT
+\
+\                 Robert F. Illyes
+\
+\                      ISYS
+\                PO Box 2516, Sta. A
+\                Champaign, IL 61820
+\                Phone: 217/359-6039
+\
 \ If binary normalization and rounding are used, a fast
 \ single-precision FORTH floating point can be built with
 \ accuracy adequate for many applications. The creation
@@ -10885,9 +10985,9 @@ ook <ok> !
 \ 9E-4933 to about 5E4931. This floating point may be
 \ used without fee provided the copyright notice and
 \ associated information in the source are included.
-\ 
+\
 \ FIXED VS. FLOATING POINT
-\ 
+\
 \ FORTH programmers have traditionally favored fixed over
 \ floating point. A fixed point application is harder to
 \ write. The range of each value must be known and
@@ -10896,77 +10996,77 @@ ook <ok> !
 \ applications are much more compact and often much
 \ faster than floating point (in the absence of floating
 \ point hardware).
-\ 
+\
 \ The debate of fixed vs. floating point is at least as
 \ old as the ENIAC, the first electronic digital
 \ computer. John von Neumann used fixed point on the
 \ ENIAC. He felt that the detailed understanding of
 \ expressions required by fixed point was desirable, and
 \ that fixed point was well worth the extra time (1).
-\ 
+\
 \ But computers are no longer the scarce resource that
 \ they once were, and the extra programming time is often
 \ more costly than any advantages offered by fixed point.
 \ For getting the most out of the least hardware,
 \ however, fixed point will always be the technique of
 \ choice.
-\ 
+\
 \ Fixed point arithmetic represents a real number as a
 \ ratio of integers, with an implicit divisor. This
 \ implicit divisor may be thought of as the
 \ representation of unity. If unity were represented by
 \ 300, for example, 2.5 would be represented by 750.
-\ 
+\
 \ To multiply 2.5 by 3.5, with all values representing
 \ unity as ten, one would evaluate
-\ 
-\ 		     25 * 35
-\ 		     -------
-\ 		       10
-\ 
+\
+\                      25 * 35
+\                      -------
+\                        10
+\
 \ The ten is called a scale factor, and the division by
 \ ten is called a scaling operation. This expression is
 \ obviously inefficient, requiring both a division and a
 \ multiplication to accomplish a multiplication.
-\ 
+\
 \ Most scaling operations can, however, be eliminated by
 \ a little algebraic manipulation. In the case of the sum
 \ of two squares, for example, where A and B are fixed
 \ point integers and unity is represented by the integer
 \ U,
-\ 
+\
 \       A * A   B * B           (A * A)+(B * B)
 \       ----- + -----    -->    ---------------
-\ 	U       U                    U
-\ 
+\         U       U                    U
+\
 \ In addition to the elimination of a division by U, the
 \ right expression is more accurate. Each division can
 \ introduce some error, and halving the number of
 \ divisions halves the worst-case error.
-\ 
+\
 \ DECIMAL VS. BINARY NORMALIZATION
-\ 
+\
 \ A floating point number consists of two values, an
 \ exponent and a mantissa. The mantissa may represent
 \ either an integer or a fraction. The exponent and the
 \ mantissa are related to each other in the same way as
 \ the value and power of ten in scientific notation are
 \ related.
-\ 
+\
 \ A mantissa is always kept as large as possible. This
 \ process is called normalization. The following
 \ illustrates the action of decimal normalization with an
 \ unsigned integer mantissa:
-\ 
-\ 	 Value       Stack representation
-\ 	       4
-\ 
-\ 	 5 * 10         50000  0  --
-\ 	       3
-\ 	   * 10          7000  0  --
-\ 	       3
-\ 	   * 10         50000 -1  --
-\ 
+\
+\          Value       Stack representation
+\            4
+\
+\          5 * 10         50000  0  --
+\                3
+\            * 10          7000  0  --
+\                3
+\            * 10         50000 -1  --
+\
 \ The smallest the mantissa can become is 6554. If a
 \ mantissa of 6553 is encountered, normalization requires
 \ that it be made 65530, and that the exponent be
@@ -10975,13 +11075,13 @@ ook <ok> !
 \ or 1 part in 13108. The error is halved because of the
 \ rounding of the real number to the nearest floating
 \ point value.
-\ 
+\
 \ Had we been using binary normalization, the smallest
 \ mantissa would have been 32768, and the worst case
 \ error in representation would have been 1 part 65536,
 \ or 1/5 that of decimal normalization. LOG10(65536) is
 \ 4.8, the accuracy in decimal digits.
-\ 
+\
 \ As with fixed point, scaling operations are required by
 \ floating point. With decimal normalization, this takes
 \ the form of division and multiplication by powers of
@@ -10992,48 +11092,48 @@ ook <ok> !
 \ seem to imply. Due to the presence of scaling in 73% of
 \ decimally normalized additions (2), the amount is
 \ actually somewhat over twice.
-\ 
+\
 \ With binary normalization, by contrast, this extra
 \ multiplication effectively disappears. The scaling by
 \ a power of two can usually be handled with a single
 \ shift and some stack manipulation, all fast operations.
-\ 
+\
 \ Though a decimally normalized floating point can be
 \ incredibly small (3), a binary normalized floating
 \ point has 1/5 the error and is about twice as fast.
-\ 
+\
 \ It should be mentioned that the mantissa should be
 \ multiples of 2 bytes if the full speed advantage of
 \ binary normalization is to be available. Extra shifting
 \ and masking operations are necessary with odd byte
 \ counts when using the 2-byte arithmetic of FORTH.
-\ 
+\
 \ NUMBER FORMAT AND ARITHMETIC
-\ 
+\
 \ This floating point package uses an unsigned single
 \ precision fraction with binary normalization,
 \ representing values from 1/2 to just under 1. The high
 \ bit of the fraction is always set.
-\ 
+\
 \ The sign of the floating point number is carried in the
 \ high bit of the single precision exponent, The
 \ remaining 15 bits of the exponent represent a power of
 \ 2 in excess 4000 hex. The use of excess 4000 permits
 \ the calculation of the sign as an automatic outcome of
 \ exponent arithmetic in multiplication and division.
-\ 
+\
 \ A zero floating point value is represented by both a
 \ zero fraction and a zero exponent. Any operation that
 \ produces a zero fraction also zeros the exponent.
-\ 
+\
 \ The exponent is carried on top of the fraction , so the
 \ sign may be tested by the phrase DUP 0< and zero by the
 \ phrase DUP 0= .
-\ 
+\
 \ The FORTH-83 Double Number Extension Word Set is
 \ required. Floating point values are used with the "2"
 \ words: 2CONSTANT, 2@, 2DUP, etc.
-\ 
+\
 \ There is no checking for exponent overflow or underflow
 \ after arithmetic operation, nor is division by zero
 \ checked for. The rationale for this is the same as with
@@ -11043,39 +11143,39 @@ ook <ok> !
 \ which errors are resolved may be determined by the
 \ user. The extremely large exponent range makes exponent
 \ overflow and underflow quite unlikely, of course.
-\ 
+\
 \ All of the arithmetic is rounding. The failure to round
 \ is the equivalent of throwing a bit of accuracy away.
 \ The representational accuracy of 4.8 digits will be
 \ quickly lost without rounding arithmetic.
-\ 
+\
 \ The following words behave like their integer
 \ namesakes:
-\ 
+\
 \      F+  F-  F*  F/  F2*  F2/  FABS  FNEGATE  F<
-\ 
+\
 \ Single precision integers may be floated by FLOAT, and
 \ produced from floating point by FIX and INT, which are
 \ rounding and truncating, respectively. DFLOAT floats a
 \ double precision integer.
-\ 
+\
 \ NUMBER INPUT AND OUTPUT
-\ 
+\
 \ Both E and F formats are supported. A few illustrations
 \ should suffice to show their usage. An underscore
 \ indicates the point at which the return key is pressed.
 \ PLACE determines the number of places to the right of
 \ the decimal point for output only.
-\ 
-\ 	   12.34  F      F. _ 12.340
-\ 	   12.34  F      E. _ 1.234E1
-\ 	   .033 E -1002  E. _ 3.300E-1004
-\ 
-\ 	   4 PLACES
-\ 
-\ 	   2. F -3. F F/ F. _ -0.6667
-\ 	   2. F -3. F F/ E. _ -6.6667E-1
-\ 
+\
+\            12.34  F      F. _ 12.340
+\            12.34  F      E. _ 1.234E1
+\            .033 E -1002  E. _ 3.300E-1004
+\
+\            4 PLACES
+\
+\            2. F -3. F F/ F. _ -0.6667
+\            2. F -3. F F/ E. _ -6.6667E-1
+\
 \ F and E will correctly float any input string
 \ representing a signed double precision number. There
 \ may be as many as 9 digits to the right of the decimal
@@ -11086,7 +11186,7 @@ ook <ok> !
 \ right of the decimal point because a division by a
 \ power of ten must be added to the input conversion
 \ process.
-\ 
+\
 \ F and E round the input value to the nearest floating
 \ point value. So a sixth digit will often allow a more
 \ accurately rounded conversion, even thought the result
@@ -11095,7 +11195,7 @@ ook <ok> !
 \ points, this extra accuracy can only be achieved by the
 \ inconvenient procedure of entering the values as
 \ hexadecimal integers.
-\ 
+\
 \ Only the leftmost 5 digits of the F. output are
 \ significant. F. displays values from 32767 to -32768,
 \ with up to 4 additional places to the right of the
@@ -11106,73 +11206,73 @@ ook <ok> !
 \ somewhat limited range. Since a higher limit on size
 \ would display digits that are not significant, this
 \ range limit does not seem at all undesirable.
-\ 
+\
 \ Like E input, E. is accurate to somewhat over 4 digits.
 \ The principal source of inaccuracy is the function EXP,
 \ which calculates powers of 2.
-\ 
+\
 \ The following extended fraction is used by EXP. It
 \ gives the square root of 2 to the x power. The result
 \ must be squared to get 2 to the x.
-\ 
-\ 		      2x
-\ 	 1 + ---------------------------
-\ 			      57828
-\ 	     34.668 - x - --------------
-\ 					2
-\ 			  2001.18 + (2x)
-\ 
+\
+\                       2x
+\          1 + ---------------------------
+\                               57828
+\              34.668 - x - --------------
+\                                         2
+\                           2001.18 + (2x)
+\
 \ In order to do E format I/O conversion, one must be
 \ able to evaluate the expressions
-\ 
-\ 	 a   a/log10(2)        b    b*log10(2)
+\
+\          a   a/log10(2)        b    b*log10(2)
 \        10 = 2           and   2 = 10
-\ 
+\
 \ These log expressions may be easily evaluated with
 \ great precision by applying a few fixed point
 \ techniques. First, a good rational approximation to
 \ log10(2) is needed.
-\ 
-\ 	    log10(2)     = .3010299957
-\ 	    4004 / 13301 = .3010299978
-\ 
+\
+\             log10(2)     = .3010299957
+\             4004 / 13301 = .3010299978
+\
 \ The following code will convert an integer power of
 \ ten, assumed to be on the stack, into a power of 2:
-\ 
-\ 	       13301 4004 */MOD >R
-\ 	       FLOAT 4004 FLOAT F/ EXP
-\ 	       R> +
-\ 
+\
+\                13301 4004 */MOD >R
+\                FLOAT 4004 FLOAT F/ EXP
+\                R> +
+\
 \ The first line divides the power of ten by log10(2) and
 \ pushes the quotient on the return stack. The quotient
 \ is the integer part of the power of two.
-\ 
+\
 \ The second line finds the fractional part of the power
 \ of two by dividing the remainder by the divisor. This
 \ floating point fractional part is evaluated using EXP.
-\ 
+\
 \ The third line adds the integer power of two into the
 \ exponent of the floating point value of the fractional
 \ part, completing the conversion.
-\ 
+\
 \ The inverse process is used to convert a power of 2 to
 \ a power of ten.
-\ 
+\
 \ FORTH-83 LIMITATIONS
-\ 
+\
 \ Perhaps the most serious deficiency in the FORTH-83
 \ with extensibility as its pre-eminent feature, it is
 \ surprisingly difficult to write standard code that will
 \ alter the processing of numeric input strings by the
 \ interpreter and compiler.
-\ 
+\
 \ It is usually a simple matter to replace the system
 \ conversion word (usually called NUMBER) with a routine
 \ of ones choice. But there if no simple standard way of
 \ doing this. The interpreter, compiler and abort
 \ language are all interwoven, and may all have to be
 \ replaced if a standard solution is sought.
-\ 
+\
 \ This floating point package assumes that double
 \ precision integers are generated if the numeric input
 \ string contains a period, and that a word PLACES can be
@@ -11180,90 +11280,90 @@ ook <ok> !
 \ right of the period. This does not seem to be
 \ guaranteed by FORTH-83, although it may be safely
 \ assumed on most systems that include double precision.
-\ 
+\
 \ If you know how this part of your system works, you
 \ will probably want to eliminate the words E and F, and
 \ instead force floating point conversion of any input
 \ string containing a period. Double precision integers
 \ could still be generated by using a comma or other
 \ punctuation.
-\ 
+\
 \ It is suggested that future FORTH standards include the
 \ word NUMBER, which is a vector to the current input
 \ numeric word.
-\ 
+\
 \ It is also suggested that the Double Number Extension
 \ Wordset specification include a requirement that the
 \ interpreter and compiler be able to accept input
 \ strings specifying double precision values.
-\ 
+\
 \ COMMENTS ON THE FOLLOWING CODE
-\ 
+\
 \ The words ". and "- leave the ASCII values for period
 \ and minus, respectively. Replace these with whatever
 \ language you prefer for insertion of ASCII values.
-\ 
+\
 \ The size of F+ can be considerably reduced at the
 \ expense of quite a lot of execution speed. Think twice
 \ before you simplify it.
-\ 
+\
 \ The normalizing word NORM expects the stack value under
 \ the exponent to be a double precision signed integer.
 \ It leaves a normalized floating point number, rounding
 \ the double precision integer into the fraction.
-\ 
+\
 \ ALIGN and RALIGN expect an integer shift count with an
 \ unsigned double precision number beneath. They leave
 \ double precision unsigned integer results. At least one
 \ shift is always performed. RALIGN rounds after
 \ alignment.
-\ 
+\
 \ UM/ divides an unsigned double precision number by an
 \ unsigned single precision number, and rounds the single
 \ precision quotient.
-\ 
+\
 \ ZERO forces a floating point value with a zero fraction
 \ to also have a zero exponent.
-\ 
+\
 \ FSIGN applies the sign of the stack value under the
 \ exponent to the exponent. The double precision integer
 \ under an exponent is left unsigned.
-\ 
+\
 \ FEXP evaluates a power of e. It is included because it
 \ is a trivial but useful application of EXP.
-\ 
+\
 \ GET converts the next word in the input stream into a
 \ single precision signed integer.
-\ 
+\
 \ REFERENCES
-\ 
+\
 \ 1. Von Neumann, J., John von Neumann Collected Works,
 \ vol. 5, p.113.
-\ 
+\
 \ 2. Knuth, D. K., The Art of Computer Programming,
 \ second edition, vol. 2, pp. 238,9.
-\ 
+\
 \ 3. Tracy, M., Zen Floating Point, 1984 FORML Conference
 \ Proceedings, pp. 33-35.
-\ 
+\
 
 ( FORTH-83 FLOATING POINT.
   ----------------------------------
   COPYRIGHT 1985 BY ROBERT F. ILLYES
 
-	PO BOX 2516, STA. A
-	CHAMPAIGN, IL 61820
-	PHONE: 217/826-2734  )     HEX
+        PO BOX 2516, STA. A
+        CHAMPAIGN, IL 61820
+        PHONE: 217/826-2734  )     HEX
 
 : ZERO  OVER 0= IF DROP 0 THEN ;
 : FNEGATE 8000 XOR ZERO ;
 : FABS  7FFF AND ;
 : NORM  >R 2DUP OR
-	IF BEGIN DUP 0< NOT
-	   WHILE D2* R> 1- >R
-	   REPEAT SWAP 0< - ?DUP
-	   IF R> ELSE 8000 R> 1+ THEN
-	ELSE R> DROP THEN ;
+        IF BEGIN DUP 0< NOT
+           WHILE D2* R> 1- >R
+           REPEAT SWAP 0< - ?DUP
+           IF R> ELSE 8000 R> 1+ THEN
+        ELSE R> DROP THEN ;
 
 : F2*   1+ ZERO ;
 : F*    ROT + 4000 - >R UM* R> NORM ;
@@ -11271,29 +11371,29 @@ ook <ok> !
 
 : F2/   1- ZERO ;
 : UM/   DUP >R UM/MOD SWAP R>
-	OVER 2* 1+ U< SWAP 0< OR - ;
+        OVER 2* 1+ U< SWAP 0< OR - ;
 : F/    ROT SWAP - 4000 + >R
-	0 ROT ROT 2DUP U<
-	IF   UM/ R> ZERO
-	ELSE >R D2/ FABS R> UM/ R> 1+
-	THEN ;
+        0 ROT ROT 2DUP U<
+        IF   UM/ R> ZERO
+        ELSE >R D2/ FABS R> UM/ R> 1+
+        THEN ;
 
 : ALIGN 20 MIN 0 DO D2/ LOOP ;
 : RALIGN 1- ?DUP IF ALIGN THEN
-	1 0 D+ D2/ ;
+        1 0 D+ D2/ ;
 : FSIGN FABS OVER 0< IF >R DNEGATE R>
-	8000 OR THEN ;
+        8000 OR THEN ;
 
 : F+    ROT 2DUP >R >R FABS SWAP FABS -
-	DUP IF DUP 0<
-		IF   ROT SWAP  NEGATE
-		     R> R> SWAP >R >R
-		THEN 0 SWAP RALIGN
-	THEN SWAP 0 R> R@ XOR 0<
-	IF   R@ 0< IF 2SWAP THEN D-
-	     R> FSIGN ROT SWAP NORM
-	ELSE D+ IF 1+ 2/ 8000 OR R> 1+
-		ELSE R> THEN THEN ;
+        DUP IF DUP 0<
+                IF   ROT SWAP  NEGATE
+                     R> R> SWAP >R >R
+                THEN 0 SWAP RALIGN
+        THEN SWAP 0 R> R@ XOR 0<
+        IF   R@ 0< IF 2SWAP THEN D-
+             R> FSIGN ROT SWAP NORM
+        ELSE D+ IF 1+ 2/ 8000 OR R> 1+
+                ELSE R> THEN THEN ;
 
 : F-    FNEGATE F+ ;
 : F<    F- 0< SWAP DROP ;
@@ -11301,18 +11401,18 @@ ook <ok> !
 ( FLOATING POINT INPUT/OUTPUT ) DECIMAL
 
 CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
-	  ,100 , ,            1,000 , ,
-	10,000 , ,          100,000 , ,
+          ,100 , ,            1,000 , ,
+        10,000 , ,          100,000 , ,
      1,000,000 , ,       10,000,000 , ,
    100,000,000 , ,    1,000,000,000 , ,
 
 : TENS  2* 2* LITERAL + 2@ ;     HEX
 : PLACES PL ! ;
 : SHIFTS FABS 4010 - DUP 0< NOT
-	ABORT" TOO BIG" NEGATE ;
+        ABORT" TOO BIG" NEGATE ;
 : F#    >R PL @ TENS DROP UM* R> SHIFTS
-	RALIGN PL @ ?DUP IF 0 DO # LOOP
-	". HOLD THEN #S ROT SIGN ;
+        RALIGN PL @ ?DUP IF 0 DO # LOOP
+        ". HOLD THEN #S ROT SIGN ;
 : TUCK  SWAP OVER ;
 : F.    TUCK <# F# #> TYPE SPACE ;
 : DFLOAT 4020 FSIGN NORM ;
@@ -11331,29 +11431,29 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 1.4427  FCONSTANT X4
 
 : EXP   2DUP INT DUP >R FLOAT F-
-	F2* X2 2OVER FSQ X3 F+ F/
-	2OVER F2/ F-     X1 F+ F/
-	ONE F+ FSQ R> + ;
+        F2* X2 2OVER FSQ X3 F+ F/
+        2OVER F2/ F-     X1 F+ F/
+        ONE F+ FSQ R> + ;
 : FEXP  X4 F* EXP ;
 : GET   BL WORD DUP 1+ C@ "- = TUCK -
-	0 0 ROT CONVERT DROP -+ ;
+        0 0 ROT CONVERT DROP -+ ;
 : E     F GET >R R@ ABS 13301 4004 */MOD
-	>R FLOAT 4004 FLOAT F/ EXP R> +
-	R> 0< IF F/ ELSE F* THEN ;
+        >R FLOAT 4004 FLOAT F/ EXP R> +
+        R> 0< IF F/ ELSE F* THEN ;
 
 : E.    TUCK FABS 16384 TUCK -
-	4004 13301 */MOD >R
-	FLOAT 4004 FLOAT F/ EXP F*
-	2DUP ONE F<
-	IF 10 FLOAT F* R> 1- >R THEN
-	<# R@ ABS 0 #S R> SIGN 2DROP
-	"E HOLD F# #>     TYPE SPACE ;
+        4004 13301 */MOD >R
+        FLOAT 4004 FLOAT F/ EXP F*
+        2DUP ONE F<
+        IF 10 FLOAT F* R> 1- >R THEN
+        <# R@ ABS 0 #S R> SIGN 2DROP
+        "E HOLD F# #>     TYPE SPACE ;
 
 
 \ ## Future Direction and Additional tasks.
 \
 \ There is still a lot that could be done with this system,
-\ there are many programs and extensions that could be written 
+\ there are many programs and extensions that could be written
 \ for it. Some of them have already been mentioned.
 \
 \ For example any of these games could be ported to the system;
@@ -11384,18 +11484,18 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ thing to have.
 \
 \ Games like these used to come as listing in microcomputer
-\ magazines, usually written in a dialect of BASIC and 
+\ magazines, usually written in a dialect of BASIC and
 \ requiring only a terminal for the display of the games
-\ graphics. 
+\ graphics.
 \
 \ It would be quite easy to add in words for "free", "allocate"
-\ and "resize", from 
+\ and "resize", from
 \ <http://lars.nocrew.org/forth2012/memory.html>. A simple
 \ allocator only requires a handful of words and could be done
 \ in two blocks of Forth code. We have seen though that you do
 \ not need such an allocator package in order to produce
 \ useful programs. In order to write an allocator you just need
-\ a static section of memory (perhaps as little as 4KiB) 
+\ a static section of memory (perhaps as little as 4KiB)
 \ to divide up into sections, you do not need support from the
 \ operating system or special system calls, this can be done in
 \ pure Forth.
@@ -11415,19 +11515,19 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ language.
 \
 \ There are a number of optimizations, or just changes, that
-\ could be done to the system. Removing SUBLEQ assembly 
+\ could be done to the system. Removing SUBLEQ assembly
 \ routines, or at least making them compile time switches,
 \ and implementing the routine in Forth where doable is one
-\ way to save space. 
+\ way to save space.
 \
 \ Writing an LZSS CODEC in pure Forth would be a utility that
-\ could find use elsewhere, and compression routines in 
+\ could find use elsewhere, and compression routines in
 \ general. As mentioned a substantial amount of room could be
 \ saved if the image could be compressed during creation and
 \ decompressed on the fly. For the system a tiny decompressor
 \ written in SUBLEQ assembly would allow the greatest saving.
 \ This might mean the compression algorithm would have to be
-\ selected for execution speed on SUBLEQ with no other 
+\ selected for execution speed on SUBLEQ with no other
 \ concerns. There is a similarity between dictionary encoding
 \ compression schemes, such as LZSS and the Forth concept of
 \ "factoring". Factoring in Forth means finding common runs of
@@ -11436,11 +11536,11 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ finding the common factor of those words. Highly and well
 \ factored Forth code is considered good Forth code. This is
 \ quite similar to the automatic searching and replacing of
-\ repeated sub-sequences in dictionary encoding. 
-\ 
+\ repeated sub-sequences in dictionary encoding.
+\
 \ The utility <https://github.com/howerj/ngram> can be used
 \ to repeated sequences of words suitable for factoring.
-\ 
+\
 \ An LZSS encoder for this system would best being adapted to
 \ work on 16-bit data instead of bytes, perhaps using the top
 \ most bit to determine whether compressed data is a run of
@@ -11462,7 +11562,7 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ image, and not the compiled Forth section.
 \
 \ The main and most useful task would be the creation of an
-\ MS-DOS like subsystem for this Forth. 
+\ MS-DOS like subsystem for this Forth.
 \
 \ DOS (Disk Operating System) is an incredibly
 \ simple operating system, suitable for tiny systems and
@@ -11477,7 +11577,7 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ decided, they are all simple file systems but they are also
 \ crufty. Commands for directory manipulation would need to
 \ be implemented, the command line parsed, and functions for
-\ opening, reading, and writing to files made. 
+\ opening, reading, and writing to files made.
 \
 \ Again, it should be emphasized that the retrieval mechanism
 \ used should be Forth blocks in this DOS. If a custom file
@@ -11491,20 +11591,20 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \
 \ Not many commands would need to be implemented; mkdir, edit,
 \ chdir, pwd, rmdir, del, move, copy, rename, format, stat,
-\ time, df, and a few others. 
+\ time, df, and a few others.
 \
 \ Programs could consist of Forth scripts, that could be
 \ executed, with their input and output redirected to and from
 \ files. Alternatively they could be SUBLEQ instructions.
 \
-\ A user login system for the operating system could take 
-\ advantage of Forth words and vocabularies. By defining a 
+\ A user login system for the operating system could take
+\ advantage of Forth words and vocabularies. By defining a
 \ word for each user name, and only having the user name
 \ vocabulary loaded,and only having the user name
 \ vocabulary loaded, password validation would have to be
 \ done by the user name word, and the system would have to
 \ take care that it could not get into a state where normal
-\ Forth words could be executed without the correct password. 
+\ Forth words could be executed without the correct password.
 \
 \ It would be a simple system suitable for the type of limited
 \ operating system and not for serious use.
@@ -11544,7 +11644,7 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ physical device is far more tangible than a software project
 \ and there is less temptation to tinker after it is finished
 \ as there is with software, in can be "complete" in a way
-\ software is never complete (much like this project I 
+\ software is never complete (much like this project I
 \ declared complete and after a while came back to it). The
 \ initial design could be done one of the various electronics
 \ simulators that are available.
@@ -11552,20 +11652,20 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ There are some things that are missing in this Forth that
 \ could be added, which are present in the ANS Forth standard,
 \ some control structures ("case", "do" loops), the locals word
-\ set which allows Forth words to create and use named 
+\ set which allows Forth words to create and use named
 \ parameters (which would be too complex to implement), the
 \ file access word-set (which requires a file system, although
-\ the DOS extensions could be used as a basis to implement 
+\ the DOS extensions could be used as a basis to implement
 \ them), words for dealing with structures (such as "+field",
 \ "field:", "begin-structure", "end-structure"), and more. The
 \ main aim implementing these words would be for portability
 \ purposes.
 \
-\ What would the purpose of these little programs and 
+\ What would the purpose of these little programs and
 \ extensions however? A lot of effort could be dedicated to
 \ this system and other Forth systems like it, for little
 \ gain other than as an intellectual exercise. Code written for
-\ this eForth could be ported to more viable and usable 
+\ this eForth could be ported to more viable and usable
 \ systems, or this system could be a component in a virtual
 \ world. One could imagine this eForth and SUBLEQ machine being
 \ used to control a 3D model of a 1980s style microcomputer, or
@@ -11575,15 +11675,15 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ ## A Forth Manifesto
 \
 \ I deliberately eschew standards when it comes to Forth (apart
-\ from the FORTH-83 and FORTH-79 standards), to me Forth is 
-\ best represented by eForth, or some of the long obsolete 
+\ from the FORTH-83 and FORTH-79 standards), to me Forth is
+\ best represented by eForth, or some of the long obsolete
 \ Forth implementations and is only suitable for systems that
 \ are well out to pasture. It represents a simpler time, one
 \ that no longer exists. A time where the technology stack
 \ employed by a programmer could be understood entirely by
 \ them, and if there was any complexity involved it was the
 \ individual at fault and not some impenetrably Byzantine mess
-\ of leaky abstraction upon leaky abstraction that is 
+\ of leaky abstraction upon leaky abstraction that is
 \ responsible for running internet, our operating systems and
 \ the web, today (to be fair, that mess is awfully productive
 \ and profitable).
