@@ -3442,10 +3442,10 @@ system[
 :s (push) r> dup [@] swap 1+ >r ;s ( -- n : inline push value )
 :m lit (push) t, ;m ( n -- : compile a literal )
 
-:s (up) r> dup [@] {up} half lit [@] + 2* swap 1+ >r ;s
+:s (up) r> dup [@] {up} half lit [@] 2* + swap 1+ >r ;s
   compile-only ( -- n : user variable implementation word )
 :s (var) r> 2* ;s compile-only ( R: a --, -- a )
-:s (user) r> [@] {up} half lit [@] + 2* ;s compile-only
+:s (user) r> [@] {up} half lit [@] 2* + ;s compile-only
   ( R: a --, -- u )
 
 :m up (up) t, ;m ( n -- : compile user variable )
@@ -11716,6 +11716,7 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ uses a LaTeX template with its own license, available from:
 \ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
 \
+
 
 
 

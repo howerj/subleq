@@ -59,7 +59,7 @@ static const char *yn(int y) { return y ? "YES" : " NO"; }
 static int number(const char *n) { return strtol(n, NULL, 0); }
 
 static cmp_t  compares[] = {
-//	{ .name = " <", .original = o_less, .subleq = s_less, },
+	{ .name = " <", .original = o_less, .subleq = s_less, },
 	{ .name = " >", .original = o_more, .subleq = s_more, },
 	{ .name = "==", .original = o_eq,   .subleq = s_eq,   },
 };

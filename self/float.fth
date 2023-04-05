@@ -1,6 +1,10 @@
 \ # Floating Point Package (and more)
 \
-\ This is a Forth Floating point package. 
+\ TODO: Meta-compilation and integrate into base system?
+\ TODO: Make "precision" a user variable
+\ TODO: Handle under/overflow?
+\
+\ This is a Forth Floating point package *for 16-bit systems*.
 \
 \ It has been extended and modified from the original adding 
 \ many of the standard Forth floating point words as well as 
@@ -42,17 +46,14 @@
 \ even be made into a compile time option, using the words that
 \ store their items on the stack and redefining them. If this
 \ option were to be chosen the floating point stack should be
-\ made to be thread local.
+\ made to be thread local. This would require a minor rewrite.
 \
-\ TODO: Meta-compilation and integrate into base system?
-\ TODO: Negative 0 = Positive 0? 
-\ TODO: Add back in unit test framework?
-\ TODO: Make "precision" a user variable
-\ TODO: Depth checks
-\ TODO: Under/overflow checks
-\
-\ NB. Input is finicky, requires "dpl" to be set, so
-\ "fone e 1" will not work, but "1.0 e 1" will.
+\ Floating point input is finicky, and requires "dpl" to be 
+\ set, so "fone e 1" will not work, but "1.0 e 1" will. 
+\ Likewise with "1.0 f" and "fone f", the former working, and 
+\ the latter not. The problem is that the number parsing
+\ routines need modifying, which for an add-on component is
+\ not possible to do in a standard way.
 \
 \ Some references and links that are useful:
 \
@@ -82,6 +83,7 @@ undefined? 1-   ?\ : 1- 1 - ;
 undefined? 2+   ?\ : 2+ 2 + ;
 undefined? 2*   ?\ : 2* 1 lshift ;
 undefined? 2/   ?\ : 2/ 1 rshift ;
+undefined? >=   ?\ : >= < 0= ;
 \ undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
 undefined? 1+!  ?\ : 1+! 1 swap +! ;
 undefined? dnegate ?\ : dnegate invert >r invert 1 um+ r> + ; 
@@ -91,6 +93,7 @@ undefined? 2>r ?\ : 2>r r> swap >r swap >r >r ;
 undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ; 
 undefined? /string ?\ : /string over min rot over + -rot - ;
 \  /string ( b u1 u2 -- b u : advance string u2 )
+undefined? ?depth ?\ : ?depth depth >= -4 and throw ;
 
 1 cells 8 * constant #bits
 1 #bits 1- lshift constant #msb
@@ -98,8 +101,8 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 : banner ( +n c -- : print a character 'n' times )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ; 
 : spaces bl banner ; ( +n  -- : print space 'n' times )
-: anonymous ( -- : make an anonymous vocabulary and enable it )
-  get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
+\ : anonymous ( -- : make anonymous vocabulary and enable it )
+\  get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 : arshift ( n u -- n : arithmetic right shift )
   2dup rshift >r swap $8000 and
@@ -135,9 +138,10 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 \ 'sc': unsigned small candidate
 \ 'lc': unsigned large candidate
 \
-: square dup * ;
+: square dup * ; ( n -- n : square a number )
 : sqrt ( n -- u : integer square root )
-  s>d  if -$B throw then ( does not work for signed values )
+  1 ?depth
+  s>d  if -$B throw then ( does not work for negative values )
   dup 2 < if exit then   ( return 0 or 1 )
   dup                    ( u u )
   2 rshift recurse 2*    ( u sc )
@@ -212,7 +216,6 @@ only forth definitions system +order
 
 : cordic ( angle -- sine cosine | x y -- atan sqrt )
   z ! cordic_1K x ! 0 y ! 0 k !
-
   $10 begin ?dup while
     z @ 0< d !
     x @ y @ k @ arshift d @ xor d @ - - tx !
@@ -267,10 +270,10 @@ create ftable
   else r> drop then ;
 : lalign $20 min for aft d2/ then next ;
 : ralign 1- ?dup if lalign then 1 0 d+ d2/ ;
-: tens 2* cells ftable + 2@ ;     
-: shifts fabs $4010 - s>d invert if -$2B throw then negate ;
-: base? base @ $A <> -$28 and throw ; ( -- : check base )
-: unaligned? dup 1 and = -$9 and throw ; ( -- : check ptr )
+: tens 2* cells ftable + 2@ ; ( a -- d )
+: shifts fabs $4010 - s>d invert if -43 throw then negate ;
+: base? base @ $A <> -40 and throw ; ( -- : check base )
+: unaligned? dup 1 and = -9 and throw ; ( -- : check ptr )
 : -+ drop swap 0< if negate then ;
 
 only forth definitions system +order
@@ -278,45 +281,49 @@ only forth definitions system +order
 \ "fdepth" is standards compliant, but pretty useless because
 \ there is no separate floating point stack.
 
+: fcopysign $8000 and nip >r fabs r> or ; ( r1 r2 -- r1 )
+: floats 2* cells ;    ( u -- u )
+: float+ [ 1 floats ] literal + ; ( a -- a : inc addr by float )
 : set-precision ( +n -- : set FP decimals printed out )
-  dup 0 5 within if (precision) ! exit then -$2B throw ; 
+  dup 0 5 within if (precision) ! exit then -43 throw ; 
 : precision (precision) @ ; ( -- u : precision of FP values )
-: f@ unaligned? 2@ ;  ( a -- r : fetch FP value )
-: f! unaligned? 2! ;  ( r a -- : store FP value )
-: falign align ;      ( -- : align the dict. to store a FP )
-: faligned aligned ;  ( a -- a : align point for FP )
-: fdepth depth ;      ( -- u : dodgy floating point depth )
-: fdup 2dup ;         ( r -- r r : FP duplicate )
-: fswap 2swap ;       ( r1 r2 -- r2 r1 : FP swap )
-: fover 2over ;       ( r1 r2 -- r1 r2 r1 )
-: f2dup fover fover ; ( r1 r2 -- r1 r2 r1 r2 )
+: f@ unaligned? 2@ ;   ( a -- r : fetch FP value )
+: f! unaligned? 2! ;   ( r a -- : store FP value )
+: f, 2, ; ( r -- )
+: falign align ;       ( -- : align the dict. to store a FP )
+: faligned aligned ;   ( a -- a : align point for FP )
+: fdepth depth 2/ ;    ( -- n : number of floats, approximate )
+: fdup 2 ?depth 2dup ; ( r -- r r : FP duplicate )
+: fswap 4 ?depth 2swap ; ( r1 r2 -- r2 r1 : FP swap )
+: fover 4 ?depth 2over ; ( r1 r2 -- r1 r2 r1 )
+: f2dup fover fover ;  ( r1 r2 -- r1 r2 r1 r2 )
 : ftuck fdup 2>r fswap 2r> ; ( r1 r2 -- r2 r1 r2 )
 : frot 2>r fswap 2r> fswap ; ( r1 r2 r3 -- r2 r3 r1 )
-: -frot frot frot ;   ( r1 r2 r3 -- r3 r1 r2 )
-: fdrop 2drop ;       ( r -- : floating point drop )
+: -frot frot frot ;    ( r1 r2 r3 -- r3 r1 r2 )
+: fdrop 2 ?depth 2drop ; ( r -- : floating point drop )
 : f2drop fdrop fdrop ; ( r1 r2 -- : FP 2drop )
 : fnip fswap fdrop ;   ( r1 r2 -- r2 : FP nip )
 : fnegate $8000 xor zero ;  ( r -- r : FP negate )
 : fsign fabs over 0< if >r dnegate r> $8000 or then ;
-: f2* 1+ zero ;       ( r -- r : FP times by two )
-: f2/ 1- zero ;       ( r -- r : FP divide by two )
-: f*  rot + $4000 - >r um* r> norm ; ( r r -- r )
-: fsq fdup f* ;       ( r -- r : FP square )
+: f2* 2 ?depth 1+ zero ; ( r -- r : FP times by two )
+: f2/ 2 ?depth 1- zero ; ( r -- r : FP divide by two )
+: f*  4 ?depth rot + $4000 - >r um* r> norm ; ( r r -- r )
+: fsq fdup f* ;        ( r -- r : FP square )
 : f0= fabs zero d0= ; ( r -- r : FP equal to zero [incl -0.0] )
-: floats 2* cells ;   ( u -- u )
-: float+ 1 floats + ; ( a -- a : increment addr by one float )
 : um/ ( ud u -- u : ud/u and round )
   dup >r um/mod swap r> over 2* 1+ u< swap 0< or - ; 
 
-: f/ ( f1 f2 -- f1/f2 : floating point division )
-  fdup f0= -44 and throw
+: f/ ( r1 r2 -- r1/r2 : floating point division )
+  4 ?depth
+  fdup f0= -42 and throw
   rot swap - $4000 + >r
   0 -rot 2dup u<
   if  um/ r> zero 
   else >r d2/ fabs r> um/ r> 1+
   then ;
 
-: f+ ( f f -- f : floating point addition )
+: f+ ( r r -- r : floating point addition )
+  4 ?depth
   rot 2dup >r >r fabs swap fabs - 
   dup if s>d
     if rot swap negate
@@ -355,12 +362,15 @@ only forth definitions system +order
 : f.r >r tuck <# f# #> r> over - spaces type ; ( f +n -- )
 : f. space 0 f.r ; ( f -- : output floating point )
 
-( NB. 'f' and 'e' require "dpl" to be set correctly! )
+( N.B. 'f' and 'e' require "dpl" to be set correctly! )
 
 : f ( n|d -- f : formatted double to float )
    base?
-\  1 ?depth ( NB. 2 ?depth if following line missing )
-   dpl @ 0< if s>d 0 dpl ! then ( input was single number )
+   dpl @ 0< if ( input was single number )
+     1 ?depth s>d 0 dpl ! 
+   else ( else a double )
+     2 ?depth
+   then 
    d>f dpl @ tens d>f f/ ;    
 
 : fconstant f 2constant ; ( "name", r --, Run Time: -- r )
@@ -453,14 +463,29 @@ only forth definitions system +order
 
 only forth definitions system +order decimal
 
+
+\ F~
+\ ( -- flag ) ( F: r1 r2 r3 -- ) or ( r1 r2 r3 -- flag )
+\ 
+\ If r3 is positive, flag is true if the absolute value of
+\ (r1 minus r2) is less than r3.
+\ 
+\ If r3 is zero, flag is true if the implementation-dependent
+\ encoding of r1 and r2 are exactly identical (positive and
+\ negative zero are unequal if they have distinct encodings).
+\ 
+\ If r3 is negative, flag is true if the absolute value of
+\ (r1 minus r2) is less than the absolute value of r3 times
+\ the sum of the absolute values of r1 and r2.
+\ 
 \ TODO: Testing!
-: f~ ( r1 r2 r3 -- flag )
-  fdup f0> if 2>r f- fabs 2r> f< exit then
-  fdup f0= if fdrop f= exit then
-  fabs 2>r f2dup f+ 2r> f* 2>r f- 2r> f< ;
+\ : f~ ( r1 r2 r3 -- flag )
+\  fdup f0> if 2>r f- fabs 2r> f< exit then
+\  fdup f0= if fdrop f= exit then
+\  fabs 2>r f2dup f+ 2r> f* 2>r f- 2r> f< ;
 
 : fsqrt ( r -- r : square root of 'r' )
-  fdup f0< if fdrop -43 throw then
+  fdup f0< if fdrop -46 throw then
   fdup f0= if fdrop fzero exit then
   fone 
   16 for aft 
@@ -470,7 +495,7 @@ only forth definitions system +order decimal
 
 : filog2 ( r -- u : Floating point integer logarithm )
   zero
-  fdup fzero f<= -42 and throw
+  fdup fzero f<= -46 and throw
   ( norm ) nip $4001 - ;
 
 : fhypot f2dup f> if fswap then ( a b -- c : hypotenuse )
@@ -531,9 +556,6 @@ only forth definitions system +order
 : facosh ( r1 -- r2 : acosh, 1 <= r1 < INF )
   fdup fsq f1- fsqrt f+ fln ; 
 : fasinh fdup fsq f1+ fsqrt f+ fln ; ( r -- r )
-: fdepth depth 2/ ; ( -- n : number of floats, approximate )
-: 2pick dup >r pick r> 2+ pick swap ;
-: fpick floats 2pick ;
 
 system +order definitions
 
@@ -646,5 +668,8 @@ only forth definitions system +order
 
 system -order
 .( DONE ) cr
+
+: 2pick dup >r pick r> 2+ pick swap ;
+: .hs base @ >r hex .s r> base ! ;
 
 
