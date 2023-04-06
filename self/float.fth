@@ -65,6 +65,10 @@
 \ Dimensions Vol.2, No.4 1986.
 \ * <https://en.wikibooks.org/wiki/Digital_Circuits/CORDIC>
 \ 
+\ Some floating point discussions on comp.lang.forth:
+\
+\ * <https://groups.google.com/g/comp.lang.forth/c/H8Bs-5JSArc> 
+\ * <https://groups.google.com/g/comp.lang.forth/c/pMl8Vzr00X0>
 \
 
 only forth definitions decimal system +order
@@ -463,7 +467,6 @@ only forth definitions system +order
 
 only forth definitions system +order decimal
 
-
 \ F~
 \ ( -- flag ) ( F: r1 r2 r3 -- ) or ( r1 r2 r3 -- flag )
 \ 
@@ -478,11 +481,15 @@ only forth definitions system +order decimal
 \ (r1 minus r2) is less than the absolute value of r3 times
 \ the sum of the absolute values of r1 and r2.
 \ 
-\ TODO: Testing!
-\ : f~ ( r1 r2 r3 -- flag )
-\  fdup f0> if 2>r f- fabs 2r> f< exit then
-\  fdup f0= if fdrop f= exit then
-\  fabs 2>r f2dup f+ 2r> f* 2>r f- 2r> f< ;
+\  r3 > 0 -> |r1 - r2| < r3
+\  r3 = 0 -> r1 = r2
+\  r3 < 0 -> |r1 - r2| < |r3| * (|r1| + |r2|)
+\
+
+: f~ ( r1 r2 r3 -- flag )
+  fdup f0> if 2>r f- fabs 2r> f< exit then
+  fdup f0= if fdrop f= exit then
+  fabs 2>r f2dup fabs fswap fabs f+ 2r> f* 2>r f- 2r> f< ;
 
 : fsqrt ( r -- r : square root of 'r' )
   fdup f0< if fdrop -46 throw then
@@ -670,6 +677,5 @@ system -order
 .( DONE ) cr
 
 : 2pick dup >r pick r> 2+ pick swap ;
-: .hs base @ >r hex .s r> base ! ;
 
 

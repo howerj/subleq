@@ -7738,13 +7738,10 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \ Implement "buffer", make better block system with four
 \ block buffers, a "transfer" word with an execution vector
-\ that takes "block flag1 flag2" (block num, read, write flags)
+\ that takes "block flag addr" (block num, read XOR write) 
 \ that can access all memory. Also make "move" and use in
 \ block editor, as it is faster.
 \
-\
-\
-
 
 ( system[ variable dirty ]system )
 : b/buf 400 lit ; ( -- u : size of the block buffer )
@@ -8357,7 +8354,6 @@ opt.multi [if]
 \ Possibly missing are words to put to sleep and wake up a
 \ task, if you need them, implement them yourself.
 \
-
 \ # Forth Text / Block Editor
 \
 \ I love Forth blocks, they are simple to implement and
@@ -8625,7 +8621,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 \ perform the same functionality as "allocate", "free", and
 \ "resize" do, apart from the fact that it is possible to pass
 \ in a custom arena to allocate memory in.
-
+\
 \ Allocate "u" bytes, return pointer to block and result flag,
 \ zero for success, check to see if pool has been initialized.
 : (allocate) ( u -- addr ior : dynamic allocate of 'u' bytes )
@@ -8933,7 +8929,7 @@ it being run.
 \ I currently reside in the UK.
 \
 \ The book was written for fun, it has next to no real
-\ commercial or proffesional value whatsoever but the entire
+\ commercial or professional value whatsoever but the entire
 \ SUBLEQ eForth system was a lovely puzzle to crack. My next
 \ big project will probably be my own Unix operating system in
 \ a Pascal like language of my own design, or starting a

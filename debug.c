@@ -37,6 +37,8 @@
 #define LICENSE "Public Domain / Unlicense for code only"
 #define VERSION "1.0"
 
+#define UNUSED(X) ((void)(X))
+
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -49,13 +51,6 @@
 #include <string.h>
 #include <time.h>
 
-#define MAX_LINE (512)
-#define SZ   (1<<16)
-#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
-#define HI(X)  (1ull << ((X) - 1))
-#define UNUSED(X) ((void)(X))
-#define NELEMS(X) (sizeof (X) / sizeof((X)[0]))
-
 #ifdef _WIN32 /* Used to unfuck file mode for "Win"dows. Text mode is for losers. */
 #include <windows.h>
 #include <io.h>
@@ -65,11 +60,18 @@ static void binary(FILE *f) { _setmode(_fileno(f), _O_BINARY); }
 static inline void binary(FILE *f) { UNUSED(f); }
 #endif
 
+#define MAX_LINE (512)
+#define SZ   (1<<16)
+#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
+#define HI(X)  (1ull << ((X) - 1))
+#define NELEMS(X) (sizeof (X) / sizeof((X)[0]))
+
 /* A small, portable, terminal library would be nice, not something
  * as heavy as the standard ones, perhaps something like linenoise. */
-#define ESCAPE    (27)
-#define DELETE    (127)
-#define BACKSPACE (8)
+#define CH_ESCAPE    (27)
+#define CH_DELETE    (127)
+#define CH_BACKSPACE (8)
+
 #ifdef __unix__
 #include <unistd.h>
 #include <termios.h>
@@ -114,7 +116,7 @@ extern int getch(void);
 extern int putch(int c);
 static int term_getch(FILE *in) { assert(in); return in == stdin ? getch() : fgetc(in); }
 static int term_putch(const int c, FILE *out) { int r = out == stdout ? putch(c) : fputc(c, out); if (fflush(out) < 0) return -1; return r; }
-static void term_sleep_ms(unsigned ms) { usleep((unsigned long)ms * 1000); }
+static void term_sleep_ms(unsigned ms) { Sleep(ms); }
 #else
 static int term_getch(FILE *in) { assert(in); return fgetc(in); }
 static int term_putch(const int c, FILE *out) { int r = fputc(c, out); if (fflush(out) < 0) return -1; return r; }
@@ -341,14 +343,14 @@ enum {
 	ZERO, PUT, GET, HALT,
 	IADD, ISUB,
 	IJMP, ILOAD, ISTORE, INC, DEC,
-	INV, DOUBLE, LSHIFT,
+	INV, DUBS, LSHIFT,
 
 	IMAX
 };
 
 static const uint64_t instruction_increment[] = {
 	[SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/, [MOV] = 12,
-	[ADD] = 9, [DOUBLE] = 9, [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
+	[ADD] = 9, [DUBS] = 9, [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
 	[ZERO] = 3, [IJMP] = 15/*Disassembly only*/, [ILOAD] = 24,
 	[IADD] = 21, [ISUB] = 15,
 	[ISTORE] = 36, [PUT] = 3, [GET] = 3, [HALT] = 3/*Disassembly only*/,
@@ -598,7 +600,7 @@ static int dump(asm_t *a, FILE *out, uint64_t start, uint64_t length, int mod3, 
 }
 
 enum {  
-	ERROR = -'X',
+	PROBLEM = -'X',
 	EOI = 'E', EOL = 'L', EXCLAIM = '!',
 	DOT = '.', LPAR = '(', RPAR = ')', SEP = ' ', COMMA = ',', 
 	SEMI = ';', PLUS = '+', MINUS = '-', NUMBER = '0', LABEL = 'N',  COLON = ':', QUESTION = '?', AT = '@',  
@@ -645,7 +647,7 @@ static int inner(asm_t *a) {
 			for (size_t i = 1;;i++) {
 				if (i >= (sizeof(a->name) - 1)) {
 					a->aerror = -1;
-					return ERROR;
+					return PROBLEM;
 				}
 				ch = fgetc(a->in);
 				if (ch == EOF)
@@ -863,7 +865,7 @@ static int nchars(unsigned long i, int base) {
 	return ilog(i, base);
 }
 
-static int itoa(char a[64 + 2], unsigned long n, int base) {
+static int d_itoa(char a[64 + 2], unsigned long n, int base) {
 	assert(a);
 	assert(base >= 2 && base <= 36);
 	int i = 0;
@@ -913,7 +915,7 @@ static int pnum(uint64_t n, int base, int pad_char, int nbits, int sign, FILE *o
 		if (fputc(pad_char, out) < 0)
 			return -1;
 	char a[66] = { 0, }; /* 64 (base = 2, 64 bit number) + ASCII NUL + '-' (although not needed) */
-	const int len = itoa(a, n, base);
+	const int len = d_itoa(a, n, base);
 	/* Note that when printing with padding other than space, putting
 	 * the sign here looks odd, we might want to fix that. */
 	if (negate && sign)
@@ -1374,7 +1376,7 @@ static int subleq_getch(subleq_t *s) {
 	const int ch = term_getch(s->in);
 	if (ch == EOF) 
 		term_sleep_ms(1);
-	return ch == DELETE ? BACKSPACE : ch;
+	return ch == CH_DELETE ? CH_BACKSPACE : ch;
 }
 
 static int match(subleq_t *s, uint64_t *n, int sz, uint64_t pc, const char *st, ...) {
@@ -1543,10 +1545,10 @@ static int optimizer(subleq_t *s, uint64_t pc) {
 		/* We should match multiple ones in a row and
 			* turn them into a left shift */
 		if (match(s, n, DEPTH, i, "!Z> Z!> ZZ>", &q0, &q1) == 1 && q0 == q1) {
-			s->im[L(s, i)].instruction = DOUBLE;
+			s->im[L(s, i)].instruction = DUBS; /* check 'em */
 			s->im[L(s, i)].d = L(s, q1);
 			s->im[L(s, i)].s = L(s, q0);
-			s->o.matches[DOUBLE]++;
+			s->o.matches[DUBS]++;
 			continue;
 		}
 
@@ -1639,6 +1641,7 @@ static int report(subleq_t *s) {
 		return -1;
 	if (fputs(rep_div, e) < 0)
 		return -1;
+	/* This (using PRId64) emits a warning on Windows...I know. (At least on Windows 10, MinGW, GCC v6.3.0). */
 	for (int i = 0; i < IMAX; i++)
 		if (fprintf(e, "| %s| % 6d | % 12"PRId64" | % 7.1f%% |\n", instruction_names[i], o->matches[i], o->cnt[i], 100.0*((float)o->cnt[i])/(float)total) < 0)
 			return 1;
@@ -1654,7 +1657,6 @@ static int report(subleq_t *s) {
 		return -1;
 	return 0;
 }
-
 
 static int cmd_disassemble(subleq_t *s, int argc, char **argv) {
 	assert(s);
@@ -2056,7 +2058,7 @@ static int subleq(subleq_t *s) {
 			tracer(s, "a=%l b=%l c=%l ", (long)a, (long)b, (long)c);
 			if (a == msk(s->N)) {
 				const int ch = subleq_getch(s) & msk(s->N);
-				if (ch == ESCAPE) {
+				if (ch == CH_ESCAPE) {
 					s->debug = 1;
 					if (s->exit_on_escape)
 						goto end;
@@ -2095,7 +2097,7 @@ static int subleq(subleq_t *s) {
 		case JMP: s->pc = d; m[src] = 0; s->debug = s->debug || s->debug_on_jump; break;
 		case MOV: m[d]	= m[src]; s->pc += inc; break;
 		case ADD: m[d] += m[src]; s->pc += inc; break;
-		case DOUBLE: m[d] <<= 1; s->pc += inc; break;
+		case DUBS: m[d] <<= 1; s->pc += inc; break;
 		case LSHIFT: m[d] <<= src; s->pc += inc * src; break;
 		case SUB: m[d] -= m[src]; s->pc += inc; break;
 		case ZERO: m[d] = 0; s->pc += inc; break;
@@ -2114,7 +2116,7 @@ static int subleq(subleq_t *s) {
 				const uint64_t l = L(s, m[src]);
 				if (l == msk(s->N)) {
 					const int ch = subleq_getch(s) & msk(s->N);
-					if (ch == ESCAPE) {
+					if (ch == CH_ESCAPE) {
 						s->debug = 1;
 						s->count--;
 						if (s->exit_on_escape)
@@ -2133,7 +2135,7 @@ static int subleq(subleq_t *s) {
 		case ISUB: m[L(s, m[d])] -= m[src]; s->pc += inc; break;
 		case GET: {
 			const int ch = subleq_getch(s) & msk(s->N); 
-			if (ch == ESCAPE) {
+			if (ch == CH_ESCAPE) {
 				s->debug = 1;
 				s->count--;
 				if (s->exit_on_escape)
@@ -2267,15 +2269,23 @@ static int set_option(subleq_t *s, char *kv) {
 }
 
 int main(int argc, char **argv) {
-	sys_getopt_t opt = { .init = 0, .error = stdout, };
+	/* These should be static (program does not run under Windows/GCC if these
+	 * are on the stack). That means we have to manually assign the I/O streams
+	 * as that cannot be done statically. We should also avoid assigning to
+	 * these static objects as it bloats the binaries. */
+	static sys_getopt_t opt;
+	static subleq_t s;
 	char *save = NULL, *bsave = NULL;
-	subleq_t s = { 
-		.N = 16, .sz = SZ,
-		.in = stdin, .out = stdout, .trace = stderr,
-       	};
 	binary(stdin);
 	binary(stdout);
 	binary(stderr);
+	s.in      = stdin;
+	s.out     = stdout;
+	s.trace   = stderr;
+	s.N       = 16;
+	s.sz      = SZ;
+	opt.init  = 0;
+	opt.error = stderr;
 
 	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhHtdkc:s:B:b:x:n:p:S:a:A:o:R:")) != -1;) {
 		switch (ch) {
