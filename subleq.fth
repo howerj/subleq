@@ -6674,7 +6674,7 @@ root[
 :to variable create #0 , ;
 :to constant create cell negate allot compile (const) , ;
 :to user create cell negate allot compile (user)
-    user? @ , #1 user? +! ;
+   cell user? +! user? @ , ;
 
 : >body cell+ ; ( a -- a : move to a create words body )
 :s (does) r> r> 2* swap >r ;s compile-only

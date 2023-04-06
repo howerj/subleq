@@ -55,6 +55,8 @@
 \ routines need modifying, which for an add-on component is
 \ not possible to do in a standard way.
 \
+\ Another note, negative zero is not handled in all cases.
+\
 \ Some references and links that are useful:
 \
 \ * <https://stackoverflow.com/questions/3581528/>
@@ -98,6 +100,7 @@ undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ;
 undefined? /string ?\ : /string over min rot over + -rot - ;
 \  /string ( b u1 u2 -- b u : advance string u2 )
 undefined? ?depth ?\ : ?depth depth >= -4 and throw ;
+undefined? user ?\ : user variable ; ( single thread systems )
 
 1 cells 8 * constant #bits
 1 #bits 1- lshift constant #msb
@@ -255,7 +258,7 @@ only forth definitions system +order
 
 system definitions
 
-variable (precision) 4 (precision) !
+user (precision) 4 (precision) !
 
 create ftable
           .001 , ,        .010 , ,
@@ -467,29 +470,17 @@ only forth definitions system +order
 
 only forth definitions system +order decimal
 
-\ F~
-\ ( -- flag ) ( F: r1 r2 r3 -- ) or ( r1 r2 r3 -- flag )
-\ 
-\ If r3 is positive, flag is true if the absolute value of
-\ (r1 minus r2) is less than r3.
-\ 
-\ If r3 is zero, flag is true if the implementation-dependent
-\ encoding of r1 and r2 are exactly identical (positive and
-\ negative zero are unequal if they have distinct encodings).
-\ 
-\ If r3 is negative, flag is true if the absolute value of
-\ (r1 minus r2) is less than the absolute value of r3 times
-\ the sum of the absolute values of r1 and r2.
-\ 
-\  r3 > 0 -> |r1 - r2| < r3
-\  r3 = 0 -> r1 = r2
-\  r3 < 0 -> |r1 - r2| < |r3| * (|r1| + |r2|)
+\ A poor standard Forth word, with three comparison operators
+\ rolled into one.
 \
+\  r3 > 0 -> |r1 - r2| < r3
+\  r3 = 0 -> r1 = r2 [should also deals with negative zero...]
+\  r3 < 0 -> |r1 - r2| < |r3| * (|r1| + |r2|)
 
 : f~ ( r1 r2 r3 -- flag )
   fdup f0> if 2>r f- fabs 2r> f< exit then
   fdup f0= if fdrop f= exit then
-  fabs 2>r f2dup fabs fswap fabs f+ 2r> f* 2>r f- 2r> f< ;
+  fabs 2>r f2dup fabs fswap fabs f+ 2r> f* 2>r f- fabs 2r> f< ;
 
 : fsqrt ( r -- r : square root of 'r' )
   fdup f0< if fdrop -46 throw then
