@@ -204,6 +204,20 @@ undefined? user ?\ : user variable ; ( single thread systems )
 \ cosine, atan, atan(x/y), sqrt(x^2 + y^2), y/x, x*z,
 \ hyperbolic sine and cosine and some other functions.
 \
+\ The code has a few weaknesses, it should be rewritten if
+\ possible not to use "variable" which it unfortunately does.
+\ Doing this would mean using "pick" and stack juggling a lot
+\ and would make for a poor Forth word.
+\
+\ Using "variable" would create problems on a preemptive
+\ multitasking Forth system (this system uses cooperative
+\ threading and CORDIC does not call "pause" anywhere). A
+\ simple fix would be to use "user" instead of "variable" to
+\ make all of these variables thread-local, however there are
+\ a lot of those variables and thread local storage is in
+\ short supply.
+\
+\
 
 system +order definitions
 create lookup ( 16 values )

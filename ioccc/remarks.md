@@ -5,7 +5,7 @@ To run:
 	./prog 16 data.dec
 
 The second argument may be between 8 and 32 inclusive, but
-you'll only get a useful system when it is 16 (a error
+you'll only get a useful system when it is 16 (an error
 message is printed out if it is not 16).
 
 Once it is running, type "words". 
@@ -16,6 +16,9 @@ This:
 	hello
 
 Works as well.
+
+The program will return zero on success and non-zero on
+failure.
 
 # Hints
 
@@ -29,9 +32,10 @@ the system, focus instead on the data.
 
 # Portability and Features
 
-* Running this on a 16-bit machine might not work, it might
-work on an 18-bit one, it should definitely work on a 36-bit
-one? (although I haven't tested it!).
+* For the full range of features the int type should be at
+least 32-bits in length, a 33-bit int should be fine. If "int"
+is 16-bit, then the first argument should be restricted to be
+less than or equal to 16.
 * Twos compliment machines only guys, pls.
 * Tested using clang/gcc/tcc on Linux/Windows and 64/32 bit. It
 should be pretty portable.
@@ -58,6 +62,7 @@ and see how far you get!).
 
 The following obfuscation has been used:
 
+- There are no numbers, magic or otherwise, used in the code.
 - Replacing common bitwise operators with equivalents based on
 multiplexing, despite the theme multiplexing is my favorite
 operator.
@@ -117,7 +122,7 @@ arithmetic and must settle on a machine width to target,
 you must also settle on a numeric representation for signed
 numbers, which in this case is twos (sic) compliment).
 
-The source code for the interpreter can be produced on
-request, but I think the entry is nicer without it as it
-preserves an air of mystery and simplicity to it.
+The source code for the (self-hosting-) Forth interpreter can 
+be produced on request, but I think the entry is nicer without 
+it as it preserves an air of mystery and simplicity to it.
 

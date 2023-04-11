@@ -810,7 +810,7 @@ static int assemble(asm_t *a, int output) {
 
 static int assembly_help(FILE *out) {
 	const char *help = "\
-SUBLEQ ASSEMBLER. This is an assembler for a SUBLEQ Single Instruction\n\
+SUBLEQ ASSEMBLER SUBSECTION. \n\
 machine. A SUBLEQ instruction consists of three operands; 'a', 'b'\n\
 and 'c'.\n\
 \n\
@@ -849,7 +849,6 @@ Number of copies:  %u (single operand instructions)\n\
 Label name length: %u\n\n\
 It would be possible to remove these restrictions, but it\n\
 is far easier to keep them in.\n";
-
 
 	return fprintf(out, help, MAX_LABELS, MAX_HOLES, MAX_COPY, MAX_NAME);
 }
@@ -1796,11 +1795,7 @@ one value per cell. For example this program prints 'Hi':\n\n\
 \n\
 Options:\n\n\
 \t-h             Display this help message and exit.\n\
-\t-H             Display the assembler help and exit.\n\
-\t-k             Turn non-blocking terminal input on.\n\
 \t-t             Turn tracing on.\n\
-\t-r             Print report after execution.\n\
-\t-z             Recompile SUBLEQ code for speed, might break program\n\
 \t-d             Run debugger first before execution.\n\
 \t-c num         Run for 'num' cycles before halting into debugger.\n\
 \t-b break-point Add break point.\n\
@@ -1820,7 +1815,7 @@ Options:\n\n\
 \n";
 	if (fprintf(out, help_string, PROJECT, AUTHOR, EMAIL, REPO, VERSION, (long)SZ) < 0)
 		return -1;
-	return 0;
+	return assembly_help(out);
 }
 
 
@@ -2287,11 +2282,9 @@ int main(int argc, char **argv) {
 	opt.init  = 0;
 	opt.error = stderr;
 
-	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "rzhHtdkc:s:B:b:x:n:p:S:a:A:o:R:")) != -1;) {
+	for (int ch = 0; (ch = sys_getopt(&opt, argc, argv, "htdc:s:B:b:x:n:p:S:a:A:o:R:")) != -1;) {
 		switch (ch) {
 		case 'h': return cli_help(stderr) < 0 ? 1 : 0;
-		case 'H': return assembly_help(stderr) < 0 ? 1 : 0;
-		case 'k': s.non_blocking = 1; break;
 		case 't': s.tron++; break;
 		case 'd': s.debug = 1; s.debug_on_halt = 1; break;
 		case 'c': s.cycles = number(opt.arg); break;
@@ -2300,9 +2293,7 @@ int main(int argc, char **argv) {
 		case 'B': bsave = opt.arg; break;
 		case 'n': s.N = atoi(opt.arg); break;
 		case 'x': if (subleq_examples(&s, opt.arg) < 0) return 1; break;
-		case 'z': s.optimize = 1; break;
 		case 'p': s.meta[L(&s, number(opt.arg))] |= META_PRN; break;
-		case 'r': s.stats = 1; break;
 		case 'R': s.base = number(opt.arg); if (s.base < 2 || s.base > 36) { (void)fprintf(stderr, "Invalid base '%s'\n", opt.arg); return 1; } break;
 		case 'o': if (set_option(&s, opt.arg) < 0) return 1; break;
 		case 'S': { long sz = number(opt.arg); if (sz <= 0 || sz > SZ) { (void)fprintf(stderr, "Incorrect size: %ld\n", sz); return 1; } s.sz = sz; } break;

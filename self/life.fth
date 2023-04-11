@@ -19,7 +19,7 @@
   repeat r> nip ;
 
 only forth definitions hex
-variable life-vocabulary
+variable life-vocabulary 0 life-vocabulary !
 life-vocabulary +order definitions
 
    $40 constant c/b
@@ -80,19 +80,22 @@ system -order
 life-vocabulary -order definitions
 life-vocabulary +order
 
-: life life-blk ! state-blk ! game ;       ( k1 k2 -- )
-: random-life $18 randomize $19 $18 life ; ( -- )
 
-\ only forth definitions hex
+decimal
+
+: life life-blk ! state-blk ! game ;       ( k1 k2 -- )
+: random-life 30 randomize 31 30 life ; ( -- )
+
+
 
 editor l x
 3 i      ***  
 4 i      *    
 5 i       *   
 q
-decimal
 
-.( Usage: $19 $18 life ) cr
+
+.( Usage: 31 30 life ) cr
 .( Or:    random-life ) cr
-random-life
+\ random-life
 
