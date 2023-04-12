@@ -1,7 +1,7 @@
 defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ # Information
 \
-\ * Edition: 1.1.0
+\ * Edition: X.X.0
 \ * Project: Cross Compiler / eForth for a SUBLEQ CPU
 \ * Author:  Richard James Howe
 \ * Email:   howe.r.j.89@gmail.com
@@ -9,6 +9,16 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ * License: The Unlicense / Public domain for code only, all
 \ rights reserved for comments, the book, diagrams
 \ and pictures.
+\
+\ # ***THIS FILE NEEDS EDITING***
+\
+\ THIS FILE NEEDS TO GO THROUGH THE EDITING PROCESS TO MAKE
+\ A SECOND EDITION OF THIS BOOK.
+\
+\ ***THIS FILE NEEDS EDITING***
+\ ***THIS FILE NEEDS EDITING***
+\ ***THIS FILE NEEDS EDITING***
+\ ***THIS FILE NEEDS EDITING***
 \
 \ # Dedication and Foreword
 \
@@ -695,6 +705,7 @@ only forth definitions hex
 0 constant opt.allocate   ( Add in "allocate"/"free" )
 0 constant opt.generate-c ( Generate C code )
 0 constant opt.better-see ( Replace 'see' with better version )
+0 constant opt.sm-vm-err  ( Smaller VM error message )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -901,6 +912,7 @@ variable voc-last 0 voc-last ! ( last defined in any vocab )
 :m t, there t! 2 tdp +! ;m ( u -- : write cell to target dic. )
 :m tallot tdp +! ;m ( u -- : allocate bytes in target dic. )
 :m mdrop drop ;m ( u -- : always call drop )
+:m mdrop swap ;m ( u -- : always call drop )
 
 \ "tpack" is used to copy a string into the target image.
 \ Useful if we want to define strings in the target, which we
@@ -2083,12 +2095,18 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 \ fewer bytes than might be necessary to do this.
 \
 
+opt.sm-vm-err [if]
+( Smaller, more cryptic, error message string "Error" )
+7 tvar err-str
+  45 t, 72 t, 72 t, 6F t, 72 t, 0D t, 0A t,
+[else]
 ( Error message string "Error: Not a 16-bit SUBLEQ VM" )
 1F tvar err-str
   45 t, 72 t, 72 t, 6F t, 72 t, 3A t, 20 t, 4E t,
   6F t, 74 t, 20 t, 61 t, 20 t, 31 t, 36 t, 2D t,
   62 t, 69 t, 74 t, 20 t, 53 t, 55 t, 42 t, 4C t,
   45 t, 51 t, 20 t, 56 t, 4D t, 0D t, 0A t,
+[then]
 
 err-str 2/ tvar err-str-addr
 
@@ -10579,6 +10597,114 @@ forth-wordlist +order definitions
   cell- here cell- 2/ swap ! ; immediate compile-only
 only forth definitions
 
+\ TODO: Integrate this extra code into this module.
+
+\ This is a late binding macro system, it makes a macro out
+\ of a name and the rest of the current line.
+\
+\ Usage:
+\
+\        macro square dup *
+\        : foo 5 square . ;
+\ 
+\ Note that:
+\
+\        : * ." ???" ;
+\        : foo 5 square ;
+\
+\ Prints out:
+\
+\        ??? 5
+\
+\ This is due to the fact, already mentioned, that this macro
+\ system is *late binding* and not *early binding*.
+\
+\ Another version using "sliteral", not yet implemented in
+\ this system, is:
+\
+\   : macro 
+\     : char parse postpone sliteral postpone evaluate
+\     postpone ; immediate ;
+\
+\ It has a slightly different syntax:
+\
+\        macro square " dup * "
+\
+\ And the same problems.
+\
+
+: scopy ( b u -- b u : copy a string into the dictionary )
+  align here >r aligned dup allot
+  r@ swap dup >r cmove r> r> swap ;
+
+: macro ( c" xxx" --, : create a late-binding macro )
+  create immediate align here 2 cells + ,
+  0 parse dup , scopy 2drop
+  does> 2@ swap evaluate ;
+
+system -order
+.( DONE ) cr
+
+: 2pick dup >r pick r> 2+ pick swap ;
+
+
+\ \ http://forth.sourceforge.net/word/n-to-r/index.html
+\ \ Push n+1 elements on the return stack.
+\ : n>r ( xn..x1 n -- , R: -- x1..xn n )
+\   dup
+\   begin dup
+\   while rot r> swap >r >r 1-
+\   repeat
+\   drop r> swap >r >r ; \ compile-only
+\ 
+\ \ http://forth.sourceforge.net/word/n-r-from/index.html
+\ \ pop n+1 elements from the return stack.
+\ : nr> ( -- xn..x1 n, R: x1..xn n -- )
+\     r> r> swap >r dup
+\     begin dup
+\     while r> r> swap >r -rot 1-
+\     repeat
+\     drop ; \ compile-only
+
+\ : ?exit if rdrop exit then ;
+
+\ $FFFE constant rp0
+ 
+\ : +leading ( b u -- b u: skip leading space )
+\     begin over c@ dup bl = swap 9 = or while 1 /string repeat ;
+
+\ http://forth.sourceforge.net/word/string-plus/index.html
+\ ( addr1 len1 addr2 len2 -- addr1 len3 )
+\ append the text specified by addr2 and len2 to the text of length len2
+\ in the buffer at addr1. return address and length of the resulting text.
+\ an ambiguous condition exists if the resulting text is larger
+\ than the size of buffer at addr1.
+\ : string+ ( bufaddr buftextlen addr len -- bufaddr buftextlen+len )
+\        2over +         ( ba btl a l bta+btl )
+\        swap dup >r     ( ba btl a bta+btl l ) ( r: l )
+\        move
+\        r> + ;
+
+
+\ ( addr1 len1 c -- addr1 len2 )
+\ append c to the text of length len2 in the buffer at addr1.
+\ Return address and length of the resulting text.
+\ An ambiguous condition exists if the resulting text is larger
+\ than the size of buffer at addr1.
+\ : string+c ( addr len c -- addr len+1 )
+\   dup 2over + c! drop 1+ ;
+
+\ http://forth.sourceforge.net/algorithm/unprocessed/valuable-algorithms.txt
+\ : -m/mod over 0< if dup    >r +       r> then u/mod ;         ( d +n - r q )
+\ :  m/     dup 0< if negate >r dnegate r> then -m/mod swap drop ; ( d n - q )
+
+\ From comp.lang.forth:
+\ : du/mod ( ud1 ud2 -- udrem udquot )  \ b/d = bits/double
+\   0 0 2rot b/d 0 do 2 pick over 2>r d2* 2swap d2* r>
+\  0< 1 and m+ 2dup 7 pick 7 pick du< 0= r> 0< or if 5 pick
+\  5 pick d- 2swap 1 m+ else 2swap then loop 2rot 2drop ; 
+
+
 \ One possible word-set for structures in Forth (something
 \ which Forth is really lacking in and is its major weakness).
 \
@@ -11717,7 +11843,6 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \
 \ TODO: Move to correct place 
 \ TODO: Meta-compilation and integrate into base system?
-\ TODO: Make "precision" a user variable
 \ TODO: Handle under/overflow?
 \
 \ This is a Forth Floating point package *for 16-bit systems*.
@@ -11815,11 +11940,13 @@ undefined? 2>r ?\ : 2>r r> swap >r swap >r >r ;
 undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ; 
 undefined? /string ?\ : /string over min rot over + -rot - ;
 \  /string ( b u1 u2 -- b u : advance string u2 )
-undefined? ?depth ?\ : ?depth depth >= -4 and throw ;
-undefined? user ?\ : user variable ; ( single thread systems )
 
 1 cells 8 * constant #bits
 1 #bits 1- lshift constant #msb
+
+:m 2variable mswap (var) t, t, ;m
+:m 2literal mswap lit lit ;m
+:m 2constant abort ;m
 
 : banner ( +n c -- : print a character 'n' times )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ; 
@@ -11841,9 +11968,9 @@ undefined? user ?\ : user variable ; ( single thread systems )
 : 2over ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
   >r >r 2dup r> swap >r swap r> r> -rot ;
 : 2, , , ; ( n n -- : write to values into dictionary )
-: 2constant create 2, does> 2@ ; ( d --, Run: -- d )
-: 2variable create 0 , 0 , ; \ does> ; ( d --, Run: -- a )
-: 2literal swap postpone literal postpone literal ; immediate
+:to 2constant create 2, does> 2@ ; ( d --, Run: -- d )
+:to 2variable create 0 , 0 , ; \ does> ; ( d --, Run: -- a )
+:to 2literal swap postpone literal postpone literal ; immediate
 : +- 0< if negate then ; ( n n -- n : copy sign )
 : m* ( n n -- d : single to double cell multiply [16x16->32] ) 
   2dup xor 0< >r abs swap abs um* r> if dnegate then ; 
@@ -12351,108 +12478,25 @@ only forth definitions system +order
 : fasin fdup fsq fone fswap f- fsqrt f/ fatan ; ( r -- r )
 : facos fasin fhpi fswap f- ; ( r -- r )
 
-\ This is a late binding macro system, it makes a macro out
-\ of a name and the rest of the current line.
+\ These constants should help during meta-compilation of the
+\ system.
 \
-\ Usage:
-\
-\        macro square dup *
-\        : foo 5 square . ;
-\ 
-\ Note that:
-\
-\        : * ." ???" ;
-\        : foo 5 square ;
-\
-\ Prints out:
-\
-\        ??? 5
-\
-\ This is due to the fact, already mentioned, that this macro
-\ system is *late binding* and not *early binding*.
-\
-\ Another version using "sliteral", not yet implemented in
-\ this system, is:
-\
-\   : macro 
-\     : char parse postpone sliteral postpone evaluate
-\     postpone ; immediate ;
-\
-\ It has a slightly different syntax:
-\
-\        macro square " dup * "
-\
-\ And the same problems.
-\
-
-: scopy ( b u -- b u : copy a string into the dictionary )
-  align here >r aligned dup allot
-  r@ swap dup >r cmove r> r> swap ;
-
-: macro ( c" xxx" --, : create a late-binding macro )
-  create immediate align here 2 cells + ,
-  0 parse dup , scopy 2drop
-  does> 2@ swap evaluate ;
-
-system -order
-.( DONE ) cr
-
-: 2pick dup >r pick r> 2+ pick swap ;
-
-
-\ \ http://forth.sourceforge.net/word/n-to-r/index.html
-\ \ Push n+1 elements on the return stack.
-\ : n>r ( xn..x1 n -- , R: -- x1..xn n )
-\   dup
-\   begin dup
-\   while rot r> swap >r >r 1-
-\   repeat
-\   drop r> swap >r >r ; \ compile-only
-\ 
-\ \ http://forth.sourceforge.net/word/n-r-from/index.html
-\ \ pop n+1 elements from the return stack.
-\ : nr> ( -- xn..x1 n, R: x1..xn n -- )
-\     r> r> swap >r dup
-\     begin dup
-\     while r> r> swap >r -rot 1-
-\     repeat
-\     drop ; \ compile-only
-
-\ : ?exit if rdrop exit then ;
-
-\ $FFFE constant rp0
- 
-\ : +leading ( b u -- b u: skip leading space )
-\     begin over c@ dup bl = swap 9 = or while 1 /string repeat ;
-
-\ http://forth.sourceforge.net/word/string-plus/index.html
-\ ( addr1 len1 addr2 len2 -- addr1 len3 )
-\ append the text specified by addr2 and len2 to the text of length len2
-\ in the buffer at addr1. return address and length of the resulting text.
-\ an ambiguous condition exists if the resulting text is larger
-\ than the size of buffer at addr1.
-\ : string+ ( bufaddr buftextlen addr len -- bufaddr buftextlen+len )
-\        2over +         ( ba btl a l bta+btl )
-\        swap dup >r     ( ba btl a bta+btl l ) ( r: l )
-\        move
-\        r> + ;
-
-
-\ ( addr1 len1 c -- addr1 len2 )
-\ append c to the text of length len2 in the buffer at addr1.
-\ Return address and length of the resulting text.
-\ An ambiguous condition exists if the resulting text is larger
-\ than the size of buffer at addr1.
-\ : string+c ( addr len c -- addr len+1 )
-\   dup 2over + c! drop 1+ ;
-
-\ http://forth.sourceforge.net/algorithm/unprocessed/valuable-algorithms.txt
-\ : -m/mod over 0< if dup    >r +       r> then u/mod ;         ( d +n - r q )
-\ :  m/     dup 0< if negate >r dnegate r> then -m/mod swap drop ; ( d n - q )
-
-\ From comp.lang.forth:
-\ : du/mod ( ud1 ud2 -- udrem udquot )  \ b/d = bits/double
-\   0 0 2rot b/d 0 do 2 pick over 2>r d2* 2swap d2* r>
-\  0< 1 and m+ 2dup 7 pick 7 pick du< 0= r> 0< or if 5 pick
-\  5 pick d- 2swap 1 m+ else 2swap then loop 2rot 2drop ; 
-
+\  1.0 fconstant fone decimal= $8000 $4001 
+\  f2* [ -57828.0 ] fliteral = $E1E5 $C010 
+\  2over fsq [ 2001.18 ] fliteral f+ f/= $FA26 $400B 
+\  2over f2/ f- [ 34.6680 ] fliteral f+ f/= $8AAC $4006 
+\  [ 1.4427 ( = log2(e) ] fliteral f* exp ; = $B8AA $4001 
+\  : falog [ 3.3219 ( = log2(10) ] fliteral f* exp ; ( r -- r )= $D49A $4002 
+\   3.14159265 fconstant fpi    \ PI= $C911 $4002 
+\   1.57079632 fconstant fhpi   \ Half PI= $C911 $4001 
+\   6.28318530 fconstant f2pi   \ 2*PI= $C911 $4003 
+\   2.71828182 fconstant fe     \ e= $ADF8 $4002 
+\   0.69314718 fconstant fln2   \ ln(2.0)  (natural log of 2)= $B172 $4000 
+\   2.30258509 fconstant fln10  \ ln(10.0) (natural log of 10)= $935D $4002 
+\  : fdeg f2pi f/ [ 360.0 ] fliteral f* ; ( rad -- deg )= $B400 $4009 
+\  : frad [ 360.0 ] fliteral f/ f2pi f* ; ( deg -- rad )= $B400 $4009 
+\  : >cordic     [ 16384.0 ] fliteral f* f>s ; ( f -- n )= $8000 $400F 
+\  : cordic> s>f [ 16384.0 ] fliteral f/ ;     ( n -- f )= $8000 $400F 
+\     [  0.07765095 ( = A ) ] fliteral f* = $9F08 $3FFD 
+\     [ -0.28743447 ( = B ) ] fliteral f+ f* = $932B $BFFF 
+\     [  0.99518168 ( pi/4 - A - B ) ] fliteral f+ f* ;= $FEC5 $4000 

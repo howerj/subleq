@@ -74,8 +74,8 @@
 \
 
 only forth definitions decimal system +order
-: debug source type ."  ok" cr ; 
- ' debug <ok> !
+\ : debug source type ."  ok" cr ; 
+\ ' debug <ok> !
 
 : undefined? bl word find nip 0= ; ( "name", -- f )
 : defined? undefined? 0= ; ( "name", -- f: Is word defined ? )
@@ -394,6 +394,11 @@ only forth definitions system +order
    then 
    d>f dpl @ tens d>f f/ ;    
 
+\ : $$ [char] $ emit ;
+\ : .h base @ >r hex $$ 0 u.r space r> base ! ;
+\ : disp source type ." = " 2dup swap .h .h cr ;
+\ : fconstant f disp 2constant ;
+\ : fliteral  f disp postpone 2literal ; immediate ( r --, Run: -- r )
 : fconstant f 2constant ; ( "name", r --, Run Time: -- r )
 : fliteral  f postpone 2literal ; immediate ( r --, Run: -- r )
 : fix tuck 0 swap shifts ralign -+ ; ( r -- n : f>s rounding )
