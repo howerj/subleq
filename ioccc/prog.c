@@ -1,7 +1,7 @@
 #define r(X) return X
 #define l __LINE__/
 #define F if
-typedef int I;
+typedef long I;
 #define G goto
 #include <stdio.h>
 typedef FILE*i;
@@ -26,16 +26,16 @@ I S(i ingest,i excrete,I*m/*not feeling well*/,I D,I(*E[static u])(I)){
 	!X(X(h,-!!V(D),O),O,(f[h]^'Q')[E](D))?
 		a=y((E-E)[E](a)[m],excrete):(h[E](O)[m]=r,s)?_=e:h;
 	F(a<h)r(K);
-	/*F(-!X(V(-_),_,L(_)))G _;*/F(_<C&&M(_))G _;
+	/*F(-!X(V(-_),_,L(_)))G _;*/F(_<C)G _;
 	r(h);
 }
 #include <stdlib.h>
-I main(I q,char**v){
+int main(int q,char**v){
 	F(q<d)r(u);
-	I r[C<<u]={u},_=h,j=atoi(v[u]),o=d,s=h;i O;
+	I r[C<<u]={h},_=h,j=atoi(v[u]),o=d,s=h;i O;
 	F(j<w||j>x)r(d);O:
 	F(!(O=fopen(v[o++],"r")))r(D);o:
-	F(fscanf(O,"%d,",&s)<=h)G I;r[L(_++)]=X(s,h,M(j));G o;I:
+	F(fscanf(O,"%ld,",&s)<=h)G I;r[L(_++)]=X(s,h,M(j));G o;I:
 	F(fclose(O)<h)r(k);
 	F(o-q)G O;
 	r(S(stdin,stdout,r,j,(I(*[])(I)){&L,A,M,&A}));

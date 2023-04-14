@@ -707,6 +707,8 @@ only forth definitions hex
 0 constant opt.better-see ( Replace 'see' with better version )
 0 constant opt.sm-vm-err  ( Smaller VM error message )
 
+\ TODO: Make a really cut down version for the IOCCC?
+
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
 : sys.info     4 or ; ( bit #4 = print info msg on startup )
@@ -4492,6 +4494,9 @@ system[
 
 : 2! tuck ! cell+ ! ; ( u1 u2 a -- : store two cells )
 : 2@ dup cell+ @ swap @ ; ( a -- u1 u2 : fetch two cells )
+
+\ :s (2const) r> 2* 2@ ;s compile-only ( R: a --, -- u )
+:m 2constant
 
 \ These two words are like "2!" and "2@", but for shunting
 \ two numbers between the return and data stacks. Note that
@@ -11915,38 +11920,30 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \
 
 only forth definitions decimal system +order
-: debug source type ."  ok" cr ; 
- ' debug <ok> !
 
-: undefined? bl word find nip 0= ; ( "name", -- f )
-: defined? undefined? 0= ; ( "name", -- f: Is word defined ? )
-undefined? postpone [if] 
-  : postpone [compile] [compile] ; immediate 
-[then] 
-: ?\ 0= if postpone \ then ; ( f --, <string>| : cond. comp. )
+\ : undefined? bl word find nip 0= ; ( "name", -- f )
+\ : defined? undefined? 0= ; ( "name", -- f: word defined ? )
+\ undefined? postpone [if] 
+\   : postpone [compile] [compile] ; immediate 
+\ [then] 
+\ : ?\ 0= if postpone \ then ; ( f --, <string>| : cond comp. )
 
-undefined? 0<   ?\ : 0< 0 < ;
-undefined? 1-   ?\ : 1- 1 - ;
-undefined? 2+   ?\ : 2+ 2 + ;
-undefined? 2*   ?\ : 2* 1 lshift ;
-undefined? 2/   ?\ : 2/ 1 rshift ;
-undefined? >=   ?\ : >= < 0= ;
 \ undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
-undefined? 1+!  ?\ : 1+! 1 swap +! ;
-undefined? dnegate ?\ : dnegate invert >r invert 1 um+ r> + ; 
-undefined? d+ ?\ : d+ >r swap >r um+ r> + r> + ; 
-undefined? s>d ?\ : s>d dup 0< ;
-undefined? 2>r ?\ : 2>r r> swap >r swap >r >r ; 
-undefined? 2r> ?\ : 2r> r> r> swap r> swap >r ; 
-undefined? /string ?\ : /string over min rot over + -rot - ;
-\  /string ( b u1 u2 -- b u : advance string u2 )
 
-1 cells 8 * constant #bits
-1 #bits 1- lshift constant #msb
+: 2+ 2 + ;
+: 2- 2 - ;
+: 1+! 1 swap +1 ;
+: d+ >r swap >r um+ r> + r> + ; 
 
-:m 2variable mswap (var) t, t, ;m
+: /string ( b u1 u2 -- b u : advance string u2 )
+  over min rot over + -rot - ;
+
+( 1 cells 8 * -> ) $10 constant #bits
+( 1 #bits 1- lshift -> ) $8000 constant #msb
+
+:m 2variable :t mdrop mswap (var) t, t, munorder ;m
 :m 2literal mswap lit lit ;m
-:m 2constant abort ;m
+:m 2constant :t mdrop mswap (2const) t, t, ;m
 
 : banner ( +n c -- : print a character 'n' times )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ; 
@@ -12021,22 +12018,22 @@ undefined? /string ?\ : /string over min rot over + -rot - ;
 ( : log2 2 log ; ( u -- u : binary integer logarithm )
 : log2 ?dup 0= -11 and throw clz #bits swap - 1- ; ( u -- u )
 
-\ <forth.sourceforge.net/algorithm/bit-counting/index.html>
-: count-bits ( number -- bits )
-  dup $5555 and swap 1 rshift $5555 and +
-  dup $3333 and swap 2 rshift $3333 and +
-  dup $0F0F and swap 4 rshift $0F0F and +
-  $FF mod ;
-
-\ <forth.sourceforge.net/algorithm/firstbit/index.html>
-: first-bit ( number -- first-bit )
-  dup   1 rshift or
-  dup   2 rshift or
-  dup   4 rshift or
-  dup   8 rshift or
-  dup $10 rshift or
-  dup   1 rshift xor ;
-
+\ \ <forth.sourceforge.net/algorithm/bit-counting/index.html>
+\ : count-bits ( number -- bits )
+\   dup $5555 and swap 1 rshift $5555 and +
+\   dup $3333 and swap 2 rshift $3333 and +
+\   dup $0F0F and swap 4 rshift $0F0F and +
+\   $FF mod ;
+\ 
+\ \ <forth.sourceforge.net/algorithm/firstbit/index.html>
+\ : first-bit ( number -- first-bit )
+\   dup   1 rshift or
+\   dup   2 rshift or
+\   dup   4 rshift or
+\   dup   8 rshift or
+\   dup $10 rshift or
+\   dup   1 rshift xor ;
+ 
 \ ## CORDIC CODE
 \
 \ NB. This CORDIC code could be extended to perform many more
