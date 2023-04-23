@@ -127,7 +127,10 @@ undefined? user ?\ : user variable ; ( single thread systems )
 : 2, , , ; ( n n -- : write to values into dictionary )
 : 2constant create 2, does> 2@ ; ( d --, Run: -- d )
 : 2variable create 0 , 0 , ; \ does> ; ( d --, Run: -- a )
+: .h base @ >r hex [char] $ emit 0 u.r space r> base ! ;
 : 2literal swap postpone literal postpone literal ; immediate
+\ : 2literal source type ."  = " 2dup .h .h cr 
+\   swap postpone literal postpone literal ; immediate
 : +- 0< if negate then ; ( n n -- n : copy sign )
 : m* ( n n -- d : single to double cell multiply [16x16->32] ) 
   2dup xor 0< >r abs swap abs um* r> if dnegate then ; 
@@ -461,6 +464,8 @@ system +order definitions
 
 : >cordic     [ 16384.0 ] fliteral f* f>s ; ( f -- n )
 : cordic> s>f [ 16384.0 ] fliteral f/ ;     ( n -- f )
+
+
 
 : quadrant 
   fdup fhpi f< if fdrop 0 exit then 

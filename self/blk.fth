@@ -1,10 +1,9 @@
 \ TODO: Implement a generic block word set interface with
 \ a vectored execution word for actually transferring data.
+\ TODO: MS-DOS subsystem, file system and file access words
+\ built upon the block system.
 
 system +order
-
-2 constant #buffers
-1024 constant b/buf
 
 1 [if]
 $F800 constant buf0
@@ -16,6 +15,8 @@ create buf1 b/buf allot
 
 ( space for two buffers, consists of addr and blk/flags )
 \ TODO: Store in frequency sorted list
+2 constant #buffers
+1024 constant b/buf
 create buffers buf0 , 0 , buf1 , 0 ,
 
 variable <block>
