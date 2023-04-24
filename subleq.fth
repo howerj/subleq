@@ -20,6 +20,10 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ ***THIS FILE NEEDS EDITING***
 \ ***THIS FILE NEEDS EDITING***
 \
+\ TODO: Make "\[" and "\]" target only, use them when using
+\ literals to make the code much more Forth like, e.g.
+\ "2 lit" should become "\[ 2 \] literal".
+\
 \ # Dedication and Foreword
 \
 \ This book is dedicated to my wife Molly Barton, my Moll,
@@ -1493,7 +1497,7 @@ defined eforth [if] system -order [then]
 :m NOOP Z Z NADDR ;m ( -- : No operation )
 :m ZERO dup 2/ t, 2/ t, NADDR ;m ( a -- : zero a location )
 :m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
-:m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
+\ :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
 :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
@@ -3745,10 +3749,9 @@ system[
 \
 \
 
-variable blk ( -- a : latest loaded block )
+variable blk ( -- a : loaded block )
 variable scr ( -- a : latest listed block )
 
-2F t' blk >tbody t!
 2F t' scr >tbody t!
 
 user base  ( -- a : push the radix for numeric I/O )
@@ -7650,17 +7653,15 @@ opt.better-see [if] ( Start conditional compilation )
 \ "update" and "flush". The latter two words do nothing on
 \ this system.
 \
-\ TODO: Incorrect use of "blk"?
-\
 \ The word "block" is the core of the block system, given a
 \ block number, "k", it will return an address to a block
 \ buffer (or thrown an exception if there is an error), it
 \ will perform the task of checking if the current block is
 \ dirty, of potentially writing the changes back, of loading
 \ the new block, of assigning the new block buffer. It does
-\ all of the work. It also sets the variable "blk" to the
-\ block buffer id given to "block", which contains the latest
-\ loaded block. If the block number is the same as the one
+\ all of the work. 
+\
+\ If the block number is the same as the one
 \ loaded then it does nothing but return a pointer to the
 \ already loaded block. This version of "block" also checks
 \ that there is at least one value on the stack and it also
@@ -7764,7 +7765,8 @@ opt.better-see [if] ( Start conditional compilation )
 
 ( system[ variable dirty ]system )
 : b/buf 400 lit ; ( -- u : size of the block buffer )
-: block #1 ?depth dup blk ! A lit lshift pause ; ( k -- u )
+: block ( k -- u )
+   #1 ?depth 1- ( dup blk ! ) A lit lshift pause ; 
 : flush ( dirty @ if save-buffers empty-buffers then ) ;
 : update ( #-1 dirty ! ) ; ( -- : mark cur. buf. as dirty )
 : blank bl fill ; ( a u -- : blank an area of memory )
@@ -7871,11 +7873,11 @@ opt.better-see [if] ( Start conditional compilation )
 \ which can be chained together. The next block is the block
 \ with the current block number plus one.
 \
-\ TODO: load should affect "blk" and nothing else?
 :s line 6 lit lshift swap block + 40 lit ;s ( k l -- a u )
 :s loadline line evaluate ;s ( k l -- ??? : execute a line! )
-: load #0 F lit for
-   2dup 2>r loadline 2r> 1+ next 2drop ; ( k -- : exec blk )
+: load ( k -- : exec blk )
+   blk @ >r dup blk ! #0 F lit for
+   2dup 2>r loadline 2r> 1+ next 2drop r> blk ! ; 
 
 \ Two words that allow the user of the environment to get
 \ information about the system, "eforth", which has uses in
@@ -8423,8 +8425,8 @@ opt.multi [if]
 \
 \ To use the editor type "editor", this will replace the
 \ current vocabulary so only the editor commands are visible,
-\ they are; "q", "?", "l", "e", "ia", "i", "w", "s", "n", "p",
-\ "r", "x", and finally "d". Some of the words are not
+\ they are; "q", "?", "l", "x", "ia", "i", "w", "s", "n", "p",
+\ "r", "z", and finally "d". Some of the words are not
 \ strictly necessary in this editor, but they are not large
 \ and are useful.
 \
@@ -8434,7 +8436,7 @@ opt.multi [if]
 \ * "q", quit editor
 \ * "?", display current block number
 \ * "l", list current forth block
-\ * "e", execute current forth block
+\ * "x", execute current forth block
 \ * "ia", insert line of text into line at position
 \ * "i", insert line of text into line
 \ * "w", list commands
@@ -8442,7 +8444,7 @@ opt.multi [if]
 \ * "n", go to next block and list it
 \ * "p", go to previous block and list it
 \ * "r", list a specific block
-\ * "x", erase the screen, replacing it with spaces
+\ * "z", erase the screen, replacing it with spaces
 \ * "d", delete a line, it takes a number as an argument
 \
 \ Missing are words to perform searching, replacing, and
@@ -8453,12 +8455,13 @@ opt.multi [if]
 \ lines would exit this mode early.
 \
 \ They are all easy to add, but are not necessary. The
-\ fact that execute, "e", calls "q" might cause problems when
+\ fact that execute, "x", calls "q" might cause problems when
 \ trying to put words into different vocabularies, but it is
-\ not an insurmountable problem. Also "e" might clash with
-\ the hexadecimal value for the number 14, in this Forth it is
-\ not a problem as hexadecimal numbers use uppercase only, and
-\ this Forth is case sensitive.
+\ not an insurmountable problem. 
+
+\ Also "d" might clash with the hexadecimal value for the 
+\ number 13, in this Forth it is not a problem as hexadecimal 
+\ numbers use uppercase only, and this Forth is case sensitive.
 \
 \ The editor can also be used to enter data with a series
 \ of commands into blocks to create databases if file
@@ -8467,12 +8470,12 @@ opt.multi [if]
 \ An example of its use:
 \
 \        editor
-\        x
+\        z
 \        0 i ( HELLO WORLD PROGRAM VERSION 3.4 )
 \        1 i : ahoy cr ." HELLO, WORLD" ;
 \        2 i ahoy
 \        l
-\        e
+\        x
 \
 \ This will make the block containing the following text:
 \
@@ -8521,7 +8524,7 @@ opt.editor [if]
 :e q only forth ;e ( -- : exit back to Forth interpreter )
 :e ? scr @ . ;e ( -- : print block number of current block )
 :e l scr @ list ;e ( -- : list current block )
-:e e q scr @ load editor ;e ( -- : evaluate current block )
+:e x q scr @ load editor ;e ( -- : evaluate current block )
 :e ia #2 ?depth 6 lit lshift + scr @ block + tib >in @ +
    swap source nip >in @ - cmove tib @ >in ! update l ;e
 :e i #0 swap ia ;e ( line --, "line" : insert line at )
@@ -8530,7 +8533,7 @@ opt.editor [if]
 :e n  #1 scr +! l ;e ( -- : display next block )
 :e p #-1 scr +! l ;e ( -- : display previous block )
 :e r scr ! l ;e ( k -- : retrieve given block )
-:e x scr @ block b/buf blank l ;e ( -- : erase current block )
+:e z scr @ block b/buf blank l ;e ( -- : erase current block )
 :e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit
    blank l ;e ( line -- : delete line )
 [then]
@@ -8766,9 +8769,8 @@ opt.float [if] ( Large section of optional code! )
 \ # Floating Point Package (and more)
 \
 \ TODO: Testing!
+\ TODO: Handle different bases?
 \ TODO: Handle under/overflow?
-\ TODO: Convert all constants to hexadecimal, including
-\ error codes.
 \
 \ This is a Forth Floating point package *for 16-bit systems*.
 \
@@ -8865,14 +8867,13 @@ system[
 :m mcreate :t mdrop (var) munorder ;m ( --, "name": var )
 
 : spaces bl banner ; ( +n  -- : print space 'n' times )
-\ : anonymous ( -- : make anonymous vocabulary and enable it )
-\ get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
+\ TODO: Throw?
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 : arshift ( n u -- n : arithmetic right shift )
-  2dup rshift >r swap $8000 lit and
+  2dup rshift >r swap #msb and
   if $10 lit swap - #-1 swap lshift else drop #0 then r> or ;
-: d2* over $8000 lit and >r 2* swap 2* swap r> if #1 or then ;
-: d2/ dup   #1 and >r 2/ swap 2/ r> if $8000 lit or then swap ;
+: d2* over #msb and >r 2* swap 2* swap r> if #1 or then ;
+: d2/ dup   #1 and >r 2/ swap 2/ r> if #msb or then swap ;
 : d- dnegate d+ ; ( d d -- d : double cell subtraction )
 : d= rot = -rot = and ; ( d d -- f : double cell equal )
 : d0= or 0= ;     ( d -- f : double cell number equal to zero )
@@ -8896,64 +8897,6 @@ system[
   >r m* r> sm/rem ;
 : d>s drop ; ( d -- n : convert dubs to single )
 
-\ TODO: Move to extra code
-\
-\ From: https://en.wikipedia.org/wiki/Integer_square_root
-\ This function computes the integer square root of a number.
-\
-\ 'sc': unsigned small candidate
-\ 'lc': unsigned large candidate
-\
-\ : square dup * ; ( n -- n : square a number )
-\ : sqrt ( n -- u : integer square root )
-\   #1 ?depth
-\   s>d  if -$B lit throw then ( does not work for neg. values )
-\   dup #2 < if exit then   ( return 0 or 1 )
-\   dup                    ( u u )
-\   #2 rshift sqrt ( recurse ) 2*    ( u sc )
-\   dup                    ( u sc sc )
-\   1+ dup square          ( u sc lc lc^2 )
-\   >r rot r> <            ( sc lc bool )
-\   if drop else nip then ; ( return small or large candidate )
-\ 
-\ : log ( u base -- u : the integer logarithm of u in 'base' )
-\   >r
-\   dup 0= -$B lit and throw ( logarithm of zero is an error )
-\   #0 swap
-\   begin
-\     swap 1+ swap r@ / dup 0= ( keep dividing until 'u' is 0 )
-\   until
-\   drop 1- rdrop ;
-\ 
-\ : clz ( u -- : count leading zeros )
-\   ?dup 0= if #bits exit then
-\   #msb #0 >r begin
-\    2dup and 0=
-\   while
-\    r> 1+ >r 2/
-\   repeat
-\   2drop r> ;
-\ 
-\ ( : log2 2 log ; ( u -- u : binary integer logarithm )
-\ : log2 ( u -- u )
-\   ?dup 0= -11 lit and throw clz #bits swap - 1- ; 
-\ 
-\ \ <forth.sourceforge.net/algorithm/bit-counting/index.html>
-\ : count-bits ( number -- bits )
-\   dup $5555 and swap 1 rshift $5555 and +
-\   dup $3333 and swap 2 rshift $3333 and +
-\   dup $0F0F and swap 4 rshift $0F0F and +
-\   $FF mod ;
-\ 
-\ \ <forth.sourceforge.net/algorithm/firstbit/index.html>
-\ : first-bit ( number -- first-bit )
-\   dup   1 rshift or
-\   dup   2 rshift or
-\   dup   4 rshift or
-\   dup   8 rshift or
-\   dup $10 rshift or
-\   dup   1 rshift xor ;
- 
 \ ## CORDIC CODE
 \
 \ NB. This CORDIC code could be extended to perform many more
@@ -9034,8 +8977,6 @@ variable cd variable ck
 
 : fabs $7FFF lit and ; ( f -- f )
 
-
-
 system[
 \ TODO: make a user variable, it's not currently working!
 \ user (precision) \ 4 (precision) !
@@ -9043,6 +8984,8 @@ variable (precision)
 
 4 t' (precision) >tbody t!
 
+\ TODO: "d." and "ud." should be implemented.
+\ TODO: Replace this table.
 mdecimal
 mcreate ftable
          0.001 t, t,       0.010 t, t,
@@ -9060,13 +9003,13 @@ mhex
   if begin s>d invert
     while d2* r> 1- >r
     repeat swap 0< - ?dup
-    if r> else $8000 lit r> 1+ then
+    if r> else #msb r> 1+ then
   else r> drop then ;s
 :s lalign $20 lit min for aft d2/ then next ;s
 :s ralign 1- ?dup if lalign then #1 #0 d+ d2/ ;s
 :s tens 2* cells ftable + 2@ ;s ( a -- d )
 :s shifts 
-   fabs $4010 lit - s>d invert if -43 lit throw then negate ;s
+   fabs $4010 lit - s>d invert if -$2B lit throw then negate ;s
 :s base? ( -- : check base )
   base @ $A lit <> -40 lit and throw ;s
 :s unaligned? dup #1 and = -9 lit and throw ;s ( -- : chk ptr )
@@ -9077,12 +9020,12 @@ mhex
 \ "fdepth" is standards compliant, but pretty useless because
 \ there is no separate floating point stack.
 
-: fcopysign $8000 lit and nip >r fabs r> or ; ( r1 r2 -- r1 )
+: fcopysign #msb and nip >r fabs r> or ; ( r1 r2 -- r1 )
 : floats 2* cells ;    ( u -- u )
-\ : float+ [ 1 floats ] literal + ; ( a -- a : inc addr by float )
+\ : float+ [ 1 floats ] literal + ; 
 : float+ 4 lit + ; ( a -- a : inc addr by float )
 : set-precision ( +n -- : set FP decimals printed out )
-  dup #0 5 lit within if (precision) ! exit then -43 lit throw ; 
+dup #0 5 lit within if (precision) ! exit then -$2B lit throw ; 
 : precision (precision) @ ; ( -- u : precision of FP values )
 \ : precision 
 \  (precision) @ #0 5 lit within if (precision) @ exit then
@@ -9103,8 +9046,8 @@ mhex
 : fdrop #2 ?depth 2drop ; ( r -- : floating point drop )
 : f2drop fdrop fdrop ; ( r1 r2 -- : FP 2drop )
 : fnip fswap fdrop ;   ( r1 r2 -- r2 : FP nip )
-: fnegate $8000 lit xor null ;  ( r -- r : FP negate )
-: fsign fabs over 0< if >r dnegate r> $8000 lit or then ;
+: fnegate #msb xor null ;  ( r -- r : FP negate )
+: fsign fabs over 0< if >r dnegate r> #msb or then ;
 : f2* #2 ?depth 1+ null ; ( r -- r : FP times by two )
 : f2/ #2 ?depth 1- null ; ( r -- r : FP divide by two )
 : f*  ( r r -- r )
@@ -9116,7 +9059,7 @@ mhex
 
 : f/ ( r1 r2 -- r1/r2 : floating point division )
   4 lit ?depth
-  fdup f0= -42 lit and throw
+  fdup f0= -$2A lit and throw
   rot swap - $4000 lit + >r
   #0 -rot 2dup u<
   if  um/ r> null 
@@ -9133,7 +9076,7 @@ mhex
   then swap #0 r> r@ xor 0< 
   if r@ 0< if 2swap then d-
     r> fsign rot swap norm 
-  else d+ if 1+ 2/ $8000 lit or r> 1+
+  else d+ if 1+ 2/ #msb or r> 1+
     else r> then then ;
 
 0 0 2constant fzero 
@@ -9182,8 +9125,7 @@ mhex
 : fround fix s>f ; ( r -- r )
 : fmod f2dup f/ floor f* f- ; ( r1 r2 -- r )
 
-\  1.0 fconstant fone decimal ( = $8000 $4001 )
-\ 1.0 fconstant fone decimal
+\ 1.0 fconstant fone decimal ( = $8000 $4001 )
 $8000 $4001 2constant fone
 
 : f1+ fone f+ ; ( r -- r : increment FP number )
@@ -9192,18 +9134,15 @@ $8000 $4001 2constant fone
 
 : exp ( r -- r : raise 2.0 to the power of 'r' )
   2dup f>s dup >r s>f f-     
-\  f2* [ -57828.0 ] fliteral ( = $E1E5 $C010 )
-  f2* $E1E5 $C010 2literal
-\  2over fsq [ 2001.18 ] fliteral f+ f/ ( = $FA26 $400B )
-  2over fsq  $FA26 $400B 2literal f+ f/
-\  2over f2/ f- [ 34.6680 ] fliteral f+ f/ ( = $8AAC $4006 )
-  2over f2/ f- $8AAC $4006 2literal f+ f/
-  f1+ fsq r> + ;
+  f2* $E1E5 $C010 2literal ( [ -57828.0 ] fliteral )
+  2over fsq $FA26 $400B 2literal ( [ 2001.18 ] fliteral ) f+ f/
+  2over f2/ f- $8AAC $4006 2literal ( [ 34.6680 ] fliteral ) 
+  f+ f/ f1+ fsq r> + ;
 : fexp  ( r -- r : raise e to the power of 'r' )
-\  [ 1.4427 ( = log2(e) ] fliteral f* exp ; ( = $B8AA $4001 )
-   $B8AA $4001 2literal f* exp ; 
-\  : falog [ 3.3219 ( = log2(10) ] fliteral f* exp ; ( = $D49A $4002 )
-: falog $D49A $4002 2literal f* exp ; ( r -- r )
+  \ 1.4427 = log2(e)
+  $B8AA $4001 2literal ( [ 1.4427 ] fliteral ) f* exp ; 
+: falog ( r -- r ) 
+   $D49A $4002 2literal ( [ 3.3219 ] fliteral ) f* exp ; 
 : get ( "123" -- : get a single signed number )
   bl word dup 1+ c@ [char] - = tuck -
   #0 #0 rot convert drop ( should throw if not number... ) -+ ;
@@ -9224,55 +9163,44 @@ mdecimal
   if 10 lit s>f f* r> 1- >r then
   <# r@ abs #0 #s r> sign 2drop
   [char] e hold f# #> r> over - spaces type ;
-\ TODO: Get this working! (Probably a problem with 'f')
-\ : e ( f "123" -- usage "1.23 e 10", input scientific notation )
-\  f get >r r@ abs 13301 lit 4004 lit */mod
-\  >r s>f 4004 lit s>f f/ exp r> +
-\  r> 0< if f/ else f* then ;
+: e ( f "123" -- usage "1.23 e 10", input scientific notation )
+  f get >r r@ abs 13301 lit 4004 lit */mod
+  >r s>f 4004 lit s>f f/ exp r> +
+  r> 0< if f/ else f* then ;
 mhex
 : e. space #0 e.r ;
 
-
 ( Define some useful constants )
-\ 3.14159265 fconstant fpi    \ PI
- $C911 $4002 2constant fpi
-\   1.57079632 fconstant fhpi   \ Half PI = $C911 $4001 
- $C911 $4001 2constant fhpi
-\   6.28318530 fconstant f2pi   \ 2*PI = $C911 $4003 
- $C911 $4003 2constant f2pi
-\   2.71828182 fconstant fe     \ e = $ADF8 $4002 
- $ADF8 $4002 2constant fe
-\   0.69314718 fconstant fln2   \ ln(2.0)  (natural log of 2) = $B172 $4000 
- $B172 $4000 2constant fln2
-\   2.30258509 fconstant fln10  \ ln(10.0) (natural log of 10) = $935D $4002 
- $935D $4002 2constant fln10
+$C911 $4002 2constant fpi \ Pi = 3.14159265 fconstant fpi )
+$C911 $4001 2constant fhpi \ 1/2pi = 1.57079632 fconstant fhpi
+$C911 $4003 2constant f2pi \ 2pi = 6.28318530 fconstant f2pi
+$ADF8 $4002 2constant fe \ e = 2.71828182 fconstant fe
+$B172 $4000 2constant fln2 \ ln[2] = 0.69314718 fconstant fln2
+$935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 
-\  : fdeg f2pi f/ [ 360.0 ] fliteral f* ; ( rad -- deg ) = $B400 $4009 
-: fdeg f2pi f/ $B400 $4009 2literal f* ; ( rad -- deg )
-\  : frad [ 360.0 ] fliteral f/ f2pi f* ; ( deg -- rad ) = $B400 $4009 
-: frad $B400 $4009 2literal f/ f2pi f* ; ( deg -- rad )
+: fdeg ( rad -- deg )
+  f2pi f/ $B400 $4009 2literal ( [ 360.0 ] fliteral ) f* ; 
+: frad ( deg -- rad )
+  $B400 $4009 2literal ( [ 360.0 ] fliteral ) f/ f2pi f* ; 
 
-\  : >cordic     [ 16384.0 ] fliteral f* f>s ; ( f -- n ) = $8000 $400F 
-:s >cordic  $8000 $400F 2literal f* f>s ;s ( f -- n )
-\  : cordic> s>f [ 16384.0 ] fliteral f/ ;     ( n -- f ) = $8000 $400F 
-:s cordic> s>f $8000 $400F 2literal f/ ;s     ( n -- f )
+:s >cordic ( f -- n )
+   $8000 $400F 2literal ( [ 16384.0 ] fliteral ) f* f>s ;s 
+:s cordic> ( n -- f )
+   s>f $8000 $400F 2literal ( [ 16384.0 ] fliteral ) f/ ;s     
 
-: quadrant 
+:s quadrant 
   fdup fhpi f< if fdrop #0 exit then 
   fdup  fpi f< if fdrop #1 exit then 
-\ TODO: Calc constants
-\     [ fpi fhpi f+ ] 2literal f< if 2 exit then  = $96CD $4003
-      $96CD $4003 2literal f< if #2 exit then 
-  3 lit ;
-: >sin #2 4 lit within if fnegate then ;
-: >cos #1 3 lit within if fnegate then ;
-: scfix >r 
+      $96CD $4003 2literal ( [ fpi fhpi f+ ] 2 literal ) f< 
+      if #2 exit then 
+  3 lit ;s
+:s >sin #2 4 lit within if fnegate then ;s
+:s >cos #1 3 lit within if fnegate then ;s
+:s scfix >r 
   r@ #1 = if fnegate fpi f+ rdrop exit then
-  r> 3 lit = if fnegate f2pi f+ then ;
+  r> 3 lit = if fnegate f2pi f+ then ;s
 
-: (fsincos) fhpi fmod >cordic cordic >r cordic> r> cordic> ; 
-
-\ only forth definitions system +order
+:s (fsincos) fhpi fmod >cordic cordic >r cordic> r> cordic> ;s
 
 : fsincos ( rads -- sin cos )
    fdup f0< >r
@@ -9299,7 +9227,7 @@ mhex
   fabs 2>r f2dup fabs fswap fabs f+ 2r> f* 2>r f- fabs 2r> f< ;
 
 : fsqrt ( r -- r : square root of 'r' )
-  fdup f0< if fdrop -46 lit throw then
+  fdup f0< if fdrop -$2E lit throw then
   fdup f0= if fdrop fzero exit then
   fone 
   $10 lit for aft 
@@ -9309,7 +9237,7 @@ mhex
 
 : filog2 ( r -- u : Floating point integer logarithm )
   null
-  fdup fzero f<= -46 lit and throw
+  fdup fzero f<= -$2E lit and throw
   ( norm ) nip $4001 lit - ;
 
 : fhypot f2dup f> if fswap then ( a b -- c : hypotenuse )
@@ -9322,8 +9250,7 @@ mhex
   while
     fdup fdup f. [char] , emit space fsincos 
     fswap f. [char] , emit space f. cr
-\   [ f2pi 50.0 f f/ ] 2literal f+ = $80AF $3FFE
-    $80AF $3FFE 2literal f+
+    $80AF $3FFE 2literal ( [ f2pi 50.0 f f/ ] 2literal ) f+
   repeat fdrop ;
 
 
@@ -9402,16 +9329,16 @@ mhex
 \ See <https://stackoverflow.com/questions/42537957/>
 \
 
-: fatan-lo fdup fsq fdup 
+:s fatan-lo fdup fsq fdup 
 \ [  0.07765095 ( = A ) ] fliteral f* = $9F08 $3FFD 
    $9F08 $3FFD 2literal f* 
 \ [ -0.28743447 ( = B ) ] fliteral f+ f* = $932B $BFFF 
    $932B $BFFF 2literal f+ f* 
 \ [  0.99518168 ( pi/4 - A - B ) ] fliteral f+ f* ;= $FEC5 $4000 
-   $FEC5 $4000 2literal f+ f* ;
+   $FEC5 $4000 2literal f+ f* ;s
 
 \ atan(x) = pi/2 - atan(1/x)
-: fatan-hi finv fatan-lo fhpi fswap f- ;
+:s fatan-hi finv fatan-lo fhpi fswap f- ;s
 
 : fatan fdup fabs fone f> if fatan-hi exit then fatan-lo ;
 
@@ -9433,9 +9360,10 @@ mhex
   then
   fdrop
   fdup f0> if fdrop fhpi exit then
-\  fdup f0< if fdrop [ fhpi fnegate ] 2literal exit then = $C911 $C001
-  fdup f0< if fdrop $C911 $C001 2literal exit then
-  -46 lit throw ;
+  fdup f0< if 
+    fdrop $C911 $C001 2literal ( [ fhpi fnegate ] 2literal ) 
+    exit then
+  -$2E lit throw ;
 
 : fasin fdup fsq fone fswap f- fsqrt f/ fatan ; ( r -- r )
 : facos fasin fhpi fswap f- ; ( r -- r )
@@ -11105,6 +11033,8 @@ variable seed here seed !
   dup  7 lshift xor
   dup seed ! ;
 
+: anonymous ( -- : make anonymous vocabulary and enable it )
+  get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
 : rpick rp@ swap - 1- 2* @ ;
 : umin 2dup swap u< if swap then drop ; ( u u -- u )
 : umax 2dup      u< if swap then drop ; ( u u -- u )
@@ -11121,7 +11051,7 @@ variable seed here seed !
 : .base base @ dup decimal . base ! ; ( -- )
 : also get-order over swap 1+ set-order ; ( -- )
 : previous get-order nip 1- set-order ; ( -- )
-: buffer block ; ( k -- a )
+\ : buffer block ; ( k -- a )
 : enum dup constant 1+ ; ( n --, <string> )
 : logical 0= 0= ; ( n -- f )
 : square dup * ; ( n -- n )
@@ -11138,6 +11068,7 @@ variable seed here seed !
 : 2tuck 2swap 2over ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 n3 n4 )
 : 4drop 2drop 2drop ; ( n1 n2 n3 n4 -- )
 : trip dup dup ; ( n -- n n n )
+: 2pick dup >r pick r> 2+ pick swap ;
 : log  >r 0 swap ( u base -- u : integer logarithm )
   begin swap 1+ swap r@ / dup 0= until drop 1- rdrop ;
 : log2 0 swap ( u -- u : integer logarithm in base 2 )
@@ -11212,6 +11143,64 @@ variable seed here seed !
 \        : and 0 -rot mux ;
 \
 : mux dup >r and swap r> invert and or ; ( x1 x2 mask -- x )
+
+\
+\ From: https://en.wikipedia.org/wiki/Integer_square_root
+\ This function computes the integer square root of a number.
+\
+\ 'sc': unsigned small candidate
+\ 'lc': unsigned large candidate
+\
+\ : square dup * ; ( n -- n : square a number )
+\ : sqrt ( n -- u : integer square root )
+\   #1 ?depth
+\   s>d  if -$B lit throw then ( does not work for neg. values )
+\   dup #2 < if exit then   ( return 0 or 1 )
+\   dup                    ( u u )
+\   #2 rshift sqrt ( recurse ) 2*    ( u sc )
+\   dup                    ( u sc sc )
+\   1+ dup square          ( u sc lc lc^2 )
+\   >r rot r> <            ( sc lc bool )
+\   if drop else nip then ; ( return small or large candidate )
+\ 
+\ : log ( u base -- u : the integer logarithm of u in 'base' )
+\   >r
+\   dup 0= -$B lit and throw ( logarithm of zero is an error )
+\   #0 swap
+\   begin
+\     swap 1+ swap r@ / dup 0= ( keep dividing until 'u' is 0 )
+\   until
+\   drop 1- rdrop ;
+\ 
+\ : clz ( u -- : count leading zeros )
+\   ?dup 0= if #bits exit then
+\   #msb #0 >r begin
+\    2dup and 0=
+\   while
+\    r> 1+ >r 2/
+\   repeat
+\   2drop r> ;
+\ 
+\ ( : log2 2 log ; ( u -- u : binary integer logarithm )
+\ : log2 ( u -- u )
+\   ?dup 0= -11 lit and throw clz #bits swap - 1- ; 
+\ 
+\ \ <forth.sourceforge.net/algorithm/bit-counting/index.html>
+\ : count-bits ( number -- bits )
+\   dup $5555 and swap 1 rshift $5555 and +
+\   dup $3333 and swap 2 rshift $3333 and +
+\   dup $0F0F and swap 4 rshift $0F0F and +
+\   $FF mod ;
+\ 
+\ \ <forth.sourceforge.net/algorithm/firstbit/index.html>
+\ : first-bit ( number -- first-bit )
+\   dup   1 rshift or
+\   dup   2 rshift or
+\   dup   4 rshift or
+\   dup   8 rshift or
+\   dup $10 rshift or
+\   dup   1 rshift xor ;
+ 
 
 \ "many" is an interesting word, it allows a line of code to be
 \ executed an infinite number of times by postfixing it to the
@@ -11291,8 +11280,6 @@ forth-wordlist +order definitions
   cell- here cell- 2/ swap ! ; immediate compile-only
 only forth definitions
 
-\ TODO: Integrate this extra code into this module.
-
 \ This is a late binding macro system, it makes a macro out
 \ of a name and the rest of the current line.
 \
@@ -11338,9 +11325,6 @@ only forth definitions
 
 system -order
 .( DONE ) cr
-
-: 2pick dup >r pick r> 2+ pick swap ;
-
 
 \ \ http://forth.sourceforge.net/word/n-to-r/index.html
 \ \ Push n+1 elements on the return stack.
@@ -11538,6 +11522,7 @@ $40    constant c/b     ( columns per block )
 
 variable position  ( current player position )
 variable moves     ( moves made by player )
+variable lblk      ( last block loaded )
 
 ( used to store rule being processed )
 create rule 3 c, 0 c, 0 c, 0 c,
@@ -11585,7 +11570,7 @@ create rule 3 c, 0 c, 0 c, 0 c,
 : relative swap c/b * + + ( $3ff and ) ; ( +x +y pos -- pos )
 : +position position @ relative ; ( +x +y -- pos )
 : double 2* swap 2* swap ;  ( u u -- u u )
-: arena blk @ block b/buf ; ( -- b u )
+: arena lblk @ block b/buf ; ( -- b u )
 : >arena arena drop + ;     ( pos -- a )
 : fetch                     ( +x +y -- a a a )
   2dup   +position >arena >r
@@ -11617,7 +11602,7 @@ create rule 3 c, 0 c, 0 c, 0 c,
 : .boulders  ." BOLDERS: " #boulders u. cr ; ( -- )
 : .moves    ." MOVES: " moves    @ u. cr ; ( -- )
 : .help     ." WASD - MOVEMENT" cr ." H    - HELP" cr ; ( -- )
-: .maze blk @ list ;                  ( -- )
+: .maze lblk @ list ;                  ( -- )
 : show ( page cr ) .maze .boulders .moves .help ; ( -- )
 : solved? #boulders 0= ;               ( -- )
 : finished? solved? if 1 throw then ; ( -- )
@@ -11640,7 +11625,7 @@ create rule 3 c, 0 c, 0 c, 0 c,
 : end  [char] q ?ignore drop 2 throw ; ( c -- | c, R ? -- | ? )
 : default drop ;  ( c -- )
 : command up down left right help end default finished? ;
-: maze! block drop ; ( k -- )
+: maze! dup lblk ! block drop ; ( k -- )
 : input key ;        ( -- c )
 
 sokoban-wordlist -order definitions
@@ -11654,7 +11639,7 @@ sokoban-wordlist +order
 
 decimal 47 maze!
 only forth definitions decimal
-editor x
+editor z
  1 i            XXXXX
  2 i            X   X
  3 i            X*  X
@@ -11667,7 +11652,7 @@ editor x
 10 i            X      XXX  XXXXXX
 11 i            XXXXXXXX
 12 i
-n x
+n z
  1 i       XXXXXXXXXXXX
  2 i       X..  X     XXX
  3 i       X..  X *  *  X
@@ -11679,7 +11664,7 @@ n x
  9 i         X    X     X
 10 i         XXXXXXXXXXXX
 11 i
-n x
+n z
  1 i               XXXXXXXX
  2 i               X     @X
  3 i               X *X* XX
@@ -11690,7 +11675,7 @@ n x
  8 i       XX...    *  *   X
  9 i       X....  XXXXXXXXXX
 10 i       XXXXXXXX
-n x
+n z
  1 i                     XXXXXXXX
  2 i                     X  ....X
  3 i          XXXXXXXXXXXX  ....X
