@@ -15,7 +15,9 @@ debug
 eforth
 eforth.c
 eforth.fth
+fast
+if
 nbit
 save
 subleq
-if
+opt

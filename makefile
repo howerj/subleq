@@ -1,4 +1,4 @@
-CFLAGS=-std=c99 -Wall -Wextra -pedantic -O3
+CFLAGS=-std=c99 -fwrapv -Wall -Wextra -pedantic -O3
 FORTH=subleq.fth
 IMAGE=subleq.dec
 
@@ -108,9 +108,6 @@ self.dec:
 
 debug.o: debug.c subleq.cma
 	${CC} -std=gnu99 -Wall -Wextra -pedantic $< -c -o $@
-
-float: gforth.dec subleq
-	cat self/float.fth /dev/stdin | ./subleq $<
 
 debug: debug.o
 

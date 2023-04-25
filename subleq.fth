@@ -695,10 +695,14 @@ only forth definitions hex
 \ "opt.multi", "opt.editor", "opt.info" turn on/off groups
 \ of words being compiled into the target image, they are all
 \ optional and are not required for self-hosting the image.
+\ "opt.control", "opt.float" and "opt.allocate" do the same.
 \
 \ "opt.generate-c" puts a comma in between the numbers in the
 \ target image when it is outputted instead of a space, this
 \ makes including the file in a C program easier.
+\
+\ "opt.sm-vm-err" makes for a smaller error message in the
+\ Forth VM, where it detects the SUBLEQ machines width.
 \
 \ The "opt.sys" constant will be described more later, it
 \ contains flags that control features in the system.
@@ -708,6 +712,7 @@ only forth definitions hex
 1 constant opt.info       ( Add info printing function )
 0 constant opt.generate-c ( Generate C code )
 0 constant opt.better-see ( Replace 'see' with better version )
+0 constant opt.control    ( Add in more control structures )
 0 constant opt.allocate   ( Add in "allocate"/"free" )
 0 constant opt.float      ( Add in floating point code )
 0 constant opt.sm-vm-err  ( Smaller VM error message )
@@ -5475,7 +5480,6 @@ system[ user tup =cell tallot ]system
 \
 : . space s>d if [char] - emit then (.) ; ( n -- )
 
-
 \ "\>number" is a large but not terribly complex word, it
 \ is however a bit unwieldy to use, it operates on double
 \ cell numbers instead of single cell ones. By solving the
@@ -8425,7 +8429,7 @@ opt.multi [if]
 \
 \ To use the editor type "editor", this will replace the
 \ current vocabulary so only the editor commands are visible,
-\ they are; "q", "?", "l", "x", "ia", "i", "w", "s", "n", "p",
+\ they are; "q", "?", "l", "x", "ia", "a", "w", "s", "n", "p",
 \ "r", "z", and finally "d". Some of the words are not
 \ strictly necessary in this editor, but they are not large
 \ and are useful.
@@ -8438,7 +8442,7 @@ opt.multi [if]
 \ * "l", list current forth block
 \ * "x", execute current forth block
 \ * "ia", insert line of text into line at position
-\ * "i", insert line of text into line
+\ * "a", insert line of text into line
 \ * "w", list commands
 \ * "s", save and flush
 \ * "n", go to next block and list it
@@ -8471,9 +8475,9 @@ opt.multi [if]
 \
 \        editor
 \        z
-\        0 i ( HELLO WORLD PROGRAM VERSION 3.4 )
-\        1 i : ahoy cr ." HELLO, WORLD" ;
-\        2 i ahoy
+\        0 a ( HELLO WORLD PROGRAM VERSION 3.4 )
+\        1 a : ahoy cr ." HELLO, WORLD" ;
+\        2 a ahoy
 \        l
 \        x
 \
@@ -8527,7 +8531,7 @@ opt.editor [if]
 :e x q scr @ load editor ;e ( -- : evaluate current block )
 :e ia #2 ?depth 6 lit lshift + scr @ block + tib >in @ +
    swap source nip >in @ - cmove tib @ >in ! update l ;e
-:e i #0 swap ia ;e ( line --, "line" : insert line at )
+:e a #0 swap ia ;e ( line --, "line" : insert line at )
 :e w words ;e ( -- : display block editor commands )
 :e s update flush ;e ( -- : save edited block )
 :e n  #1 scr +! l ;e ( -- : display next block )
@@ -8537,6 +8541,157 @@ opt.editor [if]
 :e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit
    blank l ;e ( line -- : delete line )
 [then]
+
+\ # Extra Control Structures
+\
+\ This section contains extra control structures not usually
+\ present in eForth, and some are not standard Forth constructs 
+\ at all. They include the "do...loop", case-statements, macros
+\ and "many".
+\
+
+opt.control [if]
+
+: rpick rp@ swap - 1- 2* @ ; ( n -- u, R: ??? -- ??? )
+
+\ "many" is an interesting word, it allows a line of code to be
+\ executed an infinite number of times by postfixing it to the
+\ end of the command. That is less interesting compared to the
+\ way it does it, by manipulating the input line to make it so
+\ it is executed again, the line is then re-parsed and executed
+\ again, including "many", which triggers another re-parsing
+\ and so on. It is a neat little word.
+\
+\ Extensions to the word could include executing the same
+\ line X amount of times, or quitting on a key press or
+\ specific key.
+\
+: many #0 >in ! ; ( -- : repeat current line )
+
+\ Case Statements:
+\
+\ Usage:
+\
+\        : x case
+\          1 of ." one" endof
+\          2 of ." two" endof
+\          ." default"
+\          endcase ;
+\
+
+:s (case) r> swap >r >r ;s compile-only
+:s (of) r> r@ swap >r = ;s compile-only
+:s (endcase) r> r> drop >r ;s
+
+: case compile (case) $1E lit ; compile-only immediate
+: of compile (of) postpone if ; compile-only immediate
+: endof postpone else $1F lit ; compile-only immediate
+: endcase
+   begin
+    dup $1F lit =
+   while
+    drop
+    postpone then
+   repeat
+   $1E lit <> -$16 lit and throw ( abort" Bad case construct!" )
+   compile (endcase) ; compile-only immediate
+
+:s r+ 1+ ;s ( NB. Should be cell+ on most platforms )
+:s (unloop) r> rdrop rdrop rdrop >r ;s compile-only
+:s (leave) rdrop rdrop rdrop ;s compile-only
+:s (j) 4 lit rpick ;s compile-only
+:s (k) 7 lit rpick ;s compile-only
+:s (do) r> dup >r swap rot >r >r r+ >r ;s compile-only
+:s (?do)
+   2dup <> if
+     r> dup >r swap rot >r >r r+ >r exit
+   then 2drop ;s compile-only
+:s (loop)
+  r> r> 1+ r> 2dup <> if
+    >r >r 2* @ >r exit \ NB. 2* and 2/ cause porting problems
+  then >r 1- >r r+ >r ;s compile-only
+:s (+loop)
+   r> swap r> r> 2dup - >r
+   #2 pick r@ + r@ xor 0>=
+   3 lit pick r> xor 0>= or if
+     >r + >r 2* @ >r exit
+   then >r >r drop r+ >r ;s compile-only
+
+: unloop compile (unloop) ; immediate compile-only
+: i compile r@ ; immediate compile-only
+: j compile (j) ; immediate compile-only
+: k compile (k) ; immediate compile-only
+: leave compile (leave) ; immediate compile-only
+: do compile (do) #0 , here ; immediate compile-only
+: ?do compile (?do) #0 , here ; immediate compile-only
+: loop
+  compile (loop) dup 2/ ,
+  compile (unloop)
+  cell- here cell- 2/ swap ! ; immediate compile-only
+: +loop
+  compile (+loop) dup 2/ ,
+  compile (unloop)
+  cell- here cell- 2/ swap ! ; immediate compile-only
+
+\ This is a late binding macro system, it makes a macro out
+\ of a name and the rest of the current line.
+\
+\ Usage:
+\
+\        macro square dup *
+\        : foo 5 square . ;
+\ 
+\ Note that:
+\
+\        : * ." ???" ;
+\        : foo 5 square ;
+\
+\ Prints out:
+\
+\        ??? 5
+\
+\ This is due to the fact, already mentioned, that this macro
+\ system is *late binding* and not *early binding*.
+\
+\ Another version using "sliteral", not yet implemented in
+\ this system, is:
+\
+\   : macro 
+\     : char parse postpone sliteral postpone evaluate
+\     postpone ; immediate ;
+\
+\ It has a slightly different syntax:
+\
+\        macro square " dup * "
+\
+\ And the same problems.
+\
+
+:s scopy ( b u -- b u : copy a string into the dictionary )
+  align here >r aligned dup allot
+  r@ swap dup >r cmove r> r> swap ;s
+:s (macro) r> 2* 2@ swap evaluate ;s
+
+\ If "does\>" worked at time of meta-compilation we could
+\ do the following:
+\
+\       : macro ( c" xxx" --, : create a late-binding macro )
+\         create postpone immediate align here #2 cells + ,
+\         #0 parse dup , scopy 2drop
+\         does> 2@ swap evaluate ;
+\
+\ Instead we have to manipulate the dictionary and compile
+\ a word "(macro)" into the correct place.
+\
+
+: macro ( c" xxx" --, : create a late-binding macro )
+  create postpone immediate 
+  cell negate allot compile (macro)
+  align here #2 cells + ,
+  #0 parse dup , scopy 2drop ;
+
+[then] ( opt.control )
+
 
 \ # Dynamic Memory Allocation
 \
@@ -8841,8 +8996,6 @@ opt.float [if] ( Large section of optional code! )
 \ * <https://groups.google.com/g/comp.lang.forth/c/pMl8Vzr00X0>
 \
 
-\ only forth definitions decimal system +order
-
 \ : undefined? bl word find nip 0= ; ( "name", -- f )
 \ : defined? undefined? 0= ; ( "name", -- f: word defined ? )
 \ : ?\ 0= if postpone \ then ; ( f --, <string>| : cond comp. )
@@ -8867,7 +9020,6 @@ system[
 :m mcreate :t mdrop (var) munorder ;m ( --, "name": var )
 
 : spaces bl banner ; ( +n  -- : print space 'n' times )
-\ TODO: Throw?
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 : arshift ( n u -- n : arithmetic right shift )
   2dup rshift >r swap #msb and
@@ -8883,10 +9035,25 @@ system[
 : 2over ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
   >r >r 2dup r> swap >r swap r> r> -rot ;
 : 2, , , ; ( n n -- : write to values into dictionary )
-:to 2constant create 2, does> 2@ ; ( d --, Run: -- d )
+
+\ As "does\>" does not work during meta-compilation we cannot
+\ defined "2constant" as:
+\
+\        :to 2constant create 2, does> 2@ ; ( d --, Run: -- d )
+\
+\ Instead, we use the same trick we used to define "constant".
+
+:to 2constant create cell negate allot compile (2const) 2, ;
 :to 2variable create #0 , #0 , ; \ does> ; ( d --, Run: -- a )
 :to 2literal swap postpone literal postpone literal ; immediate
 :s +- 0< if negate then ;s ( n n -- n : copy sign )
+
+\ Some more arithmetic words need to be defined for this 
+\ floating point package, less common ones. It is amazing how
+\ involved simple operations like division and multiplication
+\ can be.
+\
+
 : m* ( n n -- d : single to double cell multiply [16x16->32] ) 
   2dup xor 0< >r abs swap abs um* r> if dnegate then ; 
 : sm/rem ( dl dh nn -- rem quo: symmetric division )
@@ -8895,7 +9062,6 @@ system[
   r> r@ xor +- swap r> +- swap ;
 : */mod ( a b c -- rem a*b/c : double prec. intermediate val )
   >r m* r> sm/rem ;
-: d>s drop ; ( d -- n : convert dubs to single )
 
 \ ## CORDIC CODE
 \
@@ -8984,7 +9150,6 @@ variable (precision)
 
 4 t' (precision) >tbody t!
 
-\ TODO: "d." and "ud." should be implemented.
 \ TODO: Replace this table.
 mdecimal
 mcreate ftable
@@ -9015,15 +9180,12 @@ mhex
 :s unaligned? dup #1 and = -9 lit and throw ;s ( -- : chk ptr )
 :s -+ drop swap 0< if negate then ;s
 
-\ only forth definitions system +order
-
 \ "fdepth" is standards compliant, but pretty useless because
 \ there is no separate floating point stack.
 
 : fcopysign #msb and nip >r fabs r> or ; ( r1 r2 -- r1 )
 : floats 2* cells ;    ( u -- u )
-\ : float+ [ 1 floats ] literal + ; 
-: float+ 4 lit + ; ( a -- a : inc addr by float )
+: float+ 4 lit ( [ 1 floats ] literal ) + ; ( a -- a )
 : set-precision ( +n -- : set FP decimals printed out )
 dup #0 5 lit within if (precision) ! exit then -$2B lit throw ; 
 : precision (precision) @ ; ( -- u : precision of FP values )
@@ -9032,7 +9194,7 @@ dup #0 5 lit within if (precision) ! exit then -$2B lit throw ;
 \  4 lit set-precision (precision) @ ; ( -- u : precision of FP values )
 : f@ unaligned? 2@ ;   ( a -- r : fetch FP value )
 : f! unaligned? 2! ;   ( r a -- : store FP value )
-: f, 2, ; ( r -- )
+: f, 2, ; ( r -- : write float into dictionary )
 : falign align ;       ( -- : align the dict. to store a FP )
 : faligned aligned ;   ( a -- a : align point for FP )
 : fdepth depth 2/ ;    ( -- n : number of floats, approximate )
@@ -9050,7 +9212,7 @@ dup #0 5 lit within if (precision) ! exit then -$2B lit throw ;
 : fsign fabs over 0< if >r dnegate r> #msb or then ;
 : f2* #2 ?depth 1+ null ; ( r -- r : FP times by two )
 : f2/ #2 ?depth 1- null ; ( r -- r : FP divide by two )
-: f*  ( r r -- r )
+: f*  ( r r -- r : FP multiply )
    4 lit ?depth rot + $4000 lit - >r um* r> norm ; 
 : fsq fdup f* ;        ( r -- r : FP square )
 : f0= fabs null d0= ; ( r -- r : FP equal to zero [incl -0.0] )
@@ -9117,8 +9279,10 @@ dup #0 5 lit within if (precision) ! exit then -$2B lit throw ;
    then 
    d>f dpl @ tens d>f f/ ;    
 
-:to fconstant f postpone 2constant ; ( "name", r --, Run Time: -- r )
-:to fliteral  f postpone 2literal ; immediate ( r --, Run: -- r )
+:to fconstant ( "name", r --, Run Time: -- r ) 
+  f postpone 2constant ; 
+:to fliteral ( r --, Run: -- r : compile a literal in a word ) 
+  f postpone 2literal ; immediate 
 : fix tuck #0 swap shifts ralign -+ ; ( r -- n : f>s rounding )
 : f>s tuck #0 swap shifts lalign -+ ; ( r -- n : f>s truncate )
 : floor  f>s s>f ; ( r -- r )
@@ -9250,13 +9414,15 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
   while
     fdup fdup f. [char] , emit space fsincos 
     fswap f. [char] , emit space f. cr
-    $80AF $3FFE 2literal ( [ f2pi 50.0 f f/ ] 2literal ) f+
+    $80AF $3FFE 2literal ( [ f2pi 50.0 f f/ ] 2literal ) 
+    f+
   repeat fdrop ;
 
-
-\ <en.wikipedia.org/wiki/Arithmetic%E2%80%93geometric_mean>
+\ We use the Arithmetic Geometric Mean, see
+\ <en.wikipedia.org/wiki/Arithmetic%E2%80%93geometric_mean>,
+\ to calculate a natural logarithm.
+\
 : agm f2dup f* fsqrt 2>r f+ f2/ 2r> fswap ; ( r1 r2 -- r1 r2 )
-
 
 \ ln(x) = (pi / (2*M(1, (2^(2-m))/ x))) - (m*ln(2))
 \
@@ -9272,16 +9438,20 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \
 \ 12 = Number of steps
 \
-: fln
-\  [ 2 12 - s>f exp ] 2literal fswap f/  = $8000 $3FF7 
-  $8000 $3FF7 2literal fswap f/ 
+: fln ( r -- r : natural logarithm )
+  $8000 $3FF7 2literal ( [ 2 12 - s>f exp ] 2literal ) fswap f/ 
   fone fswap 
   12 lit for aft agm then next f+ fpi 
-\  fswap f/ [ 12 s>f fln2 f* ] 2literal f- ; = $8516 $4004 
-  fswap f/ $8516 $4004 2literal f- ;
-: flnp1 fone f+ fln ;
+  fswap f/ $8516 $4004 2literal ( [ 12 s>f fln2 f* ] 2literal ) 
+  f- ;
+: flnp1 fone f+ fln ; ( r -- r )
 
-
+\ Once we have a function for calculating the natural logarithm
+\ we can use this to calculate logarithms in other bases, by
+\ either dividing by the natural logarithm of the target base
+\ (which can be precomputed) or by multiplying by the inverse
+\ of that.
+\
 \ An Alternate "flog2":
 \
 \        : flog2
@@ -9289,6 +9459,7 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \          fone fswap 
 \          12 for aft agm then next f+ fln2 f* fpi 
 \          fswap f/ [ 12 s>f ] 2literal f- ;
+\
 
 : flog2 fln fln2 f/ ; ( r -- r : base  2 logarithm )
 : flog fln fln10 f/ ; ( r -- r : base 10 logarithm )
@@ -9300,9 +9471,8 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
   fdup fsq f1- fsqrt f+ fln ; 
 : fasinh fdup fsq f1+ fsqrt f+ fln ; ( r -- r )
 
-
 \ N.B This is a better version of atan where x > 1, but it
-\ is larger and uses global variables
+\ is larger and uses global variables:
 \
 \        2variable fatan.cnt
 \        2variable fatan.sqr
@@ -11016,7 +11186,6 @@ int main(int argc, char **argv) {
  0 constant false
 -1 constant true
 
-
 \ A poorer, smaller, version of "random" can be defined as:
 \
 \        : random seed @ 31421 * 6927 + dup seed ! ; ( -- u )
@@ -11035,39 +11204,39 @@ variable seed here seed !
 
 : anonymous ( -- : make anonymous vocabulary and enable it )
   get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
-: rpick rp@ swap - 1- 2* @ ;
+
 : umin 2dup swap u< if swap then drop ; ( u u -- u )
 : umax 2dup      u< if swap then drop ; ( u u -- u )
 : off false swap ! ; ( a -- )
 : on true swap ! ; ( a -- )
-: tab 9 emit ; ( -- )
+: tab 9 emit ; ( -- : emit the tab character )
 : spaces ( n -- : equiv. bl banner  )
     ?dup 0> if for aft space then next then ;
-: 2+ 2 + ; ( u -- u )
-: 2- 2 - ; ( u -- u )
-: not -1 xor ; ( u -- u )
-: binary $2 base ! ; ( -- )
-: octal $8 base ! ; ( -- )
+: 2+ 2 + ; ( u -- u : increment by two )
+: 2- 2 - ; ( u -- u : decrement by two )
+: not -1 xor ; ( u -- u : same as 'invert' in this Forth )
+: binary $2 base ! ; ( -- : set numeric radix to binary )
+: octal $8 base ! ; ( -- : set numeric base to octal )
 : .base base @ dup decimal . base ! ; ( -- )
 : also get-order over swap 1+ set-order ; ( -- )
 : previous get-order nip 1- set-order ; ( -- )
 \ : buffer block ; ( k -- a )
 : enum dup constant 1+ ; ( n --, <string> )
-: logical 0= 0= ; ( n -- f )
-: square dup * ; ( n -- n )
+: logical 0= 0= ; ( n -- f : turn a number into a 0 or -1 )
 : limit rot min max ; ( n lo hi -- n )
 : odd 1 and logical ; ( n -- f )
 : even odd invert ; ( n -- f )
 : nor or invert ; ( u u -- u )
 : nand and invert ; ( u u -- u )
-: under >r dup r> ; ( n1 n2 -- n1 n1 n2 )
+\ : under >r dup r> ; ( n1 n2 -- n1 n1 n2 )
+: under over swap ; ( n1 n2 -- n1 n1 n2 )
 : 2nip >r >r 2drop r> r> ; ( n1 n2 n3 n4 -- n3 n4 )
 ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
 : 2over >r >r 2dup r> swap >r swap r> r> -rot ;
 : 2swap >r -rot r> -rot ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 )
 : 2tuck 2swap 2over ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 n3 n4 )
 : 4drop 2drop 2drop ; ( n1 n2 n3 n4 -- )
-: trip dup dup ; ( n -- n n n )
+: trip dup dup ; ( n -- n n n : triplicate )
 : 2pick dup >r pick r> 2+ pick swap ;
 : log  >r 0 swap ( u base -- u : integer logarithm )
   begin swap 1+ swap r@ / dup 0= until drop 1- rdrop ;
@@ -11076,20 +11245,25 @@ variable seed here seed !
 : average um+ 2 um/mod nip ; ( u u -- u )
 : <=> 2dup > if 2drop -1 exit then < ;
 : bounds over + swap ;
-: 2, , , ; ( n n -- )
+: 2, , , ; ( n n -- : write two numbers into the dictionary )
+: d>s drop ; ( d -- n : convert dubs to single )
 : d< rot 2dup >                    ( d -- f )
    if = nip nip if 0 exit then -1 exit then
    2drop u< ;
-: d>= d< invert ;                  ( d -- f )
-: d>  2swap d< ;                   ( d -- f )
-: d<= d> invert ;                  ( d -- f )
-\ : du> 2swap du< ;                ( d -- f )
-: d=  rot = -rot = and ;           ( d d -- f )
-: d- dnegate d+ ;                  ( d d -- d )
-: dabs  s>d if dnegate then ;      ( d -- ud )
-: d<> d= 0= ;                      ( d d -- f )
-: d0= or 0= ;                      ( d -- f )
-: d0<> d0= 0= ;                    ( d -- f )
+: dabs s>d if dnegate then ; ( d -- ud )
+: d>= d< invert ;            ( d -- f )
+: d>  2swap d< ;             ( d -- f )
+: d<= d> invert ;            ( d -- f )
+\ : du> 2swap du< ;          ( d -- f )
+: d=  rot = -rot = and ;     ( d d -- f )
+: d- dnegate d+ ;            ( d d -- d )
+: d<> d= 0= ;                ( d d -- f )
+: d0= or 0= ;                ( d -- f )
+: d0<> d0= 0= ;              ( d -- f )
+: d.r >r tuck dabs <# #s rot sign #> r> over - bl banner type ;
+: ud.r >r <# #s #> r> over - bl banner type ;
+: d. 0 d.r space ;
+: ud. 0 ud.r space ;
 : 2rdrop r> rdrop rdrop >r ; ( R: n n -- )
 : 2. swap . . ; ( n n -- )
 : m* 2dup xor 0< >r abs swap abs um* r> if dnegate then ;
@@ -11100,7 +11274,7 @@ variable seed here seed !
 : signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )
 : >< dup 8 rshift swap 8 lshift or ; ( u -- u : swap bytes )
 : #digits >r dup 0= if 1+ exit then r> log 1+ ; ( u b -- u )
-: ** ( n u -- n )
+: ** ( n u -- n : integer exponentiation )
   ?dup if
     over >r
     begin
@@ -11109,10 +11283,21 @@ variable seed here seed !
       swap r@ * swap 1-
     repeat rdrop drop
   else logical 1 and then ;
-: b. base @ swap 2 base ! . base ! ; ( u -- )
-: h. base @ swap hex . base ! ;      ( u -- )
-: o. base @ swap 8 base ! . base ! ; ( u -- )
-: d. base @ swap decimal . base ! ;  ( n -- )
+
+: ur. base @ >r base ! u. r> base ! ; ( u base -- )
+: r. base @ >r base ! . r> base ! ; ( n base -- )
+
+: b. $2 ur. ;  ( u -- )
+: h. $10 ur. ; ( u -- )
+: o. $8 ur. ;  ( u -- )
+: d. $A r. ;   ( n -- )
+
+\ : b. base @ swap 2 base ! . base ! ; ( u -- )
+\ : h. base @ swap hex . base ! ;      ( u -- )
+\ : o. base @ swap 8 base ! . base ! ; ( u -- )
+\ : d. base @ swap decimal . base ! ;  ( n -- )
+
+
 : @bits swap @ and ;                 ( a u -- u )
 : ?\ if postpone \ then ; immediate
 : ?( if postpone ( then ; immediate ( )
@@ -11129,7 +11314,6 @@ variable seed here seed !
 : char+ 1+ ; ( b -- b )
 : str= compare 0= ;
 : str< compare 0< ;
-: under over swap ; ( n1 n2 -- n1 n1 n2 )
 
 \ This version of Forth defines "mux" in SUBLEQ assembly,
 \ previous versions did not and coded the bitwise routines in
@@ -11172,156 +11356,42 @@ variable seed here seed !
 \   until
 \   drop 1- rdrop ;
 \ 
-\ : clz ( u -- : count leading zeros )
-\   ?dup 0= if #bits exit then
-\   #msb #0 >r begin
-\    2dup and 0=
-\   while
-\    r> 1+ >r 2/
-\   repeat
-\   2drop r> ;
+: clz ( u -- : count leading zeros )
+  ?dup 0= if $10 exit then
+  $8000 0 >r begin
+   2dup and 0=
+  while
+   r> 1+ >r 2/
+  repeat
+  2drop r> ;
+
+( : log2 2 log ; ( u -- u : binary integer logarithm )
+: log2 ( u -- u )
+  ?dup 0= -$B lit and throw clz $10 swap - 1- ; 
 \ 
-\ ( : log2 2 log ; ( u -- u : binary integer logarithm )
-\ : log2 ( u -- u )
-\   ?dup 0= -11 lit and throw clz #bits swap - 1- ; 
-\ 
-\ \ <forth.sourceforge.net/algorithm/bit-counting/index.html>
-\ : count-bits ( number -- bits )
-\   dup $5555 and swap 1 rshift $5555 and +
-\   dup $3333 and swap 2 rshift $3333 and +
-\   dup $0F0F and swap 4 rshift $0F0F and +
-\   $FF mod ;
+\ <forth.sourceforge.net/algorithm/bit-counting/index.html>
+: count-bits ( number -- bits )
+  dup $5555 and swap 1 rshift $5555 and +
+  dup $3333 and swap 2 rshift $3333 and +
+  dup $0F0F and swap 4 rshift $0F0F and +
+  $FF mod ;
 \ 
 \ \ <forth.sourceforge.net/algorithm/firstbit/index.html>
-\ : first-bit ( number -- first-bit )
-\   dup   1 rshift or
-\   dup   2 rshift or
-\   dup   4 rshift or
-\   dup   8 rshift or
-\   dup $10 rshift or
-\   dup   1 rshift xor ;
+: first-bit ( number -- first-bit )
+  dup   1 rshift or
+  dup   2 rshift or
+  dup   4 rshift or
+  dup   8 rshift or
+  dup $10 rshift or
+  dup   1 rshift xor ;
  
-
-\ "many" is an interesting word, it allows a line of code to be
-\ executed an infinite number of times by postfixing it to the
-\ end of the command. That is less interesting compared to the
-\ way it does it, by manipulating the input line to make it so
-\ it is executed again, the line is then re-parsed and executed
-\ again, including "many", which triggers another re-parsing
-\ and so on. It is a neat little word.
-\
-: many 0 >in ! ; ( -- : repeat current line )
-
-\ Case Statements:
-\
-\ Usage:
-\
-\        : x case
-\          1 of ." one" endof
-\          2 of ." two" endof
-\          ." default"
-\          endcase ;
-\
-system +order definitions
-: (case) r> swap >r >r ; compile-only
-: (of) r> r@ swap >r = ; compile-only
-: (endcase) r> r> drop >r ;
-forth-wordlist +order definitions
-: case compile (case) 30 ; compile-only immediate
-: of compile (of) postpone if ; compile-only immediate
-: endof postpone else 31 ; compile-only immediate
-: endcase
-   begin
-    dup 31 =
-   while
-    drop
-    postpone then
-   repeat
-   30 <> abort" Bad case construct!"
-   compile (endcase) ; compile-only immediate
-only forth definitions
-
-system +order definitions
-: r+ 1+ ; ( NB. Should be cell+ on most platforms )
-: (unloop) r> rdrop rdrop rdrop >r ; compile-only
-: (leave) rdrop rdrop rdrop ; compile-only
-: (j) 4 rpick ; compile-only
-: (k) 7 rpick ; compile-only
-: (do) r> dup >r swap rot >r >r r+ >r ; compile-only
-: (?do)
-   2dup <> if
-     r> dup >r swap rot >r >r r+ >r exit
-   then 2drop ; compile-only
-: (loop)
-  r> r> 1+ r> 2dup <> if
-    >r >r 2* @ >r exit \ NB. 2* and 2/ cause porting problems
-  then >r 1- >r r+ >r ; compile-only
-: (+loop)
-   r> swap r> r> 2dup - >r
-   2 pick r@ + r@ xor 0>=
-   3 pick r> xor 0>= or if
-     >r + >r 2* @ >r exit
-   then >r >r drop r+ >r ; compile-only
-forth-wordlist +order definitions
-: unloop compile (unloop) ; immediate compile-only
-: i compile r@ ; immediate compile-only
-: j compile (j) ; immediate compile-only
-: k compile (k) ; immediate compile-only
-: leave compile (leave) ; immediate compile-only
-: do compile (do) 0 , here ; immediate compile-only
-: ?do compile (?do) 0 , here ; immediate compile-only
-: loop
-  compile (loop) dup 2/ ,
-  compile (unloop)
-  cell- here cell- 2/ swap ! ; immediate compile-only
-: +loop
-  compile (+loop) dup 2/ ,
-  compile (unloop)
-  cell- here cell- 2/ swap ! ; immediate compile-only
-only forth definitions
-
-\ This is a late binding macro system, it makes a macro out
-\ of a name and the rest of the current line.
-\
-\ Usage:
-\
-\        macro square dup *
-\        : foo 5 square . ;
-\ 
-\ Note that:
-\
-\        : * ." ???" ;
-\        : foo 5 square ;
-\
-\ Prints out:
-\
-\        ??? 5
-\
-\ This is due to the fact, already mentioned, that this macro
-\ system is *late binding* and not *early binding*.
-\
-\ Another version using "sliteral", not yet implemented in
-\ this system, is:
-\
-\   : macro 
-\     : char parse postpone sliteral postpone evaluate
-\     postpone ; immediate ;
-\
-\ It has a slightly different syntax:
-\
-\        macro square " dup * "
-\
-\ And the same problems.
-\
-
-: scopy ( b u -- b u : copy a string into the dictionary )
-  align here >r aligned dup allot
-  r@ swap dup >r cmove r> r> swap ;
-
-: macro ( c" xxx" --, : create a late-binding macro )
-  create immediate align here 2 cells + ,
-  0 parse dup , scopy 2drop
-  does> 2@ swap evaluate ;
+: gray-encode dup 1 rshift xor ; ( gray -- u )
+: gray-decode ( u -- gray )
+\ dup $10 rshift xor ( <- 32 bit )
+  dup   8 rshift xor 
+  dup   4 rshift xor
+  dup   2 rshift xor 
+  dup   1 rshift xor ;
 
 system -order
 .( DONE ) cr
@@ -11640,55 +11710,55 @@ sokoban-wordlist +order
 decimal 47 maze!
 only forth definitions decimal
 editor z
- 1 i            XXXXX
- 2 i            X   X
- 3 i            X*  X
- 4 i          XXX  *XXX
- 5 i          X  *  * X
- 6 i        XXX X XXX X     XXXXXX
- 7 i        X   X XXX XXXXXXX  ..X
- 8 i        X *  *             ..X
- 9 i        XXXXX XXXX X@XXXX  ..X
-10 i            X      XXX  XXXXXX
-11 i            XXXXXXXX
-12 i
+ 1 a            XXXXX
+ 2 a            X   X
+ 3 a            X*  X
+ 4 a          XXX  *XXX
+ 5 a          X  *  * X
+ 6 a        XXX X XXX X     XXXXXX
+ 7 a        X   X XXX XXXXXXX  ..X
+ 8 a        X *  *             ..X
+ 9 a        XXXXX XXXX X@XXXX  ..X
+10 a            X      XXX  XXXXXX
+11 a            XXXXXXXX
+12 a
 n z
- 1 i       XXXXXXXXXXXX
- 2 i       X..  X     XXX
- 3 i       X..  X *  *  X
- 4 i       X..  X*XXXX  X
- 5 i       X..    @ XX  X
- 6 i       X..  X X  * XX
- 7 i       XXXXXX XX* * X
- 8 i         X *  * * * X
- 9 i         X    X     X
-10 i         XXXXXXXXXXXX
-11 i
+ 1 a       XXXXXXXXXXXX
+ 2 a       X..  X     XXX
+ 3 a       X..  X *  *  X
+ 4 a       X..  X*XXXX  X
+ 5 a       X..    @ XX  X
+ 6 a       X..  X X  * XX
+ 7 a       XXXXXX XX* * X
+ 8 a         X *  * * * X
+ 9 a         X    X     X
+10 a         XXXXXXXXXXXX
+11 a
 n z
- 1 i               XXXXXXXX
- 2 i               X     @X
- 3 i               X *X* XX
- 4 i               X *  *X
- 5 i               XX* * X
- 6 i       XXXXXXXXX * X XXX
- 7 i       X....  XX *  *  X
- 8 i       XX...    *  *   X
- 9 i       X....  XXXXXXXXXX
-10 i       XXXXXXXX
+ 1 a               XXXXXXXX
+ 2 a               X     @X
+ 3 a               X *X* XX
+ 4 a               X *  *X
+ 5 a               XX* * X
+ 6 a       XXXXXXXXX * X XXX
+ 7 a       X....  XX *  *  X
+ 8 a       XX...    *  *   X
+ 9 a       X....  XXXXXXXXXX
+10 a       XXXXXXXX
 n z
- 1 i                     XXXXXXXX
- 2 i                     X  ....X
- 3 i          XXXXXXXXXXXX  ....X
- 4 i          X    X  * *   ....X
- 5 i          X ***X*  * X  ....X
- 6 i          X  *     * X  ....X
- 7 i          X ** X* * *XXXXXXXX
- 8 i       XXXX  * X     X
- 9 i       X   X XXXXXXXXX
-10 i       X    *  XX
-11 i       X **X** @X
-12 i       X   X   XX
-13 i       XXXXXXXXX
+ 1 a                     XXXXXXXX
+ 2 a                     X  ....X
+ 3 a          XXXXXXXXXXXX  ....X
+ 4 a          X    X  * *   ....X
+ 5 a          X ***X*  * X  ....X
+ 6 a          X  *     * X  ....X
+ 7 a          X ** X* * *XXXXXXXX
+ 8 a       XXXX  * X     X
+ 9 a       X   X XXXXXXXXX
+10 a       X    *  XX
+11 a       X **X** @X
+12 a       X   X   XX
+13 a       XXXXXXXXX
 q
 
 .( LOADED ) cr

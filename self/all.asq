@@ -7,13 +7,15 @@
 # TODO:
 # - Get this working
 # - Add back in documentation/References
-# - Implement my own assembler in "debug.c"
 # - Restore if negated, in mod code
 # - Skip mod code if bit-width == 16
 # - Fail if bit-width < 16
+# - Handle special values (a = -1, b = -1, pc > SZ)
 
 
 start:
+
+# TODO: Move vars to end of file?
 0 0 begin; # Jump over variables
 
 . Z: zr: 0 tr:1 bits:1 max:-16 IOV: nr:-1
