@@ -1,3 +1,5 @@
+*.S
+*.asm
 *.bin
 *.cma
 *.dec
@@ -9,6 +11,7 @@
 *.o
 *.pdf
 *.png
+*.s
 *.txt
 comp
 debug
@@ -18,6 +21,6 @@ eforth.fth
 fast
 if
 nbit
+opt
 save
 subleq
-opt

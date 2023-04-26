@@ -923,10 +923,8 @@ variable voc-last 0 voc-last ! ( last defined in any vocab )
 :m tallot tdp +! ;m ( u -- : allocate bytes in target dic. )
 :m mdrop drop ;m ( u -- : always call drop )
 :m mswap swap ;m ( u -- : always call swap )
-:m mdecimal decimal ;m
-:m mhex hex ;m
-:m m.s ." STK> " .s cr ;m     ( ??? -- ??? : debugging print stack )
-:m seem see cr ;m 
+:m mdecimal decimal ;m ( -- : always call decimal )
+:m mhex hex ;m ( -- : always call hex )
 
 \ "tpack" is used to copy a string into the target image.
 \ Useful if we want to define strings in the target, which we
@@ -1502,7 +1500,7 @@ defined eforth [if] system -order [then]
 :m NOOP Z Z NADDR ;m ( -- : No operation )
 :m ZERO dup 2/ t, 2/ t, NADDR ;m ( a -- : zero a location )
 :m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
-\ :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
+( :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
 :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
@@ -1832,6 +1830,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   tuser {sender}    \ multitasking; msg. send, 0 = no message
   tuser {message}   \ multitasking; the message itself
   tuser {id}        \ executing from block or terminal?
+  tuser {precision} \ floating point precision (if FP on)
 
 \ # Meta-compiler Assembly Macros
 \
@@ -3773,7 +3772,7 @@ system[
 {cycles} constant cycles ( -- a : number of "cycles" ran for )
     {sp} constant sp ( -- a : address of v.stk ptr. )
   {user} constant user? ( -- a : )
-         variable calibration F00 t' calibration >tbody t!
+         variable calibration E00 t' calibration >tbody t!
 ]system
 
 :s radix base @ ;s ( -- u : retrieve base )
@@ -7477,7 +7476,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ on how the busy loop is implemented, which we control. To
 \ account for differences between machines a "calibration"
 \ value is chosen that can be changed, on my machine a
-\ calibration value of "F00" (Hex) causes the implementation
+\ calibration value of "E00" (Hex) causes the implementation
 \ of "ms" when given 1000 (Decimal) to wait approximately one
 \ second, which is correct. On your machine it could be vastly
 \ different.
@@ -7780,7 +7779,7 @@ opt.better-see [if] ( Start conditional compilation )
    F lit for       ( for each line in the block )
      F lit r@ - 3 lit u.r space    ( print the line number )
      40 lit 2dup type cr +         ( print line )
-   ( 3F lit for count emit next cr \ print line )
+   ( 3F lit for count emit next cr ( print line )
    next drop ;
 
 \ # The Read-Eval-Loop
@@ -8058,6 +8057,7 @@ opt.info [if]
   decimal
   io!
   t' (literal) lit <literal> !
+  opt.float [if] 3 lit {precision} up ! [then]
   to' bye lit <error> !
   #0 >in ! #-1 dpl !
   this =tib lit + #0 tup 2! \ Set terminal input buffer loc.
@@ -8923,7 +8923,6 @@ opt.float [if] ( Large section of optional code! )
 
 \ # Floating Point Package (and more)
 \
-\ TODO: Testing!
 \ TODO: Handle different bases?
 \ TODO: Handle under/overflow?
 \
@@ -8996,21 +8995,16 @@ opt.float [if] ( Large section of optional code! )
 \ * <https://groups.google.com/g/comp.lang.forth/c/pMl8Vzr00X0>
 \
 
-\ : undefined? bl word find nip 0= ; ( "name", -- f )
-\ : defined? undefined? 0= ; ( "name", -- f: word defined ? )
-\ : ?\ 0= if postpone \ then ; ( f --, <string>| : cond comp. )
-\ undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
-
-: 2+ #2 + ;
-: 2- #2 - ;
-: 1+! #1 swap +! ;
+: 2+ #2 + ; ( n -- n )
+: 2- #2 - ; ( n -- n )
+: 1+! #1 swap +! ; ( a -- )
 
 : /string ( b u1 u2 -- b u : advance string u2 )
   over min rot over + -rot - ;
 
 system[
-( 1 cells 8 * -> ) $10 constant #bits
-( 1 #bits 1- lshift -> ) $8000 constant #msb
+  $10 constant #bits  ( = 1 cells 8 * )
+  $8000 constant #msb ( = 1 #bits 1- lshift  )
 ]system
 
 :m 2variable :t mdrop mswap (var) t, t, munorder ;m
@@ -9139,17 +9133,24 @@ variable cd variable ck
 \             CHAMPAIGN, IL 61820
 \             PHONE: 217/826-2734 
 \
-\ only forth definitions system +order
+\ Many of the routines in here are not from the original 
+\ package but are additions, the original routines to which
+\ the copyright applies are:
+\
+\
+\       ZERO FNEGATE FABS NORM F2* F* FSQ F2/
+\       UM/ F/ ALIGN RALIGN FSIGN F+ F- F<
+\       TENS PLACES SHIFTS F# TUCK F.  DFLOAT F
+\       FCONSTANT FLOAT -+ FIX INT EXP FEXP
+\       GET E E.
+\
+\ Some words have been renamed due to naming conflicts, such
+\ as "ZERO" (now called "null").
+\
 
-: fabs $7FFF lit and ; ( f -- f )
+: fabs $7FFF lit and ; ( r -- r )
 
 system[
-\ TODO: make a user variable, it's not currently working!
-\ user (precision) \ 4 (precision) !
-variable (precision)
-
-4 t' (precision) >tbody t!
-
 \ TODO: Replace this table.
 mdecimal
 mcreate ftable
@@ -9187,11 +9188,10 @@ mhex
 : floats 2* cells ;    ( u -- u )
 : float+ 4 lit ( [ 1 floats ] literal ) + ; ( a -- a )
 : set-precision ( +n -- : set FP decimals printed out )
-dup #0 5 lit within if (precision) ! exit then -$2B lit throw ; 
-: precision (precision) @ ; ( -- u : precision of FP values )
-\ : precision 
-\  (precision) @ #0 5 lit within if (precision) @ exit then
-\  4 lit set-precision (precision) @ ; ( -- u : precision of FP values )
+  dup #0 5 lit within if 
+    {precision} up ! exit 
+  then -$2B lit throw ; 
+: precision {precision} up @ ; ( -- u : precision of FP values )
 : f@ unaligned? 2@ ;   ( a -- r : fetch FP value )
 : f! unaligned? 2! ;   ( r a -- : store FP value )
 : f, 2, ; ( r -- : write float into dictionary )
@@ -9268,6 +9268,16 @@ dup #0 5 lit within if (precision) ! exit then -$2B lit throw ;
 : f.r >r tuck <# f# #> r> over - spaces type ; ( f +n -- )
 : f. space #0 f.r ; ( f -- : output floating point )
 
+\ TODO: Implement "represent", "fe.", "fs.", ....
+\ TODO: Implement FP input from string
+\
+\ <https://forth-standard.org/standard/float/FEd>
+\ <https://forth-standard.org/standard/float/REPRESENT>
+\
+\ : represent  ( r c-addr u -- n flag1 flag2 ) 
+\ ;
+
+
 ( N.B. 'f' and 'e' require "dpl" to be set correctly! )
 
 : f ( n|d -- f : formatted double to float )
@@ -9342,12 +9352,12 @@ $ADF8 $4002 2constant fe \ e = 2.71828182 fconstant fe
 $B172 $4000 2constant fln2 \ ln[2] = 0.69314718 fconstant fln2
 $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 
-: fdeg ( rad -- deg )
+: fdeg ( rad -- deg : FP radians to degrees )
   f2pi f/ $B400 $4009 2literal ( [ 360.0 ] fliteral ) f* ; 
-: frad ( deg -- rad )
+: frad ( deg -- rad : FP degrees to radians )
   $B400 $4009 2literal ( [ 360.0 ] fliteral ) f/ f2pi f* ; 
 
-:s >cordic ( f -- n )
+:s >cordic ( f -- n  )
    $8000 $400F 2literal ( [ 16384.0 ] fliteral ) f* f>s ;s 
 :s cordic> ( n -- f )
    s>f $8000 $400F 2literal ( [ 16384.0 ] fliteral ) f/ ;s     
@@ -9376,14 +9386,15 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 : fcos fsincos fnip  ; ( rads -- cos )
 : ftan fsincos f/ ; ( rads -- tan )
 
-\ only forth definitions system +order decimal
-
 \ A poor standard Forth word, with three comparison operators
-\ rolled into one.
+\ rolled into one depending on whether "r3" is positive,
+\ negative, or exactly zero, the following is computed:
 \
-\  r3 > 0 -> |r1 - r2| < r3
-\  r3 = 0 -> r1 = r2 [should also deals with negative zero...]
-\  r3 < 0 -> |r1 - r2| < |r3| * (|r1| + |r2|)
+\        r3 > 0 -> |r1 - r2| < r3
+\        r3 = 0 -> r1 = r2 [should also deals with neg zero...]
+\        r3 < 0 -> |r1 - r2| < |r3| * (|r1| + |r2|)
+\
+\
 
 : f~ ( r1 r2 r3 -- flag )
   fdup f0> if 2>r f- fabs 2r> f< exit then
@@ -9499,27 +9510,32 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ See <https://stackoverflow.com/questions/42537957/>
 \
 
-:s fatan-lo fdup fsq fdup 
-\ [  0.07765095 ( = A ) ] fliteral f* = $9F08 $3FFD 
-   $9F08 $3FFD 2literal f* 
-\ [ -0.28743447 ( = B ) ] fliteral f+ f* = $932B $BFFF 
-   $932B $BFFF 2literal f+ f* 
-\ [  0.99518168 ( pi/4 - A - B ) ] fliteral f+ f* ;= $FEC5 $4000 
-   $FEC5 $4000 2literal f+ f* ;s
+:s fatan-lo ( r -- r : fatan for r <= 1.0 only )
+   fdup fsq fdup 
+   $9F08 $3FFD 2literal f* ( Consider A = 0.07765095 )
+   $932B $BFFF 2literal f+ f* ( Constant B = -0.28743447 )
+   $FEC5 $4000 2literal f+ f* ;s ( Constant C = Pi/4 - A - B )
 
-\ atan(x) = pi/2 - atan(1/x)
-:s fatan-hi finv fatan-lo fhpi fswap f- ;s
-
-: fatan fdup fabs fone f> if fatan-hi exit then fatan-lo ;
-
-\ atan(y/x)
+\ Using the equation:
+\ 
+\        atan(x) = pi/2 - atan(1/x)
 \
-\ x  > 0         =>  arctan(y/x)
-\ y >= 0, x < 0  =>  arctan(y/x) + pi
-\ y  < 0, x < 0  =>  arctan(y/x) - pi
-\ y  > 0, x = 0  =>  pi/2
-\ y  < 0, x = 0  => -pi/2
-\ y  = 0, x = 0  =>  undefined
+\ We can use "fatan-lo" to computer atan when r > 1.0:
+\
+:s fatan-hi finv fatan-lo fhpi fswap f- ;s ( r -- r )
+
+: fatan ( r -- r : compute atan )
+  fdup fabs fone f> if fatan-hi exit then fatan-lo ;
+
+\ "fatan2", or atan(y/x), is defined as:
+\
+\        x  > 0         =>  arctan(y/x)
+\        y >= 0, x < 0  =>  arctan(y/x) + pi
+\        y  < 0, x < 0  =>  arctan(y/x) - pi
+\        y  > 0, x = 0  =>  pi/2
+\        y  < 0, x = 0  => -pi/2
+\        y  = 0, x = 0  =>  undefined
+\
 : fatan2 ( r1=y r2=x -- r3 )
   fdup f0> if f/ fatan exit then
   fdup f0< if 
@@ -9539,7 +9555,6 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 : facos fasin fhpi fswap f- ; ( r -- r )
 
 [then] ( opt.float )
-
 
 \ # Last word defined
 \
@@ -10223,26 +10238,55 @@ it being run.
 \
 \ It is meant to match on these instruction macros:
 \
-\ ======================= TODO ================================
-\
-\        :m Z 0 t, ;m ( -- : Address 0 must contain 0 )
-\        :m NADDR there 2/ 1+ t, ;m
-\        :m HALT 0 t, 0 t, -1 t, ;m
-\        :m JMP 2/ Z Z t, ;m ( a --, Jump to location )
+\        :m Z 0 t, ;m 
+\        :m A, 0 t, ;m 
+\        :m V, 1 t, ;m 
+\        :m NADDR there 2/ 1+ t, ;m 
+\        :m HALT 0 t, 0 t, -1 t, ;m 
+\        :m JMP 2/ Z Z t, ;m 
 \        :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
-\        :m SUB swap 2/ t, 2/ t, NADDR ;m ( a a -- : subtract )
-\        :m NOOP Z Z NADDR ;m ( -- : No operation )
-\        :m ZERO dup 2/ t, 2/ t, NADDR ;m
+\        :m SUB swap 2/ t, 2/ t, NADDR ;m 
+\        :m NOOP Z Z NADDR ;m 
+\        :m ZERO dup 2/ t, 2/ t, NADDR ;m 
 \        :m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
-\        :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
-\        :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR
-\           r> Z  t, NADDR Z Z NADDR ;m
-\        :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
-\        :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m
-\        :m iSTORE ( a a -- )
-\           swap >r there 2/ 24 + 2dup 2* MOV 2dup 1+ 2* MOV
-\           7 + 2* MOV r> 0 MOV ;m
-\
+\        ( :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
+\        :m MOV 
+\           2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> 
+\           Z  t, NADDR
+\           Z Z NADDR ;m
+\        :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
+\        :m iADD ( a a -- : indirect add )
+\           2/ t, A, NADDR
+\           2/ t, V, NADDR
+\           there 2/ 7 + dup dup t, t, NADDR
+\           A,   t, NADDR
+\           V, 0 t, NADDR
+\           A, A, NADDR
+\           V, V, NADDR ;m
+\        :m iSUB ( a a -- : indirect sub )
+\           2/ t, A, NADDR
+\           2/ >r
+\           there 2/ 7 + dup dup t, t, NADDR
+\           A,   t, NADDR
+\           r> t, 0 t, NADDR
+\           A, A, NADDR ;m
+\        :m iSTORE ( a a -- : Indirect Store )
+\          2/ t, A, NADDR
+\          there 2/ 3 4 * + dup t, t, NADDR
+\          there 2/ $A + dup t, t, NADDR
+\          A, there 2/ 5 + t, NADDR
+\          A, there 2/ 3 + t, NADDR
+\          0 t, 0 t, NADDR
+\          2/ t, V, NADDR
+\          there 2/ 7 + dup dup t, t, NADDR
+\          A,   t, NADDR
+\          V, 0 t, NADDR
+\          A, A, NADDR
+\          V, V, NADDR
+\          ;m
+\        :m iLOAD 
+\          there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
+\        
 \ If the above section differs in your version of the assembler
 \ it is quite likely the reason it is failing. This may have
 \ happened because those macros have been optimized and this
@@ -10253,431 +10297,491 @@ it being run.
 \ itself be optimized, it was written to demonstrate the
 \ concept and not for efficiency and speeds sake in of itself.
 \
-\
-\       #include <stdint.h>
-\       #include <stdio.h>
-\       #include <stdarg.h>
-\       #include <ctype.h>
-\       #include <inttypes.h>
-\       #include <time.h>
-\       #define SZ   (1<<16)
-\       #define L(X) ((X)%SZ)
-\       #define DEPTH (3*64)
-\       enum {
-\         SUBLEQ, JMP, ADD, SUB, MOV,
-\         ZERO, PUT, GET, HALT,
-\         IJMP, ILOAD, ISTORE, INC, DEC,
-\         INV, DOUBLE, LSHIFT,
-\
-\         MAX
-\       };
-\
-\       static const char *names[] = {
-\         "SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
-\         "MOV    ", "ZERO   ", "PUT    ", "GET    ",
-\         "HALT   ", "IJMP   ", "ILOAD  ", "ISTORE ",
-\         "INC    ", "DEC    ", "INV    ", "DOUBLE ",
-\         "LSHIFT ",
-\       };
-\
-\       typedef struct {
-\         int instruction;
-\         uint16_t m, s, d;
-\       } instruction_t;
-\
-\       typedef struct {
-\         int matches[MAX];
-\         int set[9];
-\         uint16_t v[9];
-\         unsigned char z_reg[SZ], one_reg[SZ], neg1_reg[SZ];
-\         clock_t start, end;
-\         int64_t cnt[MAX];
-\       } optimizer_t;
-\
-\       static int match(optimizer_t *o, uint16_t *n,
-\         int sz, uint16_t pc, const char *s, ...) {
-\         va_list ap;
-\         int r = 0, i = 0, j = 0;
-\         for (int i = 0; i < 9; i++) {
-\           o->set[i] = 0;
-\           o->v[i] = 0;
-\         }
-\         va_start(ap, s);
-\         for (i = 0, j = 0; s[j] && i < sz; j++) {
-\           switch (s[j]) {
-\           case '0': case '1': case '2': case '3':
-\           case '4': case '5': case '6': case '7':
-\           case '8': case '9': {
-\             int p = s[j] - '0';
-\             if (o->set[p]) {
-\               if (n[i] != o->v[p]) goto end;
-\             } else {
-\               o->set[p] = 1;
-\               o->v[p] = n[i];
-\             }
-\             i++;
+\        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
+\         * programs (it might break them) and tries to
+\         * recompile the program into a more efficient
+\         * instruction set. It needs work to actually make
+\         * things faster though, as it is more a proof of
+\         * concept.
+\         *
+\         * Author:  Richard James Howe
+\         * E-Mail:  howe.r.j.89@gmail.com
+\         * Repo:    https://github.com/howerj/subleq
+\         * License: The Unlicense (this file only)  */
+\        
+\        #include <stdint.h>
+\        #include <stdio.h>
+\        #include <stdarg.h>
+\        #include <ctype.h>
+\        #include <inttypes.h>
+\        #include <time.h>
+\        #define SZ   (1<<16)
+\        #define L(X) ((X)%SZ)
+\        #define DEPTH (3*64)
+\        enum {
+\          SUBLEQ, JMP, ADD, SUB, MOV,
+\          ZERO, PUT, GET, HALT,
+\          IADD, ISUB,
+\          IJMP, ILOAD, ISTORE, INC, DEC,
+\          INV, DUBS, LSHIFT,
+\        
+\          MAX
+\        };
+\        
+\        static const char *names[] = {
+\          "SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
+\          "MOV    ", "ZERO   ", "PUT    ", "GET    ",
+\          "HALT   ", "IADD   ", "ISUB   ", "IJMP   ", 
+\          "ILOAD  ", "ISTORE ", "INC    ", "DEC    ", 
+\          "INV    ", "DOUBLE ", "LSHIFT ",
+\        };
+\        
+\        static const uint64_t increment[] = {
+\          [SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/, 
+\          [MOV] = 12, [ADD] = 9, [DUBS] = 9, 
+\          [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
+\          [ZERO] = 3, [IJMP] = 15/*Disassembly only*/, 
+\          [ILOAD] = 24, [IADD] = 21, [ISUB] = 15,
+\          [ISTORE] = 36, [PUT] = 3, [GET] = 3, 
+\          [HALT] = 3/*Disassembly only*/,
+\          [INC] = 3, [DEC] = 3, [INV] = 21,
+\        };
+\        
+\        typedef struct {
+\          int instruction;
+\          uint16_t m, s, d;
+\        } instruction_t;
+\        
+\        typedef struct {
+\          int matches[MAX];
+\          int set[9];
+\          uint16_t v[9];
+\          unsigned char z_reg[SZ], one_reg[SZ], neg1_reg[SZ];
+\          clock_t start, end;
+\          int64_t cnt[MAX];
+\        } optimizer_t;
+\        
+\        static int match(optimizer_t *o, uint16_t *n,
+\          int sz, uint16_t pc, const char *s, ...) {
+\          va_list ap;
+\          int r = 0, i = 0, j = 0;
+\          for (int i = 0; i < 9; i++) {
+\            o->set[i] = 0;
+\            o->v[i] = 0;
+\          }
+\          va_start(ap, s);
+\          for (i = 0, j = 0; s[j] && i < sz; j++) {
+\            switch (s[j]) {
+\            case '0': case '1': case '2': case '3':
+\            case '4': case '5': case '6': case '7':
+\            case '8': case '9': {
+\              int p = s[j] - '0';
+\              if (o->set[p]) {
+\                if (n[i] != o->v[p]) goto end;
+\              } else {
+\                o->set[p] = 1;
+\                o->v[p] = n[i];
+\              }
+\              i++;
+\              break;
+\            }
+\            /* Mem location 0 must be 0 in SUBLEQ image! */
+\            case 'Z': if (n[i] != 0) goto end; i++; break;
+\            case 'N': if (n[i] != 65535) goto end; i++; break;
+\            case '>': if (n[i] != (pc + i + 1)) goto end; i++;
 \             break;
-\           }
-\           /* Mem location 0 must be 0 in SUBLEQ image! */
-\           case 'Z': if (n[i] != 0) goto end; i++; break;
-\           case 'N': if (n[i] != 65535) goto end; i++; break;
-\           case '>': if (n[i] != (pc + i + 1)) goto end; i++;
-\            break;
-\           case '%': {
-\             int q = va_arg(ap, int);
-\             if (n[i] != q)
-\               goto end;
-\             i++;
-\           } break;
-\           case '!': {
-\               uint16_t *p = va_arg(ap, uint16_t*);
-\               *p = n[i];
-\               i++;
-\           } break;
-\           case '?': i++; break;
-\           case ' ': case '\t':
-\           case '\n': case '\r': break;
-\           default: r = -1; goto end;
-\           }
-\         }
-\         while (isspace(s[j]))
-\           j++;
-\         r = (s[j] == 0) && (i <= sz);
-\       end:
-\         va_end(ap);
-\         return r;
-\       }
-\
-\       static long get(optimizer_t *o, char var) {
+\            case '%': {
+\              int q = va_arg(ap, int);
+\              if (n[i] != q)
+\                goto end;
+\              i++;
+\            } break;
+\            case '!': {
+\                uint16_t *p = va_arg(ap, uint16_t*);
+\                *p = n[i];
+\                i++;
+\            } break;
+\            case '?': i++; break;
+\            case ' ': case '\t':
+\            case '\n': case '\r': break;
+\            default: r = -1; goto end;
+\            }
+\          }
+\          while (isspace(s[j]))
+\            j++;
+\          r = (s[j] == 0) && (i <= sz);
+\        end:
+\          va_end(ap);
+\          return r;
+\        }
+\        
+\        static long get(optimizer_t *o, char var) {
 \         if (var < '0' || var > '9' || o->set[var - '0'] == 0)
-\           return -1;
-\         return o->v[var - '0'];
-\       }
-\
-\       /* This section pattern matches the code finding
-\        * sequences of SUBLEQ instructions against known
-\        * instruction macros.  It is essentially a
-\        * disassembler. It is liable not to work for every
-\        * case, but will do so for the code that *I* want to
-\        * speed up. */
-\       static int optimizer(optimizer_t *o,
-\           instruction_t *m, uint16_t pc) {
-\
-\         for (uint16_t i = 0; i < pc; i++) {
-\           switch (m[i].m) {
-\           case 0: o->z_reg[i] = 1; break;
-\           case 1: o->one_reg[i] = 1; break;
-\           case 0xFFFF: o->neg1_reg[i] = 1; break;
-\           }
-\         }
-\
-\         for (uint16_t i = 0; i < pc; i++) {
-\           uint16_t q0 = 0, q1 = 0;
-\           uint16_t n[DEPTH] = { 0, };
-\
-\           for (size_t j = 0; j < DEPTH; j++)
-\             n[j] = m[L(i + j)].m;
-\
-\           /* Largest instructions *must* go first */
-\
-\           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11>\
-\           ?Z> Z1> ZZ> 22> ?Z> Z2> ZZ> 33> !Z> Z3> ZZ>",
-\           &q0, &q1) == 1
-\             && get(o, '0') == (i+(3*12))
-\             && get(o, '1') == (i+(3*12)+1)) {
-\             m[L(i)].instruction = ISTORE;
-\             m[L(i)].d = L(q0);
-\             m[L(i)].s = L(q1);
-\             o->matches[ISTORE]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11>\
-\           ?Z> Z1> ZZ>", &q0) == 1
-\               && get(o, '0') == (i + 15)) {
-\             m[L(i)].instruction = ILOAD;
-\             m[L(i)].d = L(get(o, '1'));
-\             m[L(i)].s = L(q0);
-\             o->matches[ILOAD]++;
-\             continue;
-\           }
-\
-\           int shift = 0, l = 0, dest = 0;
-\           for (l = 0; l < DEPTH; l += 9) {
-\             if (match(o, n+l, DEPTH-l, i+l, "!Z>\
-\                 Z!> ZZ>", &q0, &q1) == 1
-\                 && q0 == q1) {
-\               if (l == 0) {
-\                 dest = q0;
-\               } else {
-\                 if (dest != q0) {
-\                   break;
-\                 }
-\               }
-\               shift++;
-\             } else {
-\               break;
-\             }
-\           }
-\           if (shift >= 2) {
-\             m[L(i)].instruction = LSHIFT;
-\             m[L(i)].d = L(dest);
-\             m[L(i)].s = shift;
-\             o->matches[LSHIFT]++;
-\             continue;
-\           }
-\
-\
-\           if (match(o, n, DEPTH, i, "00> 10> 11> 2Z>\
-\               Z1> ZZ> !1>", &q0) == 1
-\               && o->one_reg[q0]) {
-\             m[L(i)].instruction = INV;
-\             m[L(i)].d = L(get(o, '1'));
-\             o->matches[INV]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>",
-\           &q0) == 1
-\               && get(o, '0') == (i + (3*4) + 2)) {
-\             m[L(i)].instruction = IJMP;
-\             m[L(i)].d = L(q0);
-\             o->matches[IJMP]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
-\           &q0) == 1) {
-\             m[L(i)].instruction = MOV;
-\             m[L(i)].d = L(get(o, '0'));
-\             m[L(i)].s = L(q0);
-\             o->matches[MOV]++;
-\             continue;
-\           }
-\
-\           /* We should match multiple ones in a row and
-\            * turn them into a left shift */
-\           if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
-\           &q0, &q1) == 1
-\               && q0 == q1) {
-\             m[L(i)].instruction = DOUBLE;
-\             m[L(i)].d = L(q1);
-\             m[L(i)].s = L(q0);
-\             o->matches[DOUBLE]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
-\           &q0, &q1) == 1) {
-\             m[L(i)].instruction = ADD;
-\             m[L(i)].d = L(q1);
-\             m[L(i)].s = L(q0);
-\             o->matches[ADD]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "00>") == 1) {
-\             m[L(i)].instruction = ZERO;
-\             m[L(i)].d = L(get(o, '0'));
-\             o->matches[ZERO]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "ZZ!", &q0) == 1
-\           && q0 >= SZ) {
-\             m[L(i)].instruction = HALT;
-\             o->matches[HALT]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "00!", &q0) == 1) {
-\             m[L(i)].instruction = JMP;
-\             m[L(i)].d = q0;
-\             m[L(i)].s = L(get(o, '0'));
-\             o->matches[JMP]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "N!>", &q0) == 1) {
-\             m[L(i)].instruction = GET;
-\             m[L(i)].d = L(q0);
-\             o->matches[GET]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "!N>", &q0) == 1) {
-\             m[L(i)].instruction = PUT;
-\             m[L(i)].s = L(q0);
-\             o->matches[PUT]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
-\             && q0 != q1 && o->neg1_reg[L(q0)]) {
-\             m[L(i)].instruction = INC;
-\             m[L(i)].d = L(q1);
-\             o->matches[INC]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
-\             && q0 != q1 && o->one_reg[L(q0)]) {
-\             m[L(i)].instruction = DEC;
-\             m[L(i)].d = L(q1);
-\             o->matches[DEC]++;
-\             continue;
-\           }
-\
-\           if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
-\             && q0 != q1) {
-\             m[L(i)].instruction = SUB;
-\             m[L(i)].d = L(q1);
-\             m[L(i)].s = L(q0);
-\             o->matches[SUB]++;
-\             continue;
-\           }
-\
-\           o->matches[SUBLEQ]++;
-\         }
-\         return 0;
-\       }
-\
-\
-\       static int report(optimizer_t *o) {
-\         double elapsed_s = (double)(o->end - o->start);
-\         elapsed_s /= CLOCKS_PER_SEC;
-\         int64_t total = 0, subs = 0;
-\         FILE *e = stderr;
-\         for (int i = 0; i < MAX; i++) {
-\           total += o->cnt[i];
-\           subs  += o->matches[i];
-\         }
-\         static const char *rep_div =
-\         "+--------+--------+--------------+----------+\n";
-\
-\         if (fputs(rep_div, e) < 0)
-\           return -1;
-\         if (fprintf(e, "| Instr. | Subs.  | Instr. Cnt   |\
-\        Instr. %% |\n") < 0)
-\           return -1;
-\         if (fputs(rep_div, e) < 0)
-\           return -1;
-\         for (int i = 0; i < MAX; i++)
-\           if (fprintf(e, "| %s| % 6d | % 12"PRId64" |\
-\        % 7.1f%% |\n",
-\               names[i], o->matches[i], o->cnt[i],
-\               100.0*((float)o->cnt[i])/(float)total) < 0)
-\             return 1;
-\         if (fputs(rep_div, e) < 0)
-\           return -1;
-\         if (fprintf(e, "| Totals | % 6d | % 12"PRId64" |\
-\                 |\n",
-\                    (int)subs, total) < 0)
-\           return -1;
-\         if (fputs(rep_div, e) < 0)
-\           return -1;
-\         if (fprintf(e, "|         EXECUTION TIME %.3f \
-\       SECONDS      |\n",
-\                     elapsed_s) < 0)
-\           return -1;
-\         if (fputs(rep_div, e) < 0)
-\           return -1;
-\         return 0;
-\       }
-\
-\       int main(int s, char **v) {
-\         static instruction_t m[SZ];
-\         static optimizer_t o = { .matches = { 0, }, };
-\         uint16_t pc = 0;
-\         const int dbg = 0, optimize = 1, stats = 1;
-\         for (int i = 1, d = 0; i < s; i++) {
-\           FILE *f = fopen(v[i], "r");
-\           if (!f)
-\             return 1;
-\           while (fscanf(f, "%d,", &d) > 0)
-\             m[L(pc++)].m = d;
-\           if (fclose(f) < 0)
-\             return 2;
-\         }
-\
-\         if (optimize)
-\           if (optimizer(&o, m, pc) < 0)
-\             return 1;
-\         o.start = clock();
-\         for (pc = 0; pc < SZ;) {
-\           const int instruction = m[pc].instruction;
-\           const uint16_t s = m[pc].s, d = m[pc].d;
-\           if (dbg) {
-\             if (fprintf(stderr, "{%ld:%d}",
-\                  (long)pc, m[pc].instruction) < 0)
-\               return 1;
-\               /* Could return __LINE__ for simple debugging,
-\                * but return val is limited to 255 usually */
-\           }
-\           if (stats) {
-\             o.cnt[instruction/*% MAX*/]++;
-\           }
-\           switch (instruction) {
-\           case SUBLEQ: { /* OG Instruction */
-\             uint16_t a = m[pc++].m,
-\                      b = m[L(pc++)].m,
-\                      c = m[L(pc++)].m;
-\             if (a == 65535) {
-\               m[L(b)].m = getchar();
-\             } else if (b == 65535) {
-\               if (putchar(m[L(a)].m) < 0)
-\                 return 3;
-\               if (fflush(stdout) < 0)
-\                 return 4;
-\             } else {
-\               uint16_t r = m[L(b)].m - m[L(a)].m;
-\               if (r & 32768 || r == 0)
-\                 pc = c;
-\               m[L(b)].m = r;
-\             }
-\             }
-\             break;
-\           /* NB. We might be able to run more programs
-\            * correctly if we disable these instructions if
-\            * a write occurs within the bounds of an
-\            * instruction macro, this would slow things down
-\            * however. */
-\           case JMP: pc = d; m[s].m = 0; break;
-\           case MOV: m[d].m  = m[s].m; pc += 12; break;
-\           case ADD: m[d].m += m[s].m; pc += 9; break;
-\           case DOUBLE: m[d].m <<= 1; pc += 9; break;
-\           case LSHIFT: m[d].m <<= s; pc += 9 * s; break;
-\           case SUB: m[d].m -= m[s].m; pc += 3; break;
-\           case ZERO: m[d].m = 0; pc += 3; break;
-\           case IJMP: pc = m[d].m;  break;
-\           case ILOAD: m[d].m = m[L(m[s].m)].m; pc += 24;
-\             break;
-\           case ISTORE: m[L(m[d].m)].m = m[s].m; pc += 48;
-\             break;
-\           case PUT:
-\             if (putchar(m[L(m[pc].s)].m) < 0)
-\               return 3;
-\             if (fflush(stdout) < 0)
-\               return 4;
-\             pc += 3;
-\             break;
-\           case GET: m[m[pc].d].m = getchar(); pc += 3; break;
-\           case HALT: goto done;
-\           case INC: m[d].m++; pc += 3; break;
-\           case DEC: m[d].m--; pc += 3; break;
-\           case INV: m[d].m = ~m[d].m; pc += 21; break;
-\           default:
-\             return 5;
-\           }
-\         }
-\       done:
-\         o.end = clock();
-\         if (stats)
-\           if (report(&o) < 0)
-\             return 1;
-\         return 0;
-\       }
-\
+\            return -1;
+\          return o->v[var - '0'];
+\        }
+\        
+\        /* This section pattern matches the code finding
+\         * sequences of SUBLEQ instructions against known
+\         * instruction macros.  It is essentially a
+\         * disassembler. It is liable not to work for every
+\         * case, but will do so for the code that *I* want to
+\         * speed up. */
+\        static int optimizer(optimizer_t *o,
+\            instruction_t *m, uint16_t pc) {
+\        
+\          for (uint16_t i = 0; i < pc; i++) {
+\            switch (m[i].m) {
+\            case 0: o->z_reg[i] = 1; break;
+\            case 1: o->one_reg[i] = 1; break;
+\            case 0xFFFF: o->neg1_reg[i] = 1; break;
+\            }
+\          }
+\        
+\          for (uint16_t i = 0; i < pc; i++) {
+\            uint16_t q0 = 0, q1 = 0;
+\            uint16_t n[DEPTH] = { 0, };
+\        
+\            for (size_t j = 0; j < DEPTH; j++)
+\              n[j] = m[L(i + j)].m;
+\        
+\            /* Largest instructions *must* go first */
+\        
+\            if (match(o, n, DEPTH, i, "0Z> 11> 22> Z3> Z4> \
+\              ZZ> 56> 77> Z7> 6Z> ZZ> 66>") == 1) {
+\              m[L(i)].instruction = ISTORE;
+\              m[L(i)].d = L(get(o, '0'));
+\              m[L(i)].s = L(get(o, '5'));
+\              o->matches[ISTORE]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11> \
+\               ?Z> Z1> ZZ>", &q0) == 1 && 
+\               get(o, '0') == (i + 15)) {
+\              m[L(i)].instruction = ILOAD;
+\              m[L(i)].d = L(get(o, '1'));
+\              m[L(i)].s = L(q0);
+\              o->matches[ILOAD]++;
+\              continue;
+\            }
+\        
+\            int shift = 0, l = 0, dest = 0;
+\            for (l = 0; l < DEPTH; l += 9) {
+\              if (match(o, n+l, DEPTH-l, i+l, "!Z>\
+\                  Z!> ZZ>", &q0, &q1) == 1
+\                  && q0 == q1) {
+\                if (l == 0) {
+\                  dest = q0;
+\                } else {
+\                  if (dest != q0) {
+\                    break;
+\                  }
+\                }
+\                shift++;
+\              } else {
+\                break;
+\              }
+\            }
+\            if (shift >= 2) {
+\              m[L(i)].instruction = LSHIFT;
+\              m[L(i)].d = L(dest);
+\              m[L(i)].s = shift;
+\              o->matches[LSHIFT]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "01> 23> 44> 14> 3Z> \
+\              11> 33>") == 1) {
+\              m[L(i)].instruction = IADD;
+\              m[L(i)].d = L(get(o, '0'));
+\              m[L(i)].s = L(get(o, '2'));
+\              o->matches[IADD]++;
+\              continue;
+\            }
+\            
+\        
+\            if (match(o, n, DEPTH, i, "00> 10> 11> 2Z>\
+\                Z1> ZZ> !1>", &q0) == 1
+\                && o->one_reg[q0]) {
+\              m[L(i)].instruction = INV;
+\              m[L(i)].d = L(get(o, '1'));
+\              o->matches[INV]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "01> 33> 14> 5Z> 11>")
+\                == 1) {
+\              m[L(i)].instruction = ISUB;
+\              m[L(i)].d = L(get(o, '0'));
+\              m[L(i)].s = L(get(o, '5'));
+\              o->matches[ISUB]++;
+\              continue;
+\            }
+\         
+\        
+\            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>",
+\            &q0) == 1
+\                && get(o, '0') == (i + (3*4) + 2)) {
+\              m[L(i)].instruction = IJMP;
+\              m[L(i)].d = L(q0);
+\              o->matches[IJMP]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
+\            &q0) == 1) {
+\              m[L(i)].instruction = MOV;
+\              m[L(i)].d = L(get(o, '0'));
+\              m[L(i)].s = L(q0);
+\              o->matches[MOV]++;
+\              continue;
+\            }
+\        
+\            /* We should match multiple ones in a row and
+\             * turn them into a left shift */
+\            if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
+\            &q0, &q1) == 1
+\                && q0 == q1) {
+\              m[L(i)].instruction = DUBS;
+\              m[L(i)].d = L(q1);
+\              m[L(i)].s = L(q0);
+\              o->matches[DUBS]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
+\            &q0, &q1) == 1) {
+\              m[L(i)].instruction = ADD;
+\              m[L(i)].d = L(q1);
+\              m[L(i)].s = L(q0);
+\              o->matches[ADD]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "00>") == 1) {
+\              m[L(i)].instruction = ZERO;
+\              m[L(i)].d = L(get(o, '0'));
+\              o->matches[ZERO]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "ZZ!", &q0) == 1
+\            && q0 == 0xFFFFu) {
+\              m[L(i)].instruction = HALT;
+\              o->matches[HALT]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "00!", &q0) == 1) {
+\              m[L(i)].instruction = JMP;
+\              m[L(i)].d = q0;
+\              m[L(i)].s = L(get(o, '0'));
+\              o->matches[JMP]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "N!>", &q0) == 1) {
+\              m[L(i)].instruction = GET;
+\              m[L(i)].d = L(q0);
+\              o->matches[GET]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "!N>", &q0) == 1) {
+\              m[L(i)].instruction = PUT;
+\              m[L(i)].s = L(q0);
+\              o->matches[PUT]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
+\              && q0 != q1 && o->neg1_reg[L(q0)]) {
+\              m[L(i)].instruction = INC;
+\              m[L(i)].d = L(q1);
+\              o->matches[INC]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
+\              && q0 != q1 && o->one_reg[L(q0)]) {
+\              m[L(i)].instruction = DEC;
+\              m[L(i)].d = L(q1);
+\              o->matches[DEC]++;
+\              continue;
+\            }
+\        
+\            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
+\              && q0 != q1) {
+\              m[L(i)].instruction = SUB;
+\              m[L(i)].d = L(q1);
+\              m[L(i)].s = L(q0);
+\              o->matches[SUB]++;
+\              continue;
+\            }
+\        
+\            o->matches[SUBLEQ]++;
+\          }
+\          return 0;
+\        }
+\        
+\        static int report(optimizer_t *o) {
+\          double elapsed_s = (double)(o->end - o->start);
+\          elapsed_s /= CLOCKS_PER_SEC;
+\          int64_t total = 0, subs = 0;
+\          FILE *e = stderr;
+\          for (int i = 0; i < MAX; i++) {
+\            total += o->cnt[i];
+\            subs  += o->matches[i];
+\          }
+\          static const char *rep_div =
+\          "+--------+--------+--------------+----------+\n";
+\        
+\          if (fputs(rep_div, e) < 0)
+\            return -1;
+\          if (fprintf(e, "| Instr. | Subs.  | Instr. Cnt   |\
+\         Instr. %% |\n") < 0)
+\            return -1;
+\          if (fputs(rep_div, e) < 0)
+\            return -1;
+\          for (int i = 0; i < MAX; i++)
+\            if (fprintf(e, "| %s| % 6d | % 12"PRId64" |\
+\         % 7.1f%% |\n",
+\                names[i], o->matches[i], o->cnt[i],
+\                100.0*((float)o->cnt[i])/(float)total) < 0)
+\              return 1;
+\          if (fputs(rep_div, e) < 0)
+\            return -1;
+\          if (fprintf(e, "| Totals | % 6d | % 12"PRId64" |\
+\                  |\n",
+\                     (int)subs, total) < 0)
+\            return -1;
+\          if (fputs(rep_div, e) < 0)
+\            return -1;
+\          if (fprintf(e, "|         EXECUTION TIME %.3f \
+\        SECONDS      |\n",
+\                      elapsed_s) < 0)
+\            return -1;
+\          if (fputs(rep_div, e) < 0)
+\            return -1;
+\          return 0;
+\        }
+\        
+\        int main(int s, char **v) {
+\          static instruction_t m[SZ];
+\          static optimizer_t o = { .matches = { 0, }, };
+\          uint16_t pc = 0;
+\          const int dbg = 0, optimize = 1, stats = 1;
+\          for (int i = 1, d = 0; i < s; i++) {
+\            FILE *f = fopen(v[i], "r");
+\            if (!f)
+\              return 1;
+\            while (fscanf(f, "%d,", &d) > 0)
+\              m[L(pc++)].m = d;
+\            if (fclose(f) < 0)
+\              return 2;
+\          }
+\        
+\          if (optimize)
+\            if (optimizer(&o, m, pc) < 0)
+\              return 1;
+\          o.start = clock();
+\          for (pc = 0; pc < (SZ/2);) {
+\            const int instruction = m[pc].instruction;
+\            const int inc = increment[instruction];
+\            const uint16_t s = m[pc].s, d = m[pc].d;
+\            if (dbg) {
+\              if (fprintf(stderr, "{%ld:%d}",
+\                   (long)pc, m[pc].instruction) < 0)
+\                return 1;
+\                /* Could return __LINE__ for simple debugging,
+\                 * but return val is limited to 255 usually */
+\            }
+\            if (stats) {
+\              o.cnt[instruction/*% MAX*/]++;
+\            }
+\            switch (instruction) {
+\            case SUBLEQ: { /* OG Instruction */
+\              uint16_t a = m[pc++].m,
+\                       b = m[L(pc++)].m,
+\                       c = m[L(pc++)].m;
+\              if (a == 65535) {
+\                m[L(b)].m = getchar();
+\              } else if (b == 65535) {
+\                if (putchar(m[L(a)].m) < 0)
+\                  return 3;
+\                if (fflush(stdout) < 0)
+\                  return 4;
+\              } else {
+\                uint16_t r = m[L(b)].m - m[L(a)].m;
+\                if (r & 32768 || r == 0)
+\                  pc = c;
+\                m[L(b)].m = r;
+\              }
+\              }
+\              break;
+\            /* NB. We might be able to run more programs
+\             * correctly if we disable these instructions if
+\             * a write occurs within the bounds of an
+\             * instruction macro, this would slow things down
+\             * however. */
+\            case JMP: pc = d; m[s].m = 0; break;
+\            case MOV: m[d].m  = m[s].m; pc += inc; break;
+\            case ADD: m[d].m += m[s].m; pc += inc; break;
+\            case DUBS: m[d].m <<= 1; pc += inc; break;
+\            case LSHIFT: m[d].m <<= s; pc += inc * s; break;
+\            case SUB: m[d].m -= m[s].m; pc += inc; break;
+\            case ZERO: m[d].m = 0; pc += inc; break;
+\            case IJMP: pc = m[d].m;  break;
+\            /* ILOAD is now used in the Forth image to 
+\             * perform a GET, and GET is unused, so it must 
+\             * now perform that function, ISTORE cannot be 
+\             * used for a PUT (well, not correctly anyway), 
+\             * so does not handle it. */
+\            case ILOAD: { 
+\              const uint16_t l = L(m[s].m);
+\              if (l == 0xFFFFu) {
+\                const int ch = getchar();
+\                m[d].m = -ch;
+\                pc += inc;
+\              } else {
+\                m[d].m = m[L(m[s].m)].m; 
+\                pc += inc;
+\              }
+\              break;
+\            }
+\            case ISTORE: m[L(m[d].m)].m = m[s].m; pc += inc;
+\              break;
+\            case PUT:
+\              if (putchar(m[L(m[pc].s)].m) < 0)
+\                return 3;
+\              if (fflush(stdout) < 0)
+\                return 4;
+\              pc += 3;
+\              break;
+\            case IADD: 
+\              m[m[d].m].m += m[s].m; pc += inc; break;
+\            case ISUB: 
+\              m[m[d].m].m -= m[s].m; pc += inc; break;
+\            case GET: 
+\              m[m[pc].d].m = getchar(); pc += inc; break;
+\            case HALT: goto done;
+\            case INC: m[d].m++; pc += inc; break;
+\            case DEC: m[d].m--; pc += inc; break;
+\            case INV: m[d].m = ~m[d].m; pc += inc; break;
+\            default:
+\              return 5;
+\            }
+\          }
+\        done:
+\          o.end = clock();
+\          if (stats)
+\            if (report(&o) < 0)
+\              return 1;
+\          return 0;
+\        }
+\        
+\        
 \ A report is printed to standard error at the end of
 \ execution.
 \
@@ -11204,7 +11308,15 @@ variable seed here seed !
 
 : anonymous ( -- : make anonymous vocabulary and enable it )
   get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
+: undefined? bl word find nip 0= ; ( "name", -- f )
+: defined? undefined? 0= ; ( "name", -- f: word defined ? )
+: ?\ 0= if postpone \ then ; ( f --, <string>| : cond comp. )
 
+\ Example usage:
+\
+\        undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
+
+: rdup r> r> dup >r >r >r ;
 : umin 2dup swap u< if swap then drop ; ( u u -- u )
 : umax 2dup      u< if swap then drop ; ( u u -- u )
 : off false swap ! ; ( a -- )
@@ -11214,13 +11326,14 @@ variable seed here seed !
     ?dup 0> if for aft space then next then ;
 : 2+ 2 + ; ( u -- u : increment by two )
 : 2- 2 - ; ( u -- u : decrement by two )
+: 2, , , ; ( n n -- : write two numbers into the dictionary )
 : not -1 xor ; ( u -- u : same as 'invert' in this Forth )
 : binary $2 base ! ; ( -- : set numeric radix to binary )
 : octal $8 base ! ; ( -- : set numeric base to octal )
 : .base base @ dup decimal . base ! ; ( -- )
 : also get-order over swap 1+ set-order ; ( -- )
 : previous get-order nip 1- set-order ; ( -- )
-\ : buffer block ; ( k -- a )
+  \ : buffer block ; ( k -- a )
 : enum dup constant 1+ ; ( n --, <string> )
 : logical 0= 0= ; ( n -- f : turn a number into a 0 or -1 )
 : limit rot min max ; ( n lo hi -- n )
@@ -11245,7 +11358,6 @@ variable seed here seed !
 : average um+ 2 um/mod nip ; ( u u -- u )
 : <=> 2dup > if 2drop -1 exit then < ;
 : bounds over + swap ;
-: 2, , , ; ( n n -- : write two numbers into the dictionary )
 : d>s drop ; ( d -- n : convert dubs to single )
 : d< rot 2dup >                    ( d -- f )
    if = nip nip if 0 exit then -1 exit then
@@ -11254,16 +11366,16 @@ variable seed here seed !
 : d>= d< invert ;            ( d -- f )
 : d>  2swap d< ;             ( d -- f )
 : d<= d> invert ;            ( d -- f )
-\ : du> 2swap du< ;          ( d -- f )
+  ( : du> 2swap du< ;        ( d -- f )
 : d=  rot = -rot = and ;     ( d d -- f )
 : d- dnegate d+ ;            ( d d -- d )
 : d<> d= 0= ;                ( d d -- f )
 : d0= or 0= ;                ( d -- f )
 : d0<> d0= 0= ;              ( d -- f )
 : d.r >r tuck dabs <# #s rot sign #> r> over - bl banner type ;
-: ud.r >r <# #s #> r> over - bl banner type ;
-: d. 0 d.r space ;
-: ud. 0 ud.r space ;
+: ud.r >r <# #s #> r> over - bl banner type ; ( ud +n -- )
+: d. 0 d.r space ;           ( d -- )
+: ud. 0 ud.r space ;         ( ud -- )
 : 2rdrop r> rdrop rdrop >r ; ( R: n n -- )
 : 2. swap . . ; ( n n -- )
 : m* 2dup xor 0< >r abs swap abs um* r> if dnegate then ;
@@ -11296,7 +11408,6 @@ variable seed here seed !
 \ : h. base @ swap hex . base ! ;      ( u -- )
 \ : o. base @ swap 8 base ! . base ! ; ( u -- )
 \ : d. base @ swap decimal . base ! ;  ( n -- )
-
 
 : @bits swap @ and ;                 ( a u -- u )
 : ?\ if postpone \ then ; immediate
@@ -11335,27 +11446,27 @@ variable seed here seed !
 \ 'sc': unsigned small candidate
 \ 'lc': unsigned large candidate
 \
-\ : square dup * ; ( n -- n : square a number )
-\ : sqrt ( n -- u : integer square root )
-\   #1 ?depth
-\   s>d  if -$B lit throw then ( does not work for neg. values )
-\   dup #2 < if exit then   ( return 0 or 1 )
-\   dup                    ( u u )
-\   #2 rshift sqrt ( recurse ) 2*    ( u sc )
-\   dup                    ( u sc sc )
-\   1+ dup square          ( u sc lc lc^2 )
-\   >r rot r> <            ( sc lc bool )
-\   if drop else nip then ; ( return small or large candidate )
-\ 
-\ : log ( u base -- u : the integer logarithm of u in 'base' )
-\   >r
-\   dup 0= -$B lit and throw ( logarithm of zero is an error )
-\   #0 swap
-\   begin
-\     swap 1+ swap r@ / dup 0= ( keep dividing until 'u' is 0 )
-\   until
-\   drop 1- rdrop ;
-\ 
+: square dup * ; ( n -- n : square a number )
+: sqrt ( n -- u : integer square root )
+  1 ?depth
+  s>d  if -$B throw then ( does not work for neg. values )
+  dup 2 < if exit then   ( return 0 or 1 )
+  dup                    ( u u )
+  2 rshift sqrt ( recurse ) 2*    ( u sc )
+  dup                    ( u sc sc )
+  1+ dup square          ( u sc lc lc^2 )
+  >r rot r> <            ( sc lc bool )
+  if drop else nip then ; ( return small or large candidate )
+
+: log ( u base -- u : the integer logarithm of u in 'base' )
+  >r
+  dup 0= -$B and throw ( logarithm of zero is an error )
+  0 swap
+  begin
+    swap 1+ swap r@ / dup 0= ( keep dividing until 'u' is 0 )
+  until
+  drop 1- rdrop ;
+
 : clz ( u -- : count leading zeros )
   ?dup 0= if $10 exit then
   $8000 0 >r begin
@@ -11367,7 +11478,7 @@ variable seed here seed !
 
 ( : log2 2 log ; ( u -- u : binary integer logarithm )
 : log2 ( u -- u )
-  ?dup 0= -$B lit and throw clz $10 swap - 1- ; 
+  ?dup 0= -$B and throw clz $10 swap - 1- ; 
 \ 
 \ <forth.sourceforge.net/algorithm/bit-counting/index.html>
 : count-bits ( number -- bits )
@@ -11387,70 +11498,35 @@ variable seed here seed !
  
 : gray-encode dup 1 rshift xor ; ( gray -- u )
 : gray-decode ( u -- gray )
-\ dup $10 rshift xor ( <- 32 bit )
+  \ dup $10 rshift xor ( <- 32 bit )
   dup   8 rshift xor 
   dup   4 rshift xor
   dup   2 rshift xor 
   dup   1 rshift xor ;
 
+\ http://forth.sourceforge.net/word/n-to-r/index.html
+\ Push n+1 elements on the return stack.
+: n>r ( xn..x1 n -- , R: -- x1..xn n )
+  dup
+  begin dup
+  while rot r> swap >r >r 1-
+  repeat
+  drop r> swap >r >r ; compile-only
+
+\ http://forth.sourceforge.net/word/n-r-from/index.html
+\ pop n+1 elements from the return stack.
+: nr> ( -- xn..x1 n, R: x1..xn n -- )
+  r> r> swap >r dup
+  begin dup
+  while r> r> swap >r -rot 1-
+  repeat
+  drop ; compile-only
+
+: +leading ( b u -- b u: skip leading space )
+  begin over c@ dup bl = swap 9 = or while 1 /string repeat ;
+
 system -order
 .( DONE ) cr
-
-\ \ http://forth.sourceforge.net/word/n-to-r/index.html
-\ \ Push n+1 elements on the return stack.
-\ : n>r ( xn..x1 n -- , R: -- x1..xn n )
-\   dup
-\   begin dup
-\   while rot r> swap >r >r 1-
-\   repeat
-\   drop r> swap >r >r ; \ compile-only
-\ 
-\ \ http://forth.sourceforge.net/word/n-r-from/index.html
-\ \ pop n+1 elements from the return stack.
-\ : nr> ( -- xn..x1 n, R: x1..xn n -- )
-\     r> r> swap >r dup
-\     begin dup
-\     while r> r> swap >r -rot 1-
-\     repeat
-\     drop ; \ compile-only
-
-\ : ?exit if rdrop exit then ;
-
-\ $FFFE constant rp0
- 
-\ : +leading ( b u -- b u: skip leading space )
-\     begin over c@ dup bl = swap 9 = or while 1 /string repeat ;
-
-\ http://forth.sourceforge.net/word/string-plus/index.html
-\ ( addr1 len1 addr2 len2 -- addr1 len3 )
-\ append the text specified by addr2 and len2 to the text of length len2
-\ in the buffer at addr1. return address and length of the resulting text.
-\ an ambiguous condition exists if the resulting text is larger
-\ than the size of buffer at addr1.
-\ : string+ ( bufaddr buftextlen addr len -- bufaddr buftextlen+len )
-\        2over +         ( ba btl a l bta+btl )
-\        swap dup >r     ( ba btl a bta+btl l ) ( r: l )
-\        move
-\        r> + ;
-
-
-\ ( addr1 len1 c -- addr1 len2 )
-\ append c to the text of length len2 in the buffer at addr1.
-\ Return address and length of the resulting text.
-\ An ambiguous condition exists if the resulting text is larger
-\ than the size of buffer at addr1.
-\ : string+c ( addr len c -- addr len+1 )
-\   dup 2over + c! drop 1+ ;
-
-\ http://forth.sourceforge.net/algorithm/unprocessed/valuable-algorithms.txt
-\ : -m/mod over 0< if dup    >r +       r> then u/mod ;         ( d +n - r q )
-\ :  m/     dup 0< if negate >r dnegate r> then -m/mod swap drop ; ( d n - q )
-
-\ From comp.lang.forth:
-\ : du/mod ( ud1 ud2 -- udrem udquot )  \ b/d = bits/double
-\   0 0 2rot b/d 0 do 2 pick over 2>r d2* 2swap d2* r>
-\  0< 1 and m+ 2dup 7 pick 7 pick du< 0= r> 0< or if 5 pick
-\  5 pick d- 2swap 1 m+ else 2swap then loop 2rot 2drop ; 
 
 
 \ One possible word-set for structures in Forth (something
@@ -12587,4 +12663,5 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ uses a LaTeX template with its own license, available from:
 \ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
 \
+
 

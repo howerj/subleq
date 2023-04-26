@@ -43,6 +43,8 @@ variable last
 : flush save-buffers empty-buffers ;
 : thru ; ( k1 k2 -- )
 : show ; ( k1 k2 -- )
+: list ;
+: screens ;
 
 \ find buffer
 \ transfer

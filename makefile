@@ -114,3 +114,7 @@ debug: debug.o
 clean:
 	git clean -dffx
 
+TIME=1000
+SHELL=/bin/bash
+speed: fast subleq gforth.dec
+	time -p (echo -e "${TIME} ms\nbye\n" | ./subleq gforth.dec)

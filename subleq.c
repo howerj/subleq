@@ -1,8 +1,10 @@
 #include <stdint.h>
 #include <stdio.h>
+
+typedef uint16_t v;
+static v m[1<<16], A = 0, n = -1;
+
 int main(int a, char **as) {
-	typedef uint16_t v;
-	v m[1<<16], A = 0, n = -1;
 	for (int i = 1, d = 0; i < a; i++) {
 		FILE *f = fopen(as[i], "r");
 		if (!f)

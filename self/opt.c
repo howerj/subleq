@@ -1,287 +1,14 @@
-#if 0
-
-
-static const uint64_t instruction_increment[] = {
-	[SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/, [MOV] = 12,
-	[ADD] = 9, [DUBS] = 9, [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
-	[ZERO] = 3, [IJMP] = 15/*Disassembly only*/, [ILOAD] = 24,
-	[IADD] = 21, [ISUB] = 15,
-	[ISTORE] = 36, [PUT] = 3, [GET] = 3, [HALT] = 3/*Disassembly only*/,
-	[INC] = 3, [DEC] = 3, [INV] = 21,
-};
-
-static const char *instruction_names[] = {
-	"SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
-	"MOV    ", "ZERO   ", "PUT    ", "GET    ",
-	"HALT   ", "IADD   ", "ISUB   ", "IJMP   ", 
-	"ILOAD  ", "ISTORE ", "INC    ", "DEC    ", 
-	"INV    ", "DOUBLE ", "LSHIFT ",
-};
-
-
-#endif
-
-#if 0
-		if (match(s, n, DEPTH, i, "0Z> 11> 22> Z3> Z4> ZZ> 56> 77> Z7> 6Z> ZZ> 66>") == 1) {
-			s->im[L(s, i)].instruction = ISTORE;
-			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
-			s->im[L(s, i)].s = L(s, get(&s->o, '5'));
-			s->o.matches[ISTORE]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "00> !Z> Z0> ZZ> 11> ?Z> Z1> ZZ>", &q0) == 1 && get(&s->o, '0') == (i + 15)) {
-			s->im[L(s, i)].instruction = ILOAD;
-			s->im[L(s, i)].d = L(s, get(&s->o, '1'));
-			s->im[L(s, i)].s = L(s, q0);
-			s->o.matches[ILOAD]++;
-			continue;
-		}
-
-		uint64_t shift = 0, l = 0, dest = 0;
-		for (l = 0; l < DEPTH; l += 9) {
-			if (match(s, n+l, DEPTH-l, i+l, "!Z> Z!> ZZ>", &q0, &q1) == 1 && q0 == q1) {
-				if (l == 0) {
-					dest = q0;
-				} else {
-					if (dest != q0) {
-						break;
-					}
-				}
-				shift++;
-			} else {
-				break;
-			}
-		}
-		if (shift >= 2) {
-			s->im[L(s, i)].instruction = LSHIFT;
-			s->im[L(s, i)].d = L(s, dest);
-			s->im[L(s, i)].s = shift;
-			s->o.matches[LSHIFT]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "01> 23> 44> 14> 3Z> 11> 33>") == 1) {
-			s->im[L(s, i)].instruction = IADD;
-			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
-			s->im[L(s, i)].s = L(s, get(&s->o, '2'));
-			s->o.matches[IADD]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "00> 10> 11> 2Z> Z1> ZZ> !1>", &q0) == 1
-				&& s->o.one_reg[q0]) {
-			s->im[L(s, i)].instruction = INV;
-			s->im[L(s, i)].d = L(s, get(&s->o, '1'));
-			s->o.matches[INV]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "01> 33> 14> 5Z> 11>") == 1) {
-			s->im[L(s, i)].instruction = ISUB;
-			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
-			s->im[L(s, i)].s = L(s, get(&s->o, '5'));
-			s->o.matches[ISUB]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>", &q0) == 1 && get(&s->o, '0') == (i + (3*4) + 2)) {
-			s->im[L(s, i)].instruction = IJMP;
-			s->im[L(s, i)].d = L(s, q0);
-			s->o.matches[IJMP]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "00> !Z> Z0> ZZ>", &q0) == 1) {
-			s->im[L(s, i)].instruction = MOV;
-			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
-			s->im[L(s, i)].s = L(s, q0);
-			s->o.matches[MOV]++;
-			continue;
-		}
-
-		/* We should match multiple ones in a row and
-			* turn them into a left shift */
-		if (match(s, n, DEPTH, i, "!Z> Z!> ZZ>", &q0, &q1) == 1 && q0 == q1) {
-			s->im[L(s, i)].instruction = DUBS; /* check 'em */
-			s->im[L(s, i)].d = L(s, q1);
-			s->im[L(s, i)].s = L(s, q0);
-			s->o.matches[DUBS]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "!Z> Z!> ZZ>", &q0, &q1) == 1) {
-			s->im[L(s, i)].instruction = ADD;
-			s->im[L(s, i)].d = L(s, q1);
-			s->im[L(s, i)].s = L(s, q0);
-			s->o.matches[ADD]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "00>") == 1) {
-			s->im[L(s, i)].instruction = ZERO;
-			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
-			s->o.matches[ZERO]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "ZZ!", &q0) == 1 && q0 == msk(s->N)) {
-			s->im[L(s, i)].instruction = HALT;
-			s->o.matches[HALT]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "00!", &q0) == 1) {
-			s->im[L(s, i)].instruction = JMP;
-			s->im[L(s, i)].d = q0;
-			s->im[L(s, i)].s = L(s, get(&s->o, '0'));
-			s->o.matches[JMP]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "N!>", &q0) == 1) {
-			s->im[L(s, i)].instruction = GET;
-			s->im[L(s, i)].d = L(s, q0);
-			s->o.matches[GET]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "!N>", &q0) == 1) {
-			s->im[L(s, i)].instruction = PUT;
-			s->im[L(s, i)].s = L(s, q0);
-			s->o.matches[PUT]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "!!>", &q0, &q1) == 1 && q0 != q1 && s->o.neg1_reg[L(s, q0)]) {
-			s->im[L(s, i)].instruction = INC;
-			s->im[L(s, i)].d = L(s, q1);
-			s->o.matches[INC]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "!!>", &q0, &q1) == 1 && q0 != q1 && s->o.one_reg[L(s, q0)]) {
-			s->im[L(s, i)].instruction = DEC;
-			s->im[L(s, i)].d = L(s, q1);
-			s->o.matches[DEC]++;
-			continue;
-		}
-
-		if (match(s, n, DEPTH, i, "!!>", &q0, &q1) == 1 && q0 != q1) {
-			s->im[L(s, i)].instruction = SUB;
-			s->im[L(s, i)].d = L(s, q1);
-			s->im[L(s, i)].s = L(s, q0);
-			s->o.matches[SUB]++;
-			continue;
-		}
-#endif
-
-#if 0
-		switch (instruction) {
-		case SUBLEQ: { /* OG Instruction */
-			const uint64_t a = s->m[L(s, s->pc++)];
-			const uint64_t b = s->m[L(s, s->pc++)];
-			const uint64_t c = s->m[L(s, s->pc++)];
-			const size_t la = L(s, a), lb = L(s, b);
-
-			tracer(s, "a=%l b=%l c=%l ", (long)a, (long)b, (long)c);
-			if (a == msk(s->N)) {
-				const int ch = subleq_getch(s) & msk(s->N);
-				if (ch == CH_ESCAPE) {
-					s->debug = 1;
-					if (s->exit_on_escape)
-						goto end;
-					s->pc -= 3; /* redo instruction */
-					s->count--;
-				} else {
-					s->m[lb] = ch;
-					tracer(s, "i=%d ", (long)s->m[lb]);
-				}
-			} else if (b == msk(s->N)) {
-				tracer(s, "o=%d ", (long)s->m[la]);
-				if (term_putch(s->m[la], s->out) < 0) {
-					s->error = -1;
-					return -1;
-				}
-			} else {
-				uint64_t r = s->m[lb] - s->m[la];
-				r &= msk(s->N);
-				tracer(s, "[a]=%d [b]=%d r=%d ", (long)s->m[la], (long)s->m[lb], (long)r);
-				if (r & HI(s->N) || r == 0) {
-					tracer(s, "%c ", s->pc == c ? '=' : '!');
-					if (s->pc != c)
-						s->debug = s->debug || s->debug_on_jump;
-					s->pc = c;
-				}
-				s->max = MAX(lb, s->max);
-				s->meta[lb] |= META_WRT; /* Note, this is not done for the pseudo-instructions */
-				s->m[lb] = r;
-			}
-		} break;
-		/* NB. We might be able to run more programs
-		* correctly if we disable these instructions if
-		* a write occurs within the bounds of an
-		* instruction macro, this would slow things down
-		* however. */
-		case JMP: s->pc = d; m[src] = 0; s->debug = s->debug || s->debug_on_jump; break;
-		case MOV: m[d]	= m[src]; s->pc += inc; break;
-		case ADD: m[d] += m[src]; s->pc += inc; break;
-		case DUBS: m[d] <<= 1; s->pc += inc; break;
-		case LSHIFT: m[d] <<= src; s->pc += inc * src; break;
-		case SUB: m[d] -= m[src]; s->pc += inc; break;
-		case ZERO: m[d] = 0; s->pc += inc; break;
-		case IJMP: s->pc = m[d]; s->debug = s->debug || s->debug_on_jump; break;
-		case PUT:
-			if (term_putch(m[src], s->out) < 0)
-				return -1;
-			s->pc += inc;
-			break;
-		/* ILOAD is now used in the Forth image to perform a GET,
-		 * and GET is unused, so it must now perform that function, 
-		 * ISTORE cannot be used for a PUT (well, not correctly
-		 * anyway), so does not handle it. */
-		case ISTORE: m[L(s, m[d])] = m[src]; s->pc += inc; break;
-		case ILOAD: {
-				const uint64_t l = L(s, m[src]);
-				if (l == msk(s->N)) {
-					const int ch = subleq_getch(s) & msk(s->N);
-					if (ch == CH_ESCAPE) {
-						s->debug = 1;
-						s->count--;
-						if (s->exit_on_escape)
-							goto end;
-					} else {
-						m[d] = (-ch) & msk(s->N);
-						s->pc += inc;
-					}
-				} else {
-					m[d] = m[L(s, m[src])]; 
-					s->pc += inc;
-				}
-				break;
-		}
-		case IADD: m[L(s, m[d])] += m[src]; s->pc += inc; break;
-		case ISUB: m[L(s, m[d])] -= m[src]; s->pc += inc; break;
-		case GET: {
-			const int ch = subleq_getch(s) & msk(s->N); 
-			if (ch == CH_ESCAPE) {
-				s->debug = 1;
-				s->count--;
-				if (s->exit_on_escape)
-					goto end;
-			} else {
-				m[d] = ch;
-				s->pc += inc; 
-			}
-		} break;
-		case HALT: s->pc = msk(s->N); break;
-		case INC: m[d]++; s->pc += inc; break;
-		case DEC: m[d]--; s->pc += inc; break;
-		case INV: m[d] = ~m[d]; s->pc += inc; break;
-		default:
-			return -1;
-		}
-#endif
+/* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
+ * programs (it might break them) and tries to
+ * recompile the program into a more efficient
+ * instruction set. It needs work to actually make
+ * things faster though, as it is more a proof of
+ * concept.
+ *
+ * Author:  Richard James Howe
+ * E-Mail:  howe.r.j.89@gmail.com
+ * Repo:    https://github.com/howerj/subleq
+ * License: The Unlicense (this file only)  */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -295,8 +22,9 @@ static const char *instruction_names[] = {
 enum {
   SUBLEQ, JMP, ADD, SUB, MOV,
   ZERO, PUT, GET, HALT,
+  IADD, ISUB,
   IJMP, ILOAD, ISTORE, INC, DEC,
-  INV, DOUBLE, LSHIFT,
+  INV, DUBS, LSHIFT,
 
   MAX
 };
@@ -304,9 +32,20 @@ enum {
 static const char *names[] = {
   "SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
   "MOV    ", "ZERO   ", "PUT    ", "GET    ",
-  "HALT   ", "IJMP   ", "ILOAD  ", "ISTORE ",
-  "INC    ", "DEC    ", "INV    ", "DOUBLE ",
-  "LSHIFT ",
+  "HALT   ", "IADD   ", "ISUB   ", "IJMP   ", 
+  "ILOAD  ", "ISTORE ", "INC    ", "DEC    ", 
+  "INV    ", "DOUBLE ", "LSHIFT ",
+};
+
+static const uint64_t increment[] = {
+  [SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/, 
+  [MOV] = 12, [ADD] = 9, [DUBS] = 9, 
+  [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
+  [ZERO] = 3, [IJMP] = 15/*Disassembly only*/, 
+  [ILOAD] = 24, [IADD] = 21, [ISUB] = 15,
+  [ISTORE] = 36, [PUT] = 3, [GET] = 3, 
+  [HALT] = 3/*Disassembly only*/,
+  [INC] = 3, [DEC] = 3, [INV] = 21,
 };
 
 typedef struct {
@@ -409,21 +148,18 @@ static int optimizer(optimizer_t *o,
 
     /* Largest instructions *must* go first */
 
-    if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11>\
-    ?Z> Z1> ZZ> 22> ?Z> Z2> ZZ> 33> !Z> Z3> ZZ>",
-    &q0, &q1) == 1
-      && get(o, '0') == (i+(3*12))
-      && get(o, '1') == (i+(3*12)+1)) {
+    if (match(o, n, DEPTH, i, "0Z> 11> 22> Z3> Z4> \
+      ZZ> 56> 77> Z7> 6Z> ZZ> 66>") == 1) {
       m[L(i)].instruction = ISTORE;
-      m[L(i)].d = L(q0);
-      m[L(i)].s = L(q1);
+      m[L(i)].d = L(get(o, '0'));
+      m[L(i)].s = L(get(o, '5'));
       o->matches[ISTORE]++;
       continue;
     }
 
-    if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11>\
-    ?Z> Z1> ZZ>", &q0) == 1
-        && get(o, '0') == (i + 15)) {
+    if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11> \
+       ?Z> Z1> ZZ>", &q0) == 1 && 
+       get(o, '0') == (i + 15)) {
       m[L(i)].instruction = ILOAD;
       m[L(i)].d = L(get(o, '1'));
       m[L(i)].s = L(q0);
@@ -456,6 +192,15 @@ static int optimizer(optimizer_t *o,
       continue;
     }
 
+    if (match(o, n, DEPTH, i, "01> 23> 44> 14> 3Z> \
+      11> 33>") == 1) {
+      m[L(i)].instruction = IADD;
+      m[L(i)].d = L(get(o, '0'));
+      m[L(i)].s = L(get(o, '2'));
+      o->matches[IADD]++;
+      continue;
+    }
+    
 
     if (match(o, n, DEPTH, i, "00> 10> 11> 2Z>\
         Z1> ZZ> !1>", &q0) == 1
@@ -465,6 +210,16 @@ static int optimizer(optimizer_t *o,
       o->matches[INV]++;
       continue;
     }
+
+    if (match(o, n, DEPTH, i, "01> 33> 14> 5Z> 11>")
+        == 1) {
+      m[L(i)].instruction = ISUB;
+      m[L(i)].d = L(get(o, '0'));
+      m[L(i)].s = L(get(o, '5'));
+      o->matches[ISUB]++;
+      continue;
+    }
+ 
 
     if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>",
     &q0) == 1
@@ -489,10 +244,10 @@ static int optimizer(optimizer_t *o,
     if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
     &q0, &q1) == 1
         && q0 == q1) {
-      m[L(i)].instruction = DOUBLE;
+      m[L(i)].instruction = DUBS;
       m[L(i)].d = L(q1);
       m[L(i)].s = L(q0);
-      o->matches[DOUBLE]++;
+      o->matches[DUBS]++;
       continue;
     }
 
@@ -513,7 +268,7 @@ static int optimizer(optimizer_t *o,
     }
 
     if (match(o, n, DEPTH, i, "ZZ!", &q0) == 1
-    /*&& q0 >= SZ*/) {
+    && q0 == 0xFFFFu) {
       m[L(i)].instruction = HALT;
       o->matches[HALT]++;
       continue;
@@ -570,7 +325,6 @@ static int optimizer(optimizer_t *o,
   }
   return 0;
 }
-
 
 static int report(optimizer_t *o) {
   double elapsed_s = (double)(o->end - o->start);
@@ -635,6 +389,7 @@ int main(int s, char **v) {
   o.start = clock();
   for (pc = 0; pc < (SZ/2);) {
     const int instruction = m[pc].instruction;
+    const int inc = increment[instruction];
     const uint16_t s = m[pc].s, d = m[pc].d;
     if (dbg) {
       if (fprintf(stderr, "{%ld:%d}",
@@ -672,16 +427,31 @@ int main(int s, char **v) {
      * instruction macro, this would slow things down
      * however. */
     case JMP: pc = d; m[s].m = 0; break;
-    case MOV: m[d].m  = m[s].m; pc += 12; break;
-    case ADD: m[d].m += m[s].m; pc += 9; break;
-    case DOUBLE: m[d].m <<= 1; pc += 9; break;
-    case LSHIFT: m[d].m <<= s; pc += 9 * s; break;
-    case SUB: m[d].m -= m[s].m; pc += 3; break;
-    case ZERO: m[d].m = 0; pc += 3; break;
+    case MOV: m[d].m  = m[s].m; pc += inc; break;
+    case ADD: m[d].m += m[s].m; pc += inc; break;
+    case DUBS: m[d].m <<= 1; pc += inc; break;
+    case LSHIFT: m[d].m <<= s; pc += inc * s; break;
+    case SUB: m[d].m -= m[s].m; pc += inc; break;
+    case ZERO: m[d].m = 0; pc += inc; break;
     case IJMP: pc = m[d].m;  break;
-    case ILOAD: m[d].m = m[L(m[s].m)].m; pc += 24;
+    /* ILOAD is now used in the Forth image to 
+     * perform a GET, and GET is unused, so it must 
+     * now perform that function, ISTORE cannot be 
+     * used for a PUT (well, not correctly anyway), 
+     * so does not handle it. */
+    case ILOAD: { 
+      const uint16_t l = L(m[s].m);
+      if (l == 0xFFFFu) {
+        const int ch = getchar();
+        m[d].m = -ch;
+        pc += inc;
+      } else {
+        m[d].m = m[L(m[s].m)].m; 
+        pc += inc;
+      }
       break;
-    case ISTORE: m[L(m[d].m)].m = m[s].m; pc += 48;
+    }
+    case ISTORE: m[L(m[d].m)].m = m[s].m; pc += inc;
       break;
     case PUT:
       if (putchar(m[L(m[pc].s)].m) < 0)
@@ -690,11 +460,13 @@ int main(int s, char **v) {
         return 4;
       pc += 3;
       break;
-    case GET: m[m[pc].d].m = getchar(); pc += 3; break;
+    case IADD: m[m[d].m].m += m[s].m; pc += inc; break;
+    case ISUB: m[m[d].m].m -= m[s].m; pc += inc; break;
+    case GET: m[m[pc].d].m = getchar(); pc += inc; break;
     case HALT: goto done;
-    case INC: m[d].m++; pc += 3; break;
-    case DEC: m[d].m--; pc += 3; break;
-    case INV: m[d].m = ~m[d].m; pc += 21; break;
+    case INC: m[d].m++; pc += inc; break;
+    case DEC: m[d].m--; pc += inc; break;
+    case INV: m[d].m = ~m[d].m; pc += inc; break;
     default:
       return 5;
     }
