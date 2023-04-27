@@ -116,5 +116,5 @@ clean:
 
 TIME=1000
 SHELL=/bin/bash
-speed: fast subleq gforth.dec
+speed: subleq gforth.dec
 	time -p (echo -e "${TIME} ms\nbye\n" | ./subleq gforth.dec)

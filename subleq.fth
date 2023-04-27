@@ -27,8 +27,8 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ # Dedication and Foreword
 \
 \ This book is dedicated to my wife Molly Barton, my Moll,
-\ my tiny girl Persephone and has also introduced me to
-\ her wonderful dog Poppy.
+\ who has also introduced me to her wonderful dog Poppy and
+\ given me my little daughter, Persephone.
 \
 \ Please feel free to contact the author about thoughts,
 \ feedback, and for any corrections.
@@ -3471,12 +3471,21 @@ system[
 \
 
 :s (push) r> dup [@] swap 1+ >r ;s ( -- n : inline push value )
-:m lit (push) t, ;m ( n -- : compile a literal )
 
-:s (up) r> dup [@] {up} half lit [@] 2* + swap 1+ >r ;s
+\ TODO: replace "lit" with "literal" and use "\[" and "\]"
+\ TODO: The same must be done for "up"!
+:m lit (push) t, ;m ( n -- : compile a literal )
+:m literal lit ;m
+\ The meta-compiler version of "\[" and "\]" do not do 
+\ anything, they exist to make the code more "forth" like.
+
+:m ] ;m
+:m [ ;m
+
+:s (up) r> dup [@] [ {up} half ] literal [@] 2* + swap 1+ >r ;s
   compile-only ( -- n : user variable implementation word )
 :s (var) r> 2* ;s compile-only ( R: a --, -- a )
-:s (user) r> [@] {up} half lit [@] 2* + ;s compile-only
+:s (user) r> [@] [ {up} half ] literal [@] 2* + ;s compile-only
   ( R: a --, -- u )
 
 :m up (up) t, ;m ( n -- : compile user variable )
@@ -3660,7 +3669,7 @@ system[
   user <error>   ( -- a : <error> xt container. )
 ]system
 
-:s <cold> {cold} lit ;s ( -- a : cold xt loc. )
+:s <cold> [ {cold} ] literal ;s ( -- a : cold xt loc. )
 
 \ ### Forth Variables
 \
@@ -3682,8 +3691,10 @@ system[
 \ by words like "definitions".
 \
 
-: current {current} lit ; ( -- a : get current vocabulary )
-: root-voc {root-voc} lit ; ( -- a : get root vocabulary )
+: current ( -- a : get current vocabulary )
+  [ {current} ] literal ; 
+: root-voc ( -- a : get root vocabulary )
+  [ {root-voc} ] literal ; 
 
 \ The word "this" allows us to access the USER task area,
 \ it pushes the pointer to that area onto the stack. The
@@ -3699,7 +3710,7 @@ system[
 \ temporary usage.
 \
 : this 0 up ; ( -- a : address of task thread memory )
-: pad this 3C0 lit + ; ( -- a : index into pad area )
+: pad this [ 3C0 ] literal + ; ( -- a : index into pad area )
 
 \ More vocabulary words up next, "#vocs" contains the maximum
 \ number of possible vocabularies in the vocabulary list, while
@@ -3708,8 +3719,8 @@ system[
 \ vocabulary in the word list (or the wordlist that will get
 \ searched in first).
 \
-: #vocs 8 lit ; ( -- u : number of vocabularies )
-: context {context} lit ; ( -- a )
+: #vocs [ 8 ] literal ; ( -- u : number of vocabularies )
+: context [ {context} ] literal ; ( -- a )
 
 \ These words just push variable locations, or their values,
 \ some of them will need an explanation, like "dpl", but that
@@ -3836,8 +3847,8 @@ system[
 \ dense still viable encoding scheme.
 \
 
-: hex  $10 lit base ! ; ( -- : change to hexadecimal base )
-: decimal $A lit base ! ; ( -- : change to decimal base )
+: hex [ $10 ] literal base ! ; ( -- : hexadecimal base )
+: decimal [ $A ] literal base ! ; ( -- : decimal base )
 
 \ ## Command and Compile with "\[" and "\]"
 \
@@ -3907,8 +3918,8 @@ system[
 \ interpreter state.
 \
 
-: ] #-1 state ! ; ( -- : return to compile mode )
-: [  #0 state ! ; immediate ( -- : initiate command mode )
+:to ] #-1 state ! ; ( -- : return to compile mode )
+:to [  #0 state ! ; immediate ( -- : initiate command mode )
 
 \ These words should be familiar to any Forth programmer,
 \ they are often defined in assembly for speed reasons, but
@@ -4228,7 +4239,8 @@ system[
 
 : key? #-1 [@] negate ( -- c 0 | -1 : get byte of input )
    s>d if
-     {options} lit @ 8 lit and if bye then drop #0 exit
+     [ {options} ] literal @ 
+     [ 8 ] literal and if bye then drop #0 exit
    then #-1 ;
 
 \ "key" pauses (allows other threads to run) and repeatedly
@@ -4299,7 +4311,8 @@ system[
 \ characters as a string. A minor optimization.
 \
 
-: cr =cr lit emit =lf lit emit ; ( -- : emit new line )
+: cr ( -- : emit new line )
+  [ =cr ] literal emit [ =lf ] literal emit ; 
 
 \ There is nothing special about these three words, they are
 \ common, standard, convenience words for fetching and storing
@@ -4446,9 +4459,12 @@ system[
 \ target.
 \
 
-: c@ @+ swap #1 and if 8 lit rshift exit then FF lit and ;
-: c! swap FF lit and dup 8 lit lshift or swap
-   tuck @+ swap #1 and 0= FF lit xor
+: c@ 
+  @+ swap #1 and if 
+    [ 8 ] literal rshift exit 
+  then [ FF ] literal and ;
+: c! swap [ FF ] literal and dup [ 8 ] literal lshift or swap
+   tuck @+ swap #1 and 0= [ FF ] literal xor
    >r over xor r> and xor swap ! ; ( c a -- character store )
 
 \ "c@+" is another space saving measure like "@+", but is also
@@ -4947,8 +4963,8 @@ system[ user tup =cell tallot ]system
 
 : abort #-1 throw ; ( -- : Time to die. )
 :s (abort) do$ swap if count type abort then drop ;s ( n -- )
-:s depth {sp0} lit @ sp@ - 1- ;s ( -- n )
-:s ?depth depth >= -4 lit and throw ;s ( ??? n -- )
+:s depth [ {sp0} ] literal @ sp@ - 1- ;s ( -- n )
+:s ?depth depth >= [ -$4 ] literal and throw ;s ( ??? n -- )
 
 \ # Advanced Arithmetic
 \
@@ -5051,7 +5067,7 @@ system[ user tup =cell tallot ]system
   next shed ;
 : * um* drop ; ( n n -- n : multiply two numbers )
 : um/mod ( ud u -- ur uq : unsigned double cell div/mod )
-  ?dup 0= -A lit and throw
+  ?dup 0= [ -$A ] literal and throw
   2dup u<
   if negate F lit
     for >r dup um+ >r >r dup um+ r> + dup
@@ -5174,8 +5190,8 @@ system[ user tup =cell tallot ]system
 \ previous character.
 \
 \ The tests could be factored out, and the delete functionality
-\ "=bksp lit dup echo bl echo echo" is sometimes factored out
-\ into a word called "^h".
+\ "[ =bksp ] literal dup echo bl echo echo" is sometimes 
+\ factored out into a word called "^h".
 \
 \ If "ktap" does not know what to do with the control character
 \ then it replaces it with a space and calls "tap".
@@ -5185,13 +5201,15 @@ system[ user tup =cell tallot ]system
 
 :s tap dup echo over c! 1+ ;s ( bot eot cur c -- bot eot cur )
 :s ktap ( bot eot cur c -- bot eot cur )
-  dup dup =cr lit <> >r  =lf lit <> r> and if ( Not EOL? )
-    dup =bksp lit <> >r =del lit <> r> and if ( Not Del Char? )
+  ( Not EOL? )
+  dup dup [ =cr ] literal <> >r [ =lf ] literal  <> r> and if 
+    ( Not Del Char? )
+    dup [ =bksp ] literal <> >r [ =del ] literal <> r> and if 
       bl tap ( replace any other character with bl )
       exit
     then
     >r over r@ < dup if             ( if not at start of line )
-      =bksp lit dup echo bl echo echo ( erase char )
+      [ =bksp ] literal dup echo bl echo echo ( erase char )
     then
     r> + ( add 0/-1 to cur )
     exit
@@ -5241,11 +5259,13 @@ system[ user tup =cell tallot ]system
   over + over begin
     2dup <>
   while
-    key dup bl - 5F lit u< if tap else <tap> @execute then
+    key dup bl - [ 5F ] literal u< 
+    if tap else <tap> @execute then
   repeat drop over - ;
 : expect <expect> @execute span ! drop ; ( a u -- )
 : tib source drop ; ( -- b )
-: query tib =buf lit <expect> @execute tup ! drop #0 >in ! ;
+: query 
+  tib [ =buf ] literal <expect> @execute tup ! drop #0 >in ! ;
 
 \ "-trailing" removes the trailing white-space from an input
 \ string, it does this non-destructively leaving the original
@@ -5319,7 +5339,7 @@ system[ user tup =cell tallot ]system
   begin
     dup
   while
-    over c@ r@ - r@ bl = 4 lit pick execute
+    over c@ r@ - r@ bl = [ 4 ] literal pick execute
     if rdrop shed exit then
     +string
   repeat rdrop shed ;s
@@ -5328,8 +5348,8 @@ system[ user tup =cell tallot ]system
 : parse ( c -- b u ; <string> )
   >r tib >in @ + tup @ >in @ - r@ ( get memory to parse )
   >r over r> swap 2>r
-  r@ t' unmatch lit look 2dup ( look for start of match )
-  r> t' match   lit look swap ( look for end of match )
+  r@ [ t' unmatch ] literal look 2dup ( find start of match )
+  r> [ t' match   ] literal look swap ( find end of match )
     r> - >r - r> 1+ ( b u c -- b u delta : compute match len )
   >in +!
   r> bl = if -trailing then
@@ -5396,7 +5416,7 @@ system[ user tup =cell tallot ]system
 \ formed in hold space by using combinations of "\<#",
 \ "\#" and "hold".
 \
-: #> 2drop hld @ this =num lit + over - ; ( u -- b u )
+: #> 2drop hld @ this [ =num ] literal + over - ; ( u -- b u )
 
 \ "extract" extracts (hence the name) a single number from
 \ a double cell, it should do this with the divide/modulo
@@ -5415,7 +5435,8 @@ system[ user tup =cell tallot ]system
 \ using the behavior of the comparison and logical operators
 \ to do this.
 \
-:s digit 9 lit over < 7 lit and + [char] 0 + ;s ( u -- c )
+:s digit ( u -- c )
+   [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s 
 
 \ "\#" extracts a single digits and adds it to hold space.
 \ "\#s" continues to do this until the number is zero, which is
@@ -5429,7 +5450,7 @@ system[ user tup =cell tallot ]system
 \
 : #  #2 ?depth #0 radix extract digit hold ; ( d -- d )
 : #s begin # 2dup ( d0= -> ) or 0= until ;   ( d -- 0 )
-: <# this =num lit + hld ! ;                 ( -- )
+: <# this [ =num ] literal + hld ! ;         ( -- )
 
 \ "sign" adds a "-" character to hold space if the
 \ provided number is negative. It is used by ".".
@@ -5508,8 +5529,10 @@ system[ user tup =cell tallot ]system
   dup 0= ?exit
   begin
     2dup 2>r drop c@ radix           ( get next character )
-    ( digit? -> ) >r [char] 0 - 9 lit over <
-    if 7 lit - dup A lit < or then dup r> u< ( c base -- u f )
+    ( digit? -> ) >r [char] 0 - [ 9 ] literal over <
+    if 
+    ( next line: c base -- u f )
+    [ 7 ] literal - dup [ $A ] literal < or then dup r> u< 
     0= if                            ( d char )
       drop                           ( d char -- d )
       2r>                            ( restore string )
@@ -5706,7 +5729,7 @@ system[ user tup =cell tallot ]system
 
 : nfa cell+ ; ( pwd -- nfa : move word ptr to name field )
 : cfa ( pwd -- cfa : move to Code Field Address )
-  nfa c@+ 1F lit and + cell+ cell negate and ;
+  nfa c@+ [ 1F ] literal and + cell+ cell negate and ;
 
 \ "(search)" and "(find)" are made to be as generic as
 \ possible, they are not complex words, but they do a lot.
@@ -5755,11 +5778,12 @@ system[ user tup =cell tallot ]system
   begin
     dup
   while
-    dup nfa count 9F lit ( $1F:word-length + $80:hidden )
+    ( $9F = $1F:word-length + $80:hidden )
+    dup nfa count [ $9F ] literal 
     and r@ count compare 0=
     if ( found! )
       rdrop
-      dup ( immediate? -> ) nfa 40 lit swap @ and 0<>
+      dup ( immediate? -> ) nfa [ $40 ] literal swap @ and 0<>
       #1 or negate exit
     then
     nip @+
@@ -5864,7 +5888,7 @@ system[ user tup =cell tallot ]system
 
 : compile r> dup [@] , 1+ >r ; compile-only ( -- )
 :s (literal) state @ if compile (push) , then ;s
-: literal <literal> @execute ; immediate ( u -- )
+:to literal <literal> @execute ; immediate ( u -- )
 
 \ "compile," is a version of "," which can turn an execution
 \ vector into something that will perform a call when compiled
@@ -5885,7 +5909,7 @@ system[ user tup =cell tallot ]system
 \
 
 :s ?found ?exit ( b f -- b | ??? )
-   space count type [char] ? emit cr -D lit throw ;s
+   space count type [char] ? emit cr [ -$D ] literal throw ;s
 
 \ The "interpret" diagram describes the word, with
 \ some minor details missing that will be describe later, it
@@ -5949,7 +5973,8 @@ system[ user tup =cell tallot ]system
       cfa compile, exit \ <- compiling word are...compiled.
     then
     drop
-    dup nfa c@ 20 lit and 0<> -E lit and throw ( <- ?compile )
+    ( next line performs "?compile" )
+    dup nfa c@ [ 20 ] literal and 0<> [ -$E ] literal and throw 
     \ if it's not compiling, execute it then exit *interpreter*
     cfa execute exit
   then
@@ -6080,14 +6105,14 @@ system[ user tup =cell tallot ]system
    \ next line finds first empty cell
    #0 >r begin @+ r@ xor while cell+ repeat rdrop
   dup cell - swap
-  context - 2/ dup >r 1- s>d -$32 lit and throw
+  context - 2/ dup >r 1- s>d [ -$32 ] literal and throw
   for aft @+ swap cell - then next @ r> ;
 :r set-order ( widn ... wid1 n -- : set current search order )
   \ NB. Uses recursion, however the meta-compiler does not use
   \ the Forth compilation mechanism, so the current definition
   \ of "set-order" is available immediately.
   dup #-1 = if drop root-voc #1 set-order exit then
-  dup #vocs > -$31 lit and throw
+  dup #vocs > [ -$31 ] literal and throw
   context swap for aft tuck ! cell+ then next #0 swap ! ;r
 
 : (order) ( w wid*n n -- wid*n w n )
@@ -6148,7 +6173,7 @@ root[
 \
 
 :s .id ( pwd -- : print word )
-  nfa count 1F lit and type space ;s
+  nfa count [ $1F ] literal and type space ;s
 
 \ "words" loops through all of the vocabularies in the search
 \ order, and then goes down the linked list in each of those
@@ -6173,7 +6198,7 @@ root[
   cr get-order
   begin ?dup while swap ( dup u. ." : " ) @
     begin ?dup
-    while dup nfa c@ 80 lit and 0= if dup .id then @
+    while dup nfa c@ [ $80 ] literal and 0= if dup .id then @
     repeat ( cr )
   1- repeat ;r
 
@@ -6311,33 +6336,37 @@ root[
 \ is another milestone in making a Forth interpreter.
 \
 
-: word ( -- b )
+: word ( c -- b : parse a character delimited word )
   #1 ?depth parse here aligned dup >r 2dup ! 1+ swap cmove r> ;
-:s token bl word ;s ( -- b )
+:s token bl word ;s ( -- b : get space delimited word )
 :s ?unique ( a -- a : warn if word definition is not unique )
  dup get-current (search) 0= ?exit space
- 2drop {last} lit @ .id ." redefined" cr ;s ( b -- b )
-:s ?nul c@+ ?exit -$10 lit throw ;s ( b -- b )
-:s ?len c@+ 1F lit > -$13 lit and throw ;s ( b -- b )
+ 2drop [ {last} ] literal @ .id ." redefined" cr ;s ( b -- b )
+:s ?nul ( b -- b : check not null )
+   c@+ ?exit [ -$10 ] literal throw ;s 
+:s ?len ( b -- b )
+  c@+ [ 1F ] literal > [ -$13 ] literal and throw ;s 
 :to char token ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char compile (push) , ; immediate
-:to ;
-  CAFE lit <> -$16 lit and throw ( check compile safety )
-  =unnest lit ,                     ( compile exit )
-  postpone [                        ( back to command mode )
-  ?dup if                           ( link word in if non 0 )
-    get-current !                   ( this inks the word in )
+:to ; ( -- : end a word definition )
+  ( next line: check compiler safety )
+  [ $CAFE ] literal <> [ -$16 ] literal and throw 
+  [ =unnest ] literal ,          ( compile exit )
+  postpone [                     ( back to command mode )
+  ?dup if                        ( link word in if non 0 )
+    get-current !                ( this inks the word in )
   then ; immediate compile-only
 :to :   ( "name", -- colon-sys )
   align                 ( must be aligned before hand )
   here dup              ( push location for ";" )
-  {last} lit !          ( set last defined word )
+  [ {last} ] literal !  ( set last defined word )
   last ,                ( point to previous word in header )
   token ?nul ?len ?unique ( parse word and do basic checks )
   count + h? ! align    ( skip over packed word and align )
-  CAFE lit              ( push constant for compiler safety )
+  [ $CAFE ] literal     ( push constant for compiler safety )
   postpone ] ;          ( turn compile mode on )
-:to :noname align here #0 CAFE lit ] ; ( "name", -- xt )
+:to :noname ( "name", -- xt )
+  align here #0 [ $CAFE ] literal postpone ] ; 
 
 \ "'" is an immediate word that attempts to
 \ find a word in the dictionary (and throws an error if one
@@ -6410,7 +6439,9 @@ root[
 \ Field Address, but operated on the previously defined word
 \ like "recurse". This could be defined with:
 \
-\        :s smudge {last} lit @ nfa 80 lit swap toggle ;s
+\        :s smudge 
+\          [ {last} ] literal 
+\          @ nfa [ $80 ] literal swap toggle ;s
 \
 \ "smudge" was used to hide and unhide a word definition during
 \ its creation to implement the word hiding feature described
@@ -6419,10 +6450,11 @@ root[
 \ differently.
 \
 
-:to ' token find ?found cfa literal ; immediate
-:to recurse {last} lit @ cfa compile, ; immediate compile-only
+:to ' token find ?found cfa postpone literal ; immediate
+:to recurse 
+    [ {last} ] literal @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
-:s hide token find ?found nfa 80 lit swap toggle ;s
+:s hide token find ?found nfa [ $80 ] literal swap toggle ;s
 
 \ # Control Structures
 \
@@ -6591,19 +6623,19 @@ root[
 
 :s mark here #0 , ;s compile-only
 :to begin here ; immediate compile-only
-:to if =jumpz lit , mark ; immediate compile-only
+:to if [ =jumpz ] literal , mark ; immediate compile-only
 :to until 2/ postpone if ! ; immediate compile-only
-:to again =jump lit , compile, ; immediate compile-only
+:to again [ =jump ] literal , compile, ; immediate compile-only
 :to then here 2/ swap ! ; immediate compile-only
 :to while postpone if ; immediate compile-only
 :to repeat swap postpone again postpone then ;
     immediate compile-only
-:to else =jump lit , mark swap postpone then ;
+:to else [ =jump ] literal , mark swap postpone then ;
     immediate compile-only
-:to for =>r lit , here ; immediate compile-only
-:to aft drop =jump lit , mark here swap ;
+:to for [ =>r ] literal , here ; immediate compile-only
+:to aft drop [ =jump ] literal , mark here swap ;
     immediate compile-only
-:to next =next lit , compile, ; immediate compile-only
+:to next [ =next ] literal , compile, ; immediate compile-only
 
 \ # Create, DOES>, and other special Forth words
 \
@@ -6708,9 +6740,9 @@ root[
 : >body cell+ ; ( a -- a : move to a create words body )
 :s (does) r> r> 2* swap >r ;s compile-only
 :s (comp)
-  r> {last} lit @ cfa
+  r> [ {last} ] literal @ cfa
   ( check we are running does> on a created word )
-  @+ to' (var) half lit <> -$1F lit and throw
+  @+ [ to' (var) half ] literal <> [ -$1F ] literal and throw
   ! ;s compile-only
 : does> compile (comp) compile (does) ;
    immediate compile-only
@@ -7049,8 +7081,10 @@ root[
 \
 
 :s (nfa) last nfa toggle ;s ( u -- )
-:to immediate 40 lit (nfa) ; ( -- : mark prev word as immed. )
-:to compile-only 20 lit (nfa) ; ( -- )
+:to immediate ( -- : mark prev word as immediate )
+  [ $40 ] literal (nfa) ; 
+:to compile-only ( -- : mark prev word as compile-only )
+  [ $20 ] literal (nfa) ; 
 
 \ # Some Programmer Utilities (Decompilation and Dump)
 \
@@ -7089,7 +7123,7 @@ root[
 
 opt.better-see [unless]
 :to see token find ?found cr ( --, "name" : decompile  word )
-  begin @+ =unnest lit <>
+  begin @+ [ =unnest ] literal <>
   while @+ . cell+ here over < if drop exit then
   repeat @ u. ;
 [then]
@@ -7179,49 +7213,53 @@ opt.better-see [if] ( Start conditional compilation )
 \ as mentioned if that fails, it just prints out "u".
 \
 
+\ TODO: Add "(2const)"
 :s decompile ( a u -- a )
-  dup =jumpz lit = if
+  dup [ =jumpz ] literal = if
     drop ."  jumpz " cell+ dup @ 2* u. exit
   then
 
-  dup =jump  lit = if
+  dup [ =jump ] literal = if
     drop ."  jump  " cell+ dup @ 2* u. exit
   then
 
-  dup =next  lit = if
+  dup [ =next ] literal = if
     drop ."  next  " cell+ dup @ 2* u. exit
   then
 
-  dup to' (up) half lit = if drop
+  dup [ to' (up) half ] literal = if drop
      ."  (up) " cell+ dup @ u. exit
   then
 
-  dup to' (push) half lit = if drop
+  dup [ to' (push) half ] literal = if drop
      ."  (push) " cell+ dup @ u. exit
   then
 
-  dup to' (user) half lit = if drop
-     ."  (user) " cell+ @ u. drop $7FFF lit exit
+  dup [ to' (user) half ] literal = if drop
+     ."  (user) " cell+ @ u. drop [ $7FFF ] literal exit
   then
 
-  dup to' (const) half lit = if drop
-     ."  (const) " cell+ @ u. drop $7FFF lit exit
+  dup [ to' (const) half ] literal = if drop
+     ."  (const) " cell+ @ u. drop [ $7FFF ] literal exit
   then
 
-  dup to' (var) half lit = if drop
-     ."  (var) " cell+ dup u. ."  -> " @ . $7FFF lit exit
+  dup [ to' (var) half ] literal = if drop
+     ."  (var) " cell+ dup u. ."  -> " @ . [ $7FFF ] literal 
+     exit
   then
 
-  dup to' .$ half lit = if drop ."  ." [char] " emit space
+  dup [ to' .$ half ] literal = if drop ."  ." [char] "  
+    emit space
     cell+ count 2dup type [char] " emit + aligned
   exit then
 
-  dup to' ($) half lit = if drop ."  $" [char] "
+  dup [ to' ($) half ] literal = if drop ."  $" [char] "
   emit space
     cell+ count 2dup type [char] " emit + aligned
   exit then
-  primitive lit @ over u> if ."  VM    " 2* else
-    dup name ?dup if space count 1F lit and type drop exit then
+  [ primitive ] literal @ over u> if ."  VM    " 2* else
+    dup name ?dup if space count [ $1F ] literal 
+    and type drop exit then
   then
   u. ;s
 
@@ -7230,8 +7268,10 @@ opt.better-see [if] ( Start conditional compilation )
 \ all they do is analyze a specific bit a pointer to a given
 \ word header. Nothing complex.
 \
-:s compile-only? nfa 20 lit swap @ and 0<> ;s ( pwd -- f )
-:s immediate? nfa 40 lit swap @ and 0<> ;s ( pwd -- f )
+:s compile-only? ( pwd -- f )
+   nfa [ $20 ] literal swap @ and 0<> ;s 
+:s immediate? ( pwd -- f )
+  nfa [ $40 ] literal swap @ and 0<> ;s 
 
 \ This is the more complex version of "see", it will attempt
 \ to print the code in a form that resembles the source as
@@ -7242,9 +7282,9 @@ opt.better-see [if] ( Start conditional compilation )
 \ when a word starts and ends.
 :to see token dup ." : " count type cr find ?found
   dup >r cfa
-  begin dup @ =unnest lit <>
+  begin dup @ [ =unnest ] literal <>
   while
-    dup dup 5 lit u.r ."  | "
+    dup dup [ $5 ] literal u.r ."  | "
     @ decompile cr cell+ here over u< if drop exit then
   repeat drop ."  ;"
   r> dup immediate? if ."  immediate" then
@@ -7358,7 +7398,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ part of the initial Forth word "(cold)".
 \
 
-:s cksum aligned dup C0DE lit - >r ( a u -- u )
+:s cksum aligned dup [ $C0DE ] literal - >r ( a u -- u )
   begin ?dup
   while swap @+ r> + >r cell+ swap cell -
   repeat drop r> ;s
@@ -7435,12 +7475,13 @@ opt.better-see [if] ( Start conditional compilation )
 \ "\[if\]...\[else\]...\[then\]" statements!
 \
 
-: defined token find nip 0<> ; ( -- f )
-:to [then] ; immediate ( -- )
-:to [else]
+: defined token find nip 0<> ; ( -- f  )
+:to [then] ; immediate ( -- : end [if]...[else]...[then] )
+:to [else] ( -- : skip until '[then]' )
  begin
   begin token c@+ while
-   find drop cfa dup to' [else] lit = swap to' [then] lit = or
+   find drop cfa dup 
+    [ to' [else] ] literal = swap [ to' [then] ] literal = or
     ?exit repeat query drop again ; immediate
 :to [if] ?exit postpone [else] ; immediate
 
@@ -7560,8 +7601,9 @@ opt.better-see [if] ( Start conditional compilation )
 \ in.
 \
 
-: bell 7 lit emit ; ( -- : emit ASCII BEL character )
-:s csi 1B lit emit 5B lit emit ;s ( -- : ANSI Term. Esc. Seq. )
+: bell [ $7 ] literal emit ; ( -- : emit ASCII BEL character )
+:s csi ( -- : ANSI Term. Esc. Seq. )
+  [ $1B ] literal emit [ $5B ] literal emit ;s 
 : page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;
 : at-xy radix decimal ( x y -- : set cursor position )
    >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;
@@ -7709,7 +7751,8 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \         : within over - >r - r> u< ; ( u lo hi -- f )
 \         : .emit ( c -- )
-\           dup bl 7F lit within 0= if drop [char] . then
+\           dup bl [ $7F ] literal within 
+\           0= if drop [char] . then
 \           emit ;
 \
 \ Renders "list" a little more forgiving when printing
@@ -7767,19 +7810,18 @@ opt.better-see [if] ( Start conditional compilation )
 \
 
 ( system[ variable dirty ]system )
-: b/buf 400 lit ; ( -- u : size of the block buffer )
-: block ( k -- u )
-   #1 ?depth 1- ( dup blk ! ) A lit lshift pause ; 
+: b/buf [ $400 ] literal ; ( -- u : size of the block buffer )
+: block #1 ?depth 1- [ $A ] literal lshift pause ; ( k -- u )
 : flush ( dirty @ if save-buffers empty-buffers then ) ;
 : update ( #-1 dirty ! ) ; ( -- : mark cur. buf. as dirty )
 : blank bl fill ; ( a u -- : blank an area of memory )
 : list ( k -- : display a block )
    page cr         ( clean the screen )
    dup scr ! block ( update "scr" and load block )
-   F lit for       ( for each line in the block )
-     F lit r@ - 3 lit u.r space    ( print the line number )
-     40 lit 2dup type cr +         ( print line )
-   ( 3F lit for count emit next cr ( print line )
+   [ $F ] literal for       ( for each line in the block )
+     [ $F ] literal r@ - [ $3 ] literal u.r space 
+     [ $40 ] literal 2dup type cr +         ( print line )
+   ( [ $3F ] literal for count emit next cr ( print line )
    next drop ;
 
 \ # The Read-Eval-Loop
@@ -7852,11 +7894,11 @@ opt.better-see [if] ( Start conditional compilation )
 \
 
 : evaluate ( a u -- : evaluate a string )
-  get-input 2>r 2>r >r        ( save the current input state )
-  #0 #-1 to' ) lit set-input  ( set new input )
-  t' eval lit catch           ( evaluate the string )
-  r> 2r> 2r> set-input        ( restore input state )
-  throw ;                     ( throw on error )
+  get-input 2>r 2>r >r       ( save the current input state )
+  #0 #-1 [ to' ) ] literal set-input ( set new input )
+  [ t' eval ] literal catch  ( evaluate the string )
+  r> 2r> 2r> set-input       ( restore input state )
+  throw ;                    ( throw on error )
 
 \ "load" is one of the missing words needed by our block
 \ word set, it evaluates a forth block, treating each 64 bytes
@@ -7876,10 +7918,11 @@ opt.better-see [if] ( Start conditional compilation )
 \ which can be chained together. The next block is the block
 \ with the current block number plus one.
 \
-:s line 6 lit lshift swap block + 40 lit ;s ( k l -- a u )
+:s line ( k l -- a u )
+  [ $6 ] literal lshift swap block + [ $40 ] literal ;s 
 :s loadline line evaluate ;s ( k l -- ??? : execute a line! )
-: load ( k -- : exec blk )
-   blk @ >r dup blk ! #0 F lit for
+: load ( k -- : execute a block )
+   blk @ >r dup blk ! #0 [ $F ] literal for
    2dup 2>r loadline 2r> 1+ next 2drop r> blk ! ; 
 
 \ Two words that allow the user of the environment to get
@@ -7912,7 +7955,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ Also note that the license applies to the Forth image and
 \ not the book!
 \
-:r eforth 0109 lit ;r ( --, version )
+:r eforth [ $0109 ] literal ;r ( --, version )
 
 opt.info [if]
   :s info cr ( --, print system info )
@@ -8035,33 +8078,42 @@ opt.info [if]
 \ system without much difficulty given the facilities for file
 \ access.
 \
-:s xio t' accept lit <expect> ! <tap> ! <echo> ! <ok> ! ;s
-:s hand t' ok lit
-    t' (emit) lit ( Default: echo on )
-    {options} lit @ #1 and if drop to' drop lit then
-    t' ktap lit postpone [ xio ;s ( -- )
-:s pace B lit emit ;s ( -- : emit pacing character )
-:s file t' pace lit to' drop lit t' ktap lit xio ;s ( -- )
-:s console t' key? lit <key> ! t' (emit) lit <emit> ! hand ;s
+:s xio ( xt xt xt -- : exchange I/O )
+  [ t' accept ] literal <expect> ! <tap> ! <echo> ! <ok> ! ;s
+:s hand ( -- )
+  [ t' ok ] lit
+  [ t' (emit) ] literal ( Default: echo on )
+  [ {options} ] literal @ #1 and 
+    if drop [ to' drop ] literal then
+  [ t' ktap ] literal postpone [ xio ;s 
+:s pace [ $B ] literal emit ;s ( -- : emit pacing character )
+:s file ( -- )
+  [ t' pace ] literal 
+  [ to' drop ] literal 
+  [ t' ktap ] literal xio ;s 
+:s console 
+  [ t' key? ] literal <key> ! 
+  [ t' (emit) ] literal <emit> ! 
+  hand ;s
 :s io! console ;s ( -- : setup system I/O )
 
 \ NB. It might be slightly more efficient to copy a block of
 \ constants into the new task, patching things up after.
 :s task-init ( task-addr -- : initialize USER task )
-  {up} lit @ swap {up} lit !
+  [ {up} ] literal @ swap [ {up} ] literal !
   this 2/ {next-task} up !
-  to' bye lit 2/ {ip-save} up ! ( Default execution token )
-  this =stksz        lit + 2/ {rp-save} up !
-  this =stksz double lit + 2/ {sp-save} up !
+  to' bye literal 2/ {ip-save} up ! ( Default execution token )
+  this [ =stksz        ] literal + 2/ {rp-save} up !
+  this [ =stksz double ] literal + 2/ {sp-save} up !
   #0 {tos-save} up !
   decimal
   io!
-  t' (literal) lit <literal> !
-  opt.float [if] 3 lit {precision} up ! [then]
-  to' bye lit <error> !
+  [ t' (literal) ] literal <literal> !
+  opt.float [if] [ $3 ]  literal {precision} up ! [then]
+  [ to' bye ] literal <error> !
   #0 >in ! #-1 dpl !
-  this =tib lit + #0 tup 2! \ Set terminal input buffer loc.
-  {up} lit ! ;s
+  this [ =tib ] literal + #0 tup 2! \ Set terminal input buffer loc.
+  [ {up} ] literal ! ;s
 
 \ "ini" initializes the current task, the system brings itself
 \ up at boot time, and where "ini" is executed is critical,
@@ -8070,7 +8122,8 @@ opt.info [if]
 \ the system to reboot. It is called from "(cold)", the first
 \ forth word to run.
 \
-:s ini {up} lit @ task-init ;s ( -- : initialize current task )
+:s ini ( -- : initialize current task )
+   [ {up} ] literal @ task-init ;s 
 
 \ ## Quit and Cold
 \
@@ -8113,14 +8166,14 @@ opt.info [if]
 
 :s (error) ( u -- : quit loop error handler )
    dup space . [char] ? emit cr #-1 = if bye then
-   ini t' (error) lit <error> ! ;s
+   ini [ t' (error) ] literal <error> ! ;s
 
 : quit ( -- : interpreter loop )
-  t' (error) lit <error> !         ( set error handler )
-  begin                            ( infinite loop start... )
-   query t' eval lit catch         ( evaluate a line )
-   ?dup if <error> @execute then   ( error? )
-  again ;                          ( do it all again... )
+  [ t' (error) ] literal <error> ! ( set error handler )
+  begin                          ( infinite loop start... )
+   query [ t' eval ] literal catch ( evaluate a line )
+   ?dup if <error> @execute then ( error? )
+  again ;                        ( do it all again... )
 
 \ "(cold)" is the first word that gets executed, it performs
 \ the task of continuing to setup the environment before
@@ -8146,11 +8199,11 @@ opt.info [if]
 :s (cold) ( -- : Forth boot sequence )
   forth definitions ( un-mess-up dictionary / set it )
   ini ( initialize the current thread correctly )
-  {options} lit @ 4 lit and if info then ( display info? )
-  {options} lit @ #2 and if ( checksum on? )
-    primitive lit @ 2* dup here swap - cksum  ( calc. cksum )
-    check lit @ <> if ." bad cksum" bye then ( oops... )
-    {options} lit @ #2 xor {options} lit ! ( disable cksum )
+  [ {options} ] literal @ [ 4 ] literal and if info then
+  [ {options} ] literal @ #2 and if ( checksum on? )
+  [ primitive ] literal @ 2* dup here swap - cksum 
+  [ check ] literal @ <> if ." bad cksum" bye then ( oops... )
+  [ {options} ] literal @ #2 xor [ {options} ] literal ! 
   then quit ;s ( call the interpreter loop AKA "quit" )
 
 \ # Cooperative Multitasking
@@ -8308,7 +8361,8 @@ opt.multi [if]
   create here b/buf allot 2/ task-init ;s
 :s activate ( xt task-address -- : start task executing xt )
   dup task-init
-  dup >r swap 2/ swap {ip-save} lit + ! ( set execution word )
+  ( set execution word )
+  dup >r swap 2/ swap [ {ip-save} ] literal + ! 
   r> this @ >r dup 2/ this ! r> swap ! ;s ( link in task )
 [then]
 
@@ -8343,8 +8397,10 @@ opt.multi [if]
 \
 
 opt.multi [if]
-:s single #1 {single} lit ! ;s ( -- : disable other tasks )
-:s multi  #0 {single} lit ! ;s ( -- : enable multitasking )
+:s single ( -- : disable other tasks )
+   #1 [ {single} ] literal ! ;s 
+:s multi  ( -- : enable multitasking )
+   #0 [ {single} ] literal ! ;s 
 [then]
 
 \ "send" and "receive" are a pair of words like "wait" and
@@ -8364,11 +8420,11 @@ opt.multi [if]
 
 opt.multi [if]
 :s send ( msg task-addr -- : send message to task )
-  this over {sender} lit +
-  begin pause @+ 0= until
-  ! {message} lit + ! ;s
+  this over [ {sender} ] literal + ( msg this msg-addr )
+  begin pause @+ 0= until  ( pause until zero )
+  ! [ {message} literal + ! ;s   ( send message )
 :s receive ( -- msg task-addr : block until message )
-  begin pause {sender} up @ until
+  begin pause {sender} up @ until ( wait until non-zero )
   {message} up @ {sender} up @
   #0 {sender} up ! ;s
 [then]
@@ -8524,13 +8580,13 @@ opt.multi [if]
 \
 
 opt.editor [if]
-: editor {editor} lit #1 set-order ; ( Micro BLOCK editor )
+: editor [ {editor} ] literal #1 set-order ; ( BLOCK editor )
 :e q only forth ;e ( -- : exit back to Forth interpreter )
 :e ? scr @ . ;e ( -- : print block number of current block )
 :e l scr @ list ;e ( -- : list current block )
 :e x q scr @ load editor ;e ( -- : evaluate current block )
-:e ia #2 ?depth 6 lit lshift + scr @ block + tib >in @ +
-   swap source nip >in @ - cmove tib @ >in ! update l ;e
+:e ia #2 ?depth [ $6 ] literal lshift + scr @ block + tib 
+  >in @ + swap source nip >in @ - cmove tib @ >in ! update l ;e
 :e a #0 swap ia ;e ( line --, "line" : insert line at )
 :e w words ;e ( -- : display block editor commands )
 :e s update flush ;e ( -- : save edited block )
@@ -8538,8 +8594,8 @@ opt.editor [if]
 :e p #-1 scr +! l ;e ( -- : display previous block )
 :e r scr ! l ;e ( k -- : retrieve given block )
 :e z scr @ block b/buf blank l ;e ( -- : erase current block )
-:e d #1 ?depth >r scr @ block r> 6 lit lshift + 40 lit
-   blank l ;e ( line -- : delete line )
+:e d #1 ?depth >r scr @ block r> [ $6 ] literal lshift + 
+   [ $40 ] literal blank l ;e ( line -- : delete line )
 [then]
 
 \ # Extra Control Structures
@@ -8552,7 +8608,8 @@ opt.editor [if]
 
 opt.control [if]
 
-: rpick rp@ swap - 1- 2* @ ; ( n -- u, R: ??? -- ??? )
+: rpick ( n -- u, R: ??? -- ??? : pick a value off ret. stk. )
+  rp@ swap - 1- 2* @ ; 
 
 \ "many" is an interesting word, it allows a line of code to be
 \ executed an infinite number of times by postfixing it to the
@@ -8583,24 +8640,24 @@ opt.control [if]
 :s (of) r> r@ swap >r = ;s compile-only
 :s (endcase) r> r> drop >r ;s
 
-: case compile (case) $1E lit ; compile-only immediate
+: case compile (case) [ $1E ] literal ; compile-only immediate
 : of compile (of) postpone if ; compile-only immediate
-: endof postpone else $1F lit ; compile-only immediate
+: endof postpone else [ $1F ] literal ; compile-only immediate
 : endcase
    begin
-    dup $1F lit =
+    dup [ $1F ] literal =
    while
     drop
     postpone then
    repeat
-   $1E lit <> -$16 lit and throw ( abort" Bad case construct!" )
+   [ $1E ] literal <> [ -$16 ] literal and throw 
    compile (endcase) ; compile-only immediate
 
 :s r+ 1+ ;s ( NB. Should be cell+ on most platforms )
 :s (unloop) r> rdrop rdrop rdrop >r ;s compile-only
 :s (leave) rdrop rdrop rdrop ;s compile-only
-:s (j) 4 lit rpick ;s compile-only
-:s (k) 7 lit rpick ;s compile-only
+:s (j) [ $4 ] literal rpick ;s compile-only
+:s (k) [ $7 ] literal rpick ;s compile-only
 :s (do) r> dup >r swap rot >r >r r+ >r ;s compile-only
 :s (?do)
    2dup <> if
@@ -8613,22 +8670,22 @@ opt.control [if]
 :s (+loop)
    r> swap r> r> 2dup - >r
    #2 pick r@ + r@ xor 0>=
-   3 lit pick r> xor 0>= or if
+   [ $3 ] literal pick r> xor 0>= or if
      >r + >r 2* @ >r exit
    then >r >r drop r+ >r ;s compile-only
 
 : unloop compile (unloop) ; immediate compile-only
-: i compile r@ ; immediate compile-only
-: j compile (j) ; immediate compile-only
-: k compile (k) ; immediate compile-only
+: i compile r@ ; immediate compile-only ( current loop count )
+: j compile (j) ; immediate compile-only ( nested loop count )
+: k compile (k) ; immediate compile-only ( nested+1 loop cnt )
 : leave compile (leave) ; immediate compile-only
 : do compile (do) #0 , here ; immediate compile-only
 : ?do compile (?do) #0 , here ; immediate compile-only
-: loop
+: loop ( increment loop count )
   compile (loop) dup 2/ ,
   compile (unloop)
   cell- here cell- 2/ swap ! ; immediate compile-only
-: +loop
+: +loop ( increment loop by amount )
   compile (+loop) dup 2/ ,
   compile (unloop)
   cell- here cell- 2/ swap ! ; immediate compile-only
@@ -8746,7 +8803,6 @@ opt.control [if]
 \
 opt.allocate [if]
 
-system[
 
 \ Here we define some helper words, most of which were not
 \ in the original system, "freelist", a variable, was however.
@@ -8778,13 +8834,18 @@ system[
 \ variable so it can be used with the allocation functions.
 \
 
+system[
+
   ( pointer to beginning of free space )
 variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 
 : >length #2 cells + ; ( freelist -- length-field )
-: pool $F800 lit $400 lit ; ( default memory pool )
+: pool ( default memory pool )
+  [ $F800 ] literal [ $400 ] literal ; 
 : arena! ( start-addr len -- : initialize memory pool )
-  >r dup $80 lit u< if -B lit throw then ( arena too small )
+  >r dup [ $80 ] literal u< if 
+    [ -$B ] literal throw ( arena too small )
+  then 
   dup r@ >length !
   2dup erase
   over dup r> ! #0 swap ! swap cell+ ! ;
@@ -8792,7 +8853,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
   dup >r @ 0= if rdrop drop #0 exit then
   r> swap >r dup >r @ dup r> >length @ + r> within ;
 : >size ( ptr freelist -- size : get size of allocated ptr )
-  over swap arena? 0= if -3B lit throw then
+  over swap arena? 0= if [ -$3B ] literal throw then
   cell - @ cell - ;
 
 \ "(allocate)", "(free)" and "(resize)" are defined, they
@@ -8806,7 +8867,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
   >r
   aligned
   r@ @ 0= if pool r@ arena! then ( init to default pool )
-  dup 0= if rdrop drop #0 -3B lit exit then ( not allowed )
+  dup 0= if rdrop drop #0 [ -$3B ] literal exit then
   cell+ r@ dup
   begin
   while dup @ cell+ @ #2 pick u<
@@ -8817,7 +8878,9 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
       if
         drop dup @ dup @ rot
         ( prevent freelist address from being overwritten )
-        dup r@ = if rdrop 2drop 2drop #0 -3B lit exit then
+        dup r@ = if 
+          rdrop 2drop 2drop #0 [ -$3B ] literal exit 
+        then
         !
       else
         2dup swap @ cell+ ! swap @ +
@@ -8825,27 +8888,28 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
       2dup ! cell+ #0 ( store size, bump pointer )
     then              ( and set exit flag )
   repeat
-  rdrop nip dup 0= -3B lit and ;
+  rdrop nip dup 0= [ -$3B ] literal and ;
 
 \ Free space at "ptr", return status, zero for success.
 
 : (free) ( ptr freelist -- ior : free pointer from "allocate" )
   >r
   dup 0= if rdrop #0 exit then
-  dup r@ arena? 0= if rdrop drop -3C lit exit then
+  dup r@ arena? 0= if rdrop drop [ -$3C ] literal exit then
 
   cell- dup @ swap 2dup cell+ ! r> dup
   begin
-    dup 3 lit pick u< and
+    dup [ $3 ] literal pick u< and
   while
     @ dup @
   repeat
 
-  dup @ dup 3 lit pick ! ?dup
+  dup @ dup [ $3 ] literal pick ! ?dup
   if
-    dup 3 lit pick 5 lit pick + =
+    dup [ $3 ] literal pick [ $5 ] literal pick + =
     if
-      dup cell+ @ 4 lit pick + 3 lit pick cell+ ! @ #2 pick !
+      dup cell+ @ [ $4 ] literal pick + 
+      [ $3 ] literal pick cell+ ! @ #2 pick !
     else
       drop
     then
@@ -8872,10 +8936,10 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
   dup 0= if drop r> (free) exit then
   over 0= if nip r> (allocate) exit then
   2dup swap r@ >size u<= if drop #0 exit then
-  r@ (allocate) if drop -3D lit exit then
+  r@ (allocate) if drop [ -$3D ] literal exit then
   over r@ >size
-  #1 pick 3 lit pick >r >r cmove r> r> r>
-  (free) if drop -3D lit exit then #0 ;
+  #1 pick [ $3 ] literal pick >r >r cmove r> r> r>
+  (free) if drop [ -$3D ] literal exit then #0 ;
 
 ]system
 
@@ -8923,9 +8987,6 @@ opt.float [if] ( Large section of optional code! )
 
 \ # Floating Point Package (and more)
 \
-\ TODO: Handle different bases?
-\ TODO: Handle under/overflow?
-\
 \ This is a Forth Floating point package *for 16-bit systems*.
 \
 \ It has been extended and modified from the original adding 
@@ -8943,7 +9004,15 @@ opt.float [if] ( Large section of optional code! )
 \ values like "NaN" (Not a number) or +/- "INF" (Infinity).
 \
 \ Overflow or Underflow is not caught. These properties could
-\ be added in if needed.
+\ be added in if needed. Bases other than decimal are not
+\ handled and cause an exception. This could also be added,
+\ the biggest impediment to doing so is that the "ftable"
+\ values would need to be calculated at runtime, that and the
+\ values chosen in "e.".
+\
+\ Note that both "f." and "e." have limited ranges over
+\ which they can print values (see the appendix for the
+\ limits and rationale).
 \
 \ The original system was quite spartan, it had a system for
 \ entering floating point numbers and printing them, 
@@ -8998,7 +9067,6 @@ opt.float [if] ( Large section of optional code! )
 : 2+ #2 + ; ( n -- n )
 : 2- #2 - ; ( n -- n )
 : 1+! #1 swap +! ; ( a -- )
-
 : /string ( b u1 u2 -- b u : advance string u2 )
   over min rot over + -rot - ;
 
@@ -9016,8 +9084,9 @@ system[
 : spaces bl banner ; ( +n  -- : print space 'n' times )
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 : arshift ( n u -- n : arithmetic right shift )
-  2dup rshift >r swap #msb and
-  if $10 lit swap - #-1 swap lshift else drop #0 then r> or ;
+  2dup rshift >r swap #msb and if 
+  [ $10 ] literal swap - #-1 swap lshift 
+  else drop #0 then r> or ;
 : d2* over #msb and >r 2* swap 2* swap r> if #1 or then ;
 : d2/ dup   #1 and >r 2/ swap 2/ r> if #msb or then swap ;
 : d- dnegate d+ ; ( d d -- d : double cell subtraction )
@@ -9085,13 +9154,13 @@ system[
 
 system[
 
-mcreate lookup ( 16 values )
+mcreate lookup ( 16 values, CORDIC atan table )
 $3243 t, $1DAC t, $0FAD t, $07F5 t, 
 $03FE t, $01FF t, $00FF t, $007F t,
 $003F t, $001F t, $000F t, $0007 t, 
 $0003 t, $0001 t, $0000 t, $0000 t,
 
-$26DD constant cordic_1K 
+$26DD constant cordic_1K ( CORDIC scaling factor )
 $6487 constant hpi
 
 variable tx variable ty variable tz
@@ -9105,7 +9174,7 @@ variable cd variable ck
 
 : cordic ( angle -- sine cosine | x y -- atan sqrt )
   cz ! cordic_1K cx ! #0 cy ! #0 ck !
-  $10 lit begin ?dup while
+  [ $10 ] literal begin ?dup while
     cz @ 0< cd !
     cx @ cy @ ck @ arshift cd @ xor cd @ - - tx !
     cy @ cx @ ck @ arshift cd @ xor cd @ - + ty !
@@ -9148,10 +9217,9 @@ variable cd variable ck
 \ as "ZERO" (now called "null").
 \
 
-: fabs $7FFF lit and ; ( r -- r )
+: fabs [ $7FFF ] literal and ; ( r -- r : FP absolute value )
 
 system[
-\ TODO: Replace this table.
 mdecimal
 mcreate ftable
          0.001 t, t,       0.010 t, t,
@@ -9160,7 +9228,6 @@ mcreate ftable
       1000.000 t, t,   10000.000 t, t,
     100000.000 t, t, 1000000.000 t, t,
 mhex
-
 ]system
 
 :s null ( f -- f : zero exponent if mantissa is )
@@ -9171,36 +9238,36 @@ mhex
     repeat swap 0< - ?dup
     if r> else #msb r> 1+ then
   else r> drop then ;s
-:s lalign $20 lit min for aft d2/ then next ;s
+:s lalign [ $20 ] literal min for aft d2/ then next ;s
 :s ralign 1- ?dup if lalign then #1 #0 d+ d2/ ;s
 :s tens 2* cells ftable + 2@ ;s ( a -- d )
-:s shifts 
-   fabs $4010 lit - s>d invert if -$2B lit throw then negate ;s
+:s shifts fabs [ $4010 ] literal - s>d invert if 
+   [ -$2B ] literal throw then negate ;s
 :s base? ( -- : check base )
-  base @ $A lit <> -40 lit and throw ;s
-:s unaligned? dup #1 and = -9 lit and throw ;s ( -- : chk ptr )
+  base @ [ $A ] literal <> [ -$40 ] literal and throw ;s
+:s unaligned? ( -- : chk ptr )
+   dup #1 and = [ -$9 ] literal and throw ;s 
 :s -+ drop swap 0< if negate then ;s
 
 \ "fdepth" is standards compliant, but pretty useless because
 \ there is no separate floating point stack.
-
+: fdepth depth 2/ ;    ( -- n : number of floats, approximate )
 : fcopysign #msb and nip >r fabs r> or ; ( r1 r2 -- r1 )
 : floats 2* cells ;    ( u -- u )
-: float+ 4 lit ( [ 1 floats ] literal ) + ; ( a -- a )
+: float+ [ 4 ] literal ( [ 1 floats ] literal ) + ; ( a -- a )
 : set-precision ( +n -- : set FP decimals printed out )
-  dup #0 5 lit within if 
-    {precision} up ! exit 
-  then -$2B lit throw ; 
+  dup #0 [ 5 ] literal within if  ( check within range )
+    {precision} up ! exit ( precision ok )
+  then [ -$2B ] literal throw ;   ( precision un-ok )
 : precision {precision} up @ ; ( -- u : precision of FP values )
 : f@ unaligned? 2@ ;   ( a -- r : fetch FP value )
 : f! unaligned? 2! ;   ( r a -- : store FP value )
 : f, 2, ; ( r -- : write float into dictionary )
 : falign align ;       ( -- : align the dict. to store a FP )
 : faligned aligned ;   ( a -- a : align point for FP )
-: fdepth depth 2/ ;    ( -- n : number of floats, approximate )
 : fdup #2 ?depth 2dup ; ( r -- r r : FP duplicate )
-: fswap 4 lit ?depth 2swap ; ( r1 r2 -- r2 r1 : FP swap )
-: fover 4 lit ?depth 2over ; ( r1 r2 -- r1 r2 r1 )
+: fswap [ 4 ] literal ?depth 2swap ; ( r1 r2 -- r2 r1 )
+: fover [ 4 ] literal ?depth 2over ; ( r1 r2 -- r1 r2 r1 )
 : f2dup fover fover ;  ( r1 r2 -- r1 r2 r1 r2 )
 : ftuck fdup 2>r fswap 2r> ; ( r1 r2 -- r2 r1 r2 )
 : frot 2>r fswap 2r> fswap ; ( r1 r2 r3 -- r2 r3 r1 )
@@ -9213,23 +9280,24 @@ mhex
 : f2* #2 ?depth 1+ null ; ( r -- r : FP times by two )
 : f2/ #2 ?depth 1- null ; ( r -- r : FP divide by two )
 : f*  ( r r -- r : FP multiply )
-   4 lit ?depth rot + $4000 lit - >r um* r> norm ; 
-: fsq fdup f* ;        ( r -- r : FP square )
+   [ $4 ] literal ?depth rot + [ $4000 ] literal 
+   - >r um* r> norm ; 
+: fsq fdup f* ;       ( r -- r : FP square )
 : f0= fabs null d0= ; ( r -- r : FP equal to zero [incl -0.0] )
 : um/ ( ud u -- u : ud/u and round )
   dup >r um/mod swap r> over 2* 1+ u< swap 0< or - ; 
 
 : f/ ( r1 r2 -- r1/r2 : floating point division )
-  4 lit ?depth
-  fdup f0= -$2A lit and throw
-  rot swap - $4000 lit + >r
+  [ $4 ] literal ?depth
+  fdup f0= [ -$2A ] literal and throw
+  rot swap - [ $4000 ] literal + >r
   #0 -rot 2dup u<
   if  um/ r> null 
   else >r d2/ fabs r> um/ r> 1+
   then ;
 
 : f+ ( r r -- r : floating point addition )
-  4 lit ?depth
+  [ $4 ] literal ?depth
   rot 2dup >r >r fabs swap fabs - 
   dup if s>d
     if rot swap negate
@@ -9257,7 +9325,8 @@ mhex
 : fmax f2dup f> if fdrop exit then fnip ; ( r1 r2 -- f : max )
 : fwithin ( r1 r2 r3 -- f : r2 <= r1 < r3 )
   frot ftuck f>= >r f<= r> and ; 
-: d>f $4020 lit fsign norm ;  ( d -- r : double to float )
+: d>f ( d -- r : double to float, dOwN 2 fLoAt lul )
+  [ $4020 ] literal fsign norm ;  
 : s>f s>d d>f ;           ( n -- r : single to float )
 
 : f# 
@@ -9274,9 +9343,8 @@ mhex
 \ <https://forth-standard.org/standard/float/FEd>
 \ <https://forth-standard.org/standard/float/REPRESENT>
 \
-\ : represent  ( r c-addr u -- n flag1 flag2 ) 
-\ ;
-
+: represent  ( r c-addr u -- n flag1 flag2 )
+;
 
 ( N.B. 'f' and 'e' require "dpl" to be set correctly! )
 
@@ -9299,8 +9367,7 @@ mhex
 : fround fix s>f ; ( r -- r )
 : fmod f2dup f/ floor f* f- ; ( r1 r2 -- r )
 
-\ 1.0 fconstant fone decimal ( = $8000 $4001 )
-$8000 $4001 2constant fone
+$8000 $4001 2constant fone ( 1.0 fconstant fone )
 
 : f1+ fone f+ ; ( r -- r : increment FP number )
 : f1- fone f- ; ( r -- r : decrement FP number )
@@ -9317,9 +9384,10 @@ $8000 $4001 2constant fone
   $B8AA $4001 2literal ( [ 1.4427 ] fliteral ) f* exp ; 
 : falog ( r -- r ) 
    $D49A $4002 2literal ( [ 3.3219 ] fliteral ) f* exp ; 
-: get ( "123" -- : get a single signed number )
+:s get ( "123" -- : get a single signed number )
   bl word dup 1+ c@ [char] - = tuck -
-  #0 #0 rot convert drop ( should throw if not number... ) -+ ;
+  #0 #0 rot convert drop ( should throw if not number... )
+  -+ ;s
 
 : fexpm1 fexp fone f- ; ( r1 -- r2 : e raised to 'r1' less 1 )
 : fsinh fexpm1 fdup fdup f1+ f/ f+ f2/ ; ( r -- fsinh : h-sin )
@@ -9330,19 +9398,21 @@ $8000 $4001 2constant fone
 mdecimal
 : e.r ( r +n -- : output scientific notation )
   >r
-  tuck fabs 16384 lit tuck -
-  4004 lit 13301 lit */mod >r
-  s>f 4004 lit s>f f/ exp f*
+  tuck fabs [ 16384 ] literal tuck -
+  [ 4004 ] literal [ 13301 ] literal */mod >r
+  s>f [ 4004 ] literal s>f f/ exp f*
   2dup fone f<
-  if 10 lit s>f f* r> 1- >r then
+  if [ 10 ] literal s>f f* r> 1- >r then
   <# r@ abs #0 #s r> sign 2drop
   [char] e hold f# #> r> over - spaces type ;
 : e ( f "123" -- usage "1.23 e 10", input scientific notation )
-  f get >r r@ abs 13301 lit 4004 lit */mod
-  >r s>f 4004 lit s>f f/ exp r> +
+  f get >r r@ abs [ 13301 ] literal [ 4004 ] literal */mod
+  >r s>f [ 4004 ] literal s>f f/ exp r> +
   r> 0< if f/ else f* then ;
 mhex
 : e. space #0 e.r ;
+( : fe. e. ; ( r -- : display in engineering notation )
+: fs. e. ; ( r -- : display in scientific notation )
 
 ( Define some useful constants )
 $C911 $4002 2constant fpi \ Pi = 3.14159265 fconstant fpi )
@@ -9367,12 +9437,12 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
   fdup  fpi f< if fdrop #1 exit then 
       $96CD $4003 2literal ( [ fpi fhpi f+ ] 2 literal ) f< 
       if #2 exit then 
-  3 lit ;s
-:s >sin #2 4 lit within if fnegate then ;s
-:s >cos #1 3 lit within if fnegate then ;s
+  [ $3 ] literal ;s
+:s >sin #2 [ $4 ] literal within if fnegate then ;s
+:s >cos #1 [ $3 ] literal within if fnegate then ;s
 :s scfix >r 
   r@ #1 = if fnegate fpi f+ rdrop exit then
-  r> 3 lit = if fnegate f2pi f+ then ;s
+  r> [ $3 ] literal = if fnegate f2pi f+ then ;s
 
 :s (fsincos) fhpi fmod >cordic cordic >r cordic> r> cordic> ;s
 
@@ -9402,18 +9472,18 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
   fabs 2>r f2dup fabs fswap fabs f+ 2r> f* 2>r f- fabs 2r> f< ;
 
 : fsqrt ( r -- r : square root of 'r' )
-  fdup f0< if fdrop -$2E lit throw then
+  fdup f0< if fdrop [ -$2E ] literal throw then
   fdup f0= if fdrop fzero exit then
   fone 
-  $10 lit for aft 
+  [ $10 ] literal for aft 
     f2dup fsq fswap f- fover f2* f/ f-
   then next
   fnip ;
 
 : filog2 ( r -- u : Floating point integer logarithm )
   null
-  fdup fzero f<= -$2E lit and throw
-  ( norm ) nip $4001 lit - ;
+  fdup fzero f<= [ -$2E ] literal and throw
+  ( norm ) nip [ $4001 ] literal - ;
 
 : fhypot f2dup f> if fswap then ( a b -- c : hypotenuse )
   fabs 2>r fdup 2r> fswap f/ fsq f1+ fsqrt f* ;
@@ -9425,7 +9495,7 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
   while
     fdup fdup f. [char] , emit space fsincos 
     fswap f. [char] , emit space f. cr
-    $80AF $3FFE 2literal ( [ f2pi 50.0 f f/ ] 2literal ) 
+    [ $80AF $3FFE ] 2literal ( [ f2pi 50.0 f f/ ] 2literal ) 
     f+
   repeat fdrop ;
 
@@ -9450,10 +9520,12 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ 12 = Number of steps
 \
 : fln ( r -- r : natural logarithm )
-  $8000 $3FF7 2literal ( [ 2 12 - s>f exp ] 2literal ) fswap f/ 
+  [ $8000 $3FF7 ] 2literal ( [ 2 12 - s>f exp ] 2literal ) 
+  fswap f/ 
   fone fswap 
-  12 lit for aft agm then next f+ fpi 
-  fswap f/ $8516 $4004 2literal ( [ 12 s>f fln2 f* ] 2literal ) 
+  [ $C ] literal for aft agm then next f+ fpi 
+  fswap f/ 
+  [ $8516 $4004 ] 2literal ( [ 12 s>f fln2 f* ] 2literal ) 
   f- ;
 : flnp1 fone f+ fln ; ( r -- r )
 
@@ -9547,9 +9619,9 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
   fdrop
   fdup f0> if fdrop fhpi exit then
   fdup f0< if 
-    fdrop $C911 $C001 2literal ( [ fhpi fnegate ] 2literal ) 
+    fdrop [ $C911 $C001 ] 2literal ( [ fhpi fnegate ] 2literal ) 
     exit then
-  -$2E lit throw ;
+  [ -$2E ] literal throw ;
 
 : fasin fdup fsq fone fswap f- fsqrt f/ fatan ; ( r -- r )
 : facos fasin fhpi fswap f- ; ( r -- r )
@@ -9586,7 +9658,7 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ "primitive" are treated as jump locations by the VM).
 \
 
-: cold {cold} lit 2* @execute ; ( -- )
+: cold [ {cold} ] literal 2* @execute ; ( -- )
 
 \ # Image Generation
 \
@@ -12172,7 +12244,7 @@ ook <ok> !
 \ In order to do E format I/O conversion, one must be
 \ able to evaluate the expressions
 \
-\          a   a/log10(2)        b    b*log10(2)
+\        a   a/log10(2)        b    b*log10(2)
 \        10 = 2           and   2 = 10
 \
 \ These log expressions may be easily evaluated with
