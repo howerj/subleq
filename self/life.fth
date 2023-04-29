@@ -87,11 +87,10 @@ decimal
 : random-life 30 randomize 31 30 life ; ( -- )
 
 
-
-editor l x
-3 i      ***  
-4 i      *    
-5 i       *   
+editor l z
+3 a      ***  
+4 a      *    
+5 a       *   
 q
 
 

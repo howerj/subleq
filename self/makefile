@@ -1,5 +1,5 @@
 .PHONY: all run run-orig clean
-CFLAGS=-std=c99 -Wall -Wextra -pedantic
+CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2
 VM=../subleq
 OPTS=
 IMAGE=../subleq.dec

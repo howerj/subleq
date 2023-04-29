@@ -9,20 +9,12 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ * License: The Unlicense / Public domain for code only, all
 \ rights reserved for comments, the book, diagrams
 \ and pictures.
+\ 
+\ # THIS NEEDS EDITING
 \
-\ # ***THIS FILE NEEDS EDITING***
-\
-\ THIS FILE NEEDS TO GO THROUGH THE EDITING PROCESS TO MAKE
-\ A SECOND EDITION OF THIS BOOK.
-\
-\ ***THIS FILE NEEDS EDITING***
-\ ***THIS FILE NEEDS EDITING***
-\ ***THIS FILE NEEDS EDITING***
-\ ***THIS FILE NEEDS EDITING***
-\
-\ TODO: Make "\[" and "\]" target only, use them when using
-\ literals to make the code much more Forth like, e.g.
-\ "2 lit" should become "\[ 2 \] literal".
+\ This version should not be released to the public. It needs
+\ proof reading. For a proofread version use the previous
+\ edition of the book.
 \
 \ # Dedication and Foreword
 \
@@ -3472,15 +3464,28 @@ system[
 
 :s (push) r> dup [@] swap 1+ >r ;s ( -- n : inline push value )
 
-\ TODO: replace "lit" with "literal" and use "\[" and "\]"
-\ TODO: The same must be done for "up"!
 :m lit (push) t, ;m ( n -- : compile a literal )
 :m literal lit ;m
-\ The meta-compiler version of "\[" and "\]" do not do 
-\ anything, they exist to make the code more "forth" like.
 
-:m ] ;m
-:m [ ;m
+\ The meta-compiler version of "\[" and "\]" do not do 
+\ anything, they exist to make the code more "forth" like. As
+\ numbers cannot be automatically compiled into a target word
+\ definition we have to call "literal" to compile the number.
+\
+\ However, in normal Forth the code:
+\
+\        : x 123 literal ;
+\
+\ Is an error, even if it will work in our meta-compiled code. 
+\ To make our meta-compiled code more Forth like, we can do:
+\
+\        : x [ 123 ] literal ;
+\
+\ But we need a definition of "\[" and "\]".
+\
+
+:m ] ;m ( -- : meta-compiler version of "]", do nothing )
+:m [ ;m ( -- : meta-compiler version of "[", do nothing )
 
 :s (up) r> dup [@] [ {up} half ] literal [@] 2* + swap 1+ >r ;s
   compile-only ( -- n : user variable implementation word )
@@ -3709,7 +3714,7 @@ system[
 \ utility that should contain a *small* section of memory for
 \ temporary usage.
 \
-: this 0 up ; ( -- a : address of task thread memory )
+: this [ 0 ] up ; ( -- a : address of task thread memory )
 : pad this [ 3C0 ] literal + ; ( -- a : index into pad area )
 
 \ More vocabulary words up next, "#vocs" contains the maximum
@@ -4502,7 +4507,7 @@ system[
 \ block.
 \
 
-: source-id {id} up @ ; ( -- u : input type )
+: source-id [ {id} ] up @ ; ( -- u : input type )
 
 \ If we want to set two, often related, cell values at once,
 \ we can use "2!" and "2@", "2!" will store the top cell on the
@@ -4917,18 +4922,18 @@ system[ user tup =cell tallot ]system
 \
 
 : catch        ( xt -- exception# | 0 \ return addr on stack )
-   sp@ >r                ( xt )   \ save data stack pointer
-   {handler} up @ >r     ( xt )   \ and previous handler
-   rp@ {handler} up !    ( xt )   \ set current handler
-   execute               ( )      \ execute returns if no throw
-   r> {handler} up !     ( )      \ restore previous handler
-   rdrop                 ( )      \ discard saved stack ptr
-   #0 ;                  ( 0 )    \ normal completion
+   sp@ >r                 ( xt )  \ save data stack pointer
+   [ {handler} ] up @ >r  ( xt )  \ and previous handler
+   rp@ [ {handler} ] up ! ( xt )  \ set current handler
+   execute                ( )     \ execute returns if no throw
+   r> [ {handler} ] up !  ( )     \ restore previous handler
+   rdrop                  ( )     \ discard saved stack ptr
+   #0 ;                   ( 0 )   \ normal completion
 
 : throw ( ??? exception# -- ??? exception# )
     ?dup if              ( exc# )     \ 0 throw is no-op
-      {handler} up @ rp! ( exc# )     \ restore prev ret. stack
-      r> {handler} up !  ( exc# )     \ restore prev handler
+      [ {handler} ] up @ rp! ( exc# ) \ restore prev ret. stack
+      r> [ {handler} ] up !  ( exc# ) \ restore prev handler
       r> swap >r         ( saved-sp ) \ exc# on return stack
       sp! drop r>        ( exc# )     \ restore stack
     then ;
@@ -5060,7 +5065,7 @@ system[ user tup =cell tallot ]system
 : dnegate invert >r invert #1 um+ r> + ; ( d -- d )
 : d+ >r swap >r um+ r> + r> + ;         ( d d -- d )
 : um* ( u u -- ud : double cell width multiply )
-  #0 swap ( u1 0 u2 ) F lit
+  #0 swap ( u1 0 u2 ) [ $F ] literal
   for
     dup um+ >r >r dup um+ r> + r>
     if >r over um+ r> + then
@@ -5069,7 +5074,7 @@ system[ user tup =cell tallot ]system
 : um/mod ( ud u -- ur uq : unsigned double cell div/mod )
   ?dup 0= [ -$A ] literal and throw
   2dup u<
-  if negate F lit
+  if negate [ $F ] literal
     for >r dup um+ >r >r dup um+ r> + dup
       r> r@ swap >r um+ r> ( or -> ) 0<> swap 0<> +
       if >r drop 1+ r> else drop then r>
@@ -7213,7 +7218,8 @@ opt.better-see [if] ( Start conditional compilation )
 \ as mentioned if that fails, it just prints out "u".
 \
 
-\ TODO: Add "(2const)"
+\ N.B. We could "(2const)" here, but it is in an optional
+\ component.
 :s decompile ( a u -- a )
   dup [ =jumpz ] literal = if
     drop ."  jumpz " cell+ dup @ 2* u. exit
@@ -7848,7 +7854,7 @@ opt.better-see [if] ( Start conditional compilation )
 \
 
 : get-input source >in @ source-id <ok> @ ; ( -- n1...n5 )
-: set-input <ok> ! {id} up ! >in ! tup 2! ; ( n1...n5 -- )
+: set-input <ok> ! [ {id} ] up ! >in ! tup 2! ; ( n1...n5 -- )
 
 \ "ok" is responsible for printing out the Forth prompt after
 \ execution of each line, it will only print out if we are
@@ -8101,18 +8107,20 @@ opt.info [if]
 \ constants into the new task, patching things up after.
 :s task-init ( task-addr -- : initialize USER task )
   [ {up} ] literal @ swap [ {up} ] literal !
-  this 2/ {next-task} up !
-  to' bye literal 2/ {ip-save} up ! ( Default execution token )
-  this [ =stksz        ] literal + 2/ {rp-save} up !
-  this [ =stksz double ] literal + 2/ {sp-save} up !
-  #0 {tos-save} up !
+  this 2/ [ {next-task} ] up !
+  \ Default xt token )
+  [ to' bye ] literal 2/ [ {ip-save} ] up ! 
+  this [ =stksz        ] literal + 2/ [ {rp-save} ] up !
+  this [ =stksz double ] literal + 2/ [ {sp-save} ] up !
+  #0 [ {tos-save} ] up !
   decimal
   io!
   [ t' (literal) ] literal <literal> !
-  opt.float [if] [ $3 ]  literal {precision} up ! [then]
+  opt.float [if] [ $3 ]  literal [ {precision} ] up ! [then]
   [ to' bye ] literal <error> !
   #0 >in ! #-1 dpl !
-  this [ =tib ] literal + #0 tup 2! \ Set terminal input buffer loc.
+  \ Set terminal input buffer loc.
+  this [ =tib ] literal + #0 tup 2! 
   [ {up} ] literal ! ;s
 
 \ "ini" initializes the current task, the system brings itself
@@ -8424,9 +8432,9 @@ opt.multi [if]
   begin pause @+ 0= until  ( pause until zero )
   ! [ {message} literal + ! ;s   ( send message )
 :s receive ( -- msg task-addr : block until message )
-  begin pause {sender} up @ until ( wait until non-zero )
-  {message} up @ {sender} up @
-  #0 {sender} up ! ;s
+  begin pause [ {sender} ] up @ until ( wait until non-zero )
+  [ {message} ] up @ [ {sender} ] up @
+  #0 [ {sender} ] up ! ;s
 [then]
 
 \ That completes the multitasking section, there are only a
@@ -9063,23 +9071,28 @@ opt.float [if] ( Large section of optional code! )
 \ * <https://groups.google.com/g/comp.lang.forth/c/H8Bs-5JSArc> 
 \ * <https://groups.google.com/g/comp.lang.forth/c/pMl8Vzr00X0>
 \
-
-: 2+ #2 + ; ( n -- n )
-: 2- #2 - ; ( n -- n )
-: 1+! #1 swap +! ; ( a -- )
-: /string ( b u1 u2 -- b u : advance string u2 )
-  over min rot over + -rot - ;
+\ Most of the important words are implemented, some are missing
+\ such as "represent", "fe." and words for dealing with single
+\ and double width IEEE-754 floating point values specifically.
+\
 
 system[
   $10 constant #bits  ( = 1 cells 8 * )
   $8000 constant #msb ( = 1 #bits 1- lshift  )
 ]system
 
+:s (2const) r> 2* 2@ ;s compile-only ( R: a --, -- u )
+
+:m 2constant :t mdrop (2const) t, t, ;m
 :m 2variable :t mdrop mswap (var) t, t, munorder ;m
 :m 2literal mswap lit lit ;m
-:s (2const) r> 2* 2@ ;s compile-only ( R: a --, -- u )
-:m 2constant :t mdrop (2const) t, t, ;m
 :m mcreate :t mdrop (var) munorder ;m ( --, "name": var )
+
+: 2+ #2 + ; ( n -- n )
+: 2- #2 - ; ( n -- n )
+: 1+! #1 swap +! ; ( a -- )
+: /string ( b u1 u2 -- b u : advance string u2 )
+  over min rot over + -rot - ;
 
 : spaces bl banner ; ( +n  -- : print space 'n' times )
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
@@ -9257,9 +9270,10 @@ mhex
 : float+ [ 4 ] literal ( [ 1 floats ] literal ) + ; ( a -- a )
 : set-precision ( +n -- : set FP decimals printed out )
   dup #0 [ 5 ] literal within if  ( check within range )
-    {precision} up ! exit ( precision ok )
+    [ {precision} ] up ! exit ( precision ok )
   then [ -$2B ] literal throw ;   ( precision un-ok )
-: precision {precision} up @ ; ( -- u : precision of FP values )
+: precision ( -- u : precision of FP values )
+  [ {precision} ] up @ ; 
 : f@ unaligned? 2@ ;   ( a -- r : fetch FP value )
 : f! unaligned? 2! ;   ( r a -- : store FP value )
 : f, 2, ; ( r -- : write float into dictionary )
@@ -9337,15 +9351,6 @@ mhex
 : f.r >r tuck <# f# #> r> over - spaces type ; ( f +n -- )
 : f. space #0 f.r ; ( f -- : output floating point )
 
-\ TODO: Implement "represent", "fe.", "fs.", ....
-\ TODO: Implement FP input from string
-\
-\ <https://forth-standard.org/standard/float/FEd>
-\ <https://forth-standard.org/standard/float/REPRESENT>
-\
-: represent  ( r c-addr u -- n flag1 flag2 )
-;
-
 ( N.B. 'f' and 'e' require "dpl" to be set correctly! )
 
 : f ( n|d -- f : formatted double to float )
@@ -9375,15 +9380,17 @@ $8000 $4001 2constant fone ( 1.0 fconstant fone )
 
 : exp ( r -- r : raise 2.0 to the power of 'r' )
   2dup f>s dup >r s>f f-     
-  f2* $E1E5 $C010 2literal ( [ -57828.0 ] fliteral )
-  2over fsq $FA26 $400B 2literal ( [ 2001.18 ] fliteral ) f+ f/
-  2over f2/ f- $8AAC $4006 2literal ( [ 34.6680 ] fliteral ) 
+  f2* [ $E1E5 $C010 ] 2literal ( [ -57828.0 ] fliteral )
+  2over fsq [ $FA26 $400B ] 2literal ( [ 2001.18 ] fliteral ) 
+  f+ f/
+  2over f2/ f- 
+  [ $8AAC $4006 ] 2literal ( [ 34.6680 ] fliteral ) 
   f+ f/ f1+ fsq r> + ;
 : fexp  ( r -- r : raise e to the power of 'r' )
   \ 1.4427 = log2(e)
-  $B8AA $4001 2literal ( [ 1.4427 ] fliteral ) f* exp ; 
+  [ $B8AA $4001 ] 2literal ( [ 1.4427 ] fliteral ) f* exp ; 
 : falog ( r -- r ) 
-   $D49A $4002 2literal ( [ 3.3219 ] fliteral ) f* exp ; 
+  [ $D49A $4002 ] 2literal ( [ 3.3219 ] fliteral ) f* exp ; 
 :s get ( "123" -- : get a single signed number )
   bl word dup 1+ c@ [char] - = tuck -
   #0 #0 rot convert drop ( should throw if not number... )
@@ -9423,19 +9430,19 @@ $B172 $4000 2constant fln2 \ ln[2] = 0.69314718 fconstant fln2
 $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 
 : fdeg ( rad -- deg : FP radians to degrees )
-  f2pi f/ $B400 $4009 2literal ( [ 360.0 ] fliteral ) f* ; 
+  f2pi f/ [ $B400 $4009 ] 2literal ( [ 360.0 ] fliteral ) f* ; 
 : frad ( deg -- rad : FP degrees to radians )
-  $B400 $4009 2literal ( [ 360.0 ] fliteral ) f/ f2pi f* ; 
+  [ $B400 $4009 ] 2literal ( [ 360.0 ] fliteral ) f/ f2pi f* ; 
 
 :s >cordic ( f -- n  )
-   $8000 $400F 2literal ( [ 16384.0 ] fliteral ) f* f>s ;s 
+   [ $8000 $400F ] 2literal ( [ 16384.0 ] fliteral ) f* f>s ;s 
 :s cordic> ( n -- f )
-   s>f $8000 $400F 2literal ( [ 16384.0 ] fliteral ) f/ ;s     
+   s>f [ $8000 $400F ] 2literal ( [ 16384.0 ] fliteral ) f/ ;s     
 
 :s quadrant 
   fdup fhpi f< if fdrop #0 exit then 
   fdup  fpi f< if fdrop #1 exit then 
-      $96CD $4003 2literal ( [ fpi fhpi f+ ] 2 literal ) f< 
+      [ $96CD $4003 ] 2literal ( [ fpi fhpi f+ ] 2 literal ) f< 
       if #2 exit then 
   [ $3 ] literal ;s
 :s >sin #2 [ $4 ] literal within if fnegate then ;s
@@ -9584,9 +9591,9 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 
 :s fatan-lo ( r -- r : fatan for r <= 1.0 only )
    fdup fsq fdup 
-   $9F08 $3FFD 2literal f* ( Consider A = 0.07765095 )
-   $932B $BFFF 2literal f+ f* ( Constant B = -0.28743447 )
-   $FEC5 $4000 2literal f+ f* ;s ( Constant C = Pi/4 - A - B )
+[ $9F08 $3FFD ] 2literal f* ( Consider A = 0.07765095 )
+[ $932B $BFFF ] 2literal f+ f* ( Constant B = -0.28743447 )
+[ $FEC5 $4000 ] 2literal f+ f* ;s ( Constant C = Pi/4 - A - B )
 
 \ Using the equation:
 \ 
@@ -9619,8 +9626,8 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
   fdrop
   fdup f0> if fdrop fhpi exit then
   fdup f0< if 
-    fdrop [ $C911 $C001 ] 2literal ( [ fhpi fnegate ] 2literal ) 
-    exit then
+   fdrop [ $C911 $C001 ] 2literal ( [ fhpi fnegate ] 2literal ) 
+   exit then
   [ -$2E ] literal throw ;
 
 : fasin fdup fsq fone fswap f- fsqrt f/ fatan ; ( r -- r )
@@ -11037,47 +11044,294 @@ it being run.
 \ This C code shows the example long division code that could
 \ be used for "opDivMod".
 \
-
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-
-static int long_division(uint32_t n, uint32_t d,
-  uint32_t *quo, uint32_t *rem) {
-  assert(quo);
-  assert(rem);
-  *quo = 0;
-  *rem = 0;
-  if (d == 0)
-    return -1;
-  uint32_t q = 0, r = 0;
-  for (int i = 31; i >= 0; i--) {
-    r <<= 1;
-    r |= !!(n & (1ul << i));
-    if (r >= d) {
-      r -= d;
-      q |= (1ul << i);
-    }
-  }
-  *quo = q;
-  *rem = r;
-  return 0;
-}
-
-int main(int argc, char **argv) {
-  if (argc != 3)
-    return 1;
-  unsigned long op = atol(argv[1]);
-  unsigned long di = atol(argv[2]);
-  uint32_t quo = 0, rem = 0;
-  if (long_division(op, di, &quo, &rem) < 0)
-    return 2;
-  const char *fmt = "%lu / %lu = %lu rem: %lu\n";
-  unsigned long q = quo, r = rem;
-  int e = printf(fmt, op, di, q, r);
-  return e < 0 ? 3 : 0;
-}
+\        
+\        #include <assert.h>
+\        #include <stdio.h>
+\        #include <stdlib.h>
+\        #include <stdint.h>
+\        
+\        static int long_division(uint32_t n, uint32_t d,
+\          uint32_t *quo, uint32_t *rem) {
+\          assert(quo);
+\          assert(rem);
+\          *quo = 0;
+\          *rem = 0;
+\          if (d == 0)
+\            return -1;
+\          uint32_t q = 0, r = 0;
+\          for (int i = 31; i >= 0; i--) {
+\            r <<= 1;
+\            r |= !!(n & (1ul << i));
+\            if (r >= d) {
+\              r -= d;
+\              q |= (1ul << i);
+\            }
+\          }
+\          *quo = q;
+\          *rem = r;
+\          return 0;
+\        }
+\        
+\        int main(int argc, char **argv) {
+\          if (argc != 3)
+\            return 1;
+\          unsigned long op = atol(argv[1]);
+\          unsigned long di = atol(argv[2]);
+\          uint32_t quo = 0, rem = 0;
+\          if (long_division(op, di, &quo, &rem) < 0)
+\            return 2;
+\          const char *fmt = "%lu / %lu = %lu rem: %lu\n";
+\          unsigned long q = quo, r = rem;
+\          int e = printf(fmt, op, di, q, r);
+\          return e < 0 ? 3 : 0;
+\        }
+\        
+\ ## C Program To Simulate SUBLEQ Comparison Functions
+\
+\ This is a C program to simulate the comparison functions,
+\ which are tricky to get correct for all cases and it is
+\ not immediately obvious as to how to implement them.
+\
+\        /* This short program uses Less-Than-Or-Equal-To-Zero
+\         * to create the various signed comparison operators.
+\         *
+\         * The reason for this program is to understand how
+\         * those operators can be implemented on a SUBLEQ
+\         * One Instruction Set Computer.
+\         *
+\         * It is trivial to construct addition, subtraction
+\         * and branching with the SUBLEQ machine, but the
+\         * comparison and bitwise operators are more complex. 
+\         */
+\        
+\        #include <assert.h>
+\        #include <stdio.h>
+\        #include <stdlib.h>
+\        #include <stdint.h>
+\        
+\        #define NELEMS(X) (sizeof((X)) / sizeof((X)[0]))
+\        
+\        typedef int (*cmp_fn)(uint16_t a, uint16_t b);
+\        
+\        typedef struct {
+\          const char *name;
+\          cmp_fn original, subleq;
+\        } cmp_t;
+\        
+\        int o_more(uint16_t a, uint16_t b) { 
+\          return (int16_t)a > (int16_t)b; 
+\        }
+\        
+\        int o_less(uint16_t a, uint16_t b) { 
+\          return (int16_t)a < (int16_t)b; 
+\        }
+\        
+\        int o_eq(uint16_t a, uint16_t b) { 
+\          return a == b; 
+\        }
+\        
+\        int leq0(uint16_t a) {
+\          return ((int16_t)a) <= (int16_t)0;
+\        }
+\        
+\        int s_less(uint16_t a, uint16_t b) {
+\          const int a0 = leq0(a);
+\          const int b0 = leq0(b);
+\          if (a0 && !b0)
+\            return 1;
+\          if (!a0 && b0)
+\            return 0;
+\          if (a0 && b0) {
+\            if (!leq0(a + 1) && leq0(b + 1))
+\              return 0;
+\          }
+\          const int l = leq0((uint16_t)(a - b));
+\          return l ? leq0((uint16_t)((a + 1) - b)) : 0;
+\        }
+\        
+\        int s_more(uint16_t a, uint16_t b) {
+\          return s_less(b, a);
+\        }
+\        
+\        int s_eq(uint16_t a, uint16_t b) {
+\          return !s_more(a, b) && !s_less(a, b);
+\        }
+\        
+\        static const char *yn(int y) { 
+\          return y ? "YES" : " NO"; 
+\        }
+\        
+\        static int number(const char *n) { 
+\          return strtol(n, NULL, 0); 
+\        }
+\        
+\        static cmp_t  compares[] = {
+\          { .name=" <", .original=o_less, .subleq=s_less, },
+\          { .name=" >", .original=o_more, .subleq=s_more, },
+\          { .name="==", .original=o_eq,   .subleq=s_eq,   },
+\        };
+\        static const size_t len = NELEMS(compares);
+\        
+\        static int test(cmp_t *c, uint16_t a, uint16_t b, 
+\              int print) {
+\          const char *name = c->name;
+\          const int r_orig   = c->original(a, b);
+\          const int r_subleq = c->subleq(a, b);
+\          const int same = r_orig == r_subleq;
+\          if (print || !same) {
+\            const char *yes = yn(same);
+\            const int r = fprintf(stdout, 
+\              "%d %s %d = %s : subleq(%d) orig(%d)\n", 
+\              (int)(int16_t)a, name, (int)(int16_t)b, yes, 
+\              r_subleq, r_orig);
+\            if (r < 0)
+\              return -1;
+\          }
+\          return 0;
+\        }
+\        
+\        int main(int argc, char **argv) {
+\          if (argc == 1) {
+\            for (size_t i = 0; i < len; i++) {
+\              cmp_t *c = &compares[i];
+\              uint32_t cnt = 0;
+\              do {
+\                uint32_t a = cnt & 0xFFFF;
+\                       uint32_t b = (cnt >> 16) & 0xFFFFu;
+\                if (test(c, a, b, 0) < 0)
+\                  return 1;
+\              } while (cnt++ != 0xFFFFFFFFul);
+\            }
+\            return 0;
+\          }
+\          if (argc != 3)
+\            return 2;
+\          uint16_t a = number(argv[1]);
+\                 uint16_t b = number(argv[2]);
+\        
+\          for (size_t i = 0; i < len; i++) {
+\            cmp_t *c = &compares[i];
+\            if (test(c, a, b, 1) < 0)
+\              return 3;
+\          }
+\        
+\          return 0;
+\        }
+\
+\ ## C Program to simulate bitwise operators
+\
+\ This program shows how it is possible to implement the
+\ bitwise operators using subtraction, looping and a less
+\ than zero function, this forms the basis of the previous
+\ versions of the bitwise operators (the new version just
+\ uses "mux").
+\
+\        /* Author: Richard James Howe
+\         * Email:  howe.r.j.89@gmail.com 
+\         * Using primitives available in SUBLEQ to perform 
+\         * bitwise operations */
+\        #include <stdio.h>
+\        #include <stdint.h>
+\        #include <stdlib.h>
+\        
+\        #define N   (16)
+\        #define TST (9999)
+\        
+\        typedef int16_t uword_t;
+\        typedef int16_t  word_t;
+\        
+\        static uword_t zlt(uword_t z) {
+\          return ((word_t)z) < 0 ? 0xFFFFu : 0;
+\        }
+\        
+\        static uword_t add(uword_t a, uword_t b) {
+\          return a - (uword_t)((uword_t)0 - b);
+\        }
+\        
+\        static uword_t lshift1(uword_t a) {
+\          return add(a, a);
+\        }
+\        
+\        static uword_t b_or(uword_t a, uword_t b) {
+\          uword_t r = 0;
+\          for (size_t i = 0; i < N; i++) {
+\            r = lshift1(r);
+\            if ((uword_t)(zlt(a) + zlt(b)) != (uword_t)0u)
+\              r++;
+\            a = lshift1(a);
+\            b = lshift1(b);
+\          }
+\          return r;
+\        }
+\        
+\        static uword_t b_xor(uword_t a, uword_t b) {
+\          uword_t r = 0;
+\          for (size_t i = 0; i < N; i++) {
+\            r = lshift1(r);
+\            if ((uword_t)(zlt(a) + zlt(b))==(uword_t)0xFFFFu)
+\              r++;
+\            a = lshift1(a);
+\            b = lshift1(b);
+\          }
+\          return r;
+\        }
+\        
+\        static uword_t b_and(uword_t a, uword_t b) {
+\          uword_t r = 0;
+\          for (size_t i = 0; i < N; i++) {
+\            r = lshift1(r);
+\            if ((uword_t)(zlt(a) + zlt(b))==(uword_t)0xFFFEu)
+\              r++;
+\            a = lshift1(a);
+\            b = lshift1(b);
+\          }
+\          return r;
+\        }
+\        
+\        static uword_t rnd(void) {
+\          return rand();
+\        }
+\        
+\        int main(void) {
+\          int pass_or = 1, pass_xor = 1, pass_and = 1;
+\          for (long i = 0; i < TST; i++) {
+\            uword_t a = rnd(), b = rnd();
+\            uword_t rn = a | b;
+\            uword_t rb = b_or(a, b);
+\            if (rb != rn) {
+\              printf("or fail %x %x - expected %x got %x\n",
+\        	a, b, rn, rb);
+\              pass_or = 0;
+\            }
+\          }
+\          printf("or %s\n", pass_or ? "pass" : "FAIL");
+\          for (long i = 0; i < TST; i++) {
+\            uword_t a = rnd(), b = rnd();
+\            uword_t rn = a ^ b;
+\            uword_t rb = b_xor(a, b);
+\            if (rb != rn) {
+\              printf("xor fail %x %x - expected %x got %x\n", 
+\        	a, b, rn, rb);
+\              pass_xor = 0;
+\            }
+\          }
+\          printf("xor %s\n",  pass_xor ? "pass" : "FAIL");
+\          for (long i = 0; i < TST; i++) {
+\            uword_t a = rnd(), b = rnd();
+\            uword_t rn = a & b;
+\            uword_t rb = b_and(a, b);
+\            if (rb != rn) {
+\              printf("and fail %x %x - expected %x got %x\n", 
+\        	a, b, rn, rb);
+\              pass_and = 0;
+\            }
+\          }
+\          printf("and %s\n",  pass_and ? "pass" : "FAIL");
+\          printf("done %s\n", pass_or && pass_xor && pass_and 
+\           ? "pass" : "FAIL");
+\          return 0;
+\        }
+\        
 
 \ ## Faster SUBLEQ Assembly Operations
 \
@@ -11353,8 +11607,6 @@ int main(int argc, char **argv) {
 \ includes some missing standard Forth words, and the major
 \ things that are missing - do loops and case.
 \
-\ ======================= TODO ================================
-\ This should be a compile time option.
 \
 <ok> @ ' ) <ok> !
 : debug source type ."  ok" cr ; ' debug <ok> !
@@ -11476,10 +11728,10 @@ variable seed here seed !
 : o. $8 ur. ;  ( u -- )
 : d. $A r. ;   ( n -- )
 
-\ : b. base @ swap 2 base ! . base ! ; ( u -- )
-\ : h. base @ swap hex . base ! ;      ( u -- )
-\ : o. base @ swap 8 base ! . base ! ; ( u -- )
-\ : d. base @ swap decimal . base ! ;  ( n -- )
+( : b. base @ swap 2 base ! . base ! ; ( u -- )
+( : h. base @ swap hex . base ! ;      ( u -- )
+( : o. base @ swap 8 base ! . base ! ; ( u -- )
+( : d. base @ swap decimal . base ! ;  ( n -- )
 
 : @bits swap @ and ;                 ( a u -- u )
 : ?\ if postpone \ then ; immediate
@@ -11976,6 +12228,376 @@ ook <ok> !
 : integer? integer 0= ( dpl @ 0>= or ) -$18 and throw ;
 : ingest ( a u -- : opposite of 'dump', load nums into mem )
   cell / for aft integer? over ! cell+ then next drop ;
+
+\ ## Unit Test Framework
+\
+\ Although unit tests are not used in this system (there is
+\ no easy way of running these tests without separating this
+\ section out into a separate file) as there are other methods
+\ used to test the integrity of the Forth a unit test framework
+\ can be useful for those writing large applications in Forth.
+\
+\ This section shows how that can be achieved. The ultimate
+\ goals is to create a set of words, "T{", "->" and "}T" that
+\ can be used to perform and debug unit tests.
+\
+
+: debug source type ."  ok" cr ; ' debug <ok> !
+
+only forth definitions system +order
+
+: ?\ 0= if postpone \ then ; ( f --, <string>| : cond. comp. )
+: 1+! 1 swap +! ;
+: dabs s>d if dnegate then ;   ( d -- ud )
+: +- 0< if negate then ; ( n n -- n : copy sign )
+: >< dup 8 rshift swap 8 lshift or ; ( u -- u : byte swap )
+: m* ( n n -- d : mixed multiplication )
+  2dup xor 0< >r abs swap abs um* r> if dnegate then ; 
+: /string ( b u1 u2 -- b u : advance string u2 )
+  over min rot over + -rot - ; 
+: sm/rem ( dl dh nn -- rem quo: symmetric division )
+  over >r >r         ( dl dh nn -- dl dh,   R: -- dh nn )
+  dabs r@ abs um/mod ( dl dh    -- rem quo, R: dh nn -- dh nn )
+  r> r@ xor +- swap r> +- swap ;
+
+.( BEGIN TEST SUITE DEFINITIONS ) here . cr
+.( SET MARKER 'XXX' ) cr
+marker xxx
+
+variable test
+system +order 
+test +order definitions 
+
+variable total    ( total number of tests )
+variable passed   ( number of tests that passed )
+variable vsp      ( stack depth at execution of '->' )
+variable vsp0     ( stack depth at execution of 'T{' )
+variable n        ( temporary store for 'equal' )
+variable verbose  ( verbosity level of the tests )
+
+1 verbose !
+
+: quine source type cr ; ( -- : print out current input line )
+: ndrop for aft drop then next ;  ( a0...an n -- )
+: ndisplay for aft . then next ;  ( a0...an n -- )
+: empty-stacks depth ndrop ;      ( a0...an -- )
+: .pass   verbose @ 1 > if ."   ok: " space quine then ; ( -- )
+: .failed verbose @ 0 > if ." fail: " space quine then ; ( -- )
+: pass passed 1+! ;               ( -- )
+: fail empty-stacks -$B throw ;   ( -- )
+
+\ 'equal' is the most complex word in this test bench, it tests 
+\ whether two groups of numbers of the same length are equal, 
+\ the length of the numbers is specified by the first argument 
+\ to 'equal'.
+: equal ( a0...an b0...bn n -- a0...an b0...bn n f )
+  dup n !
+  for aft
+    r@ pick r@ n @ 1+ + pick xor if rdrop n @ 0 exit then
+  then next n @ -1 ;
+
+\ '?stacks' is given two numbers representing stack depths, if 
+\ they are not equal it prints out an error message, and calls 
+\ 'abort'.
+: ?stacks ( u u -- )
+  2dup xor
+  if
+    .failed ." Too Few/Many Arguments Provided" cr
+    ." Expected:  " u. cr
+    ." Got: "       u. cr
+    ." Full Stack:" .s cr
+    fail exit
+  else 2drop then ;
+
+\ 'equal?' takes two lists of numbers of the same length and 
+\ checks if they are equal, if they are not then an error 
+\ message is printed and 'abort' is called.
+: ?equal ( a0...an b0...bn n -- )
+  dup >r
+  equal nip 0= if
+    .failed ." Argument Value Mismatch" cr
+    ." Expected:  " r@ ndisplay cr
+    ." Got: "       r@ ndisplay cr
+    fail exit
+  then r> 2* ndrop ;
+
+only forth definitions system +order test +order
+
+: }T depth vsp0 @ - vsp @ 2* ?stacks vsp @ ?equal pass .pass ;
+: -> depth vsp0 @ - vsp ! ;
+: T{ depth vsp0 ! total 1+! ;
+: statistics total @ passed @ ;
+: throws? ( "name" -- n  )
+  postpone ' catch >r empty-stacks r> ; 
+
+: logger( ( "line" -- : print line if verbose set high )
+  verbose @ 1 > if postpone .( cr exit then postpone ( ;
+: logger\ verbose @ 1 > if exit then postpone \ ;
+
+\ And the unit tests begin...
+
+system +order
+test +order
+.( BEGIN FORTH TEST SUITE ) cr
+logger( DECIMAL BASE )
+decimal
+
+T{  1.           ->  1 0 }T
+T{               ->  }T
+T{  1            ->  1 }T
+T{  1 2 3        ->  1 2 3 }T
+T{  1 1+         ->  2 }T
+T{  2 2 +        ->  4 }T
+T{  3 2 4 within -> -1 }T
+T{  2 2 4 within -> -1 }T
+T{  4 2 4 within ->  0 }T
+T{ 98  4 min     ->  4 }T
+T{  1  5 min     ->  1 }T
+T{ -1  5 min     -> -1 }T
+T{ -6  0 min     -> -6 }T
+T{  55 3 max     -> 55 }T
+T{ -55 3 max     ->  3 }T
+T{  3 10 max     -> 10 }T
+T{ -2 negate     ->  2 }T
+T{  0 negate     ->  0 }T
+T{  2 negate     -> -2 }T
+T{ $8000 negate  -> $8000 }T
+T{  0 aligned    ->  0 }T
+T{  1 aligned    ->  2 }T
+T{  2 aligned    ->  2 }T
+T{  3 aligned    ->  4 }T
+T{  3  4 >       ->  0 }T
+T{  3 -4 >       -> -1 }T
+T{  5  5 >       ->  0 }T
+T{  6  6 u>      ->  0 }T
+T{  9 -8 u>      ->  0 }T
+T{  5  2 u>      -> -1 }T
+T{ -4 abs        ->  4 }T
+T{  0 abs        ->  0 }T
+T{  7 abs        ->  7 }T
+T{ $100 $10 $8  /string -> $108 $8 }T
+T{ $100 $10 $18 /string -> $110 $0 }T
+
+T{ 1 2 3 4 5 1 pick -> 1 2 3 4 5 4 }T
+T{ 1 2 3 4 5 0 pick -> 1 2 3 4 5 5 }T
+T{ 1 2 3 4 5 3 pick -> 1 2 3 4 5 2 }T
+
+T{ 3 4 / -> 0 }T
+T{ 4 4 / -> 1 }T
+T{ 1   0 throws? / -> -10 }T
+T{ -10 0 throws? / -> -10 }T
+T{ 2 2   throws? / -> 0 }T
+
+marker string-tests
+
+: s1 $" xxx"   count ;
+: s2 $" hello" count ;
+: s3 $" 123"   count ;
+: s4 $" aBc"   count ;
+: s5 $" abc"   count ;
+: <#> 0 <# #s #> ; ( n -- b u )
+
+logger( Test Strings: )
+logger\ .( s1:  ) space s1 type cr
+logger\ .( s2:  ) space s2 type cr
+logger\ .( s3:  ) space s3 type cr
+
+T{ s1 s2 compare 0= ->  0 }T
+T{ s2 s1 compare 0= ->  0 }T
+T{ s1 s1 compare 0= -> -1 }T
+T{ s2 s2 compare 0= -> -1 }T
+
+.( COMPARE ) cr
+
+T{ s3  123 <#> compare 0= -> -1 }T
+T{ s3 -123 <#> compare 0= ->  0 }T
+T{ s3   99 <#> compare 0= ->  0 }T
+ 
+string-tests
+
+T{ 0 ?dup -> 0 }T
+T{ 3 ?dup -> 3 3 }T
+
+T{ 1 2 3  rot -> 2 3 1 }T
+T{ 1 2 3 -rot -> 3 1 2 }T
+
+T{ 2 3 ' + execute -> 5 }T
+T{ : test-1 [ $5 $3 * ] literal ; test-1 -> $F }T
+
+marker variable-test
+
+logger( Defined variable 'x' ) 
+variable x
+T{ 9 x  ! x @ ->  9 }T
+T{ 1 x +! x @ -> $A }T
+
+variable-test
+
+T{     0 invert -> -1 }T
+T{    -1 invert -> 0 }T
+T{ $5555 invert -> $AAAA }T
+
+T{     0     0 and ->     0 }T
+T{     0    -1 and ->     0 }T
+T{    -1     0 and ->     0 }T
+T{    -1    -1 and ->    -1 }T
+T{ $FA50 $05AF and -> $0000 }T
+T{ $FA50 $FA00 and -> $FA00 }T
+
+T{     0     0  or ->     0 }T
+T{     0    -1  or ->    -1 }T
+T{    -1     0  or ->    -1 }T
+T{    -1    -1  or ->    -1 }T
+T{ $FA50 $05AF  or -> $FFFF }T
+T{ $FA50 $FA00  or -> $FA50 }T
+
+T{     0     0 xor ->     0 }T
+T{     0    -1 xor ->    -1 }T
+T{    -1     0 xor ->    -1 }T
+T{    -1    -1 xor ->     0 }T
+T{ $FA50 $05AF xor -> $FFFF }T
+T{ $FA50 $FA00 xor -> $0050 }T
+
+system +order
+T{ $FFFF     1 um+ -> 0 1  }T
+T{ $40   $FFFF um+ -> $3F 1  }T
+T{ 4         5 um+ -> 9 0  }T
+
+T{ $FFFF     1 um* -> $FFFF     0 }T
+T{ $FFFF     2 um* -> $FFFE     1 }T
+T{ $1004  $100 um* ->  $400   $10 }T
+T{     3     4 um* ->    $C     0 }T
+system -order
+
+T{     1     1   < ->  0 }T
+T{     1     2   < -> -1 }T
+T{    -1     2   < -> -1 }T
+T{    -2     0   < -> -1 }T
+T{ $8000     5   < -> -1 }T
+T{     5    -1   < -> 0 }T
+
+T{     1     1  u< ->  0 }T
+T{     1     2  u< -> -1 }T
+T{    -1     2  u< ->  0 }T
+T{    -2     0  u< ->  0 }T
+T{ $8000     5  u< ->  0 }T
+T{     5    -1  u< -> -1 }T
+
+T{     1     1   = ->  -1 }T
+T{    -1     1   = ->   0 }T
+T{     1     0   = ->   0 }T
+
+T{   2 dup -> 2 2 }T
+T{ 1 2 nip -> 2 }T
+T{ 1 2 over -> 1 2 1 }T
+T{ 1 2 tuck -> 2 1 2 }T
+T{ 1 negate -> -1 }T
+T{ 3 4 swap -> 4 3 }T
+T{ 0 0= -> -1 }T
+T{ 3 0= ->  0 }T
+T{ -5 0< -> -1 }T
+T{ 1 2 3 2drop -> 1 }T
+
+T{ 1 2 lshift -> 4 }T
+T{ 1 $10 lshift -> 0 }T
+T{ $4001 4 lshift -> $0010 }T
+
+T{ 8     2 rshift -> 2 }T
+T{ $4001 4 rshift -> $0400 }T
+T{ $8000 1 rshift -> $4000 }T
+
+T{ 99 throws? throw -> 99 }T
+
+T{ 50 10 /mod ->  0  5 }T
+( T{ -4 3  /mod -> -1 -1 }T )
+( T{ -8 3  /mod -> -2 -2 }T )
+
+T{     0 ><   -> 0     }T
+T{    -1 ><   -> -1    }T
+T{ $0001 ><   -> $0100 }T
+T{ $CAFE ><   -> $FECA }T
+T{ $1234 ><   -> $3412 }T
+
+marker definition-test
+
+logger( Created word 'y' 0 , 0 , )
+create y 0 , 0 ,
+T{ 4 5 y 2! -> }T
+T{ y 2@ -> 4 5 }T
+
+: e1 $" 2 5 + " count ;
+: e2 $" 4 0 / " count ;
+: e3 $" : z [ 4 dup * ] literal ; " count ;
+logger\ .( e1: ) space e1 type cr
+logger\ .( e2: ) space e2 type cr
+logger\ .( e3: ) space e3 type cr
+T{ e1 evaluate -> 7 }T
+T{ e2 throws? evaluate -> $A negate }T
+T{ e3 evaluate z -> $10 }T
+
+definition-test
+
+
+T{ here 4 , @ -> 4 }T
+T{ here 0 , here swap cell+ = -> -1 }T
+
+\ T{ depth depth depth -> 0 1 2 }T
+
+T{ char 0     -> $30 }T
+T{ char 1     -> $31 }T
+T{ char g     -> $67 }T
+T{ char ghijk -> $67 }T
+
+T{ #vocs 8 min -> 8 }T    \ minimum number of vocabularies is 8
+T{ b/buf       -> $400 }T  \ b/buf should always be 1024
+T{ here 4 allot -4 allot here = -> -1 }T
+
+$FFFF constant min-int 
+$7FFF constant max-int
+$FFFF constant 1s
+
+T{       0 s>d              1 sm/rem ->  0       0 }T
+T{       1 s>d              1 sm/rem ->  0       1 }T
+T{       2 s>d              1 sm/rem ->  0       2 }T
+T{      -1 s>d              1 sm/rem ->  0      -1 }T
+T{      -2 s>d              1 sm/rem ->  0      -2 }T
+T{       0 s>d             -1 sm/rem ->  0       0 }T
+T{       1 s>d             -1 sm/rem ->  0      -1 }T
+T{       2 s>d             -1 sm/rem ->  0      -2 }T
+T{      -1 s>d             -1 sm/rem ->  0       1 }T
+T{      -2 s>d             -1 sm/rem ->  0       2 }T
+T{       2 s>d              2 sm/rem ->  0       1 }T
+T{      -1 s>d             -1 sm/rem ->  0       1 }T
+T{      -2 s>d             -2 sm/rem ->  0       1 }T
+T{       7 s>d              3 sm/rem ->  1       2 }T
+T{       7 s>d             -3 sm/rem ->  1      -2 }T
+T{      -7 s>d              3 sm/rem -> -1      -2 }T
+T{      -7 s>d             -3 sm/rem -> -1       2 }T
+T{ max-int s>d              1 sm/rem ->  0 max-int }T
+T{ min-int s>d              1 sm/rem ->  0 min-int }T
+T{ max-int s>d        max-int sm/rem ->  0       1 }T
+T{ min-int s>d        min-int sm/rem ->  0       1 }T
+T{      1s 1                4 sm/rem ->  3 max-int }T
+T{       2 min-int m*       2 sm/rem ->  0 min-int }T
+T{       2 min-int m* min-int sm/rem ->  0       2 }T
+T{       2 max-int m*       2 sm/rem ->  0 max-int }T
+T{       2 max-int m* max-int sm/rem ->  0       2 }T
+T{ min-int min-int m* min-int sm/rem ->  0 min-int }T
+T{ min-int max-int m* min-int sm/rem ->  0 max-int }T
+T{ min-int max-int m* max-int sm/rem ->  0 min-int }T
+T{ max-int max-int m* max-int sm/rem ->  0 max-int }T
+
+T{ :noname 2 6 + ; execute -> 8 }T
+
+.( TESTS COMPLETE ) cr
+decimal
+.( passed: ) statistics u. space .( / ) 0 u.r cr
+.( here:   ) here . cr
+statistics <> ?\ .( [FAILED]     ) cr  \ abort
+statistics  = ?\ .( [ALL PASSED] ) cr   
+
+.( CALLING MARKER 'XXX' ) cr
+xxx
 
 \ ## Floating Point Implementation
 \
@@ -12735,5 +13357,4 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ uses a LaTeX template with its own license, available from:
 \ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
 \
-
 

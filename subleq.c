@@ -3,7 +3,7 @@
 
 typedef uint16_t u16;
 static const u16 n = -1;
-static u16 m[1<<16], pc = 0;
+static u16 m[1<<16], pc = 0, prog = 0;
 
 int main(int argc, char **argv) {
 	for (long i = 1, d = 0; i < argc; i++) {
@@ -11,7 +11,7 @@ int main(int argc, char **argv) {
 		if (!f)
 			return 1;
 		while (fscanf(f, "%ld,", &d) > 0)
-			m[pc++] = d;
+			m[prog++] = d;
 		if (fclose(f) < 0)
 			return 2;
 	}
