@@ -3465,7 +3465,7 @@ system[
 :s (push) r> dup [@] swap 1+ >r ;s ( -- n : inline push value )
 
 :m lit (push) t, ;m ( n -- : compile a literal )
-:m literal lit ;m
+:m literal lit ;m ( n -- : synonym for "lit" )
 
 \ The meta-compiler version of "\[" and "\]" do not do 
 \ anything, they exist to make the code more "forth" like. As
@@ -3772,7 +3772,7 @@ system[
 variable blk ( -- a : loaded block )
 variable scr ( -- a : latest listed block )
 
-2F t' scr >tbody t!
+2F t' scr >tbody t! ( Set default block to list, an empty one )
 
 user base  ( -- a : push the radix for numeric I/O )
 user dpl   ( -- a : decimal point variable )
@@ -4152,7 +4152,7 @@ system[
 : cell #2 ;   ( -- u : push bytes in cells to stack )
 : cell+ cell + ; ( a -- a : increment address by cell width )
 : cells 2* ;     ( u -- u : multiply # of cells to get bytes )
-: cell- cell - ;
+: cell- cell - ; ( a -- a : decrement address by cell width )
 
 \ "execute" takes an "execution token", which is just a fancy
 \ name for an address of a function, and then executes that
@@ -4464,7 +4464,7 @@ system[
 \ target.
 \
 
-: c@ 
+: c@ ( a -- c : character load )
   @+ swap #1 and if 
     [ 8 ] literal rshift exit 
   then [ FF ] literal and ;
@@ -5063,7 +5063,7 @@ system[ user tup =cell tallot ]system
 : um+ 2dup + >r r@ 0>= >r ( u u -- u carry )
   2dup and 0< r> or >r or 0< r> and negate r> swap ;
 : dnegate invert >r invert #1 um+ r> + ; ( d -- d )
-: d+ >r swap >r um+ r> + r> + ;         ( d d -- d )
+: d+ >r swap >r um+ r> + r> + ; ( d d -- d )
 : um* ( u u -- ud : double cell width multiply )
   #0 swap ( u1 0 u2 ) [ $F ] literal
   for
@@ -5268,8 +5268,8 @@ system[ user tup =cell tallot ]system
     if tap else <tap> @execute then
   repeat drop over - ;
 : expect <expect> @execute span ! drop ; ( a u -- )
-: tib source drop ; ( -- b )
-: query 
+: tib source drop ; ( -- b : get Terminal Input Buffer )
+: query ( -- : get a new line of input, store it in TIB )
   tib [ =buf ] literal <expect> @execute tup ! drop #0 >in ! ;
 
 \ "-trailing" removes the trailing white-space from an input
@@ -5403,7 +5403,7 @@ system[ user tup =cell tallot ]system
 \ which could also be done for "type", to help prevent mangled
 \ output. This is not done however.
 \
-:s banner ( +n c -- )
+:s banner ( +n c -- : output 'c' 'n' times )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ;s
 
 \ "hold" adds a number to hold space, this version does not
@@ -6125,8 +6125,10 @@ system[ user tup =cell tallot ]system
     1- swap >r ( recurse -> ) (order) over r@ xor
     if 1+ r> -rot exit then rdrop
   then ;
-: -order get-order (order) nip set-order ; ( wid -- )
-: +order dup >r -order get-order r> swap 1+ set-order ;
+: -order ( wid -- : remove vocabulary from search order )
+  get-order (order) nip set-order ; 
+: +order ( wid -- : add vocabulary to search order )
+  dup >r -order get-order r> swap 1+ set-order ; 
 
 \ "forth-wordlist" contains the standard Forth words,
 \ excluding the root Forth words, as mentioned, and "system"
@@ -6152,7 +6154,8 @@ root[
 \ and Forth vocabularies.
 \
 
-:r forth root-voc forth-wordlist #2 set-order ;r ( -- )
+:r forth ( -- : set system to contain default vocabularies )
+   root-voc forth-wordlist #2 set-order ;r 
 
 \ This version of "only" is implemented as "-1 set-order",
 \ but it could be implemented other ways, such as
@@ -6199,7 +6202,7 @@ root[
 \ itself.
 \
 
-:r words ( -- )
+:r words ( -- : list all words in all loaded vocabularies )
   cr get-order
   begin ?dup while swap ( dup u. ." : " ) @
     begin ?dup
@@ -6370,7 +6373,7 @@ root[
   count + h? ! align    ( skip over packed word and align )
   [ $CAFE ] literal     ( push constant for compiler safety )
   postpone ] ;          ( turn compile mode on )
-:to :noname ( "name", -- xt )
+:to :noname ( "name", -- xt : make a definition with no name )
   align here #0 [ $CAFE ] literal postpone ] ; 
 
 \ "'" is an immediate word that attempts to
