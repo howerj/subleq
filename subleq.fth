@@ -3787,7 +3787,7 @@ system[
        h constant h?  ( -- a : push the location of dict. ptr )
 {cycles} constant cycles ( -- a : number of "cycles" ran for )
     {sp} constant sp ( -- a : address of v.stk ptr. )
-  {user} constant user? ( -- a : )
+  {user} constant user? ( -- a : address of user alloc var )
          variable calibration E00 t' calibration >tbody t!
 ]system
 
@@ -4074,8 +4074,8 @@ system[
 \
 : u< 2dup 0>= swap 0>= <> >r < r> <> ; ( u1 u2 -- f )
 : u> swap u< ; ( u1 u2 -- f : unsigned greater than )
-: u>= u< 0= ; ( u1 u2 -- f )
-: u<= u> 0= ; ( u1 u2 -- f )
+: u>= u< 0= ; ( u1 u2 -- f : unsigned greater or equal to )
+: u<= u> 0= ; ( u1 u2 -- f : unsigned less than or equal to )
 
 \ "within" is a word that is used for bounds checking. Whether
 \ to include this word or not in the base system is up for
@@ -9655,9 +9655,10 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ to start a system or program from the beginning.
 \
 \ We could define a "warm" word with the following
-\ definition:
+\ definition, or "restart":
 \
 \        : warm 0 >r ;
+\        : restart 0 >r ;
 \
 \ This definition performs a "warm start" of sorts, and does
 \ so in a non-portable manner. The VM handles the return stack
@@ -11303,7 +11304,7 @@ it being run.
 \            uword_t rb = b_or(a, b);
 \            if (rb != rn) {
 \              printf("or fail %x %x - expected %x got %x\n",
-\        	a, b, rn, rb);
+\                a, b, rn, rb);
 \              pass_or = 0;
 \            }
 \          }
@@ -11314,7 +11315,7 @@ it being run.
 \            uword_t rb = b_xor(a, b);
 \            if (rb != rn) {
 \              printf("xor fail %x %x - expected %x got %x\n", 
-\        	a, b, rn, rb);
+\                a, b, rn, rb);
 \              pass_xor = 0;
 \            }
 \          }
@@ -11325,7 +11326,7 @@ it being run.
 \            uword_t rb = b_and(a, b);
 \            if (rb != rn) {
 \              printf("and fail %x %x - expected %x got %x\n", 
-\        	a, b, rn, rb);
+\                a, b, rn, rb);
 \              pass_and = 0;
 \            }
 \          }
@@ -11908,6 +11909,85 @@ mark
 \ another show case in leveraging the built in capabilities
 \ of Forth to accomplish a task. It has no utility.
 \
+\ The systems uses a CRC as a hash algorithm for passwords. 
+\ Cyclic Redundancy Checks (CRC) are usually used to detect
+\ errors within packets of data. The can be cajoled and coaxed
+\ into other uses, this one it is particularly poorly suited
+\ to.
+\
+\ It is well known that cryptographic hash algorithms can be
+\ used for encryption, we could use our non-cryptographic has
+\ function for a similar purpose, except it would be trivial
+\ to break, in keeping with the computer security practices 
+\ of the 1980s.
+\
+\ An insecure stream cipher is easy to construct; use an 
+\ initial 16-bit value as the 'key', feed the output to itself
+\ to generate a new 16-bit value, use the lowest bits to XOR
+\ with the text to produce the cipher text (or add high and
+\ low bytes together). This would make for a good way to 
+\ encrypt data in a more realistic cyberpunk game, as would 
+\ this login system. Making a system designed to be broken.
+\
+\ It is amazing the multitude of uses hash functions have,
+\ although the above method is insecure, using a cryptographic
+\ hash function it is possible to produce a usable crypto
+\ scheme for encrypting data.
+\
+\ Uses for hash functions include:
+\
+\ * Error detection
+\ * Random number generation
+\ * Hash tables, Bloom filters
+\ * With a cryptographic hash function and suitable construct:
+\   - Encryption
+\   - Message authentication
+\   - Cryptographically secure random number generation
+\   - Message integrity
+\   - Removing duplication of files and uniquely identifying
+\   files and resources.
+\ * And more!
+\
+\ On to how it works after that digression...each user is
+\ assigned a new user name which is stored in a special
+\ vocabulary for users. This means we can use the Forth
+\ interpreter for input, "words" to list user names, and
+\ the vocabulary as the password database. 
+\
+\ A password is also expected to be a space delimited
+\ string and requires slightly more work to parse the input,
+\ but only slightly.
+\
+\ The word "user:" is used to create a new entry in the
+\ password database. It expects two space delimited words,
+\ the first being the user name and the second the password.
+\ Entries can be added but it is more difficult to remove them
+\ from the database.
+\
+\ ".users" can be used to list the words in the password
+\ database. It performs some vocabulary manipulation, calls
+\ "words" and then restores the vocabulary. 
+\
+\ "login" is used to ask for user name and password 
+\ combination. It prompts for both and puts the system back
+\ into the Forth loop if a user name / password combination
+\ check succeeds. There are numerous ways of breaking out
+\ of that login loop that can be used to bypass the login 
+\ system.
+\
+\ "conceal" and "reveal" are interesting words, they use
+\ the fact that we are most likely using a terminal that
+\ understand ANSI escape codes. Unfortunately the codes are
+\ not widely supported. The "conceal" code turns of terminal
+\ echoing and the "reveal" turns it back on. This can be used
+\ to hide the password as it is typed. It would be possible
+\ to override the "<echo>" vector, however the terminal
+\ emulator itself could be setup to echo characters, something
+\ this program cannot control.
+\
+\ To make the system slightly harder to crack we could add
+\ the length of the password into the CRC hash.
+\
 
 <ok> @ ' ) <ok> !
 
@@ -11930,40 +12010,71 @@ system +order
 ( A primitive user login system [that is super insecure]. )
 wordlist +order definitions
 wordlist constant users
-dup constant (prompt)
+constant (prompt) ( -- xt : store prompt for later use )
+variable proceed 0 proceed !
 : conceal $1B emit ." [8m" ; ( NB. Could also override <emit> )
 : reveal $1B emit ." [28m" ;
-: secure users 1 set-order ;
+: secure users 1 set-order ; ( load password database )
 : restore only forth definitions decimal (prompt) <ok> ! ;
-: message ." user: " ;
-: fail ." Invalid username or password" cr message ;
-: success ." logged in." ;
-: pass token count crc ; ( super-super-secure <_< )
+: message ." user: " ; ( -- : prompt asking for user-name )
+: fail ." Invalid username or password" cr ; ( -- error msg )
+: success 1 proceed ! ." logged in." ; ( signal success )
+: pass token count crc ; ( "xxx" -- u : super-secure <_< )
 : ask ." pass: " conceal query reveal ;
+: empty depth for aft drop then next ; ( ??? -- : empty stack )
+: prompt secure message ' ) <ok> ! ;
+: get query eval ; ( "xxx" -- : get user name )
+: retry begin prompt ' get catch drop empty proceed @ until ;
 
 forth-wordlist +order definitions
 
-: user:
-  create pass ,
+\ The user login system presents only a few words to manage
+\ and use it. "user:", "login" and ".users". They have already
+\ been described.
+\
+\ Missing are words to remove an entry (difficult to add), to 
+\ change a password (easy to add) and the word list used to 
+\ back the database (which could be added easily enough).
+\
+: user: ( "user" "password" -- : create new user entry )
+  users +order definitions create pass , only forth definitions
   does> ask @ pass = if restore success exit then fail ;
-: login secure message ' ) <ok> ! ;
-: .users get-order secure words set-order ;
+: login 0 proceed ! retry ; ( -- : enter login system )
+: .users get-order secure words set-order ; ( -- : list users )
 
-users +order definitions
+\ Here is an example password database and usage, note how
+\ easy it is to use, and how little code it took us to get
+\ to this point (even if many improvements could be made). Both
+\ the user names and passwords are case sensitive, and cannot
+\ contain any control characters.
+\
+\ We could turn this into a turnkey system by replacing the
+\ initialization vector in "<cold>" with a new word that 
+\ calls the normal initialization code, then "login".
+\ 
+\ This could be done like so: 
+\
+\        system +order
+\        : restart 0 >r ;
+\        : boot only forth definitions ini login quit ;
+\        ' boot 2/ <cold> !
+\        system -order
+\        0 here dump    ( if we want to save the image )
+\        restart
+\
+
 user: guest guest
 user: admin password1
 user: archer dangerzone
 user: cyril figgis
 user: lana stirling
-users -order
 .( EFORTH ONLINE ) cr
-<ok> ! login
+login
 
 \ ## Sokoban
 \
 \ This is a game of Sokoban, to play, type:
 \
-\       ./embed sokoban.fth /dev/stdin
 \       cat sokoban.fth /dev/stdin | ./subleq subleq.dec
 \
 \ On the command line. Four maps are provided, more can be
