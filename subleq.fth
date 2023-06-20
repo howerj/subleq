@@ -8590,6 +8590,7 @@ opt.multi [if]
 \ necessary, complications which are not needed.
 \
 
+\ BUG: Empty line append causes problems
 opt.editor [if]
 : editor [ {editor} ] literal #1 set-order ; ( BLOCK editor )
 :e q only forth ;e ( -- : exit back to Forth interpreter )
@@ -12084,8 +12085,7 @@ login
 \ * Author:  Richard James Howe
 \ * License: The Unlicense (excluding the maps)
 \
-
-variable ook <ok> @ ook ! ' ( <ok> !
+' ( <ok> !
 .( LOADING... ) cr
 
 only forth definitions hex
@@ -12183,17 +12183,18 @@ create rule 3 c, 0 c, 0 c, 0 c,
      dup c@ boulder = if n1+ then
      1+
    then next drop ;
+: instructions ;                      ( -- )
 : .boulders  ." BOLDERS: " #boulders u. cr ; ( -- )
-: .moves    ." MOVES: " moves    @ u. cr ; ( -- )
-: .help     ." WASD - MOVEMENT" cr ." H    - HELP" cr ; ( -- )
+: .moves     ." MOVES:   " moves    @ u. cr ; ( -- )
+: .help      ." WASD:     MOVEMENT" cr ( -- ) 
+             ." H:        HELP" cr ; 
 : .maze lblk @ list ;                  ( -- )
 : show ( page cr ) .maze .boulders .moves .help ; ( -- )
 : solved? #boulders 0= ;               ( -- )
 : finished? solved? if 1 throw then ; ( -- )
-: instructions ;                      ( -- )
 : where >r arena r> locate ;          ( c -- u f )
 : player? player where 0= if drop player+ where else -1 then ;
-: player! player? 0= throw position ! ; ( -- )
+: player! player? 0= -2 and throw position ! ; ( -- )
 : start player! 0 moves ! ;           ( -- )
 : .winner show cr ." SOLVED!" cr ;    ( -- )
 : .quit cr ." Quitter!" cr ;          ( -- )
@@ -12215,15 +12216,14 @@ create rule 3 c, 0 c, 0 c, 0 c,
 sokoban-wordlist -order definitions
 sokoban-wordlist +order
 
-: sokoban ( k -- )
+: sokoban ( k -- : play a game of sokoban given a Forth block )
   maze! start
   begin
     show input ' command catch ?dup
   until finish ;
 
-decimal 47 maze!
 only forth definitions decimal
-editor z
+editor 30 r z
  1 a            XXXXX
  2 a            X   X
  3 a            X*  X
@@ -12235,7 +12235,6 @@ editor z
  9 a        XXXXX XXXX X@XXXX  ..X
 10 a            X      XXX  XXXXXX
 11 a            XXXXXXXX
-12 a
 n z
  1 a       XXXXXXXXXXXX
  2 a       X..  X     XXX
@@ -12247,8 +12246,7 @@ n z
  8 a         X *  * * * X
  9 a         X    X     X
 10 a         XXXXXXXXXXXX
-11 a
-n z
+? n z
  1 a               XXXXXXXX
  2 a               X     @X
  3 a               X *X* XX
@@ -12275,11 +12273,13 @@ n z
 13 a       XXXXXXXXX
 q
 
+system +order ' ok <ok> ! only forth definitions decimal
 .( LOADED ) cr
 .( Type '# sokoban' to play, where '#' is a block number ) cr
-.( For example "47 sokoban" ) cr
+.( For example "30 sokoban" ) cr
 .( Follow the on screen instructions to play a game. ) cr
-ook <ok> !
+
+
 
 \ ## Simple Bootloader
 \
