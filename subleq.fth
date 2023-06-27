@@ -8521,9 +8521,15 @@ opt.multi [if]
 \ Missing are words to perform searching, replacing, and
 \ swapping lines. A rudimentary help message might be useful.
 \
+\ Another useful facility would be words to copy and manipulate
+\ entire blocks.
+\
 \ A command to enter a mode to enter 16 consecutive lines
 \ would aid in editing larger amounts of text. Perhaps empty
 \ lines would exit this mode early.
+\
+\ Specific words, or a mode, for displaying and editing 
+\ sections of memory as hexadecimal values would be a useful.
 \
 \ They are all easy to add, but are not necessary. The
 \ fact that execute, "x", calls "q" might cause problems when
@@ -12074,16 +12080,58 @@ login
 
 \ ## Sokoban
 \
-\ This is a game of Sokoban, to play, type:
+\ * Author:  Richard James Howe
+\ * License: The Unlicense (excluding the maps)
+\
+\ This is a game of Sokoban, to play, on the command line type:
 \
 \       cat sokoban.fth /dev/stdin | ./subleq subleq.dec
 \
-\ On the command line. Four maps are provided, more can be
-\ found online at <https://github.com/begoon/sokoban-maps>,
-\ where the four maps were found.
+\ Four maps are provided, more can be found online at 
+\ <https://github.com/begoon/sokoban-maps>, where the four
+\ maps were found.
+\ 
+\ The object of the puzzle game is to push boulders
+\ (represented by an asterisk) on to specific locations on
+\ the floor (the dots) with your player character (an at
+\ sign) whilst navigating obstacles (walls and other boulders).
+\ Boulders can only be pushed in the cardinal directions.
 \
-\ * Author:  Richard James Howe
-\ * License: The Unlicense (excluding the maps)
+\ Victory is achieved when all boulders occupy all dots,
+\ defeat when victory is no longer possible (which is not
+\ checked for by this implementation).
+\
+\ Like other Forth modules this one leverages the standard
+\ Forth mechanisms and facilities to achieve the goal in a
+\ Forth like way. The Forth block editor is used to input
+\ the maps into blocks, a custom input method is not
+\ necessary. This also allows level design and viewing to
+\ be done with block editor.
+\
+\ With a more traditional Forth block layer (that saves blocks
+\ to mass storage) we could also the block layer to save
+\ games and restore games. This would require putting some
+\ of the game state within the Sokoban maps (such as number
+\ of moves).
+\
+\ The game engine works directly on the text input by text
+\ editor and applies a series of rules for transforming sets
+\ of two or three characters into another set in any of the
+\ four cardinal directions.
+\
+\ For game help, press 'h' at run time. The 'w', 'a', 's' and
+\ 'd' characters are used to move north, west, south and
+\ east respectively. An 'q' can be used to end the current
+\ game. The game is not reset after playing, to redo a map
+\ from scratch it must be reloaded again.
+\
+\ Game maps are loaded into block 30 (decimal) and a game
+\ of Sokoban can be played by typing "30 sokoban".
+\
+\ Most of the words used to make the Sokoban game are placed
+\ within a Sokoban vocabulary as they are specific to the game,
+\ they are some useful multipurpose words such as "pack" and
+\ "locate".
 \
 ' ( <ok> !
 .( LOADING... ) cr
@@ -12093,12 +12141,12 @@ only forth definitions hex
 variable sokoban-wordlist
 sokoban-wordlist +order definitions
 
-$20    constant maze
-char X constant wall
-char * constant boulder
-char . constant off
-char & constant on
-char @ constant player
+$20    constant maze    ( blank, or space, can be moved on )
+char X constant wall    ( wall, a lovely brick construction )
+char * constant boulder ( the burden of Sisyphus )
+char . constant off     ( switch / pressure plate )
+char & constant on      ( boulder + switch )
+char @ constant player  ( player character - amazing graphics )
 char ~ constant player+ ( player + off pad )
 $10    constant l/b     ( lines   per block )
 $40    constant c/b     ( columns per block )
@@ -12111,19 +12159,19 @@ variable lblk      ( last block loaded )
 ( used to store rule being processed )
 create rule 3 c, 0 c, 0 c, 0 c,
 
-: n1+ swap 1+ swap ; ( n n -- n n )
-: match              ( a a -- f )
+: n1+ swap 1+ swap ; ( n n -- n n : inc. second item on stk. )
+: match ( a a -- f )
   n1+ ( replace with umin of both counts? )
   count
   for aft
     count rot count rot <> if 2drop rdrop 0 exit then
   then next 2drop -1 ;
 
-: beep bell emit ; ( -- )
-: ?apply           ( a a a -- a, R: ? -- ?| )
+: beep bell emit ; ( -- : emit bell character )
+: ?apply ( a a a -- a, R: ? -- ?| )
   >r over swap match if drop r> rdrop exit then rdrop ;
 
-: apply ( a -- a )
+: apply ( a -- a : check for a rule and apply it )
  $" @ "  $"  @"  ?apply
  $" @."  $"  ~"  ?apply
  $" @* " $"  @*" ?apply
@@ -12140,7 +12188,7 @@ create rule 3 c, 0 c, 0 c, 0 c,
 : pack ( c0...cn b n -- )
   2dup swap c! for aft 1+ tuck c! then next drop ;
 
-: locate ( b u c -- u f )
+: locate ( b u c -- u f : locate 'c' in buffer b/u )
   >r
   begin
     ?dup
@@ -12155,8 +12203,8 @@ create rule 3 c, 0 c, 0 c, 0 c,
 : +position position @ relative ; ( +x +y -- pos )
 : double 2* swap 2* swap ;  ( u u -- u u )
 : arena lblk @ block b/buf ; ( -- b u )
-: >arena arena drop + ;     ( pos -- a )
-: fetch                     ( +x +y -- a a a )
+: >arena arena drop + ; ( pos -- a )
+: fetch ( +x +y -- a a a )
   2dup   +position >arena >r
   double +position >arena r> swap
   position @ >arena -rot ;
@@ -12164,7 +12212,7 @@ create rule 3 c, 0 c, 0 c, 0 c,
 : 3reverse -rot swap ;               ( 1 2 3 -- 3 2 1 )
 : rule! rule@ 3reverse rule 3 pack ; ( +x +y -- )
 : think 2dup rule! rule apply >r fetch r> ; ( +x +y --a a a a )
-: count! count rot c! ;              ( a a -- )
+: count! count rot c! ; ( a a -- )
 
 \ 'act' could be made to be more elegant, but it works, it
 \ handles rules of length 2 and length 3
@@ -12172,56 +12220,79 @@ create rule 3 c, 0 c, 0 c, 0 c,
 : act ( a a a a -- )
   count swap >r 2 =
   if
-     drop swap r> count! count!
+    drop swap r> count! count!
   else
-     3reverse r> count! count! count!
+    3reverse r> count! count! count!
   then drop ;
 
-: #boulders ( -- n )
+: #boulders ( -- n : number of boulders left on the map )
    0 arena
    for aft
      dup c@ boulder = if n1+ then
      1+
    then next drop ;
-: instructions ;                      ( -- )
+
+: input key ; ( -- c : get a character of input )
+
+: instructions ( -- : help could be stored in blocks )
+  ." THIS IS A GAME OF SOKOBAN, A GAME OF SKILL, DARING AND" cr
+  ." DARING SKILL. THE OBJECT OF THE GAME IS TO MOVE THE" cr
+  ." BOULDERS ON TO THE SWITCHES / PRESSURE PLATES IN THE" cr
+  ." FEWEST MOVES. TO PLAY THIS GAME YOU CAN TYPE:" cr cr
+  ."         30 sokoban" cr cr
+  ." THE PLAYER AND BOULDERS CAN ONLY BE PUSHED, AND ONLY" cr
+  ." PUSHED IN THE CARDINAL DIRECTIONS [NORTH, EAST, SOUTH" cr
+  ." AND WEST]. THE 'w', 'a', 's' AND 'd' KEYS ARE USED FOR" cr
+  ." MOVEMENT. 'q' CAN BE USED TO QUIT." cr
+  ." TILE KEY:" cr
+  ." ' ' : AN EMPTY, NAVIGABLE TILE" cr
+  ." 'X' : AN IMPASSIBLE WALL." cr
+  ." '*' : YOUR ARCH NEMESIS. THE BOULDER." cr
+  ." '.' : A SWITCH / PRESSURE PLATE." cr
+  ." '@' : YOU, THE HANDSOME AND WISE PLAYER CHARACTER." cr
+  ." '&' : BOULDER ON TOP OF SWITCH." cr
+  ." '~' : PLAYER ON TOP OF SWITCH." cr cr
+  ." THE GAME IS WON WHEN ALL '*' ARE ON TOP OF '.'" cr
+  ." GOOD LUCK COMMANDER." cr cr input drop ; 
 : .boulders  ." BOLDERS: " #boulders u. cr ; ( -- )
 : .moves     ." MOVES:   " moves    @ u. cr ; ( -- )
-: .help      ." WASD:     MOVEMENT" cr ( -- ) 
+: .help      ." WASD:     MOVEMENT" cr ( -- : short help ) 
              ." H:        HELP" cr ; 
-: .maze lblk @ list ;                  ( -- )
+: .maze lblk @ list ; ( -- : display the maze )
 : show ( page cr ) .maze .boulders .moves .help ; ( -- )
-: solved? #boulders 0= ;               ( -- )
-: finished? solved? if 1 throw then ; ( -- )
-: where >r arena r> locate ;          ( c -- u f )
+: solved? #boulders 0= ; ( -- : no boulders left = WIN )
+: finished? solved? if 1 throw then ; ( -- : throw on victory )
+: where >r arena r> locate ; ( c -- u f )
 : player? player where 0= if drop player+ where else -1 then ;
 : player! player? 0= -2 and throw position ! ; ( -- )
-: start player! 0 moves ! ;           ( -- )
-: .winner show cr ." SOLVED!" cr ;    ( -- )
-: .quit cr ." Quitter!" cr ;          ( -- )
+: start player! 0 moves ! ; ( -- : reset some state )
+: .winner show cr ." SOLVED!" cr ; ( -- : Win message )
+: .quit cr ." Quitter!" cr ; ( -- : Quit message )
 : finish 1 = if .winner exit then .quit ; ( n -- )
-: rules think act player! ;           ( +x +y -- )
-: +move 1 moves +! ;                  ( -- )
-: ?ignore over <> if rdrop then ;     ( c1 c2 --, R: x -- | x )
+: rules think act player! ; ( +x +y -- )
+: +move 1 moves +! ; ( -- : increment move counter )
+: ?ignore over <> if rdrop then ; ( c1 c2 --, R: x -- | x )
 : left  [char] a ?ignore -1  0 rules +move ; ( c -- c )
 : right [char] d ?ignore  1  0 rules +move ; ( c -- c )
 : up    [char] w ?ignore  0 -1 rules +move ; ( c -- c )
 : down  [char] s ?ignore  0  1 rules +move ; ( c -- c )
 : help  [char] h ?ignore instructions ; ( c -- c )
 : end  [char] q ?ignore drop 2 throw ; ( c -- | c, R ? -- | ? )
-: default drop ;  ( c -- )
+: default drop ;  ( c -- : action for unknown command )
 : command up down left right help end default finished? ;
-: maze! dup lblk ! block drop ; ( k -- )
-: input key ;        ( -- c )
+: maze! dup lblk ! block drop ; ( k -- : set block to use )
 
 sokoban-wordlist -order definitions
 sokoban-wordlist +order
 
 : sokoban ( k -- : play a game of sokoban given a Forth block )
   maze! start
-  begin
+  begin ( loop until something throws )
     show input ' command catch ?dup
   until finish ;
 
+\ The expected number of moves to complete could be included,
+\ along with other information, on a spare line.
 only forth definitions decimal
 editor 30 r z
  1 a            XXXXX
@@ -12278,8 +12349,6 @@ system +order ' ok <ok> ! only forth definitions decimal
 .( Type '# sokoban' to play, where '#' is a block number ) cr
 .( For example "30 sokoban" ) cr
 .( Follow the on screen instructions to play a game. ) cr
-
-
 
 \ ## Simple Bootloader
 \
