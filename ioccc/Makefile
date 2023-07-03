@@ -4,11 +4,11 @@ CFLAGS=-Wall -Wextra -std=c11 -pedantic -O3
 
 all: prog
 
-try: prog ../subleq.dec
-	./prog 16 ../subleq.dec
+try: prog subleq.dec
+	./prog 16 subleq.dec
 
-self: prog ../self/self.dec ../subleq.dec
-	./prog 16 ../self/self.dec ../subleq.dec
+self: prog ../self/self.dec subleq.dec
+	./prog 16 ../self/self.dec subleq.dec
 
 run: try
 
