@@ -49,7 +49,7 @@ subleq.md: subleq.fth subleq 1.dec convert.fth
 	echo "---" >> $@
 	echo "title: \"SUBLEQ eForth Meta-Compilation\"" >> $@
 	echo "author: [Richard James Howe]" >> $@
-	echo "date: \"2022-03-01\"" >> $@
+	echo "date: \"2023-07-04\"" >> $@
 	echo "subject: \"SUBLEQ eForth\"" >> $@
 	echo "keywords: [SUBLEQ, Forth]" >> $@
 	echo "subtitle: \"Forth Meta-Compilation for a SUBLEQ machine\"" >> $@

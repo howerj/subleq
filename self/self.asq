@@ -74,11 +74,13 @@
 # * Using something like this as the basis for a SUBLEQ
 # debugger. You could use this to contain and debug SUBLEQ
 # programs within the Forth interpreter.
-# * A version that could executed 
+# * A version that could simulate smaller bit-width devices,
+# which would be especially useful for simulating 16-bit
+# devices on a 32-bit platform (allowing the Forth interpreter
+# that requires a 16-bit SUBLEQ Machine to run).
 #
 # TODO:
 # 	- Comment everything.
-# 	- Translate to Forth?
 # 	- Make an inline version, which would not subtract 
 # 	the length of the program from the operands.
 #	- Make a 16-bit only version, this requires a signed

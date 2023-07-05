@@ -2513,7 +2513,7 @@ assembler.1 -order
   r2 ZERO
   tos if r2 NG1! then tos DEC tos +if r2 NG1! then
   tos {sp} iLOAD --sp
-  r2 if ip INC vm JMP then (fall-through);
+  r2 if ip INC vm JMP then (fall-through); ( !!! )
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
 
 \ "opNext" is the only other control structure instruction
@@ -2605,6 +2605,10 @@ assembler.1 -order
 \ the more bits it shifts by, it takes the longest to shift by
 \ a single bit as the result is produced in reverse order.
 \
+\ This instruction could be reworked into a generic "shift"
+\ that performed left or right shifts at perhaps little to
+\ no space increase.
+\
 \ As is common for all bitwise operations on the SUBLEQ
 \ machine barring "invert", they are expensive to compute. If
 \ the SUBLEQ machine could have any extra instructions a
@@ -2646,20 +2650,21 @@ assembler.1 -order
 \ tricks.
 \
 
-:a rshift
-  bwidth r0 MOV
-  tos r0 SUB
-  tos {sp} iLOAD --sp
-  r1 ZERO
+:a rshift ( u1 u2 -- u : right shift u1 by u2 places )
+  bwidth r0 MOV       \ load machine bit width
+  tos r0 SUB          \ adjust tos by machine width
+  tos {sp} iLOAD --sp \ pop value to shift
+  r1 ZERO             \ zero result register
   begin r0 while
-    r1 r1 ADD
+    r1 r1 ADD \ double r1, equivalent to left shift by one
     tos r2 MOV r3 ZERO
+    \ work out what bit to shift into r1
     r2 -if r3 NG1! then r2 INC r2 -if r3 NG1! then
     r3 if r1 INC then
-    tos tos ADD
-    r0 DEC
+    tos tos ADD \ double tos, equivalent to left shift by one
+    r0 DEC \ decrement loop counter
   repeat
-  r1 tos MOV ;a
+  r1 tos MOV ;a \ move result back into tos
 
 \ This single primitive, "opMux", implements bitwise
 \ multiplexing, also known as "mux". It is a Universal Gate,
@@ -2755,35 +2760,39 @@ assembler.1 -order
 \ arithmetic).
 \
 
-:a opMux
-  bwidth r0 MOV
-  r1 ZERO
-  r3 {sp} iLOAD --sp
-  r4 {sp} iLOAD --sp
+:a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
+  \ tos contains multiplexor value
+  bwidth r0 MOV \ load loop counter initial value [16]
+  r1 ZERO       \ zero results register
+  r3 {sp} iLOAD --sp \ pop first input
+  r4 {sp} iLOAD --sp \ pop second input
   begin r0 while
-    r1 r1 ADD
+    r1 r1 ADD \ shift results register
 
+    \ determine topmost bit of 'tos', place result in 'r6'
+    \ this is used to select whether to use r3 or r4
     tos r5 MOV r6 ZERO
     r5 -if r6 NG1! then r5 INC r5 -if r6 NG1! then
 
-    r6 -if
-      r4 r7 MOV r5 ZERO
-      r7 -if r5 ONE! then r7 INC r7 -if r5 ONE! then
-      r5 r1 ADD
+    r6 -if \ use r4
+      r4 r7 MOV
     then
-    r6 INC
-    r6 if
-      r3 r7 MOV r5 ZERO
-      r7 -if r5 ONE! then r7 INC r7 -if r5 ONE! then
-      r5 r1 ADD
+    r6 INC \ increment so it works with our hacky 'if' 
+    r6 if  \ use r3
+      r3 r7 MOV 
     then
 
-    tos tos ADD
-    r3 r3 ADD
-    r4 r4 ADD
-    r0 DEC
+    \ determine whether we should add 0/1 into result
+    r5 ZERO
+    r7 -if r5 ONE! then r7 INC r7 -if r5 ONE! then
+    r5 r1 ADD \ add in bit to result
+
+    tos tos ADD \ shift tos
+    r3 r3 ADD \ shift r3
+    r4 r4 ADD \ shift r4
+    r0 DEC \ decrement loop counter
   repeat
-  r1 tos MOV ;a
+  r1 tos MOV ;a \ move r1 to tos, returning our result
 
 \ "opDivMod" is purely here for efficiency reasons, it really
 \ improves the speed at which numbers can be printed, which
@@ -2938,7 +2947,7 @@ opt.multi [if]
     {cycles} INC        \ increment "pause" count
     {up} r2 MOV  r2 INC \ load TASK pointer, skip next task loc
       ip r2 iSTORE r2 INC \ save registers to current task
-     tos r2 iSTORE r2 INC
+     tos r2 iSTORE r2 INC \ only a few need to be saved
     {rp} r2 iSTORE r2 INC
     {sp} r2 iSTORE r2 INC
        r0 {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
@@ -5709,7 +5718,7 @@ system[ user tup =cell tallot ]system
 \ value much like the C "strcmp" function.
 \
 
-: compare ( a1 u1 a2 u2 -- n : string equality )
+: compare ( a1 u1 a2 u2 -- n : string comparison )
   rot
   over - ?dup if >r 2drop r> nip exit then
   for ( a1 a2 )
@@ -5892,7 +5901,7 @@ system[ user tup =cell tallot ]system
 \
 
 : compile r> dup [@] , 1+ >r ; compile-only ( -- )
-:s (literal) state @ if compile (push) , then ;s
+:s (literal) state @ if compile (push) , then ;s ( u -- )
 :to literal <literal> @execute ; immediate ( u -- )
 
 \ "compile," is a version of "," which can turn an execution
@@ -5970,7 +5979,7 @@ system[ user tup =cell tallot ]system
 \ taste however.
 \
 
-: interpret ( b -- )
+: interpret ( b -- : interpret a counted word )
   find ?dup if
     state @
     if
@@ -11744,7 +11753,7 @@ variable seed here seed !
 ( : o. base @ swap 8 base ! . base ! ; ( u -- )
 ( : d. base @ swap decimal . base ! ;  ( n -- )
 
-: @bits swap @ and ;                 ( a u -- u )
+: @bits swap @ and ; ( a u -- u )
 : ?\ if postpone \ then ; immediate
 : ?( if postpone ( then ; immediate ( )
 : ?if compile dup postpone if ; immediate
@@ -11758,8 +11767,11 @@ variable seed here seed !
 : ndrop for aft drop then next ; ( 0...n n -- )
 : unused $FFFF here - ; ( 65536 bytes available in this VM )
 : char+ 1+ ; ( b -- b )
-: str= compare 0= ;
-: str< compare 0< ;
+: str= compare 0= ; ( a1 u1 a2 u2 -- f : string equality )
+: str< compare 0< ; ( a1 u1 a2 u2 -- f )
+: str> 2swap compare 0< ; ( a1 u1 a2 u2 -- f )
+: str>= str< 0= ; ( a1 u1 a2 u2 -- f )
+: str<= str> 0= ; ( a1 u1 a2 u2 -- f )
 
 \ This version of Forth defines "mux" in SUBLEQ assembly,
 \ previous versions did not and coded the bitwise routines in
