@@ -1554,6 +1554,10 @@ defined eforth [if] system -order [then]
 \ that we cannot load or store to a cell, we can only subtract
 \ from it, thus we have to zero that cell before hand.
 \
+\ If we could combine a store or a load with a decrement or
+\ increment of the pointer we could potentially save space
+\ and execute quicker.
+\
 
 :m iLOAD there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m ( a a -- )
 
@@ -1581,8 +1585,8 @@ defined eforth [if] system -order [then]
 \
 \ * "if...then", the standard "if" clause, if the value
 \ provided in the given location is non-zero then the clause is
-\ execute, otherwise execution begins after "then". "else" is
-\ not provided here in the assembler because it is not needed.
+\ execute, otherwise execution begins after "then". "else"
+\ can be used, as normal.
 \ * "-if...then", much like "if...then" but it executes the
 \ clause if the given location contains a negative cell.
 \ * "+if...then", like "-if" but only executes the clause if
@@ -1621,13 +1625,15 @@ assembler.1 +order definitions
 : begin talign there ; ( -- a )
 : again JMP ; ( a -- )
 : mark there 0 t, ; ( -- a : create hole in dictionary )
-: if ( a -- a : NB. "if" does not work for 8000 )
+: if talign ( a -- a : NB. "if" does not work for 8000 )
    2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t,
    mark ;
 : until 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t,
    Z Z NADDR Z t, 2/ t, ; ( a -- a )
-: +if   Z 2/ t, mark ; ( a -- a )
-: -if 2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;
+: else talign Z Z mark swap there 2/ swap t! ; ( a -- a )
+: +if talign Z 2/ t, mark ; ( a -- a )
+: -if talign 
+   2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;
 : then begin 2/ swap t! ; ( a -- )
 : while if swap ; ( a a -- a a )
 : repeat JMP then ; ( a a -- )
@@ -2132,7 +2138,10 @@ label: die
      r4 r1 iLOAD
      r4 PUT
    repeat
-   HALT
+   ( fall-through )
+:a bye
+   HALT (a);
+assembler.1 +order
 
 \ Here is the "start" routine, we set the system entry point
 \ to the location in the label, do the cell bit-width test
@@ -2286,13 +2295,14 @@ assembler.1 -order
 \ optimized, both in terms of size and speed, but they are
 \ current in a "good enough" state.
 \
-\ "bye" is nothing special, it just calls "HALT".
+\ We have already seen the definition of "bye" at the end of
+\ the routine "die". "bye" is nothing special, it just calls 
+\ "HALT".
 \
-:a bye HALT (a);    ( -- : HALT system )
-
-\ The following instructions are nothing special, just simple
-\ stack manipulation functions, they implement the following
-\ Forth functions, and are as expected by a Forth programmer:
+\ The following instructions are also nothing special, just 
+\ simple stack manipulation functions, they implement the 
+\ following Forth functions, and are as expected by a Forth 
+\ programmer:
 \
 \        opSwap  -> swap ( x y -- y x )
 \        opDup   -> dup  ( x -- x x )
@@ -2307,7 +2317,7 @@ assembler.1 -order
 :a opSwap tos r0 MOV tos {sp} iLOAD r0 {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
-:a opToR ++rp tos {rp} iSTORE (fall-through);
+:a opToR ++rp tos {rp} iSTORE (fall-through); ( !!! )
 :a opDrop tos {sp} iLOAD --sp ;a ( n -- )
 
 \ The following two functions are use to build "@" and "!",
@@ -2370,7 +2380,7 @@ assembler.1 -order
 \
 \        :a opKey ++sp tos {sp} iSTORE tos GET ;a ) ( -- n )
 \
-:a opEmit tos PUT t' opDrop JMP (a);
+:a opEmit tos PUT t' opDrop JMP (a); ( n -- )
 
 \ "opExit", which is used to make "exit", deserves some
 \ explanation, it implements a "return", as part of the
@@ -2439,7 +2449,7 @@ assembler.1 -order
 \ Note: "opExit" falls-through into "rdrop" to save on space.
 \
 
-:a opExit ip {rp} iLOAD (fall-through); ( R: a -- )
+:a opExit ip {rp} iLOAD (fall-through); ( !!! ) ( R: a -- )
 :a rdrop --rp ;a ( R: u -- )
 :a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a ( R: u --, -- u )
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a ( R: ???, -- u )
@@ -2508,12 +2518,18 @@ assembler.1 -order
 \ to save on space. "opNext" also uses "opJump", which will
 \ be defined next.
 \
+\ "opIpInc" is a small helper function that is not used as a
+\ Forth primitive but used by the other Forth primitives, it
+\ increments the "ip" pointer and then jumps back to the
+\ Forth Virtual Machine.
+\
 
+:a opIpInc ip INC ;a ( -- : increment instruction pointer )
 :a opJumpZ ( u -- : Conditional jump on zero )
-  r2 ZERO
-  tos if r2 NG1! then tos DEC tos +if r2 NG1! then
+  tos r2 MOV
   tos {sp} iLOAD --sp
-  r2 if ip INC vm JMP then (fall-through); ( !!! )
+  r2 if t' opIpInc JMP then r2 DEC r2 +if t' opIpInc JMP then
+  (fall-through); ( !!! )
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
 
 \ "opNext" is the only other control structure instruction
@@ -2557,7 +2573,7 @@ assembler.1 -order
 
 :a opNext r0 {rp} iLOAD ( R: n -- | n-1 )
    r0 if r0 DEC r0 {rp} iSTORE t' opJump JMP then
-   ip INC --rp ;a
+   --rp t' opIpInc JMP (a);
 
 \ The comparison operators are tricky to get right, we build
 \ upon "leq0" and "op0=", which are relatively easy to get
@@ -2577,8 +2593,13 @@ assembler.1 -order
 \
 
 :a op0= ( n -- f : not equal to zero )
-   tos r0 MOV tos NG1!
-   r0 if tos ZERO then r0 DEC r0 +if tos ZERO then ;a
+ tos if 
+   tos ZERO 
+ else 
+   tos DEC
+   tos +if tos ZERO else tos NG1! then 
+ then ;a
+
 :a leq0 ( n -- 0|1 : less than or equal to zero )
   Z tos 2/ t, there 2/ 4 + t,
   tos 2/ dup t, t, vm 2/ t,
@@ -2589,8 +2610,8 @@ assembler.1 -order
 \
 \ The both jump to "opDrop" to finish the job.
 \
-:a - tos {sp} iSUB t' opDrop JMP (a);
-:a + tos {sp} iADD t' opDrop JMP (a);
+:a - tos {sp} iSUB t' opDrop JMP (a); ( n n -- n )
+:a + tos {sp} iADD t' opDrop JMP (a); ( n n -- n )
 
 \ "rshift" is implemented as a virtual machine instruction,
 \ but "lshift" is not as it can be implemented in Forth
@@ -2657,10 +2678,9 @@ assembler.1 -order
   r1 ZERO             \ zero result register
   begin r0 while
     r1 r1 ADD \ double r1, equivalent to left shift by one
-    tos r2 MOV r3 ZERO
     \ work out what bit to shift into r1
-    r2 -if r3 NG1! then r2 INC r2 -if r3 NG1! then
-    r3 if r1 INC then
+    tos -if r1 INC else 
+      tos r2 MOV r2 INC r2 -if r1 INC then then
     tos tos ADD \ double tos, equivalent to left shift by one
     r0 DEC \ decrement loop counter
   repeat
@@ -2771,21 +2791,14 @@ assembler.1 -order
 
     \ determine topmost bit of 'tos', place result in 'r6'
     \ this is used to select whether to use r3 or r4
-    tos r5 MOV r6 ZERO
-    r5 -if r6 NG1! then r5 INC r5 -if r6 NG1! then
-
-    r6 -if \ use r4
-      r4 r7 MOV
-    then
-    r6 INC \ increment so it works with our hacky 'if' 
-    r6 if  \ use r3
-      r3 r7 MOV 
-    then
+    tos -if r4 r7 MOV else 
+      tos r5 MOV
+      r5 INC r5 -if 
+         r4 r7 MOV else 
+         r3 r7 MOV then then
 
     \ determine whether we should add 0/1 into result
-    r5 ZERO
-    r7 -if r5 ONE! then r7 INC r7 -if r5 ONE! then
-    r5 r1 ADD \ add in bit to result
+    r7 -if r1 INC else r7 INC r7 -if r1 INC then then
 
     tos tos ADD \ shift tos
     r3 r3 ADD \ shift r3

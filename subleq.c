@@ -15,6 +15,7 @@ int main(int argc, char **argv) {
 		if (fclose(f) < 0)
 			return 2;
 	}
+	/*fwrite(m, sizeof (u16), prog, fopen("subleq.bin", "wb"));*/
 	for (pc = 0; pc < 32768;) {
 		u16 a = m[pc++], b = m[pc++], c = m[pc++];
 		if (a == n) {
