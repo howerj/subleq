@@ -708,6 +708,7 @@ only forth definitions hex
 0 constant opt.allocate   ( Add in "allocate"/"free" )
 0 constant opt.float      ( Add in floating point code )
 0 constant opt.sm-vm-err  ( Smaller VM error message )
+0 constant opt.optimize   ( Enable extra optimization )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -1883,7 +1884,11 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 :m --sp {sp} INC ;m ( -- : shrink variable stack )
 :m --rp {rp} DEC ;m ( -- : shrink return stack )
 :m ++rp {rp} INC ;m ( -- : grow return stack )
-:m a-optim drop ;m \ >r there =cell - r> 2/ t! ;m ( a -- )
+opt.optimize [if]
+  :m a-optim 2/ >r there =cell - r> swap t! ;m ( a -- )
+[else]
+  :m a-optim drop ;m
+[then]
 
 \ # The Core Forth Virtual Machine
 \
