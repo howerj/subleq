@@ -1,5 +1,6 @@
 *.S
 *.asm
+*.big
 *.bin
 *.cma
 *.dec
@@ -7,6 +8,7 @@
 *.exe
 *.hex
 *.htm
+*.lil
 *.md
 *.o
 *.pdf

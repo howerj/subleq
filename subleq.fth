@@ -709,6 +709,7 @@ only forth definitions hex
 0 constant opt.float      ( Add in floating point code )
 0 constant opt.sm-vm-err  ( Smaller VM error message )
 0 constant opt.optimize   ( Enable extra optimization )
+0 constant opt.iffy-compare ( Enable faster/incorrect compare )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -1626,7 +1627,7 @@ assembler.1 +order definitions
 : begin talign there ; ( -- a )
 : again JMP ; ( a -- )
 : mark there 0 t, ; ( -- a : create hole in dictionary )
-: if talign ( a -- a : NB. "if" does not work for 8000 )
+: if talign ( a -- a : NB. "if" does not work for $8000 )
    2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t,
    mark ;
 : until 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t,
@@ -1753,16 +1754,12 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   =stksz half tvar stacksz \ must contain $80
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
-  2 tvar two       \ must contain  2
  10 tvar bwidth    \ must contain 16
   0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
   0 tvar r3        \ register 3
   0 tvar r4        \ register 4
-  0 tvar r5        \ register 5
-  0 tvar r6        \ register 6
-  0 tvar r7        \ register 7
 
   0 tvar h         \ dictionary pointer
   =thread half tvar {up} \ Current task addr. (Half size)
@@ -1887,7 +1884,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 opt.optimize [if]
   :m a-optim 2/ >r there =cell - r> swap t! ;m ( a -- )
 [else]
-  :m a-optim drop ;m
+  :m a-optim drop ;m ( a -- )
 [then]
 
 \ # The Core Forth Virtual Machine
@@ -2197,16 +2194,15 @@ label: chk16
 \
 
 label: vm ( Forth Inner Interpreter )
-  ip r0 MOV          \ Move Instruction Pointer To Working Ptr.
-  ip INC             \ IP now points to next instruction!
-  r1 r0 iLOAD        \ Get actual instruction to execute
-  r1 r0 MOV          \ Copy it, as SUB is destructive
-  primitive r1 SUB   \ Check if it is a primitive
-  r1 -if r0 iJMP then \ Jump straight to VM functions if it is
-  ++rp               \ If it wasn't a VM instruction, inc {rp}
-  ip {rp} iSTORE     \ and store ip to return stack
-  r0 ip MOV vm a-optim \ "w" becomes our next instruction
-  vm JMP             \ Ad infinitum...
+  r0 ip iLOAD         \ Get instruction to execute from IP
+  ip INC              \ IP now points to next instruction!
+  primitive r1 MOV    \ Copy as SUB is destructive
+  r0 r1 SUB           \ Check if it is a primitive
+  r1 +if r0 iJMP then \ Jump straight to VM functions if it is
+  ++rp                \ If it wasn't a VM instruction, inc {rp}
+  ip {rp} iSTORE      \ and store ip to return stack
+  r0 ip MOV vm a-optim \ "r0" holds our next instruction
+  vm JMP              \ Ad infinitum...
 
 assembler.1 -order
 
@@ -2485,7 +2481,7 @@ assembler.1 -order
 \ patching the binary and computing addresses will need to be
 \ done in order to make these instructions useful.
 \
-\ "opPushZ" does the same as "opJump" but it does it
+\ "opJumpZ" does the same as "opJump" but it does it
 \ conditionally, it pulls a value off of the variable stack
 \ and performs the jump if it zero.
 \
@@ -2531,9 +2527,9 @@ assembler.1 -order
 
 :a opIpInc ip INC ;a ( -- : increment instruction pointer )
 :a opJumpZ ( u -- : Conditional jump on zero )
-  tos r2 MOV
+  tos r0 MOV
   tos {sp} iLOAD --sp
-  r2 if t' opIpInc JMP then r2 DEC r2 +if t' opIpInc JMP then
+  r0 if t' opIpInc JMP then r0 DEC r0 +if t' opIpInc JMP then
   (fall-through); ( !!! )
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
 
@@ -2594,11 +2590,12 @@ assembler.1 -order
 \ it implements the standard Forth word "0=", "leq0" however
 \ returns "0" and "1" as a non-standard Forth word, this is
 \ so "leq0" can be used on the output of "leq0", which it could
-\ not be if standard Forth booleans were returns by it.
+\ not be if standard Forth booleans were returned by it.
 \
 
 :a op0= ( n -- f : not equal to zero )
- tos if 
+ ( does not work: "tos if tos ZERO else tos NG1! then vm JMP" )
+ tos if ( assembly 'if' does not work for entire range )
    tos ZERO 
  else 
    tos DEC
@@ -2630,10 +2627,6 @@ assembler.1 -order
 \ A consequence of how this "rshift" works is that it is faster
 \ the more bits it shifts by, it takes the longest to shift by
 \ a single bit as the result is produced in reverse order.
-\
-\ This instruction could be reworked into a generic "shift"
-\ that performed left or right shifts at perhaps little to
-\ no space increase.
 \
 \ As is common for all bitwise operations on the SUBLEQ
 \ machine barring "invert", they are expensive to compute. If
@@ -2675,8 +2668,11 @@ assembler.1 -order
 \ now included in the appendix, "opMux" however uses the same
 \ tricks.
 \
+\ Also of note, if we negate the shift count we can perform a
+\ *left shift*. We can use this fact to save space.
+\
 
-:a rshift ( u1 u2 -- u : right shift u1 by u2 places )
+:a rshift ( u n -- u : right shift 'u' by 'n' places )
   bwidth r0 MOV       \ load machine bit width
   tos r0 SUB          \ adjust tos by machine width
   tos {sp} iLOAD --sp \ pop value to shift
@@ -2794,16 +2790,21 @@ assembler.1 -order
   begin r0 while
     r1 r1 ADD \ shift results register
 
-    \ determine topmost bit of 'tos', place result in 'r6'
+    \ determine topmost bit of 'tos', place result in 'r2'
     \ this is used to select whether to use r3 or r4
-    tos -if r4 r7 MOV else 
-      tos r5 MOV
-      r5 INC r5 -if 
-         r4 r7 MOV else 
-         r3 r7 MOV then then
+    \ The following code *almost* works:
+    \ 
+    \    tos r2 MOV r2 INC r2 -if r4 r2 MOV else r3 r2 MOV then
+    \ 
+    \ But is not quite right. 
+    tos -if label: opMuxR4 r4 r2 MOV else 
+      tos r2 MOV
+      r2 INC r2 -if 
+         opMuxR4 JMP ( space saving ) else 
+         r3 r2 MOV then then
 
     \ determine whether we should add 0/1 into result
-    r7 -if r1 INC else r7 INC r7 -if r1 INC then then
+    r2 -if r1 INC else r2 INC r2 -if r1 INC then then
 
     tos tos ADD \ shift tos
     r3 r3 ADD \ shift r3
@@ -3903,15 +3904,18 @@ system[
 \
 \
 \        X:
-\                opPush 2
-\                opPush 2
+\                (push) 
+\                2
+\                (push) 
+\                2
 \                address of +
 \                address of .
 \                address of cr
 \                opExit
 \
 \        Y:
-\                opPush 4
+\                (push) 
+\                4
 \                address of .
 \                address of cr
 \                opExit
@@ -4059,7 +4063,26 @@ system[
 \ and build upon that.
 \
 
-: <
+: = - 0= ;     ( u1 u2 -- f : equality )
+: <> = 0= ;    ( u1 u2 -- f : inequality )
+: 0> leq0 0= ; ( n -- f : greater than zero )
+: 0<> 0= 0= ;  ( n -- f : not equal to zero )
+: 0<= 0> 0= ;  ( n -- f : less than or equal to zero )
+
+opt.iffy-compare [if]
+\ Enabling this faster and smaller, but broken, compare, breaks 
+\ many things, especially the unsigned comparison operators
+\ which build upon these operators. You can swap these out,
+\ recompile, and watch what breaks. The incorrect operators 
+\ work, but not for the entire range of values.
+\
+: > - 0> ;   ( n1 n2 -- f : signed greater than )
+: < swap > ; ( n1 n2 -- f : less than, is n1 less than n2 )
+[else]
+\ This, slower, larger, version of the comparison function
+\ works as should for all values.
+\
+: < ( n1 n2 -- f : less than, is n1 less than n2 )
    2dup leq0 swap leq0 if
      if
        2dup 1+ leq0 swap 1+ leq0
@@ -4073,14 +4096,10 @@ system[
      #0 exit
    then
    2drop #0 ;
-
-: = - 0= ;     ( u1 u2 -- f : equality )
-: <> = 0= ;    ( u1 u2 -- f : inequality )
 : > swap < ;   ( n1 n2 -- f : signed greater than )
-: 0> leq0 0= ; ( n -- f : greater than zero )
-: 0< #0 < ;
-: 0<> 0= 0= ;  ( n -- f : not equal to zero )
-: 0<= 0> 0= ;  ( n -- f : less than or equal to zero )
+[then]
+
+: 0< #0 < ;    ( n -- f : less than zero )
 : 0>= 0< 0= ;  ( n1 n2 -- f : greater or equal to zero )
 : >= < 0= ;    ( n1 n2 -- f : greater than or equal to )
 : <= > 0= ;    ( n1 n2 -- f : less than or equal to )
@@ -4097,7 +4116,7 @@ system[
 \
 \        : u< 2dup xor 0< if nip 0< exit then - 0< ;
 \
-\ However, this uses "xor".
+\ However, this uses "xor", which is slow on this system.
 \
 : u< 2dup 0>= swap 0>= <> >r < r> <> ; ( u1 u2 -- f )
 : u> swap u< ; ( u1 u2 -- f : unsigned greater than )
@@ -4429,19 +4448,19 @@ system[
 
 : +! 2/ tuck [@] + swap [!] ; ( u a -- : add val to cell )
 
-\ "lshift" is much faster to compute than "rshift" as
-\ "2\*" is faster than "2/". As "2\*" is much faster we can
-\ instead write "lshift" in Forth, instead of assembly, saving
-\ on space.
-\
-\ "rshift" can be defined like so:
+\ "lshift" is much faster to computer in Forth than "rshift"
+\ as "2\*" is faster than "2/". We could define both in Forth
+\ like so:
 \
 \         : rshift begin ?dup while 1- swap 2/ swap repeat ;
+\         : lshift begin ?dup while 1- swap 2* swap repeat ; 
 \
-\ However in this Forth we implement "2/" with "rshift", and
-\ as you know we have implemented "rshift" in assembly instead.
-\
-: lshift begin ?dup while 1- swap 2* swap repeat ; ( n u -- n )
+\ Instead, we can use the property of our version of "rshift",
+\ which really should be called "shift", which performs a left
+\ shift for negative values of the shift amount (and a right
+\ one for positive values).
+\ 
+: lshift negate rshift ; ( u n -- u : left shift 'u' by 'n' )
 
 \ ### Character Load / Store
 \
@@ -5114,8 +5133,8 @@ system[ user tup =cell tallot ]system
   >r s>d if r@ + then r> um/mod r>
   if swap negate swap then ;
 : /mod over 0< swap m/mod ; ( u1 u2 -- u1%u2 u1/u2 )
-: mod  /mod drop ; ( u1 u2 -- u1%u2 )
-: /    /mod nip ; ( u1 u2 -- u1/u2 )
+: mod /mod drop ; ( u1 u2 -- u1%u2 )
+: /   /mod nip ; ( u1 u2 -- u1/u2 )
 
 \ We can implement some of the signed double cell arithmetic
 \ words if we need them as well, with:
@@ -5166,7 +5185,6 @@ system[ user tup =cell tallot ]system
 \ The default execution vectors are set later on during the
 \ "task-init" function and depend partially on the "{options}"
 \ flags to enable or disable echoing with "echo".
-\
 \
 
 :s (emit) opEmit ;s ( c -- : output byte to terminal )
@@ -5240,7 +5258,7 @@ system[ user tup =cell tallot ]system
       bl tap ( replace any other character with bl )
       exit
     then
-    >r over r@ < dup if             ( if not at start of line )
+    >r over r@ < dup if ( if not at start of line )
       [ =bksp ] literal dup echo bl echo echo ( erase char )
     then
     r> + ( add 0/-1 to cur )
@@ -5291,7 +5309,7 @@ system[ user tup =cell tallot ]system
   over + over begin
     2dup <>
   while
-    key dup bl - [ 5F ] literal u< 
+    key dup bl - [ $5F ] literal u< 
     if tap else <tap> @execute then
   repeat drop over - ;
 : expect <expect> @execute span ! drop ; ( a u -- )
@@ -5467,7 +5485,7 @@ system[ user tup =cell tallot ]system
 \ using the behavior of the comparison and logical operators
 \ to do this.
 \
-:s digit ( u -- c )
+:s digit ( u -- c : extract a character from number )
    [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s 
 
 \ "\#" extracts a single digits and adds it to hold space.
@@ -5481,8 +5499,8 @@ system[ user tup =cell tallot ]system
 \ the output, you can use these set of words to achieve that.
 \
 : #  #2 ?depth #0 radix extract digit hold ; ( d -- d )
-: #s begin # 2dup ( d0= -> ) or 0= until ;   ( d -- 0 )
-: <# this [ =num ] literal + hld ! ;         ( -- )
+: #s begin # 2dup ( d0= -> ) or 0= until ; ( d -- 0 )
+: <# this [ =num ] literal + hld ! ; ( -- : start num. output )
 
 \ "sign" adds a "-" character to hold space if the
 \ provided number is negative. It is used by ".".
@@ -5560,7 +5578,7 @@ system[ user tup =cell tallot ]system
 : >number ( ud b u -- ud b u : convert string to number )
   dup 0= ?exit
   begin
-    2dup 2>r drop c@ radix           ( get next character )
+    2dup 2>r drop c@ radix ( get next character )
     ( digit? -> ) >r [char] 0 - [ 9 ] literal over <
     if 
     ( next line: c base -- u f )
@@ -6547,7 +6565,7 @@ root[
 \        EXAMPLE:
 \                0: opJumpZ
 \                1: 6
-\                2: opPush
+\                2: (push)
 \                3: 1
 \                4: address of "."
 \                5: address of "cr"
@@ -7239,7 +7257,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ cell after "u").
 \
 \ The word is just a table actions to take if specific
-\ instructions are found. For example if "=push", for "opPush",
+\ instructions are found. For example if "(push)"
 \ is found, it must print out a string containing "push" and
 \ then the contents of the next cell. Strings are only a little
 \ more complex, it must print out the string and skip over that
@@ -11580,6 +11598,9 @@ it being run.
 \ These operators take up quite a lot of space, and there is
 \ a lot that could be done to shrink the image.
 \
+\ Some of the registers may have been removed, so will need
+\ adding back in if these routines are to be used.
+\
 :a opOr
   bwidth r0 MOV
   x ZERO
@@ -11587,10 +11608,10 @@ it being run.
   --sp
   begin r0 while
     x x ADD
-    tos r5 MOV r3 ZERO
-    r5 -if r3 NG1! then r5 INC r5 -if r3 NG1! then
-    r2   r5 MOV r4 ZERO
-    r5 -if r4 NG1! then r5 INC r5 -if r4 NG1! then
+    tos r1 MOV r3 ZERO
+    r1 -if r3 NG1! then r1 INC r1 -if r3 NG1! then
+    r2   r1 MOV r4 ZERO
+    r1 -if r4 NG1! then r1 INC r1 -if r4 NG1! then
     r3 r4 ADD r4 if x INC then
     r2 r2 ADD
     tos tos ADD
@@ -11604,10 +11625,10 @@ it being run.
   --sp
   begin r0 while
     x x ADD
-    tos r5 MOV r3 ZERO r5
-    -if r3 NG1! then r5 INC r5 -if r3 NG1! then
-    r2   r5 MOV r4 ZERO r5
-    -if r4 NG1! then r5 INC r5 -if r4 NG1! then
+    tos r1 MOV r3 ZERO r1
+    -if r3 NG1! then r1 INC r1 -if r3 NG1! then
+    r2   r1 MOV r4 ZERO r1
+    -if r4 NG1! then r1 INC r1 -if r4 NG1! then
     r3 r4 ADD r4 INC r3 ONE!
     r4 if r3 ZERO then r3 x ADD
     r2 r2 ADD
@@ -11622,10 +11643,10 @@ it being run.
   --sp
   begin r0 while
    x x ADD
-   tos r5 MOV r3 ZERO r5
-   -if r3 NG1! then r5 INC r5 -if r3 NG1! then
-   r2   r5 MOV r4 ZERO r5
-   -if r4 NG1! then r5 INC r5 -if r4 NG1! then
+   tos r1 MOV r3 ZERO r1
+   -if r3 NG1! then r1 INC r1 -if r3 NG1! then
+   r2   r1 MOV r4 ZERO r1
+   -if r4 NG1! then r1 INC r1 -if r4 NG1! then
    r3 r4 ADD two r4 ADD r3 ONE!
    r4 if r3 ZERO then r3 x ADD
    r2 r2 ADD
