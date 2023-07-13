@@ -2,7 +2,7 @@
 # target for more information.
 default all: help
 
-.PHONY: all clean test run gforth width help speed
+.PHONY: all clean test run gforth width help speed count
 
 CFLAGS=-std=c99 -fwrapv -Wall -Wextra -pedantic -O3
 #CFLAGS+=-fsanitize=undefined 
@@ -75,7 +75,7 @@ gforth.dec: ${FORTH}
 gforth: subleq gforth.dec
 	./subleq gforth.dec
 
-subleq.md: subleq.fth subleq 1.dec extra/convert.fth self/self.dec self/self.asq
+subleq.md: subleq.fth subleq 1.dec extra/convert.fth extra/self/self.dec extra/self/self.asq
 	rm -f $@
 	echo "---" >> $@
 	echo "title: \"SUBLEQ eForth Meta-Compilation\"" >> $@
@@ -102,10 +102,10 @@ subleq.md: subleq.fth subleq 1.dec extra/convert.fth self/self.dec self/self.asq
 	grep '^[^\\]' subleq.fth | sed 's/^/\t/' >> $@
 	echo >> $@
 	echo "## Self Interpreter (source)" >> $@
-	cat self/self.asq >> $@
+	cat extra/self/self.asq >> $@
 	echo >> $@
 	echo "## Self Interpreter (data)" >> $@
-	cat self/self.dec | tr '\n' ' ' | fmt -w 48 | sed 's/^/\t/' >> $@
+	cat extra/self/self.dec | tr '\n' ' ' | fmt -w 48 | sed 's/^/\t/' >> $@
 	echo >> $@
 
 subleq.htm: subleq.md
@@ -137,33 +137,23 @@ eforth.c: 1.dec
 	sed 's/$$/,/' $^ | fmt -w 80 | sed 's/ //g' >> $@
 
 
-#%.hex: %.dec makefile
-#	awk '{l=$$1;s="";if(l<0){l=-l;s="-";};printf "%s%04x\n", s, l}' < $< > $@
-#
-## xxd '-e' switch does not work with '-r' and '-p' unfortunately, hence sed is
-## used to switch the bytes.
-#%.bin %.big: %.hex makefile
-#	xxd -r -p -g 0 < $< > %.big
-#	sed 's/\(.\)\(.\)/\2\1/g' < %.big > $@
-#
-#subleq.bin: subleq ${IMAGE}
-#	echo "0 here : ddd 1- for dup c@ emit 1+ next drop ; ddd bye " | ./subleq ${IMAGE} > $@
-#
+count: ${IMAGE}
+	awk '{h[$$1]++}END{for (k in h){print k ",",h[k]}}' ${IMAGE} | sort -n -k 2
 
-%.bin: %.dec subleq.dec extra/dump.fth subleq
-	cat extra/dump.fth subleq.dec | ./subleq subleq.dec > $@
+%.bin: %.dec ${IMAGE} extra/dump.fth subleq
+	cat extra/dump.fth %.dec | ./subleq ${IMAGE} > $@
 
 dump.dec:
 	echo "0 here dump bye" | ./subleq ${IMAGE} > $@
 
 self.dec:
-	make -C self self.dec
-	cp self/self.dec .
+	make -C extra/self self.dec
+	cp extra/self/self.dec .
 	sed -i 's/ /\n/g' $@
 	sed -i '/^$$/d' $@
 
-debug.o: debug.c subleq.cma
-	${CC} -std=gnu99 -Wall -Wextra -pedantic $< -c -o $@
+debug.o: extra/debug.c subleq.cma
+	${CC} -I. -std=gnu99 -Wall -Wextra -pedantic $< -c -o $@
 
 debug: debug.o
 
@@ -174,3 +164,4 @@ TIME=1000
 SHELL=/bin/bash
 speed: subleq gforth.dec
 	time -p (echo -e "${TIME} ms\nbye\n" | ./subleq gforth.dec)
+

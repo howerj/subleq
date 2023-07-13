@@ -9,7 +9,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ * License: The Unlicense / Public domain for code only, all
 \ rights reserved for comments, the book, diagrams
 \ and pictures.
-\ 
+\
 \ # THIS NEEDS EDITING
 \
 \ This version should not be released to the public. It needs
@@ -1634,7 +1634,7 @@ assembler.1 +order definitions
    Z Z NADDR Z t, 2/ t, ; ( a -- a )
 : else talign Z Z mark swap there 2/ swap t! ; ( a -- a )
 : +if talign Z 2/ t, mark ; ( a -- a )
-: -if talign 
+: -if talign
    2/ t, Z there 2/ 4 + t, Z Z there 2/ 4 + t, Z Z mark ;
 : then begin 2/ swap t! ; ( a -- )
 : while if swap ; ( a a -- a a )
@@ -2297,12 +2297,12 @@ assembler.1 -order
 \ current in a "good enough" state.
 \
 \ We have already seen the definition of "bye" at the end of
-\ the routine "die". "bye" is nothing special, it just calls 
+\ the routine "die". "bye" is nothing special, it just calls
 \ "HALT".
 \
-\ The following instructions are also nothing special, just 
-\ simple stack manipulation functions, they implement the 
-\ following Forth functions, and are as expected by a Forth 
+\ The following instructions are also nothing special, just
+\ simple stack manipulation functions, they implement the
+\ following Forth functions, and are as expected by a Forth
 \ programmer:
 \
 \        opSwap  -> swap ( x y -- y x )
@@ -2596,10 +2596,10 @@ assembler.1 -order
 :a op0= ( n -- f : not equal to zero )
  ( does not work: "tos if tos ZERO else tos NG1! then vm JMP" )
  tos if ( assembly 'if' does not work for entire range )
-   tos ZERO 
- else 
+   tos ZERO
+ else
    tos DEC
-   tos +if tos ZERO else tos NG1! then 
+   tos +if tos ZERO else tos NG1! then
  then ;a
 
 :a leq0 ( n -- 0|1 : less than or equal to zero )
@@ -2680,7 +2680,7 @@ assembler.1 -order
   begin r0 while
     r1 r1 ADD \ double r1, equivalent to left shift by one
     \ work out what bit to shift into r1
-    tos -if r1 INC else 
+    tos -if r1 INC else
       tos r2 MOV r2 INC r2 -if r1 INC then then
     tos tos ADD \ double tos, equivalent to left shift by one
     r0 DEC \ decrement loop counter
@@ -2793,15 +2793,15 @@ assembler.1 -order
     \ determine topmost bit of 'tos', place result in 'r2'
     \ this is used to select whether to use r3 or r4
     \ The following code *almost* works:
-    \ 
+    \
     \    tos r2 MOV r2 INC r2 -if r4 r2 MOV else r3 r2 MOV then
-    \ 
-    \ But is not quite right. 
-    tos -if label: opMuxR4 r4 r2 MOV else 
+    \
+    \ But is not quite right.
+    tos -if label: opMuxR4 r4 r2 MOV else
       tos r2 MOV
-      r2 INC r2 -if 
-         opMuxR4 JMP ( space saving ) else 
-         r3 r2 MOV then then
+      r2 INC r2 -if
+        opMuxR4 JMP ( space saving ) else
+        r3 r2 MOV then then
 
     \ determine whether we should add 0/1 into result
     r2 -if r1 INC else r2 INC r2 -if r1 INC then then
@@ -2964,11 +2964,11 @@ opt.multi [if]
   r0 {up} iLOAD \ load next task pointer from user storage
   r0 if
     {cycles} INC        \ increment "pause" count
-    {up} r2 MOV  r2 INC \ load TASK pointer, skip next task loc
-      ip r2 iSTORE r2 INC \ save registers to current task
-     tos r2 iSTORE r2 INC \ only a few need to be saved
-    {rp} r2 iSTORE r2 INC
-    {sp} r2 iSTORE r2 INC
+    {up} r1 MOV  r1 INC \ load TASK pointer, skip next task loc
+      ip r1 iSTORE r1 INC \ save registers to current task
+     tos r1 iSTORE r1 INC \ only a few need to be saved
+    {rp} r1 iSTORE r1 INC
+    {sp} r1 iSTORE r1 INC
        r0 {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
    {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
        r0 {up} MOV r0 INC  \ set next task
@@ -3495,7 +3495,7 @@ system[
 :m lit (push) t, ;m ( n -- : compile a literal )
 :m literal lit ;m ( n -- : synonym for "lit" )
 
-\ The meta-compiler version of "\[" and "\]" do not do 
+\ The meta-compiler version of "\[" and "\]" do not do
 \ anything, they exist to make the code more "forth" like. As
 \ numbers cannot be automatically compiled into a target word
 \ definition we have to call "literal" to compile the number.
@@ -3504,7 +3504,7 @@ system[
 \
 \        : x 123 literal ;
 \
-\ Is an error, even if it will work in our meta-compiled code. 
+\ Is an error, even if it will work in our meta-compiled code.
 \ To make our meta-compiled code more Forth like, we can do:
 \
 \        : x [ 123 ] literal ;
@@ -3725,9 +3725,9 @@ system[
 \
 
 : current ( -- a : get current vocabulary )
-  [ {current} ] literal ; 
+  [ {current} ] literal ;
 : root-voc ( -- a : get root vocabulary )
-  [ {root-voc} ] literal ; 
+  [ {root-voc} ] literal ;
 
 \ The word "this" allows us to access the USER task area,
 \ it pushes the pointer to that area onto the stack. The
@@ -3904,9 +3904,9 @@ system[
 \
 \
 \        X:
-\                (push) 
+\                (push)
 \                2
-\                (push) 
+\                (push)
 \                2
 \                address of +
 \                address of .
@@ -3914,7 +3914,7 @@ system[
 \                opExit
 \
 \        Y:
-\                (push) 
+\                (push)
 \                4
 \                address of .
 \                address of cr
@@ -4070,10 +4070,10 @@ system[
 : 0<= 0> 0= ;  ( n -- f : less than or equal to zero )
 
 opt.iffy-compare [if]
-\ Enabling this faster and smaller, but broken, compare, breaks 
+\ Enabling this faster and smaller, but broken, compare, breaks
 \ many things, especially the unsigned comparison operators
 \ which build upon these operators. You can swap these out,
-\ recompile, and watch what breaks. The incorrect operators 
+\ recompile, and watch what breaks. The incorrect operators
 \ work, but not for the entire range of values.
 \
 : > - 0> ;   ( n1 n2 -- f : signed greater than )
@@ -4290,7 +4290,7 @@ opt.iffy-compare [if]
 
 : key? #-1 [@] negate ( -- c 0 | -1 : get byte of input )
    s>d if
-     [ {options} ] literal @ 
+     [ {options} ] literal @
      [ 8 ] literal and if bye then drop #0 exit
    then #-1 ;
 
@@ -4363,7 +4363,7 @@ opt.iffy-compare [if]
 \
 
 : cr ( -- : emit new line )
-  [ =cr ] literal emit [ =lf ] literal emit ; 
+  [ =cr ] literal emit [ =lf ] literal emit ;
 
 \ There is nothing special about these three words, they are
 \ common, standard, convenience words for fetching and storing
@@ -4453,13 +4453,13 @@ opt.iffy-compare [if]
 \ like so:
 \
 \         : rshift begin ?dup while 1- swap 2/ swap repeat ;
-\         : lshift begin ?dup while 1- swap 2* swap repeat ; 
+\         : lshift begin ?dup while 1- swap 2* swap repeat ;
 \
 \ Instead, we can use the property of our version of "rshift",
 \ which really should be called "shift", which performs a left
 \ shift for negative values of the shift amount (and a right
 \ one for positive values).
-\ 
+\
 : lshift negate rshift ; ( u n -- u : left shift 'u' by 'n' )
 
 \ ### Character Load / Store
@@ -4511,8 +4511,8 @@ opt.iffy-compare [if]
 \
 
 : c@ ( a -- c : character load )
-  @+ swap #1 and if 
-    [ 8 ] literal rshift exit 
+  @+ swap #1 and if
+    [ 8 ] literal rshift exit
   then [ FF ] literal and ;
 : c! swap [ FF ] literal and dup [ 8 ] literal lshift or swap
    tuck @+ swap #1 and 0= [ FF ] literal xor
@@ -5113,7 +5113,7 @@ system[ user tup =cell tallot ]system
 : um* ( u u -- ud : double cell width multiply )
   #0 swap ( u1 0 u2 ) [ $F ] literal
   for
-    dup um+ >r >r dup um+ r> + r>
+    dup um+ 2>r dup um+ r> + r>
     if >r over um+ r> + then
   next shed ;
 : * um* drop ; ( n n -- n : multiply two numbers )
@@ -5121,7 +5121,7 @@ system[ user tup =cell tallot ]system
   ?dup 0= [ -$A ] literal and throw
   2dup u<
   if negate [ $F ] literal
-    for >r dup um+ >r >r dup um+ r> + dup
+    for >r dup um+ 2>r dup um+ r> + dup
       r> r@ swap >r um+ r> ( or -> ) 0<> swap 0<> +
       if >r drop 1+ r> else drop then r>
     next
@@ -5240,7 +5240,7 @@ system[ user tup =cell tallot ]system
 \ previous character.
 \
 \ The tests could be factored out, and the delete functionality
-\ "[ =bksp ] literal dup echo bl echo echo" is sometimes 
+\ "[ =bksp ] literal dup echo bl echo echo" is sometimes
 \ factored out into a word called "^h".
 \
 \ If "ktap" does not know what to do with the control character
@@ -5252,9 +5252,9 @@ system[ user tup =cell tallot ]system
 :s tap dup echo over c! 1+ ;s ( bot eot cur c -- bot eot cur )
 :s ktap ( bot eot cur c -- bot eot cur )
   ( Not EOL? )
-  dup dup [ =cr ] literal <> >r [ =lf ] literal  <> r> and if 
+  dup dup [ =cr ] literal <> >r [ =lf ] literal  <> r> and if
     ( Not Del Char? )
-    dup [ =bksp ] literal <> >r [ =del ] literal <> r> and if 
+    dup [ =bksp ] literal <> >r [ =del ] literal <> r> and if
       bl tap ( replace any other character with bl )
       exit
     then
@@ -5309,7 +5309,7 @@ system[ user tup =cell tallot ]system
   over + over begin
     2dup <>
   while
-    key dup bl - [ $5F ] literal u< 
+    key dup bl - [ $5F ] literal u<
     if tap else <tap> @execute then
   repeat drop over - ;
 : expect <expect> @execute span ! drop ; ( a u -- )
@@ -5486,7 +5486,7 @@ system[ user tup =cell tallot ]system
 \ to do this.
 \
 :s digit ( u -- c : extract a character from number )
-   [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s 
+   [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s
 
 \ "\#" extracts a single digits and adds it to hold space.
 \ "\#s" continues to do this until the number is zero, which is
@@ -5580,9 +5580,9 @@ system[ user tup =cell tallot ]system
   begin
     2dup 2>r drop c@ radix ( get next character )
     ( digit? -> ) >r [char] 0 - [ 9 ] literal over <
-    if 
+    if
     ( next line: c base -- u f )
-    [ 7 ] literal - dup [ $A ] literal < or then dup r> u< 
+    [ 7 ] literal - dup [ $A ] literal < or then dup r> u<
     0= if                            ( d char )
       drop                           ( d char -- d )
       2r>                            ( restore string )
@@ -5829,7 +5829,7 @@ system[ user tup =cell tallot ]system
     dup
   while
     ( $9F = $1F:word-length + $80:hidden )
-    dup nfa count [ $9F ] literal 
+    dup nfa count [ $9F ] literal
     and r@ count compare 0=
     if ( found! )
       rdrop
@@ -6024,7 +6024,7 @@ system[ user tup =cell tallot ]system
     then
     drop
     ( next line performs "?compile" )
-    dup nfa c@ [ 20 ] literal and 0<> [ -$E ] literal and throw 
+    dup nfa c@ [ 20 ] literal and 0<> [ -$E ] literal and throw
     \ if it's not compiling, execute it then exit *interpreter*
     cfa execute exit
   then
@@ -6154,9 +6154,9 @@ system[ user tup =cell tallot ]system
   context
    \ next line finds first empty cell
    #0 >r begin @+ r@ xor while cell+ repeat rdrop
-  dup cell - swap
+  dup cell- swap
   context - 2/ dup >r 1- s>d [ -$32 ] literal and throw
-  for aft @+ swap cell - then next @ r> ;
+  for aft @+ swap cell- then next @ r> ;
 :r set-order ( widn ... wid1 n -- : set current search order )
   \ NB. Uses recursion, however the meta-compiler does not use
   \ the Forth compilation mechanism, so the current definition
@@ -6171,9 +6171,9 @@ system[ user tup =cell tallot ]system
     if 1+ r> -rot exit then rdrop
   then ;
 : -order ( wid -- : remove vocabulary from search order )
-  get-order (order) nip set-order ; 
+  get-order (order) nip set-order ;
 : +order ( wid -- : add vocabulary to search order )
-  dup >r -order get-order r> swap 1+ set-order ; 
+  dup >r -order get-order r> swap 1+ set-order ;
 
 \ "forth-wordlist" contains the standard Forth words,
 \ excluding the root Forth words, as mentioned, and "system"
@@ -6200,7 +6200,7 @@ root[
 \
 
 :r forth ( -- : set system to contain default vocabularies )
-   root-voc forth-wordlist #2 set-order ;r 
+   root-voc forth-wordlist #2 set-order ;r
 
 \ This version of "only" is implemented as "-1 set-order",
 \ but it could be implemented other ways, such as
@@ -6396,14 +6396,14 @@ root[
  dup get-current (search) 0= ?exit space
  2drop [ {last} ] literal @ .id ." redefined" cr ;s ( b -- b )
 :s ?nul ( b -- b : check not null )
-   c@+ ?exit [ -$10 ] literal throw ;s 
+   c@+ ?exit [ -$10 ] literal throw ;s
 :s ?len ( b -- b )
-  c@+ [ 1F ] literal > [ -$13 ] literal and throw ;s 
+  c@+ [ 1F ] literal > [ -$13 ] literal and throw ;s
 :to char token ?nul count drop c@ ; ( "name", -- c )
 :to [char] postpone char compile (push) , ; immediate
 :to ; ( -- : end a word definition )
   ( next line: check compiler safety )
-  [ $CAFE ] literal <> [ -$16 ] literal and throw 
+  [ $CAFE ] literal <> [ -$16 ] literal and throw
   [ =unnest ] literal ,          ( compile exit )
   postpone [                     ( back to command mode )
   ?dup if                        ( link word in if non 0 )
@@ -6419,7 +6419,7 @@ root[
   [ $CAFE ] literal     ( push constant for compiler safety )
   postpone ] ;          ( turn compile mode on )
 :to :noname ( "name", -- xt : make a definition with no name )
-  align here #0 [ $CAFE ] literal postpone ] ; 
+  align here #0 [ $CAFE ] literal postpone ] ;
 
 \ "'" is an immediate word that attempts to
 \ find a word in the dictionary (and throws an error if one
@@ -6492,8 +6492,8 @@ root[
 \ Field Address, but operated on the previously defined word
 \ like "recurse". This could be defined with:
 \
-\        :s smudge 
-\          [ {last} ] literal 
+\        :s smudge
+\          [ {last} ] literal
 \          @ nfa [ $80 ] literal swap toggle ;s
 \
 \ "smudge" was used to hide and unhide a word definition during
@@ -6504,7 +6504,7 @@ root[
 \
 
 :to ' token find ?found cfa postpone literal ; immediate
-:to recurse 
+:to recurse
     [ {last} ] literal @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
 :s hide token find ?found nfa [ $80 ] literal swap toggle ;s
@@ -6791,7 +6791,7 @@ root[
    cell user? +! user? @ , ;
 
 : >body cell+ ; ( a -- a : move to a create words body )
-:s (does) r> r> 2* swap >r ;s compile-only
+:s (does) 2r> 2* swap >r ;s compile-only
 :s (comp)
   r> [ {last} ] literal @ cfa
   ( check we are running does> on a created word )
@@ -7135,9 +7135,9 @@ root[
 
 :s (nfa) last nfa toggle ;s ( u -- )
 :to immediate ( -- : mark prev word as immediate )
-  [ $40 ] literal (nfa) ; 
+  [ $40 ] literal (nfa) ;
 :to compile-only ( -- : mark prev word as compile-only )
-  [ $20 ] literal (nfa) ; 
+  [ $20 ] literal (nfa) ;
 
 \ # Some Programmer Utilities (Decompilation and Dump)
 \
@@ -7298,11 +7298,11 @@ opt.better-see [if] ( Start conditional compilation )
   then
 
   dup [ to' (var) half ] literal = if drop
-     ."  (var) " cell+ dup u. ."  -> " @ . [ $7FFF ] literal 
+     ."  (var) " cell+ dup u. ."  -> " @ . [ $7FFF ] literal
      exit
   then
 
-  dup [ to' .$ half ] literal = if drop ."  ." [char] "  
+  dup [ to' .$ half ] literal = if drop ."  ." [char] "
     emit space
     cell+ count 2dup type [char] " emit + aligned
   exit then
@@ -7312,7 +7312,7 @@ opt.better-see [if] ( Start conditional compilation )
     cell+ count 2dup type [char] " emit + aligned
   exit then
   [ primitive ] literal @ over u> if ."  VM    " 2* else
-    dup name ?dup if space count [ $1F ] literal 
+    dup name ?dup if space count [ $1F ] literal
     and type drop exit then
   then
   u. ;s
@@ -7323,9 +7323,9 @@ opt.better-see [if] ( Start conditional compilation )
 \ word header. Nothing complex.
 \
 :s compile-only? ( pwd -- f )
-   nfa [ $20 ] literal swap @ and 0<> ;s 
+   nfa [ $20 ] literal swap @ and 0<> ;s
 :s immediate? ( pwd -- f )
-  nfa [ $40 ] literal swap @ and 0<> ;s 
+  nfa [ $40 ] literal swap @ and 0<> ;s
 
 \ This is the more complex version of "see", it will attempt
 \ to print the code in a form that resembles the source as
@@ -7402,7 +7402,7 @@ opt.better-see [if] ( Start conditional compilation )
 
 : dump aligned ( a u -- : display section of memory )
   begin ?dup
-  while swap @+ . cell+ swap cell -
+  while swap @+ . cell+ swap cell-
   repeat drop ;
 
 \ ## Check sums over the image
@@ -7454,7 +7454,7 @@ opt.better-see [if] ( Start conditional compilation )
 
 :s cksum aligned dup [ $C0DE ] literal - >r ( a u -- u )
   begin ?dup
-  while swap @+ r> + >r cell+ swap cell -
+  while swap @+ r> + >r cell+ swap cell-
   repeat drop r> ;s
 
 \ # Conditional Evaluation
@@ -7525,7 +7525,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ that word, what seems like something quite elegant at first
 \ creates complications.
 \
-\ N.B. These words do not deal with nested conditional 
+\ N.B. These words do not deal with nested conditional
 \ "\[if\]...\[else\]...\[then\]" statements!
 \
 
@@ -7534,7 +7534,7 @@ opt.better-see [if] ( Start conditional compilation )
 :to [else] ( -- : skip until '[then]' )
  begin
   begin token c@+ while
-   find drop cfa dup 
+   find drop cfa dup
     [ to' [else] ] literal = swap [ to' [then] ] literal = or
     ?exit repeat query drop again ; immediate
 :to [if] ?exit postpone [else] ; immediate
@@ -7657,7 +7657,7 @@ opt.better-see [if] ( Start conditional compilation )
 
 : bell [ $7 ] literal emit ; ( -- : emit ASCII BEL character )
 :s csi ( -- : ANSI Term. Esc. Seq. )
-  [ $1B ] literal emit [ $5B ] literal emit ;s 
+  [ $1B ] literal emit [ $5B ] literal emit ;s
 : page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;
 : at-xy radix decimal ( x y -- : set cursor position )
    >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;
@@ -7758,7 +7758,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ will perform the task of checking if the current block is
 \ dirty, of potentially writing the changes back, of loading
 \ the new block, of assigning the new block buffer. It does
-\ all of the work. 
+\ all of the work.
 \
 \ If the block number is the same as the one
 \ loaded then it does nothing but return a pointer to the
@@ -7805,7 +7805,7 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \         : within over - >r - r> u< ; ( u lo hi -- f )
 \         : .emit ( c -- )
-\           dup bl [ $7F ] literal within 
+\           dup bl [ $7F ] literal within
 \           0= if drop [char] . then
 \           emit ;
 \
@@ -7873,7 +7873,7 @@ opt.better-see [if] ( Start conditional compilation )
    page cr         ( clean the screen )
    dup scr ! block ( update "scr" and load block )
    [ $F ] literal for       ( for each line in the block )
-     [ $F ] literal r@ - [ $3 ] literal u.r space 
+     [ $F ] literal r@ - [ $3 ] literal u.r space
      [ $40 ] literal 2dup type cr +         ( print line )
    ( [ $3F ] literal for count emit next cr ( print line )
    next drop ;
@@ -7973,11 +7973,11 @@ opt.better-see [if] ( Start conditional compilation )
 \ with the current block number plus one.
 \
 :s line ( k l -- a u )
-  [ $6 ] literal lshift swap block + [ $40 ] literal ;s 
+  [ $6 ] literal lshift swap block + [ $40 ] literal ;s
 :s loadline line evaluate ;s ( k l -- ??? : execute a line! )
 : load ( k -- : execute a block )
    blk @ >r dup blk ! #0 [ $F ] literal for
-   2dup 2>r loadline 2r> 1+ next 2drop r> blk ! ; 
+   2dup 2>r loadline 2r> 1+ next 2drop r> blk ! ;
 
 \ Two words that allow the user of the environment to get
 \ information about the system, "eforth", which has uses in
@@ -8137,17 +8137,17 @@ opt.info [if]
 :s hand ( -- )
   [ t' ok ] lit
   [ t' (emit) ] literal ( Default: echo on )
-  [ {options} ] literal @ #1 and 
+  [ {options} ] literal @ #1 and
     if drop [ to' drop ] literal then
-  [ t' ktap ] literal postpone [ xio ;s 
+  [ t' ktap ] literal postpone [ xio ;s
 :s pace [ $B ] literal emit ;s ( -- : emit pacing character )
 :s file ( -- )
-  [ t' pace ] literal 
-  [ to' drop ] literal 
-  [ t' ktap ] literal xio ;s 
-:s console 
-  [ t' key? ] literal <key> ! 
-  [ t' (emit) ] literal <emit> ! 
+  [ t' pace ] literal
+  [ to' drop ] literal
+  [ t' ktap ] literal xio ;s
+:s console
+  [ t' key? ] literal <key> !
+  [ t' (emit) ] literal <emit> !
   hand ;s
 :s io! console ;s ( -- : setup system I/O )
 
@@ -8157,7 +8157,7 @@ opt.info [if]
   [ {up} ] literal @ swap [ {up} ] literal !
   this 2/ [ {next-task} ] up !
   \ Default xt token )
-  [ to' bye ] literal 2/ [ {ip-save} ] up ! 
+  [ to' bye ] literal 2/ [ {ip-save} ] up !
   this [ =stksz        ] literal + 2/ [ {rp-save} ] up !
   this [ =stksz double ] literal + 2/ [ {sp-save} ] up !
   #0 [ {tos-save} ] up !
@@ -8168,7 +8168,7 @@ opt.info [if]
   [ to' bye ] literal <error> !
   #0 >in ! #-1 dpl !
   \ Set terminal input buffer loc.
-  this [ =tib ] literal + #0 tup 2! 
+  this [ =tib ] literal + #0 tup 2!
   [ {up} ] literal ! ;s
 
 \ "ini" initializes the current task, the system brings itself
@@ -8179,7 +8179,7 @@ opt.info [if]
 \ forth word to run.
 \
 :s ini ( -- : initialize current task )
-   [ {up} ] literal @ task-init ;s 
+   [ {up} ] literal @ task-init ;s
 
 \ ## Quit and Cold
 \
@@ -8257,9 +8257,9 @@ opt.info [if]
   ini ( initialize the current thread correctly )
   [ {options} ] literal @ [ 4 ] literal and if info then
   [ {options} ] literal @ #2 and if ( checksum on? )
-  [ primitive ] literal @ 2* dup here swap - cksum 
+  [ primitive ] literal @ 2* dup here swap - cksum
   [ check ] literal @ <> if ." bad cksum" bye then ( oops... )
-  [ {options} ] literal @ #2 xor [ {options} ] literal ! 
+  [ {options} ] literal @ #2 xor [ {options} ] literal !
   then quit ;s ( call the interpreter loop AKA "quit" )
 
 \ # Cooperative Multitasking
@@ -8418,7 +8418,7 @@ opt.multi [if]
 :s activate ( xt task-address -- : start task executing xt )
   dup task-init
   ( set execution word )
-  dup >r swap 2/ swap [ {ip-save} ] literal + ! 
+  dup >r swap 2/ swap [ {ip-save} ] literal + !
   r> this @ >r dup 2/ this ! r> swap ! ;s ( link in task )
 [then]
 
@@ -8454,9 +8454,9 @@ opt.multi [if]
 
 opt.multi [if]
 :s single ( -- : disable other tasks )
-   #1 [ {single} ] literal ! ;s 
+   #1 [ {single} ] literal ! ;s
 :s multi  ( -- : enable multitasking )
-   #0 [ {single} ] literal ! ;s 
+   #0 [ {single} ] literal ! ;s
 [then]
 
 \ "send" and "receive" are a pair of words like "wait" and
@@ -8573,16 +8573,16 @@ opt.multi [if]
 \ would aid in editing larger amounts of text. Perhaps empty
 \ lines would exit this mode early.
 \
-\ Specific words, or a mode, for displaying and editing 
+\ Specific words, or a mode, for displaying and editing
 \ sections of memory as hexadecimal values would be a useful.
 \
 \ They are all easy to add, but are not necessary. The
 \ fact that execute, "x", calls "q" might cause problems when
 \ trying to put words into different vocabularies, but it is
-\ not an insurmountable problem. 
+\ not an insurmountable problem.
 
-\ Also "d" might clash with the hexadecimal value for the 
-\ number 13, in this Forth it is not a problem as hexadecimal 
+\ Also "d" might clash with the hexadecimal value for the
+\ number 13, in this Forth it is not a problem as hexadecimal
 \ numbers use uppercase only, and this Forth is case sensitive.
 \
 \ The editor can also be used to enter data with a series
@@ -8648,7 +8648,7 @@ opt.editor [if]
 :e ? scr @ . ;e ( -- : print block number of current block )
 :e l scr @ list ;e ( -- : list current block )
 :e x q scr @ load editor ;e ( -- : evaluate current block )
-:e ia #2 ?depth [ $6 ] literal lshift + scr @ block + tib 
+:e ia #2 ?depth [ $6 ] literal lshift + scr @ block + tib
   >in @ + swap source nip >in @ - cmove tib @ >in ! update l ;e
 :e a #0 swap ia ;e ( line --, "line" : insert line at )
 :e w words ;e ( -- : display block editor commands )
@@ -8657,14 +8657,14 @@ opt.editor [if]
 :e p #-1 scr +! l ;e ( -- : display previous block )
 :e r scr ! l ;e ( k -- : retrieve given block )
 :e z scr @ block b/buf blank l ;e ( -- : erase current block )
-:e d #1 ?depth >r scr @ block r> [ $6 ] literal lshift + 
+:e d #1 ?depth >r scr @ block r> [ $6 ] literal lshift +
    [ $40 ] literal blank l ;e ( line -- : delete line )
 [then]
 
 \ # Extra Control Structures
 \
 \ This section contains extra control structures not usually
-\ present in eForth, and some are not standard Forth constructs 
+\ present in eForth, and some are not standard Forth constructs
 \ at all. They include the "do...loop", case-statements, macros
 \ and "many".
 \
@@ -8672,7 +8672,7 @@ opt.editor [if]
 opt.control [if]
 
 : rpick ( n -- u, R: ??? -- ??? : pick a value off ret. stk. )
-  rp@ swap - 1- 2* @ ; 
+  rp@ swap - 1- 2* @ ;
 
 \ "many" is an interesting word, it allows a line of code to be
 \ executed an infinite number of times by postfixing it to the
@@ -8713,7 +8713,7 @@ opt.control [if]
     drop
     postpone then
    repeat
-   [ $1E ] literal <> [ -$16 ] literal and throw 
+   [ $1E ] literal <> [ -$16 ] literal and throw
    compile (endcase) ; compile-only immediate
 
 :s r+ 1+ ;s ( NB. Should be cell+ on most platforms )
@@ -8760,7 +8760,7 @@ opt.control [if]
 \
 \        macro square dup *
 \        : foo 5 square . ;
-\ 
+\
 \ Note that:
 \
 \        : * ." ???" ;
@@ -8776,7 +8776,7 @@ opt.control [if]
 \ Another version using "sliteral", not yet implemented in
 \ this system, is:
 \
-\   : macro 
+\   : macro
 \     : char parse postpone sliteral postpone evaluate
 \     postpone ; immediate ;
 \
@@ -8805,7 +8805,7 @@ opt.control [if]
 \
 
 : macro ( c" xxx" --, : create a late-binding macro )
-  create postpone immediate 
+  create postpone immediate
   cell negate allot compile (macro)
   align here #2 cells + ,
   #0 parse dup , scopy 2drop ;
@@ -8904,11 +8904,11 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 
 : >length #2 cells + ; ( freelist -- length-field )
 : pool ( default memory pool )
-  [ $F800 ] literal [ $400 ] literal ; 
+  [ $F800 ] literal [ $400 ] literal ;
 : arena! ( start-addr len -- : initialize memory pool )
-  >r dup [ $80 ] literal u< if 
+  >r dup [ $80 ] literal u< if
     [ -$B ] literal throw ( arena too small )
-  then 
+  then
   dup r@ >length !
   2dup erase
   over dup r> ! #0 swap ! swap cell+ ! ;
@@ -8917,7 +8917,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
   r> swap >r dup >r @ dup r> >length @ + r> within ;
 : >size ( ptr freelist -- size : get size of allocated ptr )
   over swap arena? 0= if [ -$3B ] literal throw then
-  cell - @ cell - ;
+  cell- @ cell- ;
 
 \ "(allocate)", "(free)" and "(resize)" are defined, they
 \ perform the same functionality as "allocate", "free", and
@@ -8941,8 +8941,8 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
       if
         drop dup @ dup @ rot
         ( prevent freelist address from being overwritten )
-        dup r@ = if 
-          rdrop 2drop 2drop #0 [ -$3B ] literal exit 
+        dup r@ = if
+          rdrop 2drop 2drop #0 [ -$3B ] literal exit
         then
         !
       else
@@ -8971,7 +8971,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
   if
     dup [ $3 ] literal pick [ $5 ] literal pick + =
     if
-      dup cell+ @ [ $4 ] literal pick + 
+      dup cell+ @ [ $4 ] literal pick +
       [ $3 ] literal pick cell+ ! @ #2 pick !
     else
       drop
@@ -9052,15 +9052,15 @@ opt.float [if] ( Large section of optional code! )
 \
 \ This is a Forth Floating point package *for 16-bit systems*.
 \
-\ It has been extended and modified from the original adding 
-\ many of the standard Forth floating point words as well as 
-\ making it work on a more modern Forth system as the original 
-\ Floating Point package, published in the 1980s, targeted 
-\ Forth-83. It was published in Vierte Dimensions (Vol.2, 
-\ No.4 1986) with the article and code being written by Robert 
+\ It has been extended and modified from the original adding
+\ many of the standard Forth floating point words as well as
+\ making it work on a more modern Forth system as the original
+\ Floating Point package, published in the 1980s, targeted
+\ Forth-83. It was published in Vierte Dimensions (Vol.2,
+\ No.4 1986) with the article and code being written by Robert
 \ F. Illyes.
 \
-\ It uses non-standard Floating Point numbers (i.e. not 
+\ It uses non-standard Floating Point numbers (i.e. not
 \ IEEE 754 floats, first published in 1985 just before the
 \ publication of the article). It uses a 16-bit value for the
 \ mantissa and another for the exponent and contains no special
@@ -9078,13 +9078,13 @@ opt.float [if] ( Large section of optional code! )
 \ limits and rationale).
 \
 \ The original system was quite spartan, it had a system for
-\ entering floating point numbers and printing them, 
+\ entering floating point numbers and printing them,
 \ converting between single/double integers and floats,
 \ a few comparison operators, floating point addition,
 \ subtraction, division and multiplication, and a few other
 \ useful floating point words like "fexp" and "exp". However
 \ it lacked many of the floating point manipulation words like
-\ "ftuck", as well as nearly all of the transcendental 
+\ "ftuck", as well as nearly all of the transcendental
 \ functions, which have been added in.
 \
 \ The library is to show that it is possible to add floating
@@ -9102,9 +9102,9 @@ opt.float [if] ( Large section of optional code! )
 \ option were to be chosen the floating point stack should be
 \ made to be thread local. This would require a minor rewrite.
 \
-\ Floating point input is finicky, and requires "dpl" to be 
-\ set, so "fone e 1" will not work, but "1.0 e 1" will. 
-\ Likewise with "1.0 f" and "fone f", the former working, and 
+\ Floating point input is finicky, and requires "dpl" to be
+\ set, so "fone e 1" will not work, but "1.0 e 1" will.
+\ Likewise with "1.0 f" and "fone f", the former working, and
 \ the latter not. The problem is that the number parsing
 \ routines need modifying, which for an add-on component is
 \ not possible to do in a standard way.
@@ -9117,13 +9117,13 @@ opt.float [if] ( Large section of optional code! )
 \ * <https://stackoverflow.com/questions/4541130/>
 \ * <https://forth-standard.org/standard/float/>
 \ * <https://stackoverflow.com/questions/42537957>
-\ * FORTH-83 Floating Point by Robert F. Illyes, Vierte 
+\ * FORTH-83 Floating Point by Robert F. Illyes, Vierte
 \ Dimensions Vol.2, No.4 1986.
 \ * <https://en.wikibooks.org/wiki/Digital_Circuits/CORDIC>
-\ 
+\
 \ Some floating point discussions on comp.lang.forth:
 \
-\ * <https://groups.google.com/g/comp.lang.forth/c/H8Bs-5JSArc> 
+\ * <https://groups.google.com/g/comp.lang.forth/c/H8Bs-5JSArc>
 \ * <https://groups.google.com/g/comp.lang.forth/c/pMl8Vzr00X0>
 \
 \ Most of the important words are implemented, some are missing
@@ -9152,8 +9152,8 @@ system[
 : spaces bl banner ; ( +n  -- : print space 'n' times )
 : convert count >number drop ; ( +d1 addr1 -- +d2 addr2 )
 : arshift ( n u -- n : arithmetic right shift )
-  2dup rshift >r swap #msb and if 
-  [ $10 ] literal swap - #-1 swap lshift 
+  2dup rshift >r swap #msb and if
+  [ $10 ] literal swap - #-1 swap lshift
   else drop #0 then r> or ;
 : d2* over #msb and >r 2* swap 2* swap r> if #1 or then ;
 : d2/ dup   #1 and >r 2/ swap 2/ r> if #msb or then swap ;
@@ -9179,14 +9179,14 @@ system[
 :to 2literal swap postpone literal postpone literal ; immediate
 :s +- 0< if negate then ;s ( n n -- n : copy sign )
 
-\ Some more arithmetic words need to be defined for this 
+\ Some more arithmetic words need to be defined for this
 \ floating point package, less common ones. It is amazing how
 \ involved simple operations like division and multiplication
 \ can be.
 \
 
-: m* ( n n -- d : single to double cell multiply [16x16->32] ) 
-  2dup xor 0< >r abs swap abs um* r> if dnegate then ; 
+: m* ( n n -- d : single to double cell multiply [16x16->32] )
+  2dup xor 0< >r abs swap abs um* r> if dnegate then ;
 : sm/rem ( dl dh nn -- rem quo: symmetric division )
   over >r >r         ( dl dh nn -- dl dh,   R: -- dh nn )
   dabs r@ abs um/mod ( dl dh    -- rem quo, R: dh nn -- dh nn )
@@ -9198,7 +9198,7 @@ system[
 \
 \ NB. This CORDIC code could be extended to perform many more
 \ functions, not just sine and cosine, examples of this are
-\ in <https://github.com/howerj/q> and 
+\ in <https://github.com/howerj/q> and
 \ <https://en.wikibooks.org/wiki/Digital_Circuits/CORDIC>,
 \ using "Universal CORDIC". It is possible to compute sine,
 \ cosine, atan, atan(x/y), sqrt(x^2 + y^2), y/x, x*z,
@@ -9207,7 +9207,7 @@ system[
 \ The code has a few weaknesses, it should be rewritten if
 \ possible not to use "variable" which it unfortunately does.
 \ Doing this would mean using "pick" and stack juggling a lot
-\ and would make for a poor Forth word anyway, but eliminating 
+\ and would make for a poor Forth word anyway, but eliminating
 \ global state is preferable to using "pick" in my view.
 \
 \ Using "variable" would create problems on a preemptive
@@ -9215,7 +9215,7 @@ system[
 \ threading and CORDIC does not call "pause" anywhere). A
 \ simple fix would be to use "user" instead of "variable" to
 \ make all of these variables thread-local, however there are
-\ a lot of variables declared here and thread local storage is 
+\ a lot of variables declared here and thread local storage is
 \ in short supply.
 \
 \
@@ -9223,16 +9223,16 @@ system[
 system[
 
 mcreate lookup ( 16 values, CORDIC atan table )
-$3243 t, $1DAC t, $0FAD t, $07F5 t, 
+$3243 t, $1DAC t, $0FAD t, $07F5 t,
 $03FE t, $01FF t, $00FF t, $007F t,
-$003F t, $001F t, $000F t, $0007 t, 
+$003F t, $001F t, $000F t, $0007 t,
 $0003 t, $0001 t, $0000 t, $0000 t,
 
 $26DD constant cordic_1K ( CORDIC scaling factor )
 $6487 constant hpi
 
 variable tx variable ty variable tz
-variable cx variable cy variable cz 
+variable cx variable cy variable cz
 variable cd variable ck
 
 ]system
@@ -9250,7 +9250,7 @@ variable cd variable ck
     tx @ cx ! ty @ cy ! tz @ cz !
     ck 1+!
     1-
-  repeat 
+  repeat
   cy @ cx @ ;
 
 : sin cordic drop ; ( rad/16384 -- sin : fixed-point sine )
@@ -9258,19 +9258,19 @@ variable cd variable ck
 
 \ ## Core Floating Point Code
 
-\ This floating point library has been adapted from one found 
-\ in Vierte Dimensions Vol.2, No.4 1986, it should be free to 
+\ This floating point library has been adapted from one found
+\ in Vierte Dimensions Vol.2, No.4 1986, it should be free to
 \ use so long as the following copyright is left in the code:
-\ 
+\
 \            FORTH-83 FLOATING POINT.
 \       ----------------------------------
 \       COPYRIGHT 1985 BY ROBERT F. ILLYES
 \
 \             PO BOX 2516, STA. A
 \             CHAMPAIGN, IL 61820
-\             PHONE: 217/826-2734 
+\             PHONE: 217/826-2734
 \
-\ Many of the routines in here are not from the original 
+\ Many of the routines in here are not from the original
 \ package but are additions, the original routines to which
 \ the copyright applies are:
 \
@@ -9309,12 +9309,12 @@ mhex
 :s lalign [ $20 ] literal min for aft d2/ then next ;s
 :s ralign 1- ?dup if lalign then #1 #0 d+ d2/ ;s
 :s tens 2* cells ftable + 2@ ;s ( a -- d )
-:s shifts fabs [ $4010 ] literal - s>d invert if 
+:s shifts fabs [ $4010 ] literal - s>d invert if
    [ -$2B ] literal throw then negate ;s
 :s base? ( -- : check base )
   base @ [ $A ] literal <> [ -$40 ] literal and throw ;s
 :s unaligned? ( -- : chk ptr )
-   dup #1 and = [ -$9 ] literal and throw ;s 
+   dup #1 and = [ -$9 ] literal and throw ;s
 :s -+ drop swap 0< if negate then ;s
 
 \ "fdepth" is standards compliant, but pretty useless because
@@ -9328,7 +9328,7 @@ mhex
     [ {precision} ] up ! exit ( precision ok )
   then [ -$2B ] literal throw ;   ( precision un-ok )
 : precision ( -- u : precision of FP values )
-  [ {precision} ] up @ ; 
+  [ {precision} ] up @ ;
 : f@ unaligned? 2@ ;   ( a -- r : fetch FP value )
 : f! unaligned? 2! ;   ( r a -- : store FP value )
 : f, 2, ; ( r -- : write float into dictionary )
@@ -9349,36 +9349,36 @@ mhex
 : f2* #2 ?depth 1+ null ; ( r -- r : FP times by two )
 : f2/ #2 ?depth 1- null ; ( r -- r : FP divide by two )
 : f*  ( r r -- r : FP multiply )
-   [ $4 ] literal ?depth rot + [ $4000 ] literal 
-   - >r um* r> norm ; 
+   [ $4 ] literal ?depth rot + [ $4000 ] literal
+   - >r um* r> norm ;
 : fsq fdup f* ;       ( r -- r : FP square )
 : f0= fabs null d0= ; ( r -- r : FP equal to zero [incl -0.0] )
 : um/ ( ud u -- u : ud/u and round )
-  dup >r um/mod swap r> over 2* 1+ u< swap 0< or - ; 
+  dup >r um/mod swap r> over 2* 1+ u< swap 0< or - ;
 
 : f/ ( r1 r2 -- r1/r2 : floating point division )
   [ $4 ] literal ?depth
   fdup f0= [ -$2A ] literal and throw
   rot swap - [ $4000 ] literal + >r
   #0 -rot 2dup u<
-  if  um/ r> null 
+  if  um/ r> null
   else >r d2/ fabs r> um/ r> 1+
   then ;
 
 : f+ ( r r -- r : floating point addition )
   [ $4 ] literal ?depth
-  rot 2dup >r >r fabs swap fabs - 
+  rot 2dup >r >r fabs swap fabs -
   dup if s>d
     if rot swap negate
-      r> r> swap >r >r 
+      r> r> swap >r >r
     then #0 swap ralign
-  then swap #0 r> r@ xor 0< 
+  then swap #0 r> r@ xor 0<
   if r@ 0< if 2swap then d-
-    r> fsign rot swap norm 
+    r> fsign rot swap norm
   else d+ if 1+ 2/ #msb or r> 1+
     else r> then then ;
 
-0 0 2constant fzero 
+0 0 2constant fzero
 
 : f- fnegate f+ ; ( r1 r2 -- t : floating point subtract )
 : f< f- 0< nip ; ( r1 r2 -- t : floating point less than )
@@ -9393,12 +9393,12 @@ mhex
 : fmin f2dup f< if fdrop exit then fnip ; ( r1 r2 -- f : min )
 : fmax f2dup f> if fdrop exit then fnip ; ( r1 r2 -- f : max )
 : fwithin ( r1 r2 r3 -- f : r2 <= r1 < r3 )
-  frot ftuck f>= >r f<= r> and ; 
+  frot ftuck f>= >r f<= r> and ;
 : d>f ( d -- r : double to float, dOwN 2 fLoAt lul )
-  [ $4020 ] literal fsign norm ;  
+  [ $4020 ] literal fsign norm ;
 : s>f s>d d>f ;           ( n -- r : single to float )
 
-: f# 
+: f#
   base?
   >r precision tens drop um* r> shifts
   ralign precision ?dup if for aft # then next
@@ -9411,16 +9411,16 @@ mhex
 : f ( n|d -- f : formatted double to float )
    base?
    dpl @ 0< if ( input was single number )
-     #1 ?depth s>d #0 dpl ! 
+     #1 ?depth s>d #0 dpl !
    else ( else a double )
      #2 ?depth
-   then 
-   d>f dpl @ tens d>f f/ ;    
+   then
+   d>f dpl @ tens d>f f/ ;
 
-:to fconstant ( "name", r --, Run Time: -- r ) 
-  f postpone 2constant ; 
-:to fliteral ( r --, Run: -- r : compile a literal in a word ) 
-  f postpone 2literal ; immediate 
+:to fconstant ( "name", r --, Run Time: -- r )
+  f postpone 2constant ;
+:to fliteral ( r --, Run: -- r : compile a literal in a word )
+  f postpone 2literal ; immediate
 : fix tuck #0 swap shifts ralign -+ ; ( r -- n : f>s rounding )
 : f>s tuck #0 swap shifts lalign -+ ; ( r -- n : f>s truncate )
 : floor  f>s s>f ; ( r -- r )
@@ -9434,18 +9434,18 @@ $8000 $4001 2constant fone ( 1.0 fconstant fone )
 : finv fone fswap f/ ; ( r -- r : FP 1/x )
 
 : exp ( r -- r : raise 2.0 to the power of 'r' )
-  2dup f>s dup >r s>f f-     
+  2dup f>s dup >r s>f f-
   f2* [ $E1E5 $C010 ] 2literal ( [ -57828.0 ] fliteral )
-  2over fsq [ $FA26 $400B ] 2literal ( [ 2001.18 ] fliteral ) 
+  2over fsq [ $FA26 $400B ] 2literal ( [ 2001.18 ] fliteral )
   f+ f/
-  2over f2/ f- 
-  [ $8AAC $4006 ] 2literal ( [ 34.6680 ] fliteral ) 
+  2over f2/ f-
+  [ $8AAC $4006 ] 2literal ( [ 34.6680 ] fliteral )
   f+ f/ f1+ fsq r> + ;
 : fexp  ( r -- r : raise e to the power of 'r' )
   \ 1.4427 = log2(e)
-  [ $B8AA $4001 ] 2literal ( [ 1.4427 ] fliteral ) f* exp ; 
-: falog ( r -- r ) 
-  [ $D49A $4002 ] 2literal ( [ 3.3219 ] fliteral ) f* exp ; 
+  [ $B8AA $4001 ] 2literal ( [ 1.4427 ] fliteral ) f* exp ;
+: falog ( r -- r )
+  [ $D49A $4002 ] 2literal ( [ 3.3219 ] fliteral ) f* exp ;
 :s get ( "123" -- : get a single signed number )
   bl word dup 1+ c@ [char] - = tuck -
   #0 #0 rot convert drop ( should throw if not number... )
@@ -9485,24 +9485,24 @@ $B172 $4000 2constant fln2 \ ln[2] = 0.69314718 fconstant fln2
 $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 
 : fdeg ( rad -- deg : FP radians to degrees )
-  f2pi f/ [ $B400 $4009 ] 2literal ( [ 360.0 ] fliteral ) f* ; 
+  f2pi f/ [ $B400 $4009 ] 2literal ( [ 360.0 ] fliteral ) f* ;
 : frad ( deg -- rad : FP degrees to radians )
-  [ $B400 $4009 ] 2literal ( [ 360.0 ] fliteral ) f/ f2pi f* ; 
+  [ $B400 $4009 ] 2literal ( [ 360.0 ] fliteral ) f/ f2pi f* ;
 
 :s >cordic ( f -- n  )
-   [ $8000 $400F ] 2literal ( [ 16384.0 ] fliteral ) f* f>s ;s 
+   [ $8000 $400F ] 2literal ( [ 16384.0 ] fliteral ) f* f>s ;s
 :s cordic> ( n -- f )
-   s>f [ $8000 $400F ] 2literal ( [ 16384.0 ] fliteral ) f/ ;s     
+   s>f [ $8000 $400F ] 2literal ( [ 16384.0 ] fliteral ) f/ ;s
 
-:s quadrant 
-  fdup fhpi f< if fdrop #0 exit then 
-  fdup  fpi f< if fdrop #1 exit then 
-      [ $96CD $4003 ] 2literal ( [ fpi fhpi f+ ] 2 literal ) f< 
-      if #2 exit then 
+:s quadrant
+  fdup fhpi f< if fdrop #0 exit then
+  fdup  fpi f< if fdrop #1 exit then
+      [ $96CD $4003 ] 2literal ( [ fpi fhpi f+ ] 2 literal ) f<
+      if #2 exit then
   [ $3 ] literal ;s
 :s >sin #2 [ $4 ] literal within if fnegate then ;s
 :s >cos #1 [ $3 ] literal within if fnegate then ;s
-:s scfix >r 
+:s scfix >r
   r@ #1 = if fnegate fpi f+ rdrop exit then
   r> [ $3 ] literal = if fnegate f2pi f+ then ;s
 
@@ -9511,7 +9511,7 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 : fsincos ( rads -- sin cos )
    fdup f0< >r
    fabs
-   f2pi fmod fdup quadrant dup >r scfix (fsincos) 
+   f2pi fmod fdup quadrant dup >r scfix (fsincos)
    r@ >cos fswap r> >sin fswap
    r> if fswap fnegate fswap then ;
 : fsin fsincos fdrop ; ( rads -- sin )
@@ -9536,8 +9536,8 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 : fsqrt ( r -- r : square root of 'r' )
   fdup f0< if fdrop [ -$2E ] literal throw then
   fdup f0= if fdrop fzero exit then
-  fone 
-  [ $10 ] literal for aft 
+  fone
+  [ $10 ] literal for aft
     f2dup fsq fswap f- fover f2* f/ f-
   then next
   fnip ;
@@ -9555,9 +9555,9 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
   begin
     fdup f2pi f<
   while
-    fdup fdup f. [char] , emit space fsincos 
+    fdup fdup f. [char] , emit space fsincos
     fswap f. [char] , emit space f. cr
-    [ $80AF $3FFE ] 2literal ( [ f2pi 50.0 f f/ ] 2literal ) 
+    [ $80AF $3FFE ] 2literal ( [ f2pi 50.0 f f/ ] 2literal )
     f+
   repeat fdrop ;
 
@@ -9582,12 +9582,12 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ 12 = Number of steps
 \
 : fln ( r -- r : natural logarithm )
-  [ $8000 $3FF7 ] 2literal ( [ 2 12 - s>f exp ] 2literal ) 
-  fswap f/ 
-  fone fswap 
-  [ $C ] literal for aft agm then next f+ fpi 
-  fswap f/ 
-  [ $8516 $4004 ] 2literal ( [ 12 s>f fln2 f* ] 2literal ) 
+  [ $8000 $3FF7 ] 2literal ( [ 2 12 - s>f exp ] 2literal )
+  fswap f/
+  fone fswap
+  [ $C ] literal for aft agm then next f+ fpi
+  fswap f/
+  [ $8516 $4004 ] 2literal ( [ 12 s>f fln2 f* ] 2literal )
   f- ;
 : flnp1 fone f+ fln ; ( r -- r )
 
@@ -9600,9 +9600,9 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ An Alternate "flog2":
 \
 \        : flog2
-\          [ 2 12 - s>f exp ] 2literal fswap f/ 
-\          fone fswap 
-\          12 for aft agm then next f+ fln2 f* fpi 
+\          [ 2 12 - s>f exp ] 2literal fswap f/
+\          fone fswap
+\          12 for aft agm then next f+ fln2 f* fpi
 \          fswap f/ [ 12 s>f ] 2literal f- ;
 \
 
@@ -9613,7 +9613,7 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 : fatanh ( r1 -- r2 : atanh, -1 < r1 < 1 )
   fdup f1+ fswap fone fswap f- f/ fln f2/ ;
 : facosh ( r1 -- r2 : acosh, 1 <= r1 < INF )
-  fdup fsq f1- fsqrt f+ fln ; 
+  fdup fsq f1- fsqrt f+ fln ;
 : fasinh fdup fsq f1+ fsqrt f+ fln ; ( r -- r )
 
 \ N.B This is a better version of atan where x > 1, but it
@@ -9621,22 +9621,22 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \
 \        2variable fatan.cnt
 \        2variable fatan.sqr
-\        2variable fatan.x 
+\        2variable fatan.x
 \        variable fatan.dir
-\         
+\
 \        : fatan-hi ( r -- r )
-\          fdup fsq fatan.sqr 2! fatan.x 2! fone fatan.cnt 2! 
-\          1 fatan.dir ! 
+\          fdup fsq fatan.sqr 2! fatan.x 2! fone fatan.cnt 2!
+\          1 fatan.dir !
 \          fhpi
-\          10 for aft 
-\            fatan.x 2@ fatan.cnt 2@ f* finv 
+\          10 for aft
+\            fatan.x 2@ fatan.cnt 2@ f* finv
 \            fatan.dir @ if f- 0 fatan.dir !
 \            else f+ 1 fatan.dir ! then
 \            fatan.x 2@ fatan.sqr 2@ f* fatan.x 2!
 \            fatan.cnt 2@ [ 2.0 f ] 2literal f+ fatan.cnt 2!
 \          then next ;
 \
-\ This version of "atan" is much faster, It approximates atan 
+\ This version of "atan" is much faster, It approximates atan
 \ in range (0, 1], with a fair bit of error. We can then use
 \ that to make an atan which deals with values greater than
 \ one.
@@ -9645,13 +9645,13 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \
 
 :s fatan-lo ( r -- r : fatan for r <= 1.0 only )
-   fdup fsq fdup 
+   fdup fsq fdup
 [ $9F08 $3FFD ] 2literal f* ( Consider A = 0.07765095 )
 [ $932B $BFFF ] 2literal f+ f* ( Constant B = -0.28743447 )
 [ $FEC5 $4000 ] 2literal f+ f* ;s ( Constant C = Pi/4 - A - B )
 
 \ Using the equation:
-\ 
+\
 \        atan(x) = pi/2 - atan(1/x)
 \
 \ We can use "fatan-lo" to computer atan when r > 1.0:
@@ -9672,16 +9672,16 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \
 : fatan2 ( r1=y r2=x -- r3 )
   fdup f0> if f/ fatan exit then
-  fdup f0< if 
-     fover f0< 
+  fdup f0< if
+     fover f0<
      if   f/ fatan fpi f+
      else f/ fatan fpi f- then
      exit
   then
   fdrop
   fdup f0> if fdrop fhpi exit then
-  fdup f0< if 
-   fdrop [ $C911 $C001 ] 2literal ( [ fhpi fnegate ] 2literal ) 
+  fdup f0< if
+   fdrop [ $C911 $C001 ] 2literal ( [ fhpi fnegate ] 2literal )
    exit then
   [ -$2E ] literal throw ;
 
@@ -10373,20 +10373,20 @@ it being run.
 \
 \ It is meant to match on these instruction macros:
 \
-\        :m Z 0 t, ;m 
-\        :m A, 0 t, ;m 
-\        :m V, 1 t, ;m 
-\        :m NADDR there 2/ 1+ t, ;m 
-\        :m HALT 0 t, 0 t, -1 t, ;m 
-\        :m JMP 2/ Z Z t, ;m 
+\        :m Z 0 t, ;m
+\        :m A, 0 t, ;m
+\        :m V, 1 t, ;m
+\        :m NADDR there 2/ 1+ t, ;m
+\        :m HALT 0 t, 0 t, -1 t, ;m
+\        :m JMP 2/ Z Z t, ;m
 \        :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
-\        :m SUB swap 2/ t, 2/ t, NADDR ;m 
-\        :m NOOP Z Z NADDR ;m 
-\        :m ZERO dup 2/ t, 2/ t, NADDR ;m 
+\        :m SUB swap 2/ t, 2/ t, NADDR ;m
+\        :m NOOP Z Z NADDR ;m
+\        :m ZERO dup 2/ t, 2/ t, NADDR ;m
 \        :m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
 \        ( :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
-\        :m MOV 
-\           2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> 
+\        :m MOV
+\           2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r>
 \           Z  t, NADDR
 \           Z Z NADDR ;m
 \        :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
@@ -10419,9 +10419,9 @@ it being run.
 \          A, A, NADDR
 \          V, V, NADDR
 \          ;m
-\        :m iLOAD 
+\        :m iLOAD
 \          there 2/ 3 4 * 3 + + 2* MOV 0 swap MOV ;m
-\        
+\
 \ If the above section differs in your version of the assembler
 \ it is quite likely the reason it is failing. This may have
 \ happened because those macros have been optimized and this
@@ -10443,7 +10443,7 @@ it being run.
 \         * E-Mail:  howe.r.j.89@gmail.com
 \         * Repo:    https://github.com/howerj/subleq
 \         * License: The Unlicense (this file only)  */
-\        
+\
 \        #include <stdint.h>
 \        #include <stdio.h>
 \        #include <stdarg.h>
@@ -10459,34 +10459,34 @@ it being run.
 \          IADD, ISUB,
 \          IJMP, ILOAD, ISTORE, INC, DEC,
 \          INV, DUBS, LSHIFT,
-\        
+\
 \          MAX
 \        };
-\        
+\
 \        static const char *names[] = {
 \          "SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
 \          "MOV    ", "ZERO   ", "PUT    ", "GET    ",
-\          "HALT   ", "IADD   ", "ISUB   ", "IJMP   ", 
-\          "ILOAD  ", "ISTORE ", "INC    ", "DEC    ", 
+\          "HALT   ", "IADD   ", "ISUB   ", "IJMP   ",
+\          "ILOAD  ", "ISTORE ", "INC    ", "DEC    ",
 \          "INV    ", "DOUBLE ", "LSHIFT ",
 \        };
-\        
+\
 \        static const uint64_t increment[] = {
-\          [SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/, 
-\          [MOV] = 12, [ADD] = 9, [DUBS] = 9, 
+\          [SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/,
+\          [MOV] = 12, [ADD] = 9, [DUBS] = 9,
 \          [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
-\          [ZERO] = 3, [IJMP] = 15/*Disassembly only*/, 
+\          [ZERO] = 3, [IJMP] = 15/*Disassembly only*/,
 \          [ILOAD] = 24, [IADD] = 21, [ISUB] = 15,
-\          [ISTORE] = 36, [PUT] = 3, [GET] = 3, 
+\          [ISTORE] = 36, [PUT] = 3, [GET] = 3,
 \          [HALT] = 3/*Disassembly only*/,
 \          [INC] = 3, [DEC] = 3, [INV] = 21,
 \        };
-\        
+\
 \        typedef struct {
 \          int instruction;
 \          uint16_t m, s, d;
 \        } instruction_t;
-\        
+\
 \        typedef struct {
 \          int matches[MAX];
 \          int set[9];
@@ -10495,7 +10495,7 @@ it being run.
 \          clock_t start, end;
 \          int64_t cnt[MAX];
 \        } optimizer_t;
-\        
+\
 \        static int match(optimizer_t *o, uint16_t *n,
 \          int sz, uint16_t pc, const char *s, ...) {
 \          va_list ap;
@@ -10549,13 +10549,13 @@ it being run.
 \          va_end(ap);
 \          return r;
 \        }
-\        
+\
 \        static long get(optimizer_t *o, char var) {
 \         if (var < '0' || var > '9' || o->set[var - '0'] == 0)
 \            return -1;
 \          return o->v[var - '0'];
 \        }
-\        
+\
 \        /* This section pattern matches the code finding
 \         * sequences of SUBLEQ instructions against known
 \         * instruction macros.  It is essentially a
@@ -10564,7 +10564,7 @@ it being run.
 \         * speed up. */
 \        static int optimizer(optimizer_t *o,
 \            instruction_t *m, uint16_t pc) {
-\        
+\
 \          for (uint16_t i = 0; i < pc; i++) {
 \            switch (m[i].m) {
 \            case 0: o->z_reg[i] = 1; break;
@@ -10572,16 +10572,16 @@ it being run.
 \            case 0xFFFF: o->neg1_reg[i] = 1; break;
 \            }
 \          }
-\        
+\
 \          for (uint16_t i = 0; i < pc; i++) {
 \            uint16_t q0 = 0, q1 = 0;
 \            uint16_t n[DEPTH] = { 0, };
-\        
+\
 \            for (size_t j = 0; j < DEPTH; j++)
 \              n[j] = m[L(i + j)].m;
-\        
+\
 \            /* Largest instructions *must* go first */
-\        
+\
 \            if (match(o, n, DEPTH, i, "0Z> 11> 22> Z3> Z4> \
 \              ZZ> 56> 77> Z7> 6Z> ZZ> 66>") == 1) {
 \              m[L(i)].instruction = ISTORE;
@@ -10590,9 +10590,9 @@ it being run.
 \              o->matches[ISTORE]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11> \
-\               ?Z> Z1> ZZ>", &q0) == 1 && 
+\               ?Z> Z1> ZZ>", &q0) == 1 &&
 \               get(o, '0') == (i + 15)) {
 \              m[L(i)].instruction = ILOAD;
 \              m[L(i)].d = L(get(o, '1'));
@@ -10600,7 +10600,7 @@ it being run.
 \              o->matches[ILOAD]++;
 \              continue;
 \            }
-\        
+\
 \            int shift = 0, l = 0, dest = 0;
 \            for (l = 0; l < DEPTH; l += 9) {
 \              if (match(o, n+l, DEPTH-l, i+l, "!Z>\
@@ -10625,7 +10625,7 @@ it being run.
 \              o->matches[LSHIFT]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "01> 23> 44> 14> 3Z> \
 \              11> 33>") == 1) {
 \              m[L(i)].instruction = IADD;
@@ -10634,8 +10634,8 @@ it being run.
 \              o->matches[IADD]++;
 \              continue;
 \            }
-\            
-\        
+\
+\
 \            if (match(o, n, DEPTH, i, "00> 10> 11> 2Z>\
 \                Z1> ZZ> !1>", &q0) == 1
 \                && o->one_reg[q0]) {
@@ -10644,7 +10644,7 @@ it being run.
 \              o->matches[INV]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "01> 33> 14> 5Z> 11>")
 \                == 1) {
 \              m[L(i)].instruction = ISUB;
@@ -10653,8 +10653,8 @@ it being run.
 \              o->matches[ISUB]++;
 \              continue;
 \            }
-\         
-\        
+\
+\
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>",
 \            &q0) == 1
 \                && get(o, '0') == (i + (3*4) + 2)) {
@@ -10663,7 +10663,7 @@ it being run.
 \              o->matches[IJMP]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
 \            &q0) == 1) {
 \              m[L(i)].instruction = MOV;
@@ -10672,7 +10672,7 @@ it being run.
 \              o->matches[MOV]++;
 \              continue;
 \            }
-\        
+\
 \            /* We should match multiple ones in a row and
 \             * turn them into a left shift */
 \            if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
@@ -10684,7 +10684,7 @@ it being run.
 \              o->matches[DUBS]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
 \            &q0, &q1) == 1) {
 \              m[L(i)].instruction = ADD;
@@ -10693,21 +10693,21 @@ it being run.
 \              o->matches[ADD]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "00>") == 1) {
 \              m[L(i)].instruction = ZERO;
 \              m[L(i)].d = L(get(o, '0'));
 \              o->matches[ZERO]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "ZZ!", &q0) == 1
 \            && q0 == 0xFFFFu) {
 \              m[L(i)].instruction = HALT;
 \              o->matches[HALT]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "00!", &q0) == 1) {
 \              m[L(i)].instruction = JMP;
 \              m[L(i)].d = q0;
@@ -10715,21 +10715,21 @@ it being run.
 \              o->matches[JMP]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "N!>", &q0) == 1) {
 \              m[L(i)].instruction = GET;
 \              m[L(i)].d = L(q0);
 \              o->matches[GET]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "!N>", &q0) == 1) {
 \              m[L(i)].instruction = PUT;
 \              m[L(i)].s = L(q0);
 \              o->matches[PUT]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1 && o->neg1_reg[L(q0)]) {
 \              m[L(i)].instruction = INC;
@@ -10737,7 +10737,7 @@ it being run.
 \              o->matches[INC]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1 && o->one_reg[L(q0)]) {
 \              m[L(i)].instruction = DEC;
@@ -10745,7 +10745,7 @@ it being run.
 \              o->matches[DEC]++;
 \              continue;
 \            }
-\        
+\
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1) {
 \              m[L(i)].instruction = SUB;
@@ -10754,12 +10754,12 @@ it being run.
 \              o->matches[SUB]++;
 \              continue;
 \            }
-\        
+\
 \            o->matches[SUBLEQ]++;
 \          }
 \          return 0;
 \        }
-\        
+\
 \        static int report(optimizer_t *o) {
 \          double elapsed_s = (double)(o->end - o->start);
 \          elapsed_s /= CLOCKS_PER_SEC;
@@ -10771,7 +10771,7 @@ it being run.
 \          }
 \          static const char *rep_div =
 \          "+--------+--------+--------------+----------+\n";
-\        
+\
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          if (fprintf(e, "| Instr. | Subs.  | Instr. Cnt   |\
@@ -10801,7 +10801,7 @@ it being run.
 \            return -1;
 \          return 0;
 \        }
-\        
+\
 \        int main(int s, char **v) {
 \          static instruction_t m[SZ];
 \          static optimizer_t o = { .matches = { 0, }, };
@@ -10816,7 +10816,7 @@ it being run.
 \            if (fclose(f) < 0)
 \              return 2;
 \          }
-\        
+\
 \          if (optimize)
 \            if (optimizer(&o, m, pc) < 0)
 \              return 1;
@@ -10868,19 +10868,19 @@ it being run.
 \            case SUB: m[d].m -= m[s].m; pc += inc; break;
 \            case ZERO: m[d].m = 0; pc += inc; break;
 \            case IJMP: pc = m[d].m;  break;
-\            /* ILOAD is now used in the Forth image to 
-\             * perform a GET, and GET is unused, so it must 
-\             * now perform that function, ISTORE cannot be 
-\             * used for a PUT (well, not correctly anyway), 
+\            /* ILOAD is now used in the Forth image to
+\             * perform a GET, and GET is unused, so it must
+\             * now perform that function, ISTORE cannot be
+\             * used for a PUT (well, not correctly anyway),
 \             * so does not handle it. */
-\            case ILOAD: { 
+\            case ILOAD: {
 \              const uint16_t l = L(m[s].m);
 \              if (l == 0xFFFFu) {
 \                const int ch = getchar();
 \                m[d].m = -ch;
 \                pc += inc;
 \              } else {
-\                m[d].m = m[L(m[s].m)].m; 
+\                m[d].m = m[L(m[s].m)].m;
 \                pc += inc;
 \              }
 \              break;
@@ -10894,11 +10894,11 @@ it being run.
 \                return 4;
 \              pc += 3;
 \              break;
-\            case IADD: 
+\            case IADD:
 \              m[m[d].m].m += m[s].m; pc += inc; break;
-\            case ISUB: 
+\            case ISUB:
 \              m[m[d].m].m -= m[s].m; pc += inc; break;
-\            case GET: 
+\            case GET:
 \              m[m[pc].d].m = getchar(); pc += inc; break;
 \            case HALT: goto done;
 \            case INC: m[d].m++; pc += inc; break;
@@ -10915,8 +10915,8 @@ it being run.
 \              return 1;
 \          return 0;
 \        }
-\        
-\        
+\
+\
 \ A report is printed to standard error at the end of
 \ execution.
 \
@@ -11100,12 +11100,12 @@ it being run.
 \ This C code shows the example long division code that could
 \ be used for "opDivMod".
 \
-\        
+\
 \        #include <assert.h>
 \        #include <stdio.h>
 \        #include <stdlib.h>
 \        #include <stdint.h>
-\        
+\
 \        static int long_division(uint32_t n, uint32_t d,
 \          uint32_t *quo, uint32_t *rem) {
 \          assert(quo);
@@ -11127,7 +11127,7 @@ it being run.
 \          *rem = r;
 \          return 0;
 \        }
-\        
+\
 \        int main(int argc, char **argv) {
 \          if (argc != 3)
 \            return 1;
@@ -11141,7 +11141,7 @@ it being run.
 \          int e = printf(fmt, op, di, q, r);
 \          return e < 0 ? 3 : 0;
 \        }
-\        
+\
 \ ## C Program To Simulate SUBLEQ Comparison Functions
 \
 \ This is a C program to simulate the comparison functions,
@@ -11157,39 +11157,39 @@ it being run.
 \         *
 \         * It is trivial to construct addition, subtraction
 \         * and branching with the SUBLEQ machine, but the
-\         * comparison and bitwise operators are more complex. 
+\         * comparison and bitwise operators are more complex.
 \         */
-\        
+\
 \        #include <assert.h>
 \        #include <stdio.h>
 \        #include <stdlib.h>
 \        #include <stdint.h>
-\        
+\
 \        #define NELEMS(X) (sizeof((X)) / sizeof((X)[0]))
-\        
+\
 \        typedef int (*cmp_fn)(uint16_t a, uint16_t b);
-\        
+\
 \        typedef struct {
 \          const char *name;
 \          cmp_fn original, subleq;
 \        } cmp_t;
-\        
-\        int o_more(uint16_t a, uint16_t b) { 
-\          return (int16_t)a > (int16_t)b; 
+\
+\        int o_more(uint16_t a, uint16_t b) {
+\          return (int16_t)a > (int16_t)b;
 \        }
-\        
-\        int o_less(uint16_t a, uint16_t b) { 
-\          return (int16_t)a < (int16_t)b; 
+\
+\        int o_less(uint16_t a, uint16_t b) {
+\          return (int16_t)a < (int16_t)b;
 \        }
-\        
-\        int o_eq(uint16_t a, uint16_t b) { 
-\          return a == b; 
+\
+\        int o_eq(uint16_t a, uint16_t b) {
+\          return a == b;
 \        }
-\        
+\
 \        int leq0(uint16_t a) {
 \          return ((int16_t)a) <= (int16_t)0;
 \        }
-\        
+\
 \        int s_less(uint16_t a, uint16_t b) {
 \          const int a0 = leq0(a);
 \          const int b0 = leq0(b);
@@ -11204,31 +11204,31 @@ it being run.
 \          const int l = leq0((uint16_t)(a - b));
 \          return l ? leq0((uint16_t)((a + 1) - b)) : 0;
 \        }
-\        
+\
 \        int s_more(uint16_t a, uint16_t b) {
 \          return s_less(b, a);
 \        }
-\        
+\
 \        int s_eq(uint16_t a, uint16_t b) {
 \          return !s_more(a, b) && !s_less(a, b);
 \        }
-\        
-\        static const char *yn(int y) { 
-\          return y ? "YES" : " NO"; 
+\
+\        static const char *yn(int y) {
+\          return y ? "YES" : " NO";
 \        }
-\        
-\        static int number(const char *n) { 
-\          return strtol(n, NULL, 0); 
+\
+\        static int number(const char *n) {
+\          return strtol(n, NULL, 0);
 \        }
-\        
+\
 \        static cmp_t  compares[] = {
 \          { .name=" <", .original=o_less, .subleq=s_less, },
 \          { .name=" >", .original=o_more, .subleq=s_more, },
 \          { .name="==", .original=o_eq,   .subleq=s_eq,   },
 \        };
 \        static const size_t len = NELEMS(compares);
-\        
-\        static int test(cmp_t *c, uint16_t a, uint16_t b, 
+\
+\        static int test(cmp_t *c, uint16_t a, uint16_t b,
 \              int print) {
 \          const char *name = c->name;
 \          const int r_orig   = c->original(a, b);
@@ -11236,16 +11236,16 @@ it being run.
 \          const int same = r_orig == r_subleq;
 \          if (print || !same) {
 \            const char *yes = yn(same);
-\            const int r = fprintf(stdout, 
-\              "%d %s %d = %s : subleq(%d) orig(%d)\n", 
-\              (int)(int16_t)a, name, (int)(int16_t)b, yes, 
+\            const int r = fprintf(stdout,
+\              "%d %s %d = %s : subleq(%d) orig(%d)\n",
+\              (int)(int16_t)a, name, (int)(int16_t)b, yes,
 \              r_subleq, r_orig);
 \            if (r < 0)
 \              return -1;
 \          }
 \          return 0;
 \        }
-\        
+\
 \        int main(int argc, char **argv) {
 \          if (argc == 1) {
 \            for (size_t i = 0; i < len; i++) {
@@ -11264,13 +11264,13 @@ it being run.
 \            return 2;
 \          uint16_t a = number(argv[1]);
 \                 uint16_t b = number(argv[2]);
-\        
+\
 \          for (size_t i = 0; i < len; i++) {
 \            cmp_t *c = &compares[i];
 \            if (test(c, a, b, 1) < 0)
 \              return 3;
 \          }
-\        
+\
 \          return 0;
 \        }
 \
@@ -11283,31 +11283,31 @@ it being run.
 \ uses "mux").
 \
 \        /* Author: Richard James Howe
-\         * Email:  howe.r.j.89@gmail.com 
-\         * Using primitives available in SUBLEQ to perform 
+\         * Email:  howe.r.j.89@gmail.com
+\         * Using primitives available in SUBLEQ to perform
 \         * bitwise operations */
 \        #include <stdio.h>
 \        #include <stdint.h>
 \        #include <stdlib.h>
-\        
+\
 \        #define N   (16)
 \        #define TST (9999)
-\        
+\
 \        typedef int16_t uword_t;
 \        typedef int16_t  word_t;
-\        
+\
 \        static uword_t zlt(uword_t z) {
 \          return ((word_t)z) < 0 ? 0xFFFFu : 0;
 \        }
-\        
+\
 \        static uword_t add(uword_t a, uword_t b) {
 \          return a - (uword_t)((uword_t)0 - b);
 \        }
-\        
+\
 \        static uword_t lshift1(uword_t a) {
 \          return add(a, a);
 \        }
-\        
+\
 \        static uword_t b_or(uword_t a, uword_t b) {
 \          uword_t r = 0;
 \          for (size_t i = 0; i < N; i++) {
@@ -11319,7 +11319,7 @@ it being run.
 \          }
 \          return r;
 \        }
-\        
+\
 \        static uword_t b_xor(uword_t a, uword_t b) {
 \          uword_t r = 0;
 \          for (size_t i = 0; i < N; i++) {
@@ -11331,7 +11331,7 @@ it being run.
 \          }
 \          return r;
 \        }
-\        
+\
 \        static uword_t b_and(uword_t a, uword_t b) {
 \          uword_t r = 0;
 \          for (size_t i = 0; i < N; i++) {
@@ -11343,11 +11343,11 @@ it being run.
 \          }
 \          return r;
 \        }
-\        
+\
 \        static uword_t rnd(void) {
 \          return rand();
 \        }
-\        
+\
 \        int main(void) {
 \          int pass_or = 1, pass_xor = 1, pass_and = 1;
 \          for (long i = 0; i < TST; i++) {
@@ -11366,7 +11366,7 @@ it being run.
 \            uword_t rn = a ^ b;
 \            uword_t rb = b_xor(a, b);
 \            if (rb != rn) {
-\              printf("xor fail %x %x - expected %x got %x\n", 
+\              printf("xor fail %x %x - expected %x got %x\n",
 \                a, b, rn, rb);
 \              pass_xor = 0;
 \            }
@@ -11377,17 +11377,17 @@ it being run.
 \            uword_t rn = a & b;
 \            uword_t rb = b_and(a, b);
 \            if (rb != rn) {
-\              printf("and fail %x %x - expected %x got %x\n", 
+\              printf("and fail %x %x - expected %x got %x\n",
 \                a, b, rn, rb);
 \              pass_and = 0;
 \            }
 \          }
 \          printf("and %s\n",  pass_and ? "pass" : "FAIL");
-\          printf("done %s\n", pass_or && pass_xor && pass_and 
+\          printf("done %s\n", pass_or && pass_xor && pass_and
 \           ? "pass" : "FAIL");
 \          return 0;
 \        }
-\        
+\
 
 \ ## Faster SUBLEQ Assembly Operations
 \
@@ -11677,11 +11677,11 @@ it being run.
 \
 \        : random seed @ 31421 * 6927 + dup seed ! ; ( -- u )
 \
-\ We could mix this in with keyboard input, as we have no 
+\ We could mix this in with keyboard input, as we have no
 \ sources of actual entropy in this system, keyboard input
 \ would be the closest thing.
 \
-variable seed here seed ! 
+variable seed here seed !
 : random ( -- u : 16-bit xorshift )
   seed @ dup 0= if 0= then ( seed must not be zero )
   dup 13 lshift xor
@@ -11864,15 +11864,15 @@ variable seed here seed !
 
 ( : log2 2 log ; ( u -- u : binary integer logarithm )
 : log2 ( u -- u )
-  ?dup 0= -$B and throw clz $10 swap - 1- ; 
-\ 
+  ?dup 0= -$B and throw clz $10 swap - 1- ;
+\
 \ <forth.sourceforge.net/algorithm/bit-counting/index.html>
 : count-bits ( number -- bits )
   dup $5555 and swap 1 rshift $5555 and +
   dup $3333 and swap 2 rshift $3333 and +
   dup $0F0F and swap 4 rshift $0F0F and +
   $FF mod ;
-\ 
+\
 \ \ <forth.sourceforge.net/algorithm/firstbit/index.html>
 : first-bit ( number -- first-bit )
   dup   1 rshift or
@@ -11881,13 +11881,13 @@ variable seed here seed !
   dup   8 rshift or
   dup $10 rshift or
   dup   1 rshift xor ;
- 
+
 : gray-encode dup 1 rshift xor ; ( gray -- u )
 : gray-decode ( u -- gray )
   \ dup $10 rshift xor ( <- 32 bit )
-  dup   8 rshift xor 
+  dup   8 rshift xor
   dup   4 rshift xor
-  dup   2 rshift xor 
+  dup   2 rshift xor
   dup   1 rshift xor ;
 
 \ http://forth.sourceforge.net/word/n-to-r/index.html
@@ -11967,7 +11967,7 @@ mark
 \ another show case in leveraging the built in capabilities
 \ of Forth to accomplish a task. It has no utility.
 \
-\ The systems uses a CRC as a hash algorithm for passwords. 
+\ The systems uses a CRC as a hash algorithm for passwords.
 \ Cyclic Redundancy Checks (CRC) are usually used to detect
 \ errors within packets of data. The can be cajoled and coaxed
 \ into other uses, this one it is particularly poorly suited
@@ -11976,15 +11976,15 @@ mark
 \ It is well known that cryptographic hash algorithms can be
 \ used for encryption, we could use our non-cryptographic has
 \ function for a similar purpose, except it would be trivial
-\ to break, in keeping with the computer security practices 
+\ to break, in keeping with the computer security practices
 \ of the 1980s.
 \
-\ An insecure stream cipher is easy to construct; use an 
+\ An insecure stream cipher is easy to construct; use an
 \ initial 16-bit value as the 'key', feed the output to itself
 \ to generate a new 16-bit value, use the lowest bits to XOR
 \ with the text to produce the cipher text (or add high and
-\ low bytes together). This would make for a good way to 
-\ encrypt data in a more realistic cyberpunk game, as would 
+\ low bytes together). This would make for a good way to
+\ encrypt data in a more realistic cyberpunk game, as would
 \ this login system. Making a system designed to be broken.
 \
 \ It is amazing the multitude of uses hash functions have,
@@ -12010,7 +12010,7 @@ mark
 \ assigned a new user name which is stored in a special
 \ vocabulary for users. This means we can use the Forth
 \ interpreter for input, "words" to list user names, and
-\ the vocabulary as the password database. 
+\ the vocabulary as the password database.
 \
 \ A password is also expected to be a space delimited
 \ string and requires slightly more work to parse the input,
@@ -12024,13 +12024,13 @@ mark
 \
 \ ".users" can be used to list the words in the password
 \ database. It performs some vocabulary manipulation, calls
-\ "words" and then restores the vocabulary. 
+\ "words" and then restores the vocabulary.
 \
-\ "login" is used to ask for user name and password 
+\ "login" is used to ask for user name and password
 \ combination. It prompts for both and puts the system back
 \ into the Forth loop if a user name / password combination
 \ check succeeds. There are numerous ways of breaking out
-\ of that login loop that can be used to bypass the login 
+\ of that login loop that can be used to bypass the login
 \ system.
 \
 \ "conceal" and "reveal" are interesting words, they use
@@ -12090,8 +12090,8 @@ forth-wordlist +order definitions
 \ and use it. "user:", "login" and ".users". They have already
 \ been described.
 \
-\ Missing are words to remove an entry (difficult to add), to 
-\ change a password (easy to add) and the word list used to 
+\ Missing are words to remove an entry (difficult to add), to
+\ change a password (easy to add) and the word list used to
 \ back the database (which could be added easily enough).
 \
 : user: ( "user" "password" -- : create new user entry )
@@ -12107,10 +12107,10 @@ forth-wordlist +order definitions
 \ contain any control characters.
 \
 \ We could turn this into a turnkey system by replacing the
-\ initialization vector in "<cold>" with a new word that 
+\ initialization vector in "<cold>" with a new word that
 \ calls the normal initialization code, then "login".
-\ 
-\ This could be done like so: 
+\
+\ This could be done like so:
 \
 \        system +order
 \        : restart 0 >r ;
@@ -12138,10 +12138,10 @@ login
 \
 \       cat sokoban.fth /dev/stdin | ./subleq subleq.dec
 \
-\ Four maps are provided, more can be found online at 
+\ Four maps are provided, more can be found online at
 \ <https://github.com/begoon/sokoban-maps>, where the four
 \ maps were found.
-\ 
+\
 \ The object of the puzzle game is to push boulders
 \ (represented by an asterisk) on to specific locations on
 \ the floor (the dots) with your player character (an at
@@ -12304,11 +12304,11 @@ create rule 3 c, 0 c, 0 c, 0 c,
   ." '&' : BOULDER ON TOP OF SWITCH." cr
   ." '~' : PLAYER ON TOP OF SWITCH." cr cr
   ." THE GAME IS WON WHEN ALL '*' ARE ON TOP OF '.'" cr
-  ." GOOD LUCK COMMANDER." cr cr input drop ; 
+  ." GOOD LUCK COMMANDER." cr cr input drop ;
 : .boulders  ." BOLDERS: " #boulders u. cr ; ( -- )
 : .moves     ." MOVES:   " moves    @ u. cr ; ( -- )
-: .help      ." WASD:     MOVEMENT" cr ( -- : short help ) 
-             ." H:        HELP" cr ; 
+: .help      ." WASD:     MOVEMENT" cr ( -- : short help )
+             ." H:        HELP" cr ;
 : .maze lblk @ list ; ( -- : display the maze )
 : show ( page cr ) .maze .boulders .moves .help ; ( -- )
 : solved? #boulders 0= ; ( -- : no boulders left = WIN )
@@ -12486,9 +12486,9 @@ only forth definitions system +order
 : +- 0< if negate then ; ( n n -- n : copy sign )
 : >< dup 8 rshift swap 8 lshift or ; ( u -- u : byte swap )
 : m* ( n n -- d : mixed multiplication )
-  2dup xor 0< >r abs swap abs um* r> if dnegate then ; 
+  2dup xor 0< >r abs swap abs um* r> if dnegate then ;
 : /string ( b u1 u2 -- b u : advance string u2 )
-  over min rot over + -rot - ; 
+  over min rot over + -rot - ;
 : sm/rem ( dl dh nn -- rem quo: symmetric division )
   over >r >r         ( dl dh nn -- dl dh,   R: -- dh nn )
   dabs r@ abs um/mod ( dl dh    -- rem quo, R: dh nn -- dh nn )
@@ -12499,8 +12499,8 @@ only forth definitions system +order
 marker xxx
 
 variable test
-system +order 
-test +order definitions 
+system +order
+test +order definitions
 
 variable total    ( total number of tests )
 variable passed   ( number of tests that passed )
@@ -12520,9 +12520,9 @@ variable verbose  ( verbosity level of the tests )
 : pass passed 1+! ;               ( -- )
 : fail empty-stacks -$B throw ;   ( -- )
 
-\ 'equal' is the most complex word in this test bench, it tests 
-\ whether two groups of numbers of the same length are equal, 
-\ the length of the numbers is specified by the first argument 
+\ 'equal' is the most complex word in this test bench, it tests
+\ whether two groups of numbers of the same length are equal,
+\ the length of the numbers is specified by the first argument
 \ to 'equal'.
 : equal ( a0...an b0...bn n -- a0...an b0...bn n f )
   dup n !
@@ -12530,8 +12530,8 @@ variable verbose  ( verbosity level of the tests )
     r@ pick r@ n @ 1+ + pick xor if rdrop n @ 0 exit then
   then next n @ -1 ;
 
-\ '?stacks' is given two numbers representing stack depths, if 
-\ they are not equal it prints out an error message, and calls 
+\ '?stacks' is given two numbers representing stack depths, if
+\ they are not equal it prints out an error message, and calls
 \ 'abort'.
 : ?stacks ( u u -- )
   2dup xor
@@ -12543,8 +12543,8 @@ variable verbose  ( verbosity level of the tests )
     fail exit
   else 2drop then ;
 
-\ 'equal?' takes two lists of numbers of the same length and 
-\ checks if they are equal, if they are not then an error 
+\ 'equal?' takes two lists of numbers of the same length and
+\ checks if they are equal, if they are not then an error
 \ message is printed and 'abort' is called.
 : ?equal ( a0...an b0...bn n -- )
   dup >r
@@ -12562,7 +12562,7 @@ only forth definitions system +order test +order
 : T{ depth vsp0 ! total 1+! ;
 : statistics total @ passed @ ;
 : throws? ( "name" -- n  )
-  postpone ' catch >r empty-stacks r> ; 
+  postpone ' catch >r empty-stacks r> ;
 
 : logger( ( "line" -- : print line if verbose set high )
   verbose @ 1 > if postpone .( cr exit then postpone ( ;
@@ -12646,7 +12646,7 @@ T{ s2 s2 compare 0= -> -1 }T
 T{ s3  123 <#> compare 0= -> -1 }T
 T{ s3 -123 <#> compare 0= ->  0 }T
 T{ s3   99 <#> compare 0= ->  0 }T
- 
+
 string-tests
 
 T{ 0 ?dup -> 0 }T
@@ -12660,7 +12660,7 @@ T{ : test-1 [ $5 $3 * ] literal ; test-1 -> $F }T
 
 marker variable-test
 
-logger( Defined variable 'x' ) 
+logger( Defined variable 'x' )
 variable x
 T{ 9 x  ! x @ ->  9 }T
 T{ 1 x +! x @ -> $A }T
@@ -12786,7 +12786,7 @@ T{ #vocs 8 min -> 8 }T    \ minimum number of vocabularies is 8
 T{ b/buf       -> $400 }T  \ b/buf should always be 1024
 T{ here 4 allot -4 allot here = -> -1 }T
 
-$FFFF constant min-int 
+$FFFF constant min-int
 $7FFF constant max-int
 $FFFF constant 1s
 
@@ -12828,7 +12828,7 @@ decimal
 .( passed: ) statistics u. space .( / ) 0 u.r cr
 .( here:   ) here . cr
 statistics <> ?\ .( [FAILED]     ) cr  \ abort
-statistics  = ?\ .( [ALL PASSED] ) cr   
+statistics  = ?\ .( [ALL PASSED] ) cr
 
 .( CALLING MARKER 'XXX' ) cr
 xxx
