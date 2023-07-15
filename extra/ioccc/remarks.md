@@ -63,19 +63,17 @@ and see how far you get!).
 The following obfuscation has been used:
 
 - There are no numbers, magic or otherwise, used in the code.
-- Replacing common bitwise operators with equivalents based on
-multiplexing, despite the theme multiplexing is my favorite
-operator.
+- Using De Morgan's Theorem for fun and profit.
+- Structured programming using goto.
+- Data driven programming.
 - Using alternative methods for addition.
+- Reformatting the code *may* break it.
+  - As might renaming functions.
+  - Reformatting might make the code fail to compile!
 - Misleading comments (Someone wouldn't do that would they?
 Go on the internet and lie?).
 - Using the IOCCCs best practices when it comes to formatting
 and variable naming.
-- Structured programming using goto.
-- Data driven programming.
-- Why use equality when XOR will do?
-- Synthesizing constants, and doing so with "\_\_LINE\_\_" and 
-"\_\_func\_\_".
 
 But the big one is:
 
@@ -83,10 +81,6 @@ But the big one is:
 deobfuscating gets you nowhere, you still do not have any
 idea about how anything works unless you reverse engineer
 the data as well (which was not trivial to produce!).
-
-I toyed with the idea of filling the screen with a single
-dense blob and going crazy with it, but I think it is better
-as it is.
 
 # **MAJOR SPOILERS**
 

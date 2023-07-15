@@ -1881,10 +1881,10 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
 :m --sp {sp} INC ;m ( -- : shrink variable stack )
 :m --rp {rp} DEC ;m ( -- : shrink return stack )
 :m ++rp {rp} INC ;m ( -- : grow return stack )
-opt.optimize [if]
+opt.optimize [if] ( optimizations on )
   :m a-optim 2/ >r there =cell - r> swap t! ;m ( a -- )
 [else]
-  :m a-optim drop ;m ( a -- )
+  :m a-optim drop ;m ( a -- : optimization off )
 [then]
 
 \ # The Core Forth Virtual Machine
@@ -2137,8 +2137,8 @@ label: die
    while
      r0 DEC
      r1 INC
-     r4 r1 iLOAD
-     r4 PUT
+     r2 r1 iLOAD
+     r2 PUT
    repeat
    ( fall-through )
 :a bye
@@ -2172,8 +2172,8 @@ label: start         \ System Entry Point
 \ with smaller bit widths than 16.
 \
 
-  r1 ONE!
-  r0 ONE!
+  r0 ONE!                          \ r0 = shift bit loop count
+  r1 ONE!                          \ r1 = number of bits
 label: chk16
   r0 r0 ADD                        \ r0 = r0 * 2
   r1 INC                           \ r1++
@@ -2338,7 +2338,7 @@ assembler.1 -order
 \ addresses (such as "-1") are treated specially and are not
 \ available as memory locations.
 \
-:a [@] tos tos iLOAD ;a
+:a [@] tos tos iLOAD ;a ( a -- a : load SUBLEQ address )
 :a [!] r0 {sp} iLOAD r0 tos iSTORE --sp t' opDrop JMP (a);
 
 \ "opEmit" (and formerly "opKey") perform the I/O functions,
