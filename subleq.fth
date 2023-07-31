@@ -710,6 +710,7 @@ only forth definitions hex
 0 constant opt.sm-vm-err  ( Smaller VM error message )
 0 constant opt.optimize   ( Enable extra optimization )
 0 constant opt.iffy-compare ( Enable faster/incorrect compare )
+1 constant opt.divmod     ( Use "opDivMod" primitive )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -2866,21 +2867,24 @@ assembler.1 -order
 \
 \
 
-:a opDivMod
+opt.divmod [if]
+:a opDivMod ( u1 u2 -- u1 u2 )
   r0 {sp} iLOAD
-  r2 ZERO
-  begin
-    r1 ONE!
-    r0 -if r1 ZERO then
-    r1
-  while
-    r2 INC
-    tos r0 SUB
-  repeat
-  tos r0 ADD
-  r2 DEC
-  r2 tos MOV
-  r0 {sp} iSTORE ;a
+  r1 ZERO ( zero quotient )
+
+  label: divStep
+    r1 INC     ( increment quotient )
+    tos r0 SUB ( repeated subtraction )
+    r0 -if 
+       tos r0 ADD   ( correct remainder )
+       r1 DEC       ( correct quotient )
+       r1 tos MOV   ( store results back to tos )
+       r0 {sp} iSTORE ( ...and stack )
+       vm JMP ( finish... )
+    then
+  divStep JMP ( perform another division step )
+  (a);
+[then]
 
 \ ### PAUSE
 \
@@ -3019,7 +3023,7 @@ opt.multi [if]
 \ the current address must be a VM instruction, anything higher
 \ a Forth word.
 
-there 2/ primitive t!
+there 2/ primitive t! ( set 'primitive', needed for VM )
 
 \ # More Meta-Compiler words
 \
@@ -3431,6 +3435,15 @@ there 2/ primitive t!
 \ The trade off is that it takes longer to execute and space
 \ must be reserved for the words that push those constants.
 \
+\ One interesting way of synthesizing constants without using
+\ numbers, which we do not need to do, is to use the properties 
+\ of various operators to make them, for example:
+\
+\        : #0 dup - ; ( could also use 'xor', or '<>' )
+\
+\ This is reliant on lax stack checking when using "dup". With
+\ "invert" it is possible to make the other constants here.
+\
 system[
  0 constant #0  ( --  0 : push the number zero onto the stack )
  1 constant #1  ( --  1 : push one onto the stack )
@@ -3816,7 +3829,7 @@ system[
 {cycles} constant cycles ( -- a : number of "cycles" ran for )
     {sp} constant sp ( -- a : address of v.stk ptr. )
   {user} constant user? ( -- a : address of user alloc var )
-         variable calibration E00 t' calibration >tbody t!
+         variable calibration 1400 t' calibration >tbody t!
 ]system
 
 :s radix base @ ;s ( -- u : retrieve base )
@@ -5538,17 +5551,21 @@ system[ user tup =cell tallot ]system
 \ host, and the host doing the meta-compilation is still in
 \ command mode.
 \
+
+opt.divmod [if]
 :s (.) abs radix opDivMod ?dup if (.) then digit emit ;s
+
 
 \ "." uses "(.)", it just needs to check if the number to print
 \ is negative, if so, it emits a single "-" character.
 \
-\ The normal definition of ".", without using "(.)", is:
-\
-\        : . space dup >r abs #0 <# #s r> sign #> type ;
-\
-\
 : . space s>d if [char] - emit then (.) ; ( n -- )
+
+[else]
+
+: . space dup >r abs #0 <# #s r> sign #> type ; ( n -- )
+
+[then]
 
 \ "\>number" is a large but not terribly complex word, it
 \ is however a bit unwieldy to use, it operates on double
@@ -6153,7 +6170,7 @@ system[ user tup =cell tallot ]system
 : get-order ( -- widn...wid1 n : get current search order )
   context
    \ next line finds first empty cell
-   #0 >r begin @+ r@ xor while cell+ repeat rdrop
+  #0 >r begin @+ r@ xor while cell+ repeat rdrop
   dup cell- swap
   context - 2/ dup >r 1- s>d [ -$32 ] literal and throw
   for aft @+ swap cell- then next @ r> ;
@@ -7571,7 +7588,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ on how the busy loop is implemented, which we control. To
 \ account for differences between machines a "calibration"
 \ value is chosen that can be changed, on my machine a
-\ calibration value of "E00" (Hex) causes the implementation
+\ calibration value of "1400" (Hex) causes the implementation
 \ of "ms" when given 1000 (Decimal) to wait approximately one
 \ second, which is correct. On your machine it could be vastly
 \ different.

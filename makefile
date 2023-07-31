@@ -141,7 +141,7 @@ count: ${IMAGE}
 	awk '{h[$$1]++}END{for (k in h){print k ",",h[k]}}' ${IMAGE} | sort -n -k 2
 
 %.bin: %.dec ${IMAGE} extra/dump.fth subleq
-	cat extra/dump.fth %.dec | ./subleq ${IMAGE} > $@
+	cat extra/dump.fth $< | ./subleq ${IMAGE} > $@
 
 dump.dec:
 	echo "0 here dump bye" | ./subleq ${IMAGE} > $@
