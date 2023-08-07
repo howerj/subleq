@@ -13,7 +13,7 @@ help:
 	@echo
 	@echo "Project: 16-bit SUBLEQ VM and Forth image"
 	@echo "Author:  Richard James Howe"
-	@echo "License: The Unlicense (code only)"
+	@echo "License: The Unlicense (code only, not comments/book)"
 	@echo "Repo:    https://github.com/howerj/subleq"
 	@echo "Email:   howe.r.j.89@gmail.com"
 	@echo

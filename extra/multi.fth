@@ -1,4 +1,4 @@
-' ( <ok> !
+' ( <ok> ! ( disable ok prompt [non-portable] )
 system +order
 task: rx
 task: tx1

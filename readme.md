@@ -13,7 +13,7 @@ machines belong to the class of One Instruction Set Computers,
 they only execute a single instruction but are still Turing
 Complete. The Forth system, specifically a variant of eForth,
 is provided as [subleq.dec](subleq.dec), passing this image to
-the tiny (~ 600 bytes) [SUBLEQ C virtual machine](subleq.c)
+the tiny (~ 700 bytes) [SUBLEQ C virtual machine](subleq.c)
 allows you to run eForth on the machine. For a list of
 commands type "words" and hit enter, numbers are entered
 using Reverse Polish Notation, eg. "2 2 + . cr" prints "4",

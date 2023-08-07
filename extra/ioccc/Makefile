@@ -1,20 +1,18 @@
 CFLAGS=-Wall -Wextra -std=c11 -pedantic -O3
+EFORTH=eforth.dec
+SELF=../self/self.dec
 
-.PHONY: all try run clobber clean test
+.PHONY: all try run clobber clean
 
 all: prog
 
-try: prog subleq.dec
-	./prog 16 subleq.dec
+run try: prog ${EFORTH}
+	./prog 16 ${EFORTH}
 
-self: prog ../self/self.dec subleq.dec
-	./prog 16 ../self/self.dec subleq.dec
+self: prog ${SELF} ${EFORTH}
+	./prog 16 ${SELF} ${EFORTH}
 
-run: try
-
-clobber: clean
-
-clean:
+clobber clean:
 	rm -f prog 
 
 
