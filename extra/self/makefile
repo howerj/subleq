@@ -1,8 +1,10 @@
 .PHONY: all run run-orig clean
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2
-VM=../subleq
+MAINDIR=../..
+VM=${MAINDIR}/subleq
 OPTS=
-IMAGE=../subleq.dec
+IMAGE=${MAINDIR}/subleq.dec
+DEBUG=${MAINDIR}/debug
 
 all: self.dec
 
@@ -16,14 +18,14 @@ double: self.dec ${VM} ${IMAGE}
 	${VM} ${OPTS} self.dec self.dec ${IMAGE}
 
 
-%.dec: %.asq ../debug
-	../debug -a $< > $@
+%.dec: %.asq ${DEBUG}
+	${DEBUG} -a $< > $@
 
-../debug:
-	make -C .. debug
+${DEBUG}:
+	make -C ${MAINDIR} debug
 
-../subleq.dec ../subleq:
-	make -C .. subleq.dec subleq
+${IMAGE} ${VM}:
+	make -C ${MAINDIR} subleq.dec subleq
 
 run-all: all.dec ${VM} ${IMAGE}
 	${VM} ${OPTS} all.dec ${IMAGE}

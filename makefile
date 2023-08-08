@@ -33,7 +33,8 @@ help:
 	@echo "	speed    : perform basic speed test"
 	@echo "	gforth   : compile and run ${FORTH} with gforth"
 	@echo "	width    : peform VM cell width tests"
-	@echo "	eforth.c : make SUBLEQ VM with build in Forth"
+	@echo " self     : run ${IMAGE} under 'self-interpreter'"
+	@echo "	eforth.c : make SUBLEQ VM with built-in Forth"
 	@echo "	subleq.{pdf,epub.htm} : make documentation"
 	@echo
 	@echo "Consult subleq.fth for more information along"
@@ -149,8 +150,9 @@ dump.dec:
 self.dec:
 	make -C extra/self self.dec
 	cp extra/self/self.dec .
-	sed -i 's/ /\n/g' $@
-	sed -i '/^$$/d' $@
+
+self: self.dec ${IMAGE} subleq
+	./subleq self.dec ${IMAGE}
 
 debug.o: extra/debug.c subleq.cma
 	${CC} -I. -std=gnu99 -Wall -Wextra -pedantic $< -c -o $@

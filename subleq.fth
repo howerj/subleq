@@ -1022,7 +1022,7 @@ opt.generate-c [if]
 \ the image generation.
 \
 
-:m atlast tlast @ ;m ( -- a )
+:m atlast tlast @ ;m ( -- a : meta-comp last defined word )
 
 \ "lallot" allocates space for a USER variable, which is just
 \ an offset into the task thread, each thread has a 1024 byte
@@ -1061,7 +1061,7 @@ opt.generate-c [if]
 \ used during meta-compilation.
 \
 
-:m local? tlocal @ ;m
+:m local? tlocal @ ;m ( -- u : meta-comp local offset )
 :m lallot >r tlocal @ r> + tlocal ! ;m ( u -- allot in target )
 :m tuser ( --, "name", Created-Word: -- u )
   get-current >r meta.1 set-current create r>
@@ -1104,8 +1104,8 @@ opt.generate-c [if]
 \ tokens.
 \
 
-:m half dup 1 and abort" unaligned" 2/ ;m ( a -- a )
-:m double 2* ;m ( a -- a )
+:m half dup 1 and abort" unaligned" 2/ ;m ( a -- a : meta 2/ )
+:m double 2* ;m ( a -- a : meta-comp 2* )
 
 \ Some more conditional code is needed due to the differences
 \ between the implementations of the single quote, "'", on the
@@ -1755,7 +1755,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   =stksz half tvar stacksz \ must contain $80
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
- 10 tvar bwidth    \ must contain 16
+$10 tvar bwidth    \ must contain 16
   0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
@@ -1787,7 +1787,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   0 tvar {cold}     \ entry point of VM program, set later on
   0 tvar {last}     \ last defined word
   0 tvar {cycles}   \ number of times we have switched tasks
-  0 tvar {single}   \ is multi processing off?
+  1 tvar {single}   \ is multi processing off? +ve = off
   0 tvar {user}     \ Number of locals assigned
 
 \ Most of the following are thread local variables, with the
@@ -2133,14 +2133,12 @@ assembler.1 +order
 label: die
    err-str-addr r1 MOV
    err-str r0 MOV
-   begin
-     r0
-   while
+   label: die.loop
      r0 DEC
      r1 INC
      r2 r1 iLOAD
      r2 PUT
-   repeat
+     r0 +if die.loop JMP then
    ( fall-through )
 :a bye
    HALT (a);
@@ -2460,7 +2458,8 @@ assembler.1 -order
 \ "sp@" and "sp!" do for the variable stack what "rp@" and
 \ "rp!" do for the return stack, they can set them to arbitrary
 \ locations. "sp@" can be defined in Forth, and is defined
-\ later, "sp!" must be defined in assembly.
+\ later, "sp!" must be defined in assembly (or at least 
+\ attempts to define this word in Forth have failed).
 \
 \ "sp@" is more useful of the two, they are both used in
 \ throw/catch, but "sp@" is also used for words like "pick"
@@ -2678,14 +2677,14 @@ assembler.1 -order
   tos r0 SUB          \ adjust tos by machine width
   tos {sp} iLOAD --sp \ pop value to shift
   r1 ZERO             \ zero result register
-  begin r0 while
+  label: rshift.loop
     r1 r1 ADD \ double r1, equivalent to left shift by one
     \ work out what bit to shift into r1
     tos -if r1 INC else
       tos r2 MOV r2 INC r2 -if r1 INC then then
     tos tos ADD \ double tos, equivalent to left shift by one
     r0 DEC \ decrement loop counter
-  repeat
+    r0 +if rshift.loop JMP then
   r1 tos MOV ;a \ move result back into tos
 
 \ This single primitive, "opMux", implements bitwise
@@ -2788,7 +2787,8 @@ assembler.1 -order
   r1 ZERO       \ zero results register
   r3 {sp} iLOAD --sp \ pop first input
   r4 {sp} iLOAD --sp \ pop second input
-  begin r0 while
+  
+  label: opMux.loop
     r1 r1 ADD \ shift results register
 
     \ determine topmost bit of 'tos', place result in 'r2'
@@ -2811,7 +2811,7 @@ assembler.1 -order
     r3 r3 ADD \ shift r3
     r4 r4 ADD \ shift r4
     r0 DEC \ decrement loop counter
-  repeat
+    r0 +if opMux.loop JMP then
   r1 tos MOV ;a \ move r1 to tos, returning our result
 
 \ "opDivMod" is purely here for efficiency reasons, it really
@@ -2964,9 +2964,16 @@ opt.divmod [if]
 
 opt.multi [if]
 :a pause ( -- : pause and switch task )
-  {single} if vm JMP then \ Do nothing if single-threaded mode
+  \ "{single}" must be positive and not zero to 
+  \ turn off "pause", this is to save space as "+if" can be
+  \ used.
+  {single} +if vm JMP then \ Do nothing if single-threaded mode
   r0 {up} iLOAD \ load next task pointer from user storage
-  r0 if
+  \ "+if" saves space, "r0" should never be negative anyway as
+  \ this would mean that the thread was above the 32678 mark
+  \ and thus in an area where "@" and "!" would not work (only
+  \ "[@]" and "[!]".
+  r0 +if 
     {cycles} INC        \ increment "pause" count
     {up} r1 MOV  r1 INC \ load TASK pointer, skip next task loc
       ip r1 iSTORE r1 INC \ save registers to current task
@@ -4112,10 +4119,10 @@ opt.iffy-compare [if]
 : > swap < ;   ( n1 n2 -- f : signed greater than )
 [then]
 
-: 0< #0 < ;    ( n -- f : less than zero )
-: 0>= 0< 0= ;  ( n1 n2 -- f : greater or equal to zero )
-: >= < 0= ;    ( n1 n2 -- f : greater than or equal to )
-: <= > 0= ;    ( n1 n2 -- f : less than or equal to )
+: 0< #0 < ;   ( n -- f : less than zero )
+: 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
+: >= < 0= ;   ( n1 n2 -- f : greater than or equal to )
+: <= > 0= ;   ( n1 n2 -- f : less than or equal to )
 
 \ The unsigned words are defined in terms of each other once
 \ one of them has been defined, they are a bit awkward as they
@@ -4531,7 +4538,7 @@ opt.iffy-compare [if]
    tuck @+ swap #1 and 0= [ FF ] literal xor
    >r over xor r> and xor swap ! ; ( c a -- character store )
 
-\ "c@+" is another space saving measure like "@+", but is also
+\ "c@+" is another space saving measure like "@+", and is also
 \ useful to have around, and non-standard.
 \
 :s c@+ dup c@ ;s ( b -- b u : non-destructive 'c@' )
