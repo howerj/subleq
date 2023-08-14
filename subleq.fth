@@ -2111,15 +2111,15 @@ opt.optimize [if] ( optimizations on )
 
 opt.sm-vm-err [if]
 ( Smaller, more cryptic, error message string "Error" )
-7 tvar err-str
-  45 t, 72 t, 72 t, 6F t, 72 t, 0D t, 0A t,
+45 tvar err-str
+  72 t, 72 t, 6F t, 72 t, 0D t, 0A t, -1 t,
 [else]
 ( Error message string "Error: Not a 16-bit SUBLEQ VM" )
-1F tvar err-str
-  45 t, 72 t, 72 t, 6F t, 72 t, 3A t, 20 t, 4E t,
+45 tvar err-str
+  72 t, 72 t, 6F t, 72 t, 3A t, 20 t, 4E t,
   6F t, 74 t, 20 t, 61 t, 20 t, 31 t, 36 t, 2D t,
   62 t, 69 t, 74 t, 20 t, 53 t, 55 t, 42 t, 4C t,
-  45 t, 51 t, 20 t, 56 t, 4D t, 0D t, 0A t,
+  45 t, 51 t, 20 t, 56 t, 4D t, 0D t, 0A t, -1 t,
 [then]
 
 err-str 2/ tvar err-str-addr
@@ -2131,16 +2131,14 @@ err-str 2/ tvar err-str-addr
 
 assembler.1 +order
 label: die
-   err-str-addr r1 MOV
-   err-str r0 MOV
+   err-str-addr r0 MOV
    label: die.loop
-     r0 DEC
-     r1 INC
-     r2 r1 iLOAD
-     r2 PUT
-     r0 +if die.loop JMP then
+     r1 r0 iLOAD
+     r0 INC
+     r1 PUT
+     r1 +if die.loop JMP then
    ( fall-through )
-:a bye
+:a bye ( -- : first VM word, "bye", or halt the Forth system )
    HALT (a);
 assembler.1 +order
 
@@ -2980,9 +2978,9 @@ opt.multi [if]
      tos r1 iSTORE r1 INC \ only a few need to be saved
     {rp} r1 iSTORE r1 INC
     {sp} r1 iSTORE r1 INC
-       r0 {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
+      r0 {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
    {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
-       r0 {up} MOV r0 INC  \ set next task
+      r0 {up} MOV r0 INC  \ set next task
       ip r0 iLOAD r0 INC \ reverse of save registers
      tos r0 iLOAD r0 INC
     {rp} r0 iLOAD r0 INC
@@ -4443,6 +4441,15 @@ opt.iffy-compare [if]
 \ "pick" and likewise discouraged from use. It allows a varying
 \ number of items on the stack to be rotated.
 \
+\ "roll", along with some other stack words, can be
+\ defined as:
+\
+\       :  roll ?dup if swap >r 1- roll r> swap then ; 
+\       : -roll ?dup if rot >r 1- -roll r> then ; 
+\       : unpick 1+ sp@ + [!] ; ( n0..nx y nu -- n0..y..nx )
+\       : flip -rot swap ; ( a b c -- c b a ) 
+\
+\ If they are needed. "unpick" is the opposite of "pick".
 
 : pick sp@ + [@] ; ( nu...n0 u -- nu : pick item on stack )
 
@@ -4528,6 +4535,16 @@ opt.iffy-compare [if]
 \ of the system, the Endianess of how the meta-compiler writes
 \ values into the target also needs to be the same as the
 \ target.
+\
+\ The Forth phrase "#1 and" appears fairly often and is a
+\ candidate for factoring out into:
+\
+\        :s lsb #1 and ;s
+\
+\ To retrieve the Least Significant Bit.
+\
+\ Another one is the phrase "[ FF ] literal and" to retrieve
+\ the Least Significant Byte.
 \
 
 : c@ ( a -- c : character load )
@@ -5034,7 +5051,7 @@ system[ user tup =cell tallot ]system
 
 : abort #-1 throw ; ( -- : Time to die. )
 :s (abort) do$ swap if count type abort then drop ;s ( n -- )
-:s depth [ {sp0} ] literal @ sp@ - 1- ;s ( -- n )
+:s depth [ {sp0} ] literal @ sp@ - 1- ;s ( -- n : stk. depth )
 :s ?depth depth >= [ -$4 ] literal and throw ;s ( ??? n -- )
 
 \ # Advanced Arithmetic
@@ -5125,23 +5142,33 @@ system[ user tup =cell tallot ]system
 \ implementation which uses "um+" for multiplication, "um+"
 \ should be made to be as fast as possible.
 \
+\ Interestingly the words "\*", "/", "mod" and a few others
+\ whilst provided to the user are not used within the eForth
+\ interpreter itself (for example, "/mod" is not used for
+\ numeric conversion, instead "um/mod" is). This is because
+\ those words operate on single cell integer values, whilst
+\ internally double cell integers are used, albeit mostly
+\ hidden from the user.
+\
 
 : um+ 2dup + >r r@ 0>= >r ( u u -- u carry )
   2dup and 0< r> or >r or 0< r> and negate r> swap ;
 : dnegate invert >r invert #1 um+ r> + ; ( d -- d )
 : d+ >r swap >r um+ r> + r> + ; ( d d -- d )
 : um* ( u u -- ud : double cell width multiply )
-  #0 swap ( u1 0 u2 ) [ $F ] literal
-  for
+  #0 swap ( u1 0 u2 ) 
+  [ $F ] literal for ( 16 times )
     dup um+ 2>r dup um+ r> + r>
     if >r over um+ r> + then
   next shed ;
 : * um* drop ; ( n n -- n : multiply two numbers )
 : um/mod ( ud u -- ur uq : unsigned double cell div/mod )
-  ?dup 0= [ -$A ] literal and throw
+  ?dup 0= [ -$A ] literal and throw ( divisor is non zero? )
   2dup u<
-  if negate [ $F ] literal
-    for >r dup um+ 2>r dup um+ r> + dup
+  if 
+    negate 
+    [ $F ] literal for  ( 16 times )
+      >r dup um+ 2>r dup um+ r> + dup
       r> r@ swap >r um+ r> ( or -> ) 0<> swap 0<> +
       if >r drop 1+ r> else drop then r>
     next
@@ -5150,7 +5177,7 @@ system[ user tup =cell tallot ]system
 : m/mod ( d n -- r q : floored division )
   s>d dup >r
   if negate >r dnegate r> then
-  >r s>d if r@ + then r> um/mod r>
+  >r s>d if r@ + then r> um/mod r> ( modify um/mod result )
   if swap negate swap then ;
 : /mod over 0< swap m/mod ; ( u1 u2 -- u1%u2 u1/u2 )
 : mod /mod drop ; ( u1 u2 -- u1%u2 )
@@ -5329,7 +5356,8 @@ system[ user tup =cell tallot ]system
   over + over begin
     2dup <>
   while
-    key dup bl - [ $5F ] literal u<
+    key dup 
+    bl - [ $5F ] literal u< ( magic: within 32-127? )
     if tap else <tap> @execute then
   repeat drop over - ;
 : expect <expect> @execute span ! drop ; ( a u -- )
