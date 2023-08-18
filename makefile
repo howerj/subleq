@@ -33,7 +33,7 @@ help:
 	@echo "	speed    : perform basic speed test"
 	@echo "	gforth   : compile and run ${FORTH} with gforth"
 	@echo "	width    : peform VM cell width tests"
-	@echo " self     : run ${IMAGE} under 'self-interpreter'"
+	@echo "	self     : run ${IMAGE} under 'self-interpreter'"
 	@echo "	eforth.c : make SUBLEQ VM with built-in Forth"
 	@echo "	subleq.{pdf,epub.htm} : make documentation"
 	@echo
@@ -158,6 +158,9 @@ debug.o: extra/debug.c subleq.cma
 	${CC} -I. -std=gnu99 -Wall -Wextra -pedantic $< -c -o $@
 
 debug: debug.o
+
+debug-opt-run: ${IMAGE} debug
+	./debug -o optimize=true -o stats=true ${IMAGE}
 
 clean:
 	git clean -dffx

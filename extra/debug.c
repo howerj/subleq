@@ -1532,13 +1532,26 @@ static int optimizer(subleq_t *s, uint64_t pc) {
 			s->o.matches[IJMP]++;
 			continue;
 		}
+		/* As matching is very brittle by disabling smaller matches we
+		 * can often get broken code working again. This can be done by
+		 * placing a "continue" outside of a match. This could be made
+		 * into an option to debug non-working optimized code.
+		 */
+		/*continue;*/
 
 		if (match(s, n, DEPTH, i, "00> !Z> Z0> ZZ>", &q0) == 1) {
-			s->im[L(s, i)].instruction = MOV;
-			s->im[L(s, i)].d = L(s, get(&s->o, '0'));
-			s->im[L(s, i)].s = L(s, q0);
-			s->o.matches[MOV]++;
-			continue;
+			const uint64_t dst = L(s, get(&s->o, '0'));
+			const uint64_t src = L(s, q0);
+			/* extra check on what should be a valid MOV, but
+			 * if we are matching it, it probably is not (as
+			 * why would a programmer MOV to the same location?). */
+			if (dst != src /* && src != 0 && dst != 0*/) { 
+				s->im[L(s, i)].instruction = MOV;
+				s->im[L(s, i)].d = dst;
+				s->im[L(s, i)].s = src;
+				s->o.matches[MOV]++;
+				continue;
+			}
 		}
 
 		/* We should match multiple ones in a row and
@@ -2237,6 +2250,11 @@ static int flag(const char *v) {
 	return -1;
 }
 
+/* More advanced key-value pairs could be dealt with if we had
+ * a table of key-values with the value type, default value
+ * and a pointer to the variable. This is currently not needed, 
+ * we only * use 'set_option' to set flags, but a data driven
+ * approach (whilst being slightly more complex) is more flexible. */
 static int set_option(subleq_t *s, char *kv) {
 	assert(s);
 	assert(kv);

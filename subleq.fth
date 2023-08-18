@@ -2131,15 +2131,17 @@ err-str 2/ tvar err-str-addr
 
 assembler.1 +order
 label: die
-   err-str-addr r0 MOV
+   err-str-addr r0 MOV ( load string address )
    label: die.loop
-     r1 r0 iLOAD
-     r0 INC
-     r1 PUT
-     r1 +if die.loop JMP then
+     r1 r0 iLOAD       ( load character )
+     r0 INC            ( increment to next cell )
+     r1 +if 
+       r1 PUT       ( output single byte )
+       die.loop JMP ( sentinel is a negative val )
+     then 
    ( fall-through )
 :a bye ( -- : first VM word, "bye", or halt the Forth system )
-   HALT (a);
+   HALT (a); ( ...like tears in rain. Time to die. )
 assembler.1 +order
 
 \ Here is the "start" routine, we set the system entry point
@@ -2465,7 +2467,7 @@ assembler.1 -order
 \ also useful for error checking and debugging purposes.
 \
 
-:a sp! tos {sp} MOV ;a ( u -- ??? )
+:a sp! tos {sp} MOV ;a ( u -- ??? : set stack pointer )
 
 \ "opJump" and "opJumpZ" implement unconditional and
 \ conditional jumps respectively. The actual jump is performed
@@ -2613,16 +2615,18 @@ assembler.1 -order
 :a - tos {sp} iSUB t' opDrop JMP (a); ( n n -- n )
 :a + tos {sp} iADD t' opDrop JMP (a); ( n n -- n )
 
-\ "rshift" is implemented as a virtual machine instruction,
-\ but "lshift" is not as it can be implemented in Forth
-\ with little performance loss compared to "rshift", division
-\ by even a power of two is slow on a SUBLEQ machine.
+\ "shift" is implemented as a virtual machine instruction,
+\ this function can perform a shift in either direction due to
+\ the way it works. Shifting left is an fairly inexpensive
+\ construct on a SUBLEQ machine as that can be achieve by 
+\ adding a variable to itself, right shift, or division by two
+\ (for some definitions of division), is more expensive.
 \
 \ It works bit by bit, shifting right by a variable number of
 \ bits, building up the results one bit at a time and doubling
 \ the "x" and "tos" registers.
 \
-\ A consequence of how this "rshift" works is that it is faster
+\ A consequence of how this "shift" works is that it is faster
 \ the more bits it shifts by, it takes the longest to shift by
 \ a single bit as the result is produced in reverse order.
 \
@@ -2634,7 +2638,7 @@ assembler.1 -order
 \ those three extra additions (although another contender would
 \ be load and store instructions).
 \
-\ "rshift" works by looping for each bit in a 16-bit value less
+\ "shift" works by looping for each bit in a 16-bit value less
 \ one bit, and it tests whether the topmost bit is set (a
 \ cheap operation on twos compliment SUBLEQ machines, as the
 \ top bit is set when the value is negative).
@@ -2666,23 +2670,23 @@ assembler.1 -order
 \ now included in the appendix, "opMux" however uses the same
 \ tricks.
 \
-\ Also of note, if we negate the shift count we can perform a
-\ *left shift*. We can use this fact to save space.
+\ If we negate the shift count we can perform a *left shift*. 
+\ We can use this fact to save space.
 \
 
-:a rshift ( u n -- u : right shift 'u' by 'n' places )
+:a shift ( u n -- u : right shift 'u' by 'n' places )
   bwidth r0 MOV       \ load machine bit width
   tos r0 SUB          \ adjust tos by machine width
   tos {sp} iLOAD --sp \ pop value to shift
   r1 ZERO             \ zero result register
-  label: rshift.loop
+  label: shift.loop
     r1 r1 ADD \ double r1, equivalent to left shift by one
     \ work out what bit to shift into r1
     tos -if r1 INC else
       tos r2 MOV r2 INC r2 -if r1 INC then then
     tos tos ADD \ double tos, equivalent to left shift by one
     r0 DEC \ decrement loop counter
-    r0 +if rshift.loop JMP then
+  r0 +if shift.loop JMP then 
   r1 tos MOV ;a \ move result back into tos
 
 \ This single primitive, "opMux", implements bitwise
@@ -2792,9 +2796,9 @@ assembler.1 -order
     \ determine topmost bit of 'tos', place result in 'r2'
     \ this is used to select whether to use r3 or r4
     \ The following code *almost* works:
-    \
+    \ 
     \    tos r2 MOV r2 INC r2 -if r4 r2 MOV else r3 r2 MOV then
-    \
+    \ 
     \ But is not quite right.
     tos -if label: opMuxR4 r4 r2 MOV else
       tos r2 MOV
@@ -2980,7 +2984,7 @@ opt.multi [if]
     {sp} r1 iSTORE r1 INC
       r0 {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
    {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
-      r0 {up} MOV r0 INC  \ set next task
+      r0 {up} MOV r0 INC \ set next task
       ip r0 iLOAD r0 INC \ reverse of save registers
      tos r0 iLOAD r0 INC
     {rp} r0 iLOAD r0 INC
@@ -3219,18 +3223,18 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 \ the compilation of these is achieved.
 \
 
-:m begin talign there ;m ( -- a )
-:m until talign opJumpZ 2/ t, ;m  ( a -- )
-:m again talign opJump  2/ t, ;m ( a -- )
-:m if opJumpZ there 0 t, ;m ( -- a )
-:m tmark opJump there 0 t, ;m ( -- a )
-:m then there 2/ swap t! ;m ( a -- )
-:m else tmark swap then ;m ( a -- a )
-:m while if ;m ( -- a )
-:m repeat swap again then ;m ( a a -- )
-:m aft drop tmark begin swap ;m ( a -- a a )
-:m next talign opNext 2/ t, ;m ( a -- )
-:m for opToR begin ;m ( -- a )
+:m begin talign there ;m ( -- a : meta 'begin' )
+:m until talign opJumpZ 2/ t, ;m  ( a -- : meta 'until' )
+:m again talign opJump  2/ t, ;m ( a -- : meta 'again' )
+:m if opJumpZ there 0 t, ;m ( -- a : meta 'if' )
+:m tmark opJump there 0 t, ;m ( -- a : meta mark location )
+:m then there 2/ swap t! ;m ( a -- : meta 'then' )
+:m else tmark swap then ;m ( a -- a : meta 'else' )
+:m while if ;m ( -- a : meta 'while' )
+:m repeat swap again then ;m ( a a -- : meta 'repeat' )
+:m aft drop tmark begin swap ;m ( a -- a a : meta 'aft' )
+:m next talign opNext 2/ t, ;m ( a -- : meta 'next' )
+:m for opToR begin ;m ( -- a : meta 'for )
 
 \ The following words will be useful for defining control
 \ structures within the newly made Forth interpreter image,
@@ -3262,6 +3266,7 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :m 0= op0= ;m ( -- : compile op0= into the dictionary )
 :m mux opMux ;m ( -- : compile opMux into the dictionary )
 :m exit opExit ;m ( -- : compile opExit into the dictionary )
+:m rshift shift ;m ( -- : compile shift into the dictionary )
 
 \ This complete most of the meta-compiler words, new
 \ words will be defined later, but that is most of it. The
@@ -3318,7 +3323,7 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :to dup dup ; ( n -- n n : duplicate top of variable stack )
 :to drop opDrop ; ( n -- : drop top of variable stack )
 :to swap opSwap ; ( x y -- y x : swap two variables on stack )
-:to rshift rshift ; ( u n -- u : logical right shift by "n" )
+:to rshift shift ; ( u n -- u : logical right shift by "n" )
 :so [@] [@] ;s ( vma -- : fetch -VM Address- )
 :so [!] [!] ;s ( u vma -- : store to -VM Address- )
 :to sp! sp! ; ( a -- ??? : set the variable stack location )
@@ -4381,7 +4386,8 @@ opt.iffy-compare [if]
 \
 
 : cr ( -- : emit new line )
-  [ =cr ] literal emit [ =lf ] literal emit ;
+  [ =cr ] literal emit 
+  [ =lf ] literal emit ;
 
 \ There is nothing special about these three words, they are
 \ common, standard, convenience words for fetching and storing
@@ -4441,16 +4447,6 @@ opt.iffy-compare [if]
 \ "pick" and likewise discouraged from use. It allows a varying
 \ number of items on the stack to be rotated.
 \
-\ "roll", along with some other stack words, can be
-\ defined as:
-\
-\       :  roll ?dup if swap >r 1- roll r> swap then ; 
-\       : -roll ?dup if rot >r 1- -roll r> then ; 
-\       : unpick 1+ sp@ + [!] ; ( n0..nx y nu -- n0..y..nx )
-\       : flip -rot swap ; ( a b c -- c b a ) 
-\
-\ If they are needed. "unpick" is the opposite of "pick".
-
 : pick sp@ + [@] ; ( nu...n0 u -- nu : pick item on stack )
 
 \ "+!" is a useful utility word, often found with "1+!" and
@@ -4475,7 +4471,7 @@ opt.iffy-compare [if]
 
 : +! 2/ tuck [@] + swap [!] ; ( u a -- : add val to cell )
 
-\ "lshift" is much faster to computer in Forth than "rshift"
+\ "lshift" is much faster to compute in Forth than "rshift"
 \ as "2\*" is faster than "2/". We could define both in Forth
 \ like so:
 \
@@ -5167,14 +5163,14 @@ system[ user tup =cell tallot ]system
   2dup u<
   if 
     negate 
-    [ $F ] literal for  ( 16 times )
+    [ $F ] literal for ( 16 times )
       >r dup um+ 2>r dup um+ r> + dup
       r> r@ swap >r um+ r> ( or -> ) 0<> swap 0<> +
       if >r drop 1+ r> else drop then r>
     next
     drop swap exit
   then 2drop drop #-1 dup ;
-: m/mod ( d n -- r q : floored division )
+: m/mod ( d n -- r q : floored division, hopefully not flawed )
   s>d dup >r
   if negate >r dnegate r> then
   >r s>d if r@ + then r> um/mod r> ( modify um/mod result )
@@ -5589,7 +5585,6 @@ system[ user tup =cell tallot ]system
 
 opt.divmod [if]
 :s (.) abs radix opDivMod ?dup if (.) then digit emit ;s
-
 
 \ "." uses "(.)", it just needs to check if the number to print
 \ is negative, if so, it emits a single "-" character.
@@ -6483,6 +6478,11 @@ root[
 \ When in command mode, "2 2 ' + execute" is the same as
 \ "2 2 +".
 \
+\ Some old definitions of "'" returned zero if the word was
+\ not found (this behavior is arguably more useful), there are
+\ others that have behavior that differs in other ways (such
+\ its immediacy).
+\
 \ "compile" belongs with these words, but is needed earlier
 \ on.
 \
@@ -6555,8 +6555,9 @@ root[
 \ differently.
 \
 
-:to ' token find ?found cfa postpone literal ; immediate
-:to recurse
+:to ' ( "name" -- xt : get xt of word [or throw] )
+  token find ?found cfa postpone literal ; immediate
+:to recurse ( -- : recursive call to current definition )
     [ {last} ] literal @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
 :s hide token find ?found nfa [ $80 ] literal swap toggle ;s
@@ -9706,7 +9707,7 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \
 \        atan(x) = pi/2 - atan(1/x)
 \
-\ We can use "fatan-lo" to computer atan when r > 1.0:
+\ We can use "fatan-lo" to compute atan when r > 1.0:
 \
 :s fatan-hi finv fatan-lo fhpi fswap f- ;s ( r -- r )
 
@@ -10718,11 +10719,15 @@ it being run.
 \
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
 \            &q0) == 1) {
-\              m[L(i)].instruction = MOV;
-\              m[L(i)].d = L(get(o, '0'));
-\              m[L(i)].s = L(q0);
-\              o->matches[MOV]++;
-\              continue;
+\              uint64_t dst = L(get(o, '0'));
+\              uint64_t src = L(q0);
+\              if (dst != src) { /* check for zero also? */
+\                m[L(i)].instruction = MOV;
+\                m[L(i)].d = dst;
+\                m[L(i)].s = src;
+\                o->matches[MOV]++;
+\                continue;
+\              }
 \            }
 \
 \            /* We should match multiple ones in a row and
@@ -11721,6 +11726,7 @@ it being run.
 \
 <ok> @ ' ) <ok> !
 : debug source type ."  ok" cr ; ' debug <ok> !
+system +order
 
  0 constant false
 -1 constant true
@@ -11751,7 +11757,7 @@ variable seed here seed !
 \
 \        undefined? rdup ?\ : rdup r> r> dup >r >r >r ;
 
-: rdup r> r> dup >r >r >r ;
+: rdup r> r> dup >r >r >r ; ( R: n -- n n )
 : umin 2dup swap u< if swap then drop ; ( u u -- u )
 : umax 2dup      u< if swap then drop ; ( u u -- u )
 : off false swap ! ; ( a -- )
@@ -11768,7 +11774,7 @@ variable seed here seed !
 : .base base @ dup decimal . base ! ; ( -- )
 : also get-order over swap 1+ set-order ; ( -- )
 : previous get-order nip 1- set-order ; ( -- )
-  \ : buffer block ; ( k -- a )
+( : buffer block ; ( k -- a )
 : enum dup constant 1+ ; ( n --, <string> )
 : logical 0= 0= ; ( n -- f : turn a number into a 0 or -1 )
 : limit rot min max ; ( n lo hi -- n )
@@ -11776,7 +11782,7 @@ variable seed here seed !
 : even odd invert ; ( n -- f )
 : nor or invert ; ( u u -- u )
 : nand and invert ; ( u u -- u )
-\ : under >r dup r> ; ( n1 n2 -- n1 n1 n2 )
+( : under >r dup r> ; ( n1 n2 -- n1 n1 n2 )
 : under over swap ; ( n1 n2 -- n1 n1 n2 )
 : 2nip >r >r 2drop r> r> ; ( n1 n2 n3 n4 -- n3 n4 )
 ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
@@ -11817,7 +11823,10 @@ variable seed here seed !
 : */mod  >r m* r> m/mod ;  ( n n n -- r q )
 : */  */mod nip ;          ( n n n -- q )
 : holds begin dup while 1- 2dup + c@ hold repeat 2drop ;
-: roll  dup 0> if swap >r 1- recurse r> swap else drop then ;
+: roll ?dup if swap >r 1- recurse r> swap then ; 
+: -roll ?dup if rot >r 1- recurse r> then ; 
+: unpick 1+ sp@ + [!] ; ( n0..nx y nu -- n0..y..nx )
+: flip -rot swap ; ( a b c -- c b a ) 
 : signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )
 : >< dup 8 rshift swap 8 lshift or ; ( u -- u : swap bytes )
 : #digits >r dup 0= if 1+ exit then r> log 1+ ; ( u b -- u )
@@ -11890,7 +11899,7 @@ variable seed here seed !
   s>d  if -$B throw then ( does not work for neg. values )
   dup 2 < if exit then   ( return 0 or 1 )
   dup                    ( u u )
-  2 rshift sqrt ( recurse ) 2*    ( u sc )
+  2 rshift recurse 2*    ( u sc )
   dup                    ( u sc sc )
   1+ dup square          ( u sc lc lc^2 )
   >r rot r> <            ( sc lc bool )

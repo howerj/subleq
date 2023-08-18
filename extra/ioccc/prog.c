@@ -6,7 +6,7 @@
 #include <stdio.h>
 typedef FILE*i;typedef long I;typedef char Y;
 #define f __func__
-enum{h,u=!h,d,D,U=~u+u,k=l d,K,R=K+d,w,x=u<<K,C=x<<(u+l u),Z=sizeof(char[u-d*!!((l u)>(k+K))])};
+enum{h,u=!h,d,D,U=~u+u,k=l d,K,R=K+d,w,x=u<<K,C=x<<(u+l u),Z=sizeof(Y[u-d*!!((l u)>(k+K))])};
 J I V(I _){r(_-l(f[h]-w*(w+d)));}
 J I X(I _,I O,I o){r((o&_)|V(-(V(~O+u)|o)));}/*this doesn't do what you think it does*/
 J I L(I _){r(X(_,_^_,V(u<<(h[f]/K))));}/*this does*/
@@ -26,7 +26,7 @@ J I S(i ingest,i excrete,I*m/*not feeling well*/,I D,I(*E[u])(I)){
 	!X(X(h,-!!V(D),O),O,(f[h]/(l u)-u)[E](D))?
 		a=y((E-E)[E](a)[m],excrete):(h[E](O)[m]=r,s)?_=e:h;
 	F(a<h)r(K);
-	/*F(-!X(V(-_),_,L(_)))G _;*/F(_<C)G _;
+	/*F(-!X(V(-_),_,L(_)))G _;*/F(_<C&&M(D)-_)G _;
 	r(h);
 }
 #include <stdlib.h>
