@@ -2597,7 +2597,7 @@ assembler.1 -order
  ( does not work: "tos if tos ZERO else tos NG1! then vm JMP" )
  tos if ( assembly 'if' does not work for entire range )
    tos ZERO
- else
+ else ( deal with incorrect results )
    tos DEC
    tos +if tos ZERO else tos NG1! then
  then ;a
@@ -7706,6 +7706,14 @@ opt.better-see [if] ( Start conditional compilation )
 \ So instead of shaving bytes off of the current implementation
 \ (which can be done elsewhere), the simpler version is kept
 \ in.
+\
+\ A hacky version of "page" that is more portable can be 
+\ defined as follows:
+\
+\        : page 50 for aft cr then next ;
+\
+\ It does not work as well, it clears the screen but leaves
+\ the cursor at the bottom of the screen.
 \
 
 : bell [ $7 ] literal emit ; ( -- : emit ASCII BEL character )
