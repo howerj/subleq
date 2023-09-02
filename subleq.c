@@ -7,7 +7,7 @@ static u16 m[1<<16], pc = 0, prog = 0;
 
 int main(int argc, char **argv) {
 	for (long i = 1, d = 0; i < argc; i++) {
-		FILE *f = fopen(argv[i], "r");
+		FILE *f = fopen(argv[i], "rb");
 		if (!f)
 			return 1;
 		while (fscanf(f, "%ld,", &d) > 0)

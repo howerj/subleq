@@ -2878,11 +2878,11 @@ opt.divmod [if]
     r1 INC     ( increment quotient )
     tos r0 SUB ( repeated subtraction )
     r0 -if 
-       tos r0 ADD   ( correct remainder )
-       r1 DEC       ( correct quotient )
-       r1 tos MOV   ( store results back to tos )
-       r0 {sp} iSTORE ( ...and stack )
-       vm JMP ( finish... )
+      tos r0 ADD   ( correct remainder )
+      r1 DEC       ( correct quotient )
+      r1 tos MOV   ( store results back to tos )
+      r0 {sp} iSTORE ( ...and stack )
+      vm JMP ( finish... )
     then
   divStep JMP ( perform another division step )
   (a);
@@ -4478,12 +4478,11 @@ opt.iffy-compare [if]
 \         : rshift begin ?dup while 1- swap 2/ swap repeat ;
 \         : lshift begin ?dup while 1- swap 2* swap repeat ;
 \
-\ Instead, we can use the property of our version of "rshift",
-\ which really should be called "shift", which performs a left
-\ shift for negative values of the shift amount (and a right
-\ one for positive values).
+\ Instead, we can use the property of our version of "shift",
+\ which performs a left shift for negative values of the shift 
+\ amount (and a right one for positive values).
 \
-: lshift negate rshift ; ( u n -- u : left shift 'u' by 'n' )
+: lshift negate shift ; ( u n -- u : left shift 'u' by 'n' )
 
 \ ### Character Load / Store
 \
@@ -4791,11 +4790,14 @@ system[ user tup =cell tallot ]system
 \
 \ "blank" is sometimes used in Forth block editors.
 \
+\ Both "cmove" and "fill" do nothing if the number of bytes to
+\ copy is less than or equal to zero.
+\
 
-: cmove ( b1 b2 u -- : move character blocks around )
-   for aft >r c@+ r@ c! 1+ r> 1+ then next 2drop ;
-: fill ( b u c -- : write byte 'c' to array 'b' of 'u' length )
-   swap for swap aft 2dup c! 1+ then next 2drop ;
+: cmove ( b1 b2 n -- : move character blocks around )
+  #0 max for aft >r c@+ r@ c! 1+ r> 1+ then next 2drop ;
+: fill ( b n c -- : write byte 'c' to array 'b' of 'u' length )
+  swap #0 max for swap aft 2dup c! 1+ then next 2drop ;
 : erase #0 fill ; ( b u -- : write zeros to array )
 
 \ The following words, and two new meta-compiler words, allow
@@ -6545,8 +6547,7 @@ root[
 \ like "recurse". This could be defined with:
 \
 \        :s smudge
-\          [ {last} ] literal
-\          @ nfa [ $80 ] literal swap toggle ;s
+\          last nfa [ $80 ] literal swap toggle ;s
 \
 \ "smudge" was used to hide and unhide a word definition during
 \ its creation to implement the word hiding feature described
@@ -6561,6 +6562,7 @@ root[
     [ {last} ] literal @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
 :s hide token find ?found nfa [ $80 ] literal swap toggle ;s
+
 
 \ # Control Structures
 \
@@ -7321,6 +7323,7 @@ opt.better-see [if] ( Start conditional compilation )
 
 \ N.B. We could "(2const)" here, but it is in an optional
 \ component.
+\
 :s decompile ( a u -- a )
   dup [ =jumpz ] literal = if
     drop ."  jumpz " cell+ dup @ 2* u. exit
@@ -7343,11 +7346,11 @@ opt.better-see [if] ( Start conditional compilation )
   then
 
   dup [ to' (user) half ] literal = if drop
-     ."  (user) " cell+ @ u. drop [ $7FFF ] literal exit
+     ."  (user) " cell+ @ u. [ $7FFF ] literal exit
   then
 
   dup [ to' (const) half ] literal = if drop
-     ."  (const) " cell+ @ u. drop [ $7FFF ] literal exit
+     ."  (const) " cell+ @ u. [ $7FFF ] literal exit
   then
 
   dup [ to' (var) half ] literal = if drop
@@ -7357,12 +7360,12 @@ opt.better-see [if] ( Start conditional compilation )
 
   dup [ to' .$ half ] literal = if drop ."  ." [char] "
     emit space
-    cell+ count 2dup type [char] " emit + aligned
+    cell+ count 2dup type [char] " emit + aligned cell -
   exit then
 
   dup [ to' ($) half ] literal = if drop ."  $" [char] "
   emit space
-    cell+ count 2dup type [char] " emit + aligned
+    cell+ count 2dup type [char] " emit + aligned cell -
   exit then
   [ primitive ] literal @ over u> if ."  VM    " 2* else
     dup name ?dup if space count [ $1F ] literal
@@ -7387,12 +7390,12 @@ opt.better-see [if] ( Start conditional compilation )
 \ We could improve the stop conditions by using "(find)"
 \ as it gives us a better range for the likely positions of
 \ when a word starts and ends.
-:to see token dup ." : " count type cr find ?found
+:to see token dup find ?found swap ." : " count type cr
   dup >r cfa
   begin dup @ [ =unnest ] literal <>
   while
     dup dup [ $5 ] literal u.r ."  | "
-    @ decompile cr cell+ here over u< if drop exit then
+    @ decompile cr cell+ here over u< if drop rdrop exit then
   repeat drop ."  ;"
   r> dup immediate? if ."  immediate" then
   compile-only? if ."  compile-only" then cr ;
@@ -8524,7 +8527,7 @@ opt.multi [if]
 \ "signal", they are used to send a message from one thread
 \ to another. "send" takes a message, which is a single cell,
 \ it could be a pointer, a variable, an execution token, so
-\ long as it is a single cell, it also takes a task address
+\ long as it is a single cell, and it also takes a task address
 \ to send to.
 \
 \ "receive" waits by repeatedly pausing until a task address
@@ -8641,7 +8644,7 @@ opt.multi [if]
 \ fact that execute, "x", calls "q" might cause problems when
 \ trying to put words into different vocabularies, but it is
 \ not an insurmountable problem.
-
+\
 \ Also "d" might clash with the hexadecimal value for the
 \ number 13, in this Forth it is not a problem as hexadecimal
 \ numbers use uppercase only, and this Forth is case sensitive.
@@ -8701,8 +8704,6 @@ opt.multi [if]
 \ worth rewriting the code to draw and redraw only what is
 \ necessary, complications which are not needed.
 \
-
-\ BUG: Empty line append causes problems
 opt.editor [if]
 : editor [ {editor} ] literal #1 set-order ; ( BLOCK editor )
 :e q only forth ;e ( -- : exit back to Forth interpreter )
@@ -8731,6 +8732,7 @@ opt.editor [if]
 \
 
 opt.control [if]
+
 
 : rpick ( n -- u, R: ??? -- ??? : pick a value off ret. stk. )
   rp@ swap - 1- 2* @ ;

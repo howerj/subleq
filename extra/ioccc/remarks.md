@@ -29,9 +29,9 @@ number as well.
 
 To build this program from scratch:
 
-1. First invert the universe.
+1. First invent the universe.
 2. Wait for a C compiler to evolve on a planet.
-3. Capture the wild C compiler, *larger compilers are not
+3. Capture a wild C compiler, *larger compilers are not
 necessarily better*, you can only evaluate a C compiler
 based off its excretions.
 4. ${CC} -Wall -Wextra -pedantic -std=c11 -O3 prog.c -o prog
@@ -183,7 +183,7 @@ into one single instruction.
 Some of things things can be achieved with self-modifying
 code (which is used a lot), for example you can perform an 
 indirect jump by modifying the jump destination with another 
-SUBLEQ instruction for example. Indirect loads and stores are more
+SUBLEQ instruction. Indirect loads and stores are more
 complex.
 
 Broadly the strategy to implement the Forth interpreter on
@@ -239,7 +239,7 @@ Some limitations of this Forth:
 * Numeric bases higher than 9 use upper case letters only.
 * "ms" uses a calibrated delay loop. Calibrated to work on my
 machine.
-* "do...loop" and are missing.
+* "do...loop" and associated words are missing.
 * The heat death of the universe will eventually render all
 efforts useless.
 
