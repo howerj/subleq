@@ -2878,11 +2878,11 @@ opt.divmod [if]
     r1 INC     ( increment quotient )
     tos r0 SUB ( repeated subtraction )
     r0 -if 
-      tos r0 ADD   ( correct remainder )
-      r1 DEC       ( correct quotient )
-      r1 tos MOV   ( store results back to tos )
+      tos r0 ADD     ( correct remainder )
+      r1 DEC         ( correct quotient )
+      r1 tos MOV     ( store results back to tos )
       r0 {sp} iSTORE ( ...and stack )
-      vm JMP ( finish... )
+      vm JMP         ( finish... )
     then
   divStep JMP ( perform another division step )
   (a);
@@ -3459,6 +3459,7 @@ system[
  1 constant #1  ( --  1 : push one onto the stack )
 -1 constant #-1 ( -- -1 : push negative one onto the stack )
  2 constant #2  ( --  2 : push two onto the stack )
+-2 constant -cell  ( -- -2 : push negative two onto the stack )
 ]system
 
 \ "1+" and "1-" do what they say, increment and decrement
@@ -3837,13 +3838,13 @@ $20 constant bl ( -- 32 : push space character )
 system[
        h constant h?  ( -- a : push the location of dict. ptr )
 {cycles} constant cycles ( -- a : number of "cycles" ran for )
-    {sp} constant sp ( -- a : address of v.stk ptr. )
-  {user} constant user? ( -- a : address of user alloc var )
+    {sp} constant sp     ( -- a : address of v.stk ptr. )
+  {user} constant user?  ( -- a : address of user alloc var )
          variable calibration 1400 t' calibration >tbody t!
 ]system
 
 :s radix base @ ;s ( -- u : retrieve base )
-: here h? @ ; ( -- u : push the dictionary pointer )
+: here h? @ ;      ( -- u : push the dictionary pointer )
 
 \ As mentioned, "sp@" is defined in Forth, and it is defined
 \ here. It retrieves the variable stack position, and pushes
@@ -5828,7 +5829,7 @@ opt.divmod [if]
 
 : nfa cell+ ; ( pwd -- nfa : move word ptr to name field )
 : cfa ( pwd -- cfa : move to Code Field Address )
-  nfa c@+ [ 1F ] literal and + cell+ cell negate and ;
+  nfa c@+ [ 1F ] literal and + cell+ -cell and ;
 
 \ "(search)" and "(find)" are made to be as generic as
 \ possible, they are not complex words, but they do a lot.
@@ -6563,7 +6564,6 @@ root[
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
 :s hide token find ?found nfa [ $80 ] literal swap toggle ;s
 
-
 \ # Control Structures
 \
 \ No programming language is complete without control
@@ -6841,8 +6841,8 @@ root[
 : create state @ >r postpone : drop r> state ! compile (var)
    get-current ! ;
 :to variable create #0 , ;
-:to constant create cell negate allot compile (const) , ;
-:to user create cell negate allot compile (user)
+:to constant create -cell allot compile (const) , ;
+:to user create -cell allot compile (user)
    cell user? +! user? @ , ;
 
 : >body cell+ ; ( a -- a : move to a create words body )
@@ -6891,7 +6891,7 @@ root[
 \ deallocated for the same reason.
 \
 
-:to marker last align here create cell negate allot compile
+:to marker last align here create -cell allot compile
     (marker) , , ; ( --, "name" )
 
 \ # Return Stack Words
@@ -7007,8 +7007,8 @@ root[
 \
 
 :s (s) align [char] " word count nip 1+ allot align ;s
-:to ." compile .$ (s)  ; immediate compile-only
-:to $" compile ($) (s)  ; immediate compile-only
+:to ." compile .$ (s) ; immediate compile-only
+:to $" compile ($) (s) ; immediate compile-only
 :to abort" compile (abort) (s) ; immediate compile-only
 
 \ # Comments
@@ -7261,7 +7261,7 @@ opt.better-see [if] ( Start conditional compilation )
 \ otherwise zero is returned.
 \
 :s validate ( pwd cfa -- nfa | 0 )
-   over cfa <> if drop #0 exit then nfa ;s
+  over cfa <> if drop #0 exit then nfa ;s
 
 \ "cfa?" goes through the linked list of words in a vocabulary
 \ and attempts to find a pair of pointers for which the Code
@@ -8869,7 +8869,7 @@ opt.control [if]
 
 : macro ( c" xxx" --, : create a late-binding macro )
   create postpone immediate
-  cell negate allot compile (macro)
+  -cell allot compile (macro)
   align here #2 cells + ,
   #0 parse dup , scopy 2drop ;
 
@@ -9237,7 +9237,7 @@ system[
 \
 \ Instead, we use the same trick we used to define "constant".
 
-:to 2constant create cell negate allot compile (2const) 2, ;
+:to 2constant create -cell allot compile (2const) 2, ;
 :to 2variable create #0 , #0 , ; \ does> ; ( d --, Run: -- a )
 :to 2literal swap postpone literal postpone literal ; immediate
 :s +- 0< if negate then ;s ( n n -- n : copy sign )

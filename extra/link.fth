@@ -1,8 +1,9 @@
+\ TODO: Integrate into subleq.fth as optional code
+
 only forth definitions decimal
 system +order
 : page 50 for cr next ; ( -- : hacky 'page' )
 
-\ TODO: immediate/compile only, display addresses
 
 system +order definitions
 : .pwd dup ." PWD:" . ; ( pwd -- pwd )
