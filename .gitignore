@@ -15,7 +15,6 @@
 *.png
 *.s
 *.txt
-comp
 debug
 eforth
 eforth.c

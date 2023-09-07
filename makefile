@@ -4,7 +4,7 @@ default all: help
 
 .PHONY: all clean test run gforth width help speed count
 
-CFLAGS=-std=c99 -fwrapv -Wall -Wextra -pedantic -O3
+CFLAGS=-std=c99 -fwrapv -Wall -Wextra -pedantic -O3 -march=native
 #CFLAGS+=-fsanitize=undefined 
 FORTH=subleq.fth
 IMAGE=subleq.dec
