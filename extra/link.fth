@@ -1,20 +1,28 @@
 \ TODO: Integrate into subleq.fth as optional code
+\ TODO: Extend "vm?" to include compile-time words such
+\ as "r>" which take the form "compile <VM> exit". Currently
+\ they are undetected as built-ins
 
 only forth definitions decimal
 system +order
-: page 50 for cr next ; ( -- : hacky 'page' )
+\ : page 50 for cr next ; ( -- : hacky 'page' )
 
 
 system +order definitions
-: .pwd dup ." PWD:" . ; ( pwd -- pwd )
-: .nfa dup ."  NFA:" nfa . ; ( pwd -- pwd )
-: .cfa dup ."  CFA:" cfa . ; ( pwd -- pwd )
+: .n 6 u.r ;
+: .pwd dup ." PWD:" .n ; ( pwd -- pwd )
+: .nfa dup ."  NFA:" nfa .n ; ( pwd -- pwd )
+: .cfa dup ."  CFA:" cfa .n ; ( pwd -- pwd )
 : .blank ." --- " ; ( -- )
 : .immediate dup $40 and if ." IMM " exit then .blank ;
 : .compile-only dup $20 and if ." CMP " exit then .blank ;
 : .hidden dup $80 and if ." HID " exit then .blank ;
+: =vm [ ' pause @ ] literal ; ( pause = last defined built-in )
+: =exit [ ' pause cell+ @ ] literal ; ( exit follows built-in )
+: vm? dup @ =vm  u<= swap cell+ @ =exit = and ;
+: .built-in dup cfa vm? if ." BLT " exit then .blank ;
 : display ( pwd -- )
-  dup .pwd .nfa .cfa space nfa count 
+  dup .pwd .nfa .cfa space .built-in nfa count 
   .immediate .compile-only .hidden
   31 and type cr ;
 : (w) begin ?dup while display @ repeat ; ( voc -- )
@@ -30,7 +38,7 @@ only forth definitions decimal
 : d< rot 2dup >                    ( d -- f )
   if = nip nip if 0 exit then -1 exit then
   2drop u< ;
-: dabs s>d if dnegate then ;      ( d -- ud )
+\ : dabs s>d if dnegate then ;      ( d -- ud )
 : 2rot >r >r 2swap r> r> 2swap ; ( d1 d2 d3 -- d2 d3 d1 )
 : d0= or 0= ; ( d -- f )
 : d0< nip 0< ; ( d -- f )
@@ -44,10 +52,11 @@ only forth definitions decimal
 : dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
 
 : d. dup -rot dabs <# #s sign #> type space ; ( d -- )
-: d.r >r dup -rot dabs <# #s sign #> r> (pad) type ; ( d n -- )
+\ : d.r >r dup -rot dabs <# #s sign #> r> (pad) type ; ( d n -- )
 
 system +order
 : roll ?dup if swap >r 1- recurse r> swap then ; 
 : -roll ?dup if rot >r 1- recurse r> then ; 
 : reverse for aft r@ -roll then next ; ( x0...xn n -- xn...x0 ) 
 
+only forth definitions decimal

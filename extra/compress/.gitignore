@@ -1,6 +1,8 @@
 subleq
 1c
 1d
+2c
+2d
 *.dec
 *.o
 *.a

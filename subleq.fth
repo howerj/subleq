@@ -2422,20 +2422,19 @@ assembler.1 -order
 \ numbers) and also be aware not to cross control structure
 \ boundaries, or alternatively the programmer has to
 \ selectively apply the optimization themselves which is
-\ error prone.
+\ error prone. This Forth system does have the facilities for
+\ performing this optimization though (remove "opExit" and
+\ "opJump" to the last word).
 \
 \ These next words are for stack manipulation, mainly return
 \ stack manipulation like "opExit", words that warrant more
 \ explanation than the implementations of instructions like
 \ "swap", mainly due to what they are used for.
 \
-\ "r@" is especially useful, it is used often in "for...next"
-\ loops to fetch the loop counter (stored on the return stack),
-\ "r@" fetches the top most return stack value, pushing it to
-\ the return stack. It is a copy, so it does not modify the
-\ return stack.
-\
-\ "rdrop" just drops the topmost return stack variable.
+\ "rdrop" just drops the topmost return stack variable. It
+\ could be defined in pure Forth but "opExit" falls through
+\ to the assembly definition of "rdrop", so it might as well
+\ be kept in.
 \
 \ It should be noted that the instructions that modify the
 \ return stack should be that, instructions, and not function
@@ -2451,7 +2450,6 @@ assembler.1 -order
 
 :a opExit ip {rp} iLOAD (fall-through); ( !!! ) ( R: a -- )
 :a rdrop --rp ;a ( R: u -- )
-:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a ( R: u --, -- u )
 :a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a ( R: ???, -- u )
 :a rp! tos {rp} MOV t' opDrop JMP (a); ( u -- R: ??? )
 
@@ -2562,7 +2560,7 @@ assembler.1 -order
 \ Would compile to something like this:
 \
 \        0: opToR
-\        1: r@ instruction
+\        1: address of r@
 \        2: address of .
 \        3: opNext 1
 \
@@ -2573,7 +2571,7 @@ assembler.1 -order
 \
 
 :a opNext r0 {rp} iLOAD ( R: n -- | n-1 )
-   r0 if r0 DEC r0 {rp} iSTORE t' opJump JMP then
+   r0 +if r0 DEC r0 {rp} iSTORE t' opJump JMP then
    --rp t' opIpInc JMP (a);
 
 \ The comparison operators are tricky to get right, we build
@@ -3776,7 +3774,7 @@ system[
 \ vocabulary in the word list (or the wordlist that will get
 \ searched in first).
 \
-: #vocs [ 8 ] literal ; ( -- u : number of vocabularies )
+8 constant #vocs ( -- u : number of vocabularies )
 : context [ {context} ] literal ; ( -- a )
 
 \ These words just push variable locations, or their values,
@@ -4006,10 +4004,17 @@ system[
 \ the third item on the stack. It currently uses as much space
 \ as it saves, so it is kept in.
 \
+\ "r@" is especially useful, it is used often in "for...next"
+\ loops to fetch the loop counter (stored on the return stack),
+\ "r@" fetches the top most return stack value, pushing it to
+\ the return stack. It is a copy, so it does not modify the
+\ return stack.
+\
 
 : nip swap drop ;   ( x y -- y : remove second item on stack )
 : tuck swap over ;  ( x y -- y x y : save item for rainy day )
 : ?dup dup if dup then ; ( x -- x x | 0 : conditional dup )
+: r@ r> r> tuck >r >r ; compile-only ( R: n -- n, -- n )
 : rot >r swap r> swap ; ( x y z -- y z x : "rotate" stack )
 : -rot rot rot ; ( x y z -- z x y : "rotate" stack backwards )
 : 2drop drop drop ; ( x x -- : drop it like it is hot )
@@ -4213,13 +4218,11 @@ opt.iffy-compare [if]
 \ - "cells" is used to convert a number of cells into the
 \ number of bytes those cells take up.
 \ - "cell-" is used to decrement an address by a single cell,
-\ it used to be missing, but
-\
-\ The words are trivial, "cell-" is missing because it is not
-\ used but is easy enough to define.
+\ it used to be missing, but finds a lot of use in extension
+\ code, so much so that it was added to the core.
 \
 
-: cell #2 ;   ( -- u : push bytes in cells to stack )
+2 constant cell ( -- u : push bytes in cells to stack )
 : cell+ cell + ; ( a -- a : increment address by cell width )
 : cells 2* ;     ( u -- u : multiply # of cells to get bytes )
 : cell- cell - ; ( a -- a : decrement address by cell width )
@@ -5003,6 +5006,11 @@ system[ user tup =cell tallot ]system
 \ consumption.
 \
 
+\ TODO: Test these, replace rp@ and rp!, also replace
+\ "pause" if possible, even if partially.
+\ : rp2@ [ {rp} half ] literal [@] #2 - ; compile-only
+\ : rp2! #1 - [ {rp} half ] literal [!] ; compile-only
+
 : catch        ( xt -- exception# | 0 \ return addr on stack )
    sp@ >r                 ( xt )  \ save data stack pointer
    [ {handler} ] up @ >r  ( xt )  \ and previous handler
@@ -5013,12 +5021,12 @@ system[ user tup =cell tallot ]system
    #0 ;                   ( 0 )   \ normal completion
 
 : throw ( ??? exception# -- ??? exception# )
-    ?dup if              ( exc# )     \ 0 throw is no-op
-      [ {handler} ] up @ rp! ( exc# ) \ restore prev ret. stack
-      r> [ {handler} ] up !  ( exc# ) \ restore prev handler
-      r> swap >r         ( saved-sp ) \ exc# on return stack
-      sp! drop r>        ( exc# )     \ restore stack
-    then ;
+  ?dup if              ( exc# )     \ 0 throw is no-op
+    [ {handler} ] up @ rp! ( exc# ) \ restore prev ret. stack
+    r> [ {handler} ] up !  ( exc# ) \ restore prev handler
+    r> swap >r         ( saved-sp ) \ exc# on return stack
+    sp! drop r>        ( exc# )     \ restore stack
+  then ;
 
 \ Now we have "catch" and "throw", we can use them. The next
 \ chapter defines the more advanced arithmetic words of
@@ -5053,6 +5061,14 @@ system[ user tup =cell tallot ]system
 :s depth [ {sp0} ] literal @ sp@ - 1- ;s ( -- n : stk. depth )
 :s ?depth depth >= [ -$4 ] literal and throw ;s ( ??? n -- )
 
+\ "rdepth" can be similarly defined as:
+\
+\        : rdepth [ {rp0} ] literal @ rp@ - 1- ;
+\
+\ If needed. The variables "{sp0}" and "{rp0}", "{rp}" and
+\ "{sp}" could be made available to the user as they are
+\ useful.
+\
 \ # Advanced Arithmetic
 \
 \ The Forth arithmetic word-set attempts to solve the most
@@ -5533,7 +5549,7 @@ system[ user tup =cell tallot ]system
 \ to do this.
 \
 :s digit ( u -- c : extract a character from number )
-   [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s
+  [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s
 
 \ "\#" extracts a single digits and adds it to hold space.
 \ "\#s" continues to do this until the number is zero, which is
@@ -6941,7 +6957,6 @@ root[
 :to rp@ compile rp@ ; immediate compile-only
 :to >r compile opToR ; immediate compile-only
 :to r> compile opFromR ; immediate compile-only
-:to r@ compile r@ ; immediate compile-only
 :to rdrop compile rdrop ; immediate compile-only
 :to exit compile opExit ; immediate compile-only
 
@@ -7928,7 +7943,7 @@ opt.better-see [if] ( Start conditional compilation )
 \
 
 ( system[ variable dirty ]system )
-: b/buf [ $400 ] literal ; ( -- u : size of the block buffer )
+$400 constant b/buf ( -- u : size of the block buffer )
 : block #1 ?depth 1- [ $A ] literal lshift pause ; ( k -- u )
 : flush ( dirty @ if save-buffers empty-buffers then ) ;
 : update ( #-1 dirty ! ) ; ( -- : mark cur. buf. as dirty )
@@ -8073,7 +8088,9 @@ opt.better-see [if] ( Start conditional compilation )
 \ Also note that the license applies to the Forth image and
 \ not the book!
 \
-:r eforth [ $0109 ] literal ;r ( --, version )
+root[
+  $0109 constant eforth ( --, version )
+]root
 
 opt.info [if]
   :s info cr ( --, print system info )
@@ -10494,6 +10511,12 @@ it being run.
 \ to slow it down. There is a lot in this program that could
 \ itself be optimized, it was written to demonstrate the
 \ concept and not for efficiency and speeds sake in of itself.
+\
+\ A much faster system could be made if instead of trying to
+\ speed up the SUBLEQ part of the system the Forth VM and
+\ associated instructions were emulated instead. This would
+\ require knowing the address of "opDup" and the like, as well
+\ as the entry point stored in "{cold}".
 \
 \        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
 \         * programs (it might break them) and tries to
