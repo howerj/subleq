@@ -2962,6 +2962,7 @@ opt.divmod [if]
 \ and stores in Forth code (which is far more compact) instead.
 \
 
+\ TODO: Simplify/implement more in Forth
 opt.multi [if]
 :a pause ( -- : pause and switch task )
   \ "{single}" must be positive and not zero to 
@@ -2979,14 +2980,14 @@ opt.multi [if]
       ip r1 iSTORE r1 INC \ save registers to current task
      tos r1 iSTORE r1 INC \ only a few need to be saved
     {rp} r1 iSTORE r1 INC
-    {sp} r1 iSTORE r1 INC
+    {sp} r1 iSTORE
       r0 {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
    {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
       r0 {up} MOV r0 INC \ set next task
       ip r0 iLOAD r0 INC \ reverse of save registers
      tos r0 iLOAD r0 INC
     {rp} r0 iLOAD r0 INC
-    {sp} r0 iLOAD r0 INC \ we're all golden
+    {sp} r0 iLOAD        \ we're all golden
   then ;a
 [else]
 :m pause ;m ( -- [disabled] )
