@@ -2436,36 +2436,25 @@ assembler.1 -order
 \ to the assembly definition of "rdrop", so it might as well
 \ be kept in.
 \
-\ It should be noted that the instructions that modify the
-\ return stack should be that, instructions, and not function
-\ calls, as if you called them the call location would be
-\ in the way of their operations.
+\ "rp@" and "rp!" used to be defined as VM instructions like
+\ so:
 \
-\ "rp@" and "rp!" can get and set the return stack pointer
-\ directly, they are most useful for the throw/catch mechanism
-\ described later on.
+\        :a rp@ ( R: ???, -- u )
+\          ++sp tos {sp} iSTORE {rp} tos MOV ;a 
+\        :a rp! tos {rp} MOV t' opDrop JMP (a); ( u -- R: ??? )
+\
+\ "rp@" fetches the returns stack pointer, "rp!" sets it. They
+\ are needed for the throw/catch mechanism described later on.
+\ Although now defined in Forth the words require intimate
+\ knowledge of the implementation.
+\
 \
 \ Note: "opExit" falls-through into "rdrop" to save on space.
 \
 
 :a opExit ip {rp} iLOAD (fall-through); ( !!! ) ( R: a -- )
 :a rdrop --rp ;a ( R: u -- )
-:a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a ( R: ???, -- u )
-:a rp! tos {rp} MOV t' opDrop JMP (a); ( u -- R: ??? )
 
-\ "sp@" and "sp!" do for the variable stack what "rp@" and
-\ "rp!" do for the return stack, they can set them to arbitrary
-\ locations. "sp@" can be defined in Forth, and is defined
-\ later, "sp!" must be defined in assembly (or at least 
-\ attempts to define this word in Forth have failed).
-\
-\ "sp@" is more useful of the two, they are both used in
-\ throw/catch, but "sp@" is also used for words like "pick"
-\ and for checking the depth of the variable stack, it is
-\ also useful for error checking and debugging purposes.
-\
-
-:a sp! tos {sp} MOV ;a ( u -- ??? : set stack pointer )
 
 \ "opJump" and "opJumpZ" implement unconditional and
 \ conditional jumps respectively. The actual jump is performed
@@ -2962,7 +2951,6 @@ opt.divmod [if]
 \ and stores in Forth code (which is far more compact) instead.
 \
 
-\ TODO: Simplify/implement more in Forth
 opt.multi [if]
 :a pause ( -- : pause and switch task )
   \ "{single}" must be positive and not zero to 
@@ -3325,7 +3313,6 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :to rshift shift ; ( u n -- u : logical right shift by "n" )
 :so [@] [@] ;s ( vma -- : fetch -VM Address- )
 :so [!] [!] ;s ( u vma -- : store to -VM Address- )
-:to sp! sp! ; ( a -- ??? : set the variable stack location )
 :to 0= op0= ; ( n -- f : equal to zero )
 :so leq0 leq0 ;s ( n -- 0|1 : less than or equal to zero )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
@@ -3845,11 +3832,30 @@ system[
 :s radix base @ ;s ( -- u : retrieve base )
 : here h? @ ;      ( -- u : push the dictionary pointer )
 
-\ As mentioned, "sp@" is defined in Forth, and it is defined
-\ here. It retrieves the variable stack position, and pushes
-\ it on to the variable stack.
+\ The words for setting and getting the stack pointers
+\ will be defined here. These are "sp@", "sp!", "rp@" and
+\ "rp!".
+\
+\ The definitions of all of these words are finicky as part of 
+\ the normal operations of a function cause the values they are 
+\ reading or writing to change.
+\
+\ "rp!" for example must pop off its return value and restore
+\ it, it must all avoid using "!" and instead use "\[!\]"
+\ as the latter is a VM instruction which will not modify
+\ the return stack when it exits, whilst "!" is a function call
+\ that will. All the words also adjust the values they
+\ retrieve.
+\
+\ "rp@" and "rp!" are mainly used in throw/catch. "sp@" and
+\ "sp!" are also used in throw/catch, but "sp@" also finds
+\ uses elsewhere in the interpreter, for example in the
+\ definition of "depth" and "pick".
 \
 : sp@ sp @ 1+ ; ( -- a : Fetch variable stack pointer )
+: sp! 1- [ {sp} half ] literal [!] #1 drop ;
+: rp@ [ {rp} half ] literal [@] 1- ; compile-only
+: rp! r> swap [ {rp} half ] literal [!] >r ; compile-only
 
 \ To make switching bases easier the words "hex" and "decimal"
 \ are made available, which set the numeric input and output
@@ -5007,11 +5013,6 @@ system[ user tup =cell tallot ]system
 \ consumption.
 \
 
-\ TODO: Test these, replace rp@ and rp!, also replace
-\ "pause" if possible, even if partially.
-\ : rp2@ [ {rp} half ] literal [@] #2 - ; compile-only
-\ : rp2! #1 - [ {rp} half ] literal [!] ; compile-only
-
 : catch        ( xt -- exception# | 0 \ return addr on stack )
    sp@ >r                 ( xt )  \ save data stack pointer
    [ {handler} ] up @ >r  ( xt )  \ and previous handler
@@ -5026,7 +5027,7 @@ system[ user tup =cell tallot ]system
     [ {handler} ] up @ rp! ( exc# ) \ restore prev ret. stack
     r> [ {handler} ] up !  ( exc# ) \ restore prev handler
     r> swap >r         ( saved-sp ) \ exc# on return stack
-    sp! drop r>        ( exc# )     \ restore stack
+    sp! r>        ( exc# )     \ restore stack
   then ;
 
 \ Now we have "catch" and "throw", we can use them. The next
@@ -6938,24 +6939,30 @@ root[
 \ not possibly work. To be be more explicit:
 \
 \            (1)         (2)
-\        :to rp! compile rp! ; immediate compile-only
+\        :to rdrop compile rdrop ; immediate compile-only
 \
 \        (1) : Newly defined header, not visible within the
 \              body of the newly defined word because the
 \              meta-compiler ":to" word is used.
 \        (2) : Points to the Forth Virtual Machine instruction,
 \              which has the following definition;
-\              ":a rp! tos {rp} MOV t' opDrop JMP (a);"
-\              (equivalent to):
-\              ":a rp! tos {rp} MOV tos {sp} iLOAD --sp ;a"
+\
+\                      :a rdrop --rp ;a ( R: u -- )
 \
 \ As we have discussed how each of these instructions work
 \ previously in the VM instructions section, we will not
 \ discuss what they do here.
 \
-
-:to rp! compile rp! ; immediate compile-only
-:to rp@ compile rp@ ; immediate compile-only
+\ "rp!" and "rp@" were formerly instructions and had to
+\ be defined like so:
+\
+\        :to rp! compile rp! ; immediate compile-only
+\        :to rp@ compile rp@ ; immediate compile-only
+\
+\ That is no longer the case, they are defined as normal
+\ Forth words previously, albeit ones with knowledge of the
+\ system internals.
+\
 :to >r compile opToR ; immediate compile-only
 :to r> compile opFromR ; immediate compile-only
 :to rdrop compile rdrop ; immediate compile-only

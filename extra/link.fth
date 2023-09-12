@@ -1,7 +1,4 @@
 \ TODO: Integrate into subleq.fth as optional code
-\ TODO: Extend "vm?" to include compile-time words such
-\ as "r>" which take the form "compile <VM> exit". Currently
-\ they are undetected as built-ins
 
 only forth definitions decimal
 system +order
@@ -9,7 +6,8 @@ system +order
 
 
 system +order definitions
-: .n 6 u.r ;
+\ : .n 6 u.r ;
+: .n . ;
 : .pwd dup ." PWD:" .n ; ( pwd -- pwd )
 : .nfa dup ."  NFA:" nfa .n ; ( pwd -- pwd )
 : .cfa dup ."  CFA:" cfa .n ; ( pwd -- pwd )
@@ -19,7 +17,9 @@ system +order definitions
 : .hidden dup $80 and if ." HID " exit then .blank ;
 : =vm [ ' pause @ ] literal ; ( pause = last defined built-in )
 : =exit [ ' pause cell+ @ ] literal ; ( exit follows built-in )
-: vm? dup @ =vm  u<= swap cell+ @ =exit = and ;
+: rvm? dup @ =vm  u<= swap cell+ @ =exit = and ;
+: cvm? dup @ [ ' compile 2/ ] literal = swap cell+ rvm? and ;
+: vm? dup rvm? swap cvm? or ;
 : .built-in dup cfa vm? if ." BLT " exit then .blank ;
 : display ( pwd -- )
   dup .pwd .nfa .cfa space .built-in nfa count 
