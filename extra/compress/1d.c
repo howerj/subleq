@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
 
 	for (long i = 0; i < prog; i++) {
 		u16 o = m[i];
-		if (o == 0xFFFF) {
+		if (o == 0) {
 			n[oprog++] = m[++i];
 		} else if (o & 0x8000) {
 			o -= 0x8000;

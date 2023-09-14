@@ -18,16 +18,13 @@ int main(int argc, char **argv) {
 	}
 
 	for (long i = 0; i < prog; i++) {
-		u16 o = m[i];
+		u16 o = m[i], q = m[i + 1];
 		if (0x8000 & o) {
-			n[oprog++] = 0;
+			n[oprog++] = 0xFFFF;
 			n[oprog++] = m[i];
-		} else if (!o) {
-			long j = 0;
-			for (; i < prog && !m[i]; i++, j++)
-				;
-			n[oprog++] = 0x8000 + j;
-			i--;
+		} else if (o < 128 && q < 256) {
+			n[oprog++] = 0x8000 + (o << 8) + q;
+			i++;
 		} else {
 			n[oprog++] = o;
 		}

@@ -693,6 +693,10 @@ only forth definitions hex
 \ target image when it is outputted instead of a space, this
 \ makes including the file in a C program easier.
 \
+\ "opt.glossary" adds in a words that prints out much more
+\ detailed information about the dictionary (with the loaded
+\ vocabularies only).
+\
 \ "opt.sm-vm-err" makes for a smaller error message in the
 \ Forth VM, where it detects the SUBLEQ machines width.
 \
@@ -707,6 +711,7 @@ only forth definitions hex
 0 constant opt.control    ( Add in more control structures )
 0 constant opt.allocate   ( Add in "allocate"/"free" )
 0 constant opt.float      ( Add in floating point code )
+0 constant opt.glossary   ( Add in "glossary" word )
 0 constant opt.sm-vm-err  ( Smaller VM error message )
 0 constant opt.optimize   ( Enable extra optimization )
 0 constant opt.iffy-compare ( Enable faster/incorrect compare )
@@ -9778,6 +9783,78 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 
 [then] ( opt.float )
 
+\ # Glossary word-set
+\
+\ This optional component prints out much more detailed
+\ information about the loaded vocabularies.
+\
+
+
+opt.glossary [if]
+\
+\ TODO: Better integration, meta-compiler "recurse"
+
+\ :s .n [ 6 ] literal u.r ;s
+:s .n . ;s
+:s .pwd dup ." PWD:" .n ;s ( pwd -- pwd )
+:s .nfa dup ."  NFA:" nfa .n ;s ( pwd -- pwd )
+:s .cfa dup ."  CFA:" cfa .n ;s ( pwd -- pwd )
+:s .blank ." --- " ;s ( -- )
+:s .immediate 
+   dup [ $40 ] literal and if ." IMM " exit then .blank ;s
+:s .compile-only 
+   dup [ $20 ] literal and if ." CMP " exit then .blank ;s
+:s .hidden 
+   dup [ $80 ] literal and if ." HID " exit then .blank ;s
+:s =vm [ to' pause ] literal @ ;s ( pause = last defined BLT )
+:s =exit [ to' pause ] literal cell+ @ ;s ( exit follows BLT )
+:s rvm? dup @ =vm  u<= swap cell+ @ =exit = and ;s
+:s cvm? 
+   dup @ [ t' compile ] literal 2/ = swap cell+ rvm? and ;s
+:s vm? dup rvm? swap cvm? or ;s
+:s .built-in dup cfa vm? if ." BLT " exit then .blank ;s
+:s display ( pwd -- )
+  dup .pwd .nfa .cfa space .built-in nfa count 
+  .immediate .compile-only .hidden
+  [ $1F ] literal and type cr ;s
+:s (w) begin ?dup while display @ repeat ;s ( voc -- )
+:s .voc dup  ." voc: " . cr ;s ( voc -- voc )
+
+: glossary get-order for aft .voc @ (w) then next ; ( -- )
+
+\ TODO: Find a home for these, perhaps integrate the
+\ extra code as well behind a compile time option.
+
+: 2swap >r -rot r> -rot ;       ( w x y z -- y z w x )
+: 2over ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
+  >r >r 2dup r> swap >r swap r> r> -rot ;
+: d< rot 2dup >                    ( d -- f )
+  if = nip nip if #0 exit then #-1 exit then
+  2drop u< ;
+\ : dabs s>d if dnegate then ;      ( d -- ud )
+: 2rot >r >r 2swap r> r> 2swap ; ( d1 d2 d3 -- d2 d3 d1 )
+: d0= or 0= ; ( d -- f )
+: d0< nip 0< ; ( d -- f )
+: d- dnegate d+ ; ( d d -- d )
+: du<  rot swap u< if 2drop #-1 exit then u< ; ( ud ud -- f )
+: du> 2swap du< ; ( ud -- t )
+: d=  rot = -rot = and ; ( d d -- f )
+: d>  2swap d< ; ( d d -- f )
+: dabs 2dup #0 #0 d< if dnegate then ; ( d -- ud )
+: dmax 2over 2over d< if 2swap then 2drop ; ( d1 d2 -- d )
+: dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
+
+: d. dup -rot dabs <# #s sign #> type space ; ( d -- )
+: d.r ( d +n -- )
+   >r dup -rot dabs <# #s sign #> r> bl banner type ; 
+
+: roll ?dup if swap >r 1- roll ( <- recurse ) r> swap then ; 
+: -roll ?dup if rot >r 1- -roll ( <- recurse ) r> then ; 
+: reverse 
+   for aft r@ -roll then next ; ( x0...xn n -- xn...x0 ) 
+[then]
+
+
 \ # Last word defined
 \
 \ Finally "cold" is defined, the last word we will define,
@@ -13693,4 +13770,3 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ uses a LaTeX template with its own license, available from:
 \ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
 \
-

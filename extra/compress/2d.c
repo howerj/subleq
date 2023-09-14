@@ -19,20 +19,18 @@ int main(int argc, char **argv) {
 
 	for (long i = 0; i < prog; i++) {
 		u16 o = m[i];
-		if (o & 0x8000) {
-			if (o == 0xFFFF) {
-				n[oprog++] = m[++i];
-			} else {
-				o = -o;
-				u16 mlen = 2;
-				if (o > 0x4000) { o -= 0x4000; mlen = 5; } 
-				else if (o > 0x2000) { o -= 0x2000; mlen = 4; } 
-				else if (o > 0x1000) { o -= 0x1000; mlen = 3; } 
-				else { }
-				for (int i = 0; i < mlen; i++) {
-					n[oprog] = m[oprog - o];
-					oprog++;
-				}
+		if (o == 0xFFFF) {
+			n[oprog++] = m[++i];
+		} else if (o & 0x8000) {
+			o = -o;
+			u16 mlen = 2;
+			if (o > 0x4000) { o -= 0x4000; mlen = 5; } 
+			else if (o > 0x2000) { o -= 0x2000; mlen = 4; } 
+			else if (o > 0x1000) { o -= 0x1000; mlen = 3; } 
+			else { }
+			for (int i = 0; i < mlen; i++) {
+				n[oprog] = m[oprog - o];
+				oprog++;
 			}
 		} else {
 			n[oprog++] = o;

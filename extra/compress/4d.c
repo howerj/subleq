@@ -19,15 +19,12 @@ int main(int argc, char **argv) {
 
 	for (long i = 0; i < prog; i++) {
 		u16 o = m[i];
-		if (0x8000 & o) {
-			n[oprog++] = 0;
-			n[oprog++] = m[i];
-		} else if (!o) {
-			long j = 0;
-			for (; i < prog && !m[i]; i++, j++)
-				;
-			n[oprog++] = 0x8000 + j;
-			i--;
+		if (o == 0xFFFF) {
+			n[oprog++] = m[++i];
+		} else if (o & 0x8000) {
+			o -= 0x8000;
+			n[oprog++] = (o >> 8) & 127;
+			n[oprog++] = o & 255;
 		} else {
 			n[oprog++] = o;
 		}
@@ -43,5 +40,5 @@ int main(int argc, char **argv) {
 	const int diff = (prog - oprog)*2;
 	if (fprintf(stderr, "in=%d out=%d diff=%d ratio=%.3f%%\n", (int)prog*2, (int)oprog*2, diff, percent) < 0)
 		return 6;
+	return 0;
 }
-
