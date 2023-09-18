@@ -9786,9 +9786,11 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ # Glossary word-set
 \
 \ This optional component prints out much more detailed
-\ information about the loaded vocabularies.
+\ information about the loaded vocabularies. It is not a
+\ standard word, but it is a useful one. Another, similar,
+\ word could be defined that decompiled each word in the
+\ dictionary.
 \
-
 
 opt.glossary [if]
 \
@@ -9800,16 +9802,16 @@ opt.glossary [if]
 :s .nfa dup ."  NFA:" nfa .n ;s ( pwd -- pwd )
 :s .cfa dup ."  CFA:" cfa .n ;s ( pwd -- pwd )
 :s .blank ." --- " ;s ( -- )
-:s .immediate 
+:s .immediate ( nfa -- nfa ) )
    dup [ $40 ] literal and if ." IMM " exit then .blank ;s
-:s .compile-only 
+:s .compile-only  ( nfa -- nfa )
    dup [ $20 ] literal and if ." CMP " exit then .blank ;s
-:s .hidden 
+:s .hidden ( nfa -- nfa )
    dup [ $80 ] literal and if ." HID " exit then .blank ;s
 :s =vm [ to' pause ] literal @ ;s ( pause = last defined BLT )
 :s =exit [ to' pause ] literal cell+ @ ;s ( exit follows BLT )
 :s rvm? dup @ =vm  u<= swap cell+ @ =exit = and ;s
-:s cvm? 
+:s cvm?
    dup @ [ t' compile ] literal 2/ = swap cell+ rvm? and ;s
 :s vm? dup rvm? swap cvm? or ;s
 :s .built-in dup cfa vm? if ." BLT " exit then .blank ;s
@@ -9831,23 +9833,16 @@ opt.glossary [if]
 : d< rot 2dup >                    ( d -- f )
   if = nip nip if #0 exit then #-1 exit then
   2drop u< ;
-\ : dabs s>d if dnegate then ;      ( d -- ud )
-: 2rot >r >r 2swap r> r> 2swap ; ( d1 d2 d3 -- d2 d3 d1 )
-: d0= or 0= ; ( d -- f )
 : d0< nip 0< ; ( d -- f )
 : d- dnegate d+ ; ( d d -- d )
 : du<  rot swap u< if 2drop #-1 exit then u< ; ( ud ud -- f )
 : du> 2swap du< ; ( ud -- t )
 : d=  rot = -rot = and ; ( d d -- f )
 : d>  2swap d< ; ( d d -- f )
-: dabs 2dup #0 #0 d< if dnegate then ; ( d -- ud )
 : dmax 2over 2over d< if 2swap then 2drop ; ( d1 d2 -- d )
 : dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
 
-: d. dup -rot dabs <# #s sign #> type space ; ( d -- )
-: d.r ( d +n -- )
-   >r dup -rot dabs <# #s sign #> r> bl banner type ; 
-
+: 2rot >r >r 2swap r> r> 2swap ; ( d1 d2 d3 -- d2 d3 d1 )
 : roll ?dup if swap >r 1- roll ( <- recurse ) r> swap then ; 
 : -roll ?dup if rot >r 1- -roll ( <- recurse ) r> then ; 
 : reverse 
