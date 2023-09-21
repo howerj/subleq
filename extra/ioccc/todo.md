@@ -13,3 +13,5 @@
 - [ ] Make sure bit-width check works with new IOCCC program
   (seems to fail sometimes, indicating different between this
   program and nbit.c)
+- [ ] Make a permutation of the function pointers to obfuscate
+  things further.

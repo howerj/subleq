@@ -2149,6 +2149,64 @@ label: die
    HALT (a); ( ...like tears in rain. Time to die. )
 assembler.1 +order
 
+\ TODO: {option}'al 16-bit self interpreter that runs when
+\ the machine width is greater than 16-bits.
+\ TODO: Debug options (tracing, debug variables, ...)
+\ TODO: Mention Homomorphic Encryption SUBLEQ somewhere?
+\ TODO: Testing against values >32767 will be a problem
+\ as they will not get recorded to the decimal file 
+\ correctly...
+\ TODO: Move this, it's not in the right place, and will
+\ cause problems (the eForth system needs to access variables
+\ defined before this self-interpreter). (Is this right???)
+\ TODO: Is len adjustment needed?
+\
+\
+
+0 [if]
+ 0 tvar {a}
+ 0 tvar {b}
+ 0 tvar {c}
+ 0 tvar {pc}
+\ 0 tvar {len}
+ $58 tvar {x}
+
+label: self
+
+  {a} {pc} iLOAD {pc} INC
+  {b} {pc} iLOAD {pc} INC
+  {c} {pc} iLOAD {pc} INC
+
+\  {x} PUT {a} PUT {b} PUT {c} PUT {x} PUT
+\  {x} PUT
+
+  \ TODO: When the self-interpreter is working, and >16-bit
+  \ self-interpreter needs making, this test will need 
+  \ replacing with a test for things greater than 32767
+\  {a} +if {len} {a} ADD then
+\  {b} +if {len} {b} ADD then
+
+  \ TODO: Change jump destination to "+if"
+  there {a} swap $C $C + 2*  0 2* + + MOV
+  there {b} swap $C $0 + 2*  1 2* + + MOV
+
+  \ N.B. "+if" is modified by the above MOV instructions!
+  0 +if self JMP then
+  {c} +if 
+    {c} {pc} MOV
+\    {len} {pc} ADD
+    self JMP
+  then
+  {x} PUT
+  HALT
+
+\  there 2/ {len} t!
+\  0 {len} t!
+\  there 2/ 1+ {pc} t!
+
+[then]
+
+
 \ Here is the "start" routine, we set the system entry point
 \ to the location in the label, do the cell bit-width test
 \ (and jump to the failure handler if we are a system with
@@ -2164,6 +2222,10 @@ assembler.1 +order
 
 label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
+
+\  self JMP
+\  there 2/ {pc} t!
+  
 
 \ This routine doubles "w" until it becomes negative, which
 \ will happen on twos compliment machines upon reaching the
@@ -2183,6 +2245,9 @@ label: chk16
   r1 INC                           \ r1++
   r0 +if chk16 JMP then            \ check if still positive
   bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be zero
+
+
+
 
 \ Back to setting up registers
 \
@@ -3152,6 +3217,18 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 
 :m : :t ;m ( -- ???, "name" : start cross-compilation )
 :m ; ;t ;m ( ??? -- : end cross-compilation of a target word )
+
+\ TODO: Get this working, which will require VM changes and
+\ the wholesale replacement of all primitives, it should be
+\ slightly faster and require a little less space. It will
+\ also make it easier to check what is and what is not a
+\ primitive
+
+0 [if] 
+: o+ tos {sp} iADD t' opDrop JMP ; ( n n -- n )
+
+there 2/ primitive t! ( set 'primitive', needed for VM )
+[then]
 
 \ It is interesting to see just how simple and easy it is
 \ to define a set of words for creating control structures.
@@ -5213,7 +5290,6 @@ system[ user tup =cell tallot ]system
 \          if = nip nip if 0 exit then -1 exit then
 \          2drop u< ;
 \        : d>  2swap d< ;                   ( d -- t )
-\        : du> 2swap du< ;                  ( d -- t )
 \        : d=  rot = -rot = and ;           ( d d -- t )
 \        : d- dnegate d+ ;                  ( d d -- d )
 \        : dabs  s>d if dnegate then ;      ( d -- ud )
@@ -5610,6 +5686,12 @@ system[ user tup =cell tallot ]system
 \
 
 opt.divmod [if]
+
+\ "opDivMod" could be added like as a primitive like so:
+\
+\        :so opDivMod opDivMod ;s
+\
+
 :s (.) abs radix opDivMod ?dup if (.) then digit emit ;s
 
 \ "." uses "(.)", it just needs to check if the number to print
@@ -5727,12 +5809,17 @@ opt.divmod [if]
 \ or perhaps a string containing characters to allow as
 \ separators.
 \
+\ BUG: "$" is treated as a number, "#" would be, but it is
+\ in the word search order. This could be fixed by exiting
+\ after "+string" is the string is zero.
+\
 : number? ( a u -- d -1 | a u 0 : easier to use than >number )
   #-1 dpl !
   radix >r
-  over c@ [char] - = dup >r if         +string then
-  over c@ [char] $ =        if hex     +string then
-( over c@ [char] # =        if decimal +string then )
+  over c@ [char] - = dup >r if +string then
+  over c@ [char] $ = if hex +string 
+    ( dup 0= if dup rdrop r> base ! exit then ) 
+  then
   2>r #0 dup 2r>
   begin
     >number dup
@@ -9791,31 +9878,55 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ word could be defined that decompiled each word in the
 \ dictionary.
 \
+\ As you can see, most of the words defined in this section are
+\ added to the "system" vocabulary, not because they might be
+\ useful but because they should be hidden. It is a policy in
+\ this implementation of Forth to never define words without
+\ a header, which is perfectly possible to do in the 
+\ meta-compiler.
+\
+\ There is not much to describe, the word "glossary" attempts
+\ to determine as much information about the words in the
+\ dictionary as possible. The words that are implemented with
+\ virtual machine instruction, such as "drop", need extra work
+\ to determine that they are VM instructions, otherwise the
+\ information can be read from the header.
+\
+\ A minor level of indirection is used with the word ".n", this
+\ is so that the word to display the addresses can be changed
+\ without changing (much) of the source code. You might want
+\ to do this to print out neatly formatted tables with the
+\ following definition of ".n":
+\
+\        :s .n [ 6 ] literal u.r ;s
+\  
+\ The only word apart from "glossary" that might be useful
+\ is "(w)" which prints out the detailed list except for a
+\ single vocabulary and not for all of the vocabularies loaded
+\ like "glossary" does.
+\
 
 opt.glossary [if]
-\
-\ TODO: Better integration, meta-compiler "recurse"
 
-\ :s .n [ 6 ] literal u.r ;s
-:s .n . ;s
+:s .n . ;s ( n -- : display an address )
 :s .pwd dup ." PWD:" .n ;s ( pwd -- pwd )
-:s .nfa dup ."  NFA:" nfa .n ;s ( pwd -- pwd )
-:s .cfa dup ."  CFA:" cfa .n ;s ( pwd -- pwd )
-:s .blank ." --- " ;s ( -- )
-:s .immediate ( nfa -- nfa ) )
+:s .nfa dup ."  NFA:" nfa .n ;s ( pwd -- pwd : print NFA addr )
+:s .cfa dup ."  CFA:" cfa .n ;s ( pwd -- pwd : print CFA addr )
+:s .blank ." --- " ;s ( -- : print attribute not set )
+:s .immediate ( nfa -- nfa : is word an "immediate" word? )
    dup [ $40 ] literal and if ." IMM " exit then .blank ;s
-:s .compile-only  ( nfa -- nfa )
+:s .compile-only  ( nfa -- nfa : is word "compile-only"? )
    dup [ $20 ] literal and if ." CMP " exit then .blank ;s
-:s .hidden ( nfa -- nfa )
+:s .hidden ( nfa -- nfa : is word hidden? )
    dup [ $80 ] literal and if ." HID " exit then .blank ;s
 :s =vm [ to' pause ] literal @ ;s ( pause = last defined BLT )
 :s =exit [ to' pause ] literal cell+ @ ;s ( exit follows BLT )
-:s rvm? dup @ =vm  u<= swap cell+ @ =exit = and ;s
-:s cvm?
+:s rvm? dup @ =vm u<= swap cell+ @ =exit = and ;s ( cfa -- f ) 
+:s cvm? ( cfa -- f )
    dup @ [ t' compile ] literal 2/ = swap cell+ rvm? and ;s
-:s vm? dup rvm? swap cvm? or ;s
+:s vm? dup rvm? swap cvm? or ;s ( cfa -- f )
 :s .built-in dup cfa vm? if ." BLT " exit then .blank ;s
-:s display ( pwd -- )
+:s display ( pwd -- pwd : display info about single word )
   dup .pwd .nfa .cfa space .built-in nfa count 
   .immediate .compile-only .hidden
   [ $1F ] literal and type cr ;s
@@ -9824,29 +9935,6 @@ opt.glossary [if]
 
 : glossary get-order for aft .voc @ (w) then next ; ( -- )
 
-\ TODO: Find a home for these, perhaps integrate the
-\ extra code as well behind a compile time option.
-
-: 2swap >r -rot r> -rot ;       ( w x y z -- y z w x )
-: 2over ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
-  >r >r 2dup r> swap >r swap r> r> -rot ;
-: d< rot 2dup >                    ( d -- f )
-  if = nip nip if #0 exit then #-1 exit then
-  2drop u< ;
-: d0< nip 0< ; ( d -- f )
-: d- dnegate d+ ; ( d d -- d )
-: du<  rot swap u< if 2drop #-1 exit then u< ; ( ud ud -- f )
-: du> 2swap du< ; ( ud -- t )
-: d=  rot = -rot = and ; ( d d -- f )
-: d>  2swap d< ; ( d d -- f )
-: dmax 2over 2over d< if 2swap then 2drop ; ( d1 d2 -- d )
-: dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
-
-: 2rot >r >r 2swap r> r> 2swap ; ( d1 d2 d3 -- d2 d3 d1 )
-: roll ?dup if swap >r 1- roll ( <- recurse ) r> swap then ; 
-: -roll ?dup if rot >r 1- -roll ( <- recurse ) r> then ; 
-: reverse 
-   for aft r@ -roll then next ; ( x0...xn n -- xn...x0 ) 
 [then]
 
 
@@ -11903,6 +11991,7 @@ variable seed here seed !
 : 2swap >r -rot r> -rot ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 )
 : 2tuck 2swap 2over ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 n3 n4 )
 : 4drop 2drop 2drop ; ( n1 n2 n3 n4 -- )
+: 2rot >r >r 2swap r> r> 2swap ; ( d1 d2 d3 -- d2 d3 d1 )
 : trip dup dup ; ( n -- n n n : triplicate )
 : 2pick dup >r pick r> 2+ pick swap ;
 : log  >r 0 swap ( u base -- u : integer logarithm )
@@ -11912,20 +12001,30 @@ variable seed here seed !
 : average um+ 2 um/mod nip ; ( u u -- u )
 : <=> 2dup > if 2drop -1 exit then < ;
 : bounds over + swap ;
+\ Missing, but easy to add, are double cell words for bitwise
+\ operations, such as "drshift", "dlshift", "dand", "dor",
+\ "dxor", "dmux", "d2\*", "d2\/", etcetera. A few operators
+\ for comparison might be missing, but again, can be added if
+\ needed.
 : d>s drop ; ( d -- n : convert dubs to single )
+: dabs s>d if dnegate then ; ( d -- ud )
+: d- dnegate d+ ; ( d d -- d )
 : d< rot 2dup >                    ( d -- f )
    if = nip nip if 0 exit then -1 exit then
    2drop u< ;
-: dabs s>d if dnegate then ; ( d -- ud )
 : d>= d< invert ;            ( d -- f )
 : d>  2swap d< ;             ( d -- f )
 : d<= d> invert ;            ( d -- f )
-  ( : du> 2swap du< ;        ( d -- f )
-: d=  rot = -rot = and ;     ( d d -- f )
-: d- dnegate d+ ;            ( d d -- d )
-: d<> d= 0= ;                ( d d -- f )
+: d0< nip 0< ; ( d -- f )
+: d0>= d0< 0= ; ( d -- f )
 : d0= or 0= ;                ( d -- f )
 : d0<> d0= 0= ;              ( d -- f )
+: du<  rot swap u< if 2drop #-1 exit then u< ; ( ud ud -- f )
+: du> 2swap du< ; ( ud -- t )
+: d=  rot = -rot = and ; ( d d -- f )
+: d<> d= 0= ;                ( d d -- f )
+: dmax 2over 2over d< if 2swap then 2drop ; ( d1 d2 -- d )
+: dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
 : d.r >r tuck dabs <# #s rot sign #> r> over - bl banner type ;
 : ud.r >r <# #s #> r> over - bl banner type ; ( ud +n -- )
 : d. 0 d.r space ;           ( d -- )
@@ -11938,6 +12037,7 @@ variable seed here seed !
 : holds begin dup while 1- 2dup + c@ hold repeat 2drop ;
 : roll ?dup if swap >r 1- recurse r> swap then ; 
 : -roll ?dup if rot >r 1- recurse r> then ; 
+: reverse for aft r@ -roll then next ; ( x0...xn n -- xn...x0 )
 : unpick 1+ sp@ + [!] ; ( n0..nx y nu -- n0..y..nx )
 : flip -rot swap ; ( a b c -- c b a ) 
 : signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )

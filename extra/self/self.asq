@@ -188,8 +188,8 @@ a:0 b:0 leqz;   # Emulate subtraction / instruction
   Z Z start;    # Jump back to beginning
 leqz: 
   pc; c Z; Z pc; Z; # [pc] = [c]
-  neg1 c -1;    # Check if [c] is negative, halt if it is.
-  len pc;         # [pc] = [pc] - [len]
+  neg1 c -1;      # Check if [c] is negative, halt if it is.
+  len pc;         # [pc] = [pc] + [len]
   Z Z start;      # Jump back to the beginning
 
 # Declare and set some registers, 'len' must be last.

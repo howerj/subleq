@@ -13,6 +13,46 @@ static u16 m[1<<16], n[1<<16], prog = 0, oprog = 0;
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 #endif
 
+#if 0
+void encode(void)
+{
+    int i, j, f1, x, y, r, s, bufferend, c;
+    
+    for (i = 0; i < N - F; i++) buffer[i] = ' ';
+    for (i = N - F; i < N * 2; i++) {
+        if ((c = fgetc(infile)) == EOF) break;
+        buffer[i] = c;  textcount++;
+    }
+    bufferend = i;  r = N - F;  s = 0;
+    while (r < bufferend) {
+        f1 = (F <= bufferend - r) ? F : bufferend - r;
+        x = 0;  y = 1;  c = buffer[r];
+        for (i = r - 1; i >= s; i--)
+            if (buffer[i] == c) {
+                for (j = 1; j < f1; j++)
+                    if (buffer[i + j] != buffer[r + j]) break;
+                if (j > y) {
+                    x = i;  y = j;
+                }
+            }
+        if (y <= P) {  y = 1;  output1(c);  }
+        else output2(x & (N - 1), y - 2);
+        r += y;  s += y;
+        if (r >= N * 2 - F) {
+            for (i = 0; i < N; i++) buffer[i] = buffer[i + N];
+            bufferend -= N;  r -= N;  s -= N;
+            while (bufferend < N * 2) {
+                if ((c = fgetc(infile)) == EOF) break;
+                buffer[bufferend++] = c;  textcount++;
+            }
+        }
+    }
+    flush_bit_buffer();
+    printf("text:  %ld bytes\n", textcount);
+    printf("code:  %ld bytes (%ld%%)\n",
+        codecount, (codecount * 100) / textcount);
+}
+#endif
 
 int main(int argc, char **argv) {
 	if (argc < 3)
@@ -33,9 +73,24 @@ int main(int argc, char **argv) {
 		 * this requires a lookahead pointer/buffer */
 		long pos = 0, len = -1;
 
+		/*f1 = (F <= bufferend - r) ? F : bufferend - r;
+		x = 0;  y = 1;  c = buffer[r];
+		for (i = r - 1; i >= s; i--)
+		    if (buffer[i] == c) {
+			for (j = 1; j < f1; j++)
+			    if (buffer[i + j] != buffer[r + j]) break;
+			if (j > y) {
+			    x = i;  y = j;
+			}
+		    }
+		if (y <= P) {  y = 1;  output1(c);  }
+		else output2(x & (N - 1), y - 2);*/
+
 		for (int j = 2; j <= 5; j++) {
 
 		}
+
+
 
 #if 0
 		if (i > 5*2) {

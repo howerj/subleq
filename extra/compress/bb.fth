@@ -1,9 +1,10 @@
 \ https://groups.google.com/forum/#!topic/comp.lang.forth/mHs30gEBuyE
-( bitbuster decoder in Forth - reduced to max 65535 bytes output )
+\ bitbuster decoder in Forth - reduced to max 65535 bytes 
+\ output. No encoder...
 
-variable data                           ( input data pointer - moves )
-variable bitcount                       ( bit counter - read it MOD 8 )
-variable bits                           ( shift buffer for bit data )
+variable data     ( input data pointer - moves )
+variable bitcount ( bit counter - read it MOD 8 )
+variable bits     ( shift buffer for bit data )
 
 : @byte ( -- c )
   data @ c@ 1 data +! ;
