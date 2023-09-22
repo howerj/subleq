@@ -716,6 +716,7 @@ only forth definitions hex
 0 constant opt.optimize   ( Enable extra optimization )
 0 constant opt.iffy-compare ( Enable faster/incorrect compare )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
+0 constant opt.self       ( Enable self-interpreter )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -881,7 +882,15 @@ create tflash tflash size cells allot size erase
 \ storage system, which is used to build cooperative
 \ multitasking into the system.
 \
+\ "tzreg" and "tareg" contain the location of some special
+\ registers for the SUBLEQ machine, to save on space they
+\ are the first and second cells within the image. The
+\ registers may need to be changed for the "self-interpreter"
+\ section defined later.
+\
 
+variable tzreg 0 tzreg !
+variable tareg 1 tareg !
 variable tdp 0 tdp ! ( target dictionary pointer )
 variable tlast 0 tlast ! ( last defined target word pointer )
 variable tlocal 0 tlocal ! ( local variable allocator )
@@ -1489,18 +1498,19 @@ defined eforth [if] system -order [then]
 \ the instruction number is so small is remarkable.
 \
 
-:m Z 0 t, ;m ( -- : Address 0 must contain 0 )
-:m A, 0 t, ;m ( -- : Synonym for 'Z', temporary location )
-:m V, 1 t, ;m ( -- : Address 1 also contains 0, temp location )
+
+:m Z tzreg @ t, ;m ( -- : Address 0 must contain 0 )
+:m A, Z ;m ( -- : Synonym for 'Z', temporary location )
+:m V, tareg @ t, ;m ( -- : Address 1 also contains 0, tmp loc )
 :m NADDR there 2/ 1+ t, ;m ( --, jump to next cell )
-:m HALT 0 t, 0 t, -1 t, ;m ( --, Halt but do not catch fire )
+:m HALT Z Z -1 t, ;m ( --, Halt but do not catch fire )
 :m JMP 2/ Z Z t, ;m ( a --, Jump to location )
 :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
 :m SUB swap 2/ t, 2/ t, NADDR ;m ( a a -- : subtract )
 :m NOOP Z Z NADDR ;m ( -- : No operation )
 :m ZERO dup 2/ t, 2/ t, NADDR ;m ( a -- : zero a location )
 :m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
-( :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
+:m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
 :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
@@ -2151,58 +2161,47 @@ assembler.1 +order
 
 \ TODO: {option}'al 16-bit self interpreter that runs when
 \ the machine width is greater than 16-bits.
-\ TODO: Debug options (tracing, debug variables, ...)
-\ TODO: Mention Homomorphic Encryption SUBLEQ somewhere?
-\ TODO: Testing against values >32767 will be a problem
-\ as they will not get recorded to the decimal file 
-\ correctly...
-\ TODO: Move this, it's not in the right place, and will
-\ cause problems (the eForth system needs to access variables
-\ defined before this self-interpreter). (Is this right???)
-\ TODO: Is len adjustment needed?
-\
+\ * Debug options (tracing, debug variables, ...)
+\ * Mention Homomorphic Encryption SUBLEQ somewhere?
+\ * Mention assembly version of self interpreter and
+\ put a copy at the end of this document.
+\ * Make this a 16-bit version
+\ * Describe this section and tidy it up.
 \
 
-0 [if]
+opt.self [if]
  0 tvar {a}
  0 tvar {b}
  0 tvar {c}
  0 tvar {pc}
-\ 0 tvar {len}
+-1 tvar {-1}
  $58 tvar {x}
+
+0 tvar {zreg} {zreg} 2/ tzreg !
+0 tvar {areg} {areg} 2/ tareg !
 
 label: self
 
+  {pc} {c} MOV
+  {-1} 2/ t, {c} 2/ t, -1 t, \ Conditionally halt on '{c}'
   {a} {pc} iLOAD {pc} INC
   {b} {pc} iLOAD {pc} INC
-  {c} {pc} iLOAD {pc} INC
+  {c} {pc} iLOAD \ {pc} INC
 
-\  {x} PUT {a} PUT {b} PUT {c} PUT {x} PUT
-\  {x} PUT
-
-  \ TODO: When the self-interpreter is working, and >16-bit
-  \ self-interpreter needs making, this test will need 
-  \ replacing with a test for things greater than 32767
-\  {a} +if {len} {a} ADD then
-\  {b} +if {len} {b} ADD then
-
-  \ TODO: Change jump destination to "+if"
   there {a} swap $C $C + 2*  0 2* + + MOV
   there {b} swap $C $0 + 2*  1 2* + + MOV
 
-  \ N.B. "+if" is modified by the above MOV instructions!
-  0 +if self JMP then
-  {c} +if 
+  ( N.B. "+if" is modified by the above MOV instructions! )
+  0 +if 
+    {pc} INC
+  else
     {c} {pc} MOV
-\    {len} {pc} ADD
-    self JMP
   then
-  {x} PUT
-  HALT
+  self JMP
 
-\  there 2/ {len} t!
-\  0 {len} t!
-\  there 2/ 1+ {pc} t!
+\  there 2/ {pc} t!
+0 tzreg !
+1 tareg !
 
 [then]
 
@@ -2223,9 +2222,11 @@ label: self
 label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
 
-\  self JMP
-\  there 2/ {pc} t!
-  
+\ TODO: Integrate this into the 16-bit decision code
+opt.self [if]
+  self JMP
+  there 2/ {pc} t!
+[then]
 
 \ This routine doubles "w" until it becomes negative, which
 \ will happen on twos compliment machines upon reaching the
