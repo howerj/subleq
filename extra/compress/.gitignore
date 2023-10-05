@@ -1,4 +1,8 @@
-subleq
+*.a
+*.bin
+*.dec
+*.exe
+*.o
 1c
 1d
 2c
@@ -7,8 +11,12 @@ subleq
 3d
 4c
 4d
+5c
+5d
+l16
 lzp
-*.dec
-*.o
-*.a
-*.exe
+lzss
+subleq
+*.lzss
+*.l16
+*.orig

@@ -25,7 +25,7 @@ J I S(i ingest,i excrete,I*m/*not feeling well*/,I D,I(*E[u])(I)){
 		*(h[E](O)+m)=X(fgetc(ingest),h,E[d](D)):
 	!X(X(h,-!!V(D),O),O,(f[h]/(l u)-u)[E](D))?
 		a=y((E-E)[E](a)[m],excrete):(h[E](O)[m]=r,s)?_=e:h;
-	F(a<h)r(K);
+	F(h>a)r(K);/*F(h/a)r(K);*/
 	/*F(-!X(V(-_),_,L(_)))G _;*/F(_<C&&M(D)-_)G _;
 	r(h);
 }

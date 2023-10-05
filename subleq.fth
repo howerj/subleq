@@ -1771,6 +1771,8 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
 $10 tvar bwidth    \ must contain 16
+$40 tvar mwidth    \ must contain 64
+  0 tvar {virtual} \ running in a virtualized SUBLEQ machine?
   0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
@@ -2167,42 +2169,103 @@ assembler.1 +order
 \ put a copy at the end of this document.
 \ * Make this a 16-bit version
 \ * Describe this section and tidy it up.
+\ * Correct negative numbers, which need to be turned into
+\ positive ones using "$FFFF - m[i] + 1".
 \
+\ Original, machine width version:
+\
+\         0 tvar {a}
+\         0 tvar {b}
+\         0 tvar {c}
+\         0 tvar {pc}
+\        -1 tvar {-1}
+\        $58 tvar {x}
+\        
+\        0 tvar {zreg} {zreg} 2/ tzreg !
+\        0 tvar {areg} {areg} 2/ tareg !
+\        
+\        label: self
+\          {virtual} ONE!
+\        label: self-loop
+\          {pc} {c} MOV
+\          {-1} 2/ t, {c} 2/ t, -1 t,
+\          {a} {pc} iLOAD {pc} INC
+\          {b} {pc} iLOAD {pc} INC
+\          {c} {pc} iLOAD \ {pc} INC
+\        
+\          there {a} swap $C $C + 2*  0 2* + + MOV
+\          there {b} swap $C $0 + 2*  1 2* + + MOV
+\        
+\          ( N.B. "+if" is modified by the above MOV instrs. )
+\          0 +if 
+\            {pc} INC
+\          else
+\            {c} {pc} MOV
+\          then
+\          self-loop JMP
+\        
+\        0 tzreg !
+\        1 tareg !
 
 opt.self [if]
- 0 tvar {a}
- 0 tvar {b}
- 0 tvar {c}
- 0 tvar {pc}
+ 0 tvar {a}     ( Emulated 'a' operand )
+ 0 tvar {b}     ( Emulated 'b' operand )
+ 0 tvar {c}     ( Emulated 'c' operand )
+ 0 tvar {pc}    ( Emulated SUBLEQ Machine program counter )
+ 0 tvar {v0}
 -1 tvar {-1}
- $58 tvar {x}
+$58 tvar {x}
+$7FFF tvar {high}
 
 0 tvar {zreg} {zreg} 2/ tzreg !
 0 tvar {areg} {areg} 2/ tareg !
 
 label: self
-
+  {virtual} ONE!
+  \ TODO: Correct image values
+label: self-loop
   {pc} {c} MOV
   {-1} 2/ t, {c} 2/ t, -1 t, \ Conditionally halt on '{c}'
   {a} {pc} iLOAD {pc} INC
   {b} {pc} iLOAD {pc} INC
-  {c} {pc} iLOAD \ {pc} INC
+  {c} {pc} iLOAD {pc} INC
 
-  there {a} swap $C $C + 2*  0 2* + + MOV
-  there {b} swap $C $0 + 2*  1 2* + + MOV
-
-  ( N.B. "+if" is modified by the above MOV instructions! )
+  \ TODO: Implement this
+  \ {x} = iLOAD {b} \ Not on PUT though...
+  \ if {a} != -1 && {b} != -1: \ Replace with > 32767?
+  \   if ({x} > 32768 || {x} == 0):
+  \     {c} = {x} 
+  \   else:
+  \     {c} INC 
+  \ {x} &= 65535
+  \ iSTORE {x} -> {b} 
+ 
+\    {a} {v0} MOV
+\    {high} {v0} SUB {v0} +if 
+\    else 
+\      {b} {v0} SUB {v0} +if
+\      else
+\        {a} {a} iLOAD
+\        {v0} {b} iLOAD
+\        {v0} {a} SUB
+\        \ TODO: {v0} &= 0xFFFF
+\        {v0} {b} iSTORE
+\        \ TODO: Jump if leq0
+\      then
+\    then
+  
+  ( N.B. "+if" is modified by the MOV instructions! )
+  there {a} swap $C $C + 2* 0 2* + + MOV
+  there {b} swap $C $0 + 2* 1 2* + + MOV
   0 +if 
-    {pc} INC
+ \   {pc} INC
   else
     {c} {pc} MOV
   then
-  self JMP
+  self-loop JMP
 
-\  there 2/ {pc} t!
 0 tzreg !
 1 tareg !
-
 [then]
 
 
@@ -2222,12 +2285,6 @@ label: self
 label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
 
-\ TODO: Integrate this into the 16-bit decision code
-opt.self [if]
-  self JMP
-  there 2/ {pc} t!
-[then]
-
 \ This routine doubles "w" until it becomes negative, which
 \ will happen on twos compliment machines upon reaching the
 \ maximum bit-width.
@@ -2236,7 +2293,7 @@ opt.self [if]
 \ of the file, before (many of, but not all of) the variable
 \ declarations as we have a limited number of bytes to work
 \ with (bytes that are addressable that is) when on machines
-\ with smaller bit widths than 16.
+\ with smaller bit widths than 16. 
 \
 
   r0 ONE!                          \ r0 = shift bit loop count
@@ -2244,11 +2301,18 @@ opt.self [if]
 label: chk16
   r0 r0 ADD                        \ r0 = r0 * 2
   r1 INC                           \ r1++
+  r1 r2 MOV                        \ r2 = r1
+  mwidth r2 SUB r2 +if die JMP then \ check length < 64
   r0 +if chk16 JMP then            \ check if still positive
-  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be zero
-
-
-
+opt.self [if] \ if width > 16, jump to 16-bit emulator
+  r1 r2 MOV
+  bwidth r2 SUB r2 +if self JMP then
+[then]
+  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be 0
+opt.self [if] 
+ ( self JMP )
+  there 2/ {pc} t!  
+[then]
 
 \ Back to setting up registers
 \

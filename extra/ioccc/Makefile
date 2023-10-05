@@ -1,5 +1,5 @@
 CFLAGS=-Wall -Wextra -std=c11 -pedantic -O3
-IMAGE=eforth.dec
+IMAGE=../../subleq.dec
 SELF=../self/self.dec
 
 .PHONY: all try run clobber clean
