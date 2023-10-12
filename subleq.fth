@@ -716,6 +716,7 @@ only forth definitions hex
 0 constant opt.optimize   ( Enable extra optimization )
 0 constant opt.iffy-compare ( Enable faster/incorrect compare )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
+1 constant opt.simple-blk ( Simple block layer )
 0 constant opt.self       ( Enable self-interpreter )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
@@ -8107,12 +8108,81 @@ opt.better-see [if] ( Start conditional compilation )
 \ used to implement parts of the functionality of "block".
 \
 
-( system[ variable dirty ]system )
 $400 constant b/buf ( -- u : size of the block buffer )
-: block #1 ?depth 1- [ $A ] literal lshift pause ; ( k -- u )
-: flush ( dirty @ if save-buffers empty-buffers then ) ;
-: update ( #-1 dirty ! ) ; ( -- : mark cur. buf. as dirty )
+
+opt.simple-blk [if]
+: block #1 ?depth 1- [ $A ] literal lshift pause ; ( k -- a )
+: buffer block ; ( k -- a )
+: flush ; ( -- )
+: save-buffers ; ( -- )
+: empty-buffers ; ( -- )
+: update ; ( -- : mark cur. buf. as dirty )
+
+[else]
+\ TODO: Multiple buffers, testing, document
+\
+\ N.B. Block to block transfer without an intermediary buffer
+\ will not work!
+
+\ TODO: Remove test code
+\ : .ch dup bl 127 within 0= if drop [char] . then emit ;
+\ : display
+\   for aft count .ch r@ 64 mod 0= if cr then then next drop ;
+
+system[
+variable <block> ( -- a : xt for "block" word )
+
+$F800 constant buf0 ( -- a : location of block buffer )
+variable dirty0     ( -- a : is block buffer dirty? )
+variable blk0       ( -- a : what block is stored in buffer? )
+-1 t' blk0 >tbody t! ( set initial loaded block to be invalid )
+
+]system
+
+:s >addr ( a -- a/2 : convert to SUBLEQ VM address )
+  dup #1 and 0<> [ -9 ] literal and throw 2/ ;s 
+:s (block) ( a a u -- : transfer to/from "mass storage" )
+  >r >addr swap >addr swap r> >addr
+  for 
+    aft 2dup [@] swap [!] 1+ swap 1+ swap
+    then
+  next 2drop ;s
+
+t' (block) t' <block> >tbody t!
+
+:s valid? dup #1 [ $80 ] literal within ;s ( k -- k f )
+:s transfer <block> @ execute ;s ( a a u -- )
+:s >blk 1- b/buf * ;s ( k -- a : convert blk addr to addr )
+:s clean #0 dirty0 ! ;s ( -- : opposite of 'update' )
+:s invalidate #-1 blk0 ! ;s ( -- : store invalid block # )
+:s bput valid? if >blk buf0 b/buf transfer exit then drop ;s
+:s bget 
+  valid? if >blk buf0 swap b/buf transfer exit then drop ;s
+
+\ TODO: Move "pause" to "transfer" or "(block)"? Shouldn't
+\ "pause" go in the callback and not the caller? (more 
+\ flexible)
+: update #-1 dirty0 ! ; ( -- )
+: save-buffers dirty0 @ if blk0 @ bput clean then ; ( -- )
+: flush save-buffers invalidate ; ( -- )
+: empty-buffers clean invalidate ; ( -- )
+: buffer ( k -- a )
+  #1 ?depth                      ( sanity check stack depth )
+  valid?                         ( validity check )
+  0= [ -$23 ] literal and throw  ( throw if invalid )
+  pause                          ( multitasking pause )
+  dup blk0 @ = if drop buf0 exit then ( already loaded )
+  save-buffers                   ( save buffer if dirty )
+  blk0 !                         ( set current loaded block )
+  buf0 ;                         ( return block buffer loc. )
+\ TODO: No need to bget if block loaded
+: block 
+  dup blk0 @ = if drop buf0 exit then
+  dup buffer swap bget ; ( k -- a )
+[then]
+
 : blank bl fill ; ( a u -- : blank an area of memory )
+\ TODO: update scr after block
 : list ( k -- : display a block )
    page cr         ( clean the screen )
    dup scr ! block ( update "scr" and load block )
@@ -8887,15 +8957,19 @@ opt.multi [if]
 \ necessary, complications which are not needed.
 \
 opt.editor [if]
-: editor [ {editor} ] literal #1 set-order ; ( BLOCK editor )
-:e q only forth ;e ( -- : exit back to Forth interpreter )
-:e ? scr @ . ;e ( -- : print block number of current block )
+\ TODO: Editor test above to reflect changes
+\ TODO: List only editor commands with 'w'
+\ : editor [ {editor} ] literal #1 set-order ; ( BLOCK editor )
+\ :e q only forth ;e ( -- : exit back to Forth interpreter )
+: editor [ {editor} ] literal +order ; ( BLOCK editor )
+:e q [ {editor} ] literal -order ;e
+:e ? scr @ . ;e    ( -- : print block number of current block )
 :e l scr @ list ;e ( -- : list current block )
 :e x q scr @ load editor ;e ( -- : evaluate current block )
 :e ia #2 ?depth [ $6 ] literal lshift + scr @ block + tib
   >in @ + swap source nip >in @ - cmove tib @ >in ! update l ;e
 :e a #0 swap ia ;e ( line --, "line" : insert line at )
-:e w words ;e ( -- : display block editor commands )
+:e w words ;e ( -- : list editor cmds )
 :e s update flush ;e ( -- : save edited block )
 :e n  #1 scr +! l ;e ( -- : display next block )
 :e p #-1 scr +! l ;e ( -- : display previous block )
