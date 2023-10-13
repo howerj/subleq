@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
         pc = c;
       m[L(b)] = r;
     }
+    /*pc &= msk(N);*/
   }
   return 0;
 }

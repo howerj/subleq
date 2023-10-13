@@ -716,7 +716,7 @@ only forth definitions hex
 0 constant opt.optimize   ( Enable extra optimization )
 0 constant opt.iffy-compare ( Enable faster/incorrect compare )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
-1 constant opt.simple-blk ( Simple block layer )
+0 constant opt.simple-blk ( Simple block layer )
 0 constant opt.self       ( Enable self-interpreter )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
@@ -2224,6 +2224,8 @@ $7FFF tvar {high}
 label: self
   {virtual} ONE!
   \ TODO: Correct image values
+  \ for (i = pc; pc < 65534; i++)
+  \   m[i] &= 0xFFFF;
 label: self-loop
   {pc} {c} MOV
   {-1} 2/ t, {c} 2/ t, -1 t, \ Conditionally halt on '{c}'
@@ -4469,16 +4471,22 @@ opt.iffy-compare [if]
 \ Performing a load of address "#-1 [@] negate", which fetches
 \ a byte from input as a side effect of a load.
 \
+\ "key?" also pauses (calls "pause") allowing other threads to
+\ run.
+\
 
-: key? #-1 [@] negate ( -- c 0 | -1 : get byte of input )
+: key? pause #-1 [@] negate ( -- c 0 | -1 : get byte of input )
    s>d if
      [ {options} ] literal @
      [ 8 ] literal and if bye then drop #0 exit
    then #-1 ;
 
-\ "key" pauses (allows other threads to run) and repeatedly
-\ calls "key?" until the operation succeeds. This is a version
-\ of "key?" that always blocks until a character is received.
+\ "key" repeatedly calls "key?" until the operation succeeds. 
+\
+\ This makes "key" effectively a version of "key?" that always 
+\ blocks until a character is received, regardless of whether
+\ "key?" (or the underlying SUBLEQ machine) is implemented in
+\ blocking or non-blocking fashion.
 \
 \ Note that what is said is not correct, it does not
 \ call "key?", however the default execution token stored in
@@ -4489,7 +4497,7 @@ opt.iffy-compare [if]
 \ to the SUBLEQ machine.
 \
 
-: key begin pause <key> @execute until ; ( -- c )
+: key begin <key> @execute until ; ( -- c )
 
 \ A side note about randomness, we lack sources of entropy
 \ within the virtual machine, we have two possible sources,
@@ -4514,8 +4522,7 @@ opt.iffy-compare [if]
 \
 \ "emit" is the counter part to "key", it always blocks until
 \ it succeeds (and it is assumed that outputting a character
-\ is a fast operation that takes little time), it does call
-\ "pause" before it outputs a character.
+\ is a fast operation that takes little time).
 \
 \ "emit" does not get the character itself, it is expected
 \ that the execution vector stored in "\<emit\>" will do that.
@@ -4526,7 +4533,7 @@ opt.iffy-compare [if]
 \ those.
 \
 
-: emit pause <emit> @execute ; ( c -- : output byte )
+: emit <emit> @execute ; ( c -- : output byte )
 
 \ "cr" emits a newline, DOS style newlines are used instead
 \ of Unix style newlines, although that can be changed by
@@ -5391,14 +5398,16 @@ system[ user tup =cell tallot ]system
 \ replace the execution vector with something that does nothing
 \ then we cannot use ")" as that would leave an item on the
 \ stack where one should not be, it will be replaced with a
-\ "drop" instead.
+\ "drop" instead. "(emit)" calls "pause" as well, all of the
+\ calls to "pause" or done in the callback and not the caller
+\ so that calls to "pause" can be removed if needed.
 \
 \ The default execution vectors are set later on during the
 \ "task-init" function and depend partially on the "{options}"
 \ flags to enable or disable echoing with "echo".
 \
 
-:s (emit) opEmit ;s ( c -- : output byte to terminal )
+:s (emit) pause opEmit ;s ( c -- : output byte to terminal )
 : echo <echo> @execute ; ( c -- : emit a single character )
 
 \ "tap" and "ktap" are both used by "accept", they are both
@@ -7935,7 +7944,8 @@ opt.better-see [if] ( Start conditional compilation )
 \ could be writing to flash, to a hard-drive, or just to
 \ memory like this implementation does. Some block systems
 \ map contiguous sections of blocks to different types of
-\ memory.
+\ memory. The BLOCK word set is a primitive way of providing
+\ memory mapping.
 \
 \ The block word-set has been added because it can be used as
 \ a basis for text editing (see the block editor described
@@ -7945,7 +7955,7 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \ It would be interesting to build a simple file system on top
 \ of the Forth Block mechanism, and a set of DOS like utilities
-\ for accessing and executing files on it.  It could also be
+\ for accessing and executing files on it. It could also be
 \ used to simulate a simple DOS like operating system within
 \ this Forth system. The file system would also be portable,
 \ but limited. These possibilities will be described in more
@@ -8124,11 +8134,6 @@ opt.simple-blk [if]
 \ N.B. Block to block transfer without an intermediary buffer
 \ will not work!
 
-\ TODO: Remove test code
-\ : .ch dup bl 127 within 0= if drop [char] . then emit ;
-\ : display
-\   for aft count .ch r@ 64 mod 0= if cr then then next drop ;
-
 system[
 variable <block> ( -- a : xt for "block" word )
 
@@ -8142,7 +8147,8 @@ variable blk0       ( -- a : what block is stored in buffer? )
 :s >addr ( a -- a/2 : convert to SUBLEQ VM address )
   dup #1 and 0<> [ -9 ] literal and throw 2/ ;s 
 :s (block) ( a a u -- : transfer to/from "mass storage" )
-  >r >addr swap >addr swap r> >addr
+  pause ( pause for multitasking )
+  >r >addr swap >addr swap r> >addr ( convert addrs/length )
   for 
     aft 2dup [@] swap [!] 1+ swap 1+ swap
     then
@@ -8158,10 +8164,8 @@ t' (block) t' <block> >tbody t!
 :s bput valid? if >blk buf0 b/buf transfer exit then drop ;s
 :s bget 
   valid? if >blk buf0 swap b/buf transfer exit then drop ;s
+:s loaded? dup blk0 @ = ;s ( k -- k f )
 
-\ TODO: Move "pause" to "transfer" or "(block)"? Shouldn't
-\ "pause" go in the callback and not the caller? (more 
-\ flexible)
 : update #-1 dirty0 ! ; ( -- )
 : save-buffers dirty0 @ if blk0 @ bput clean then ; ( -- )
 : flush save-buffers invalidate ; ( -- )
@@ -8170,27 +8174,25 @@ t' (block) t' <block> >tbody t!
   #1 ?depth                      ( sanity check stack depth )
   valid?                         ( validity check )
   0= [ -$23 ] literal and throw  ( throw if invalid )
-  pause                          ( multitasking pause )
-  dup blk0 @ = if drop buf0 exit then ( already loaded )
+  loaded? if drop buf0 exit then ( already loaded )
   save-buffers                   ( save buffer if dirty )
   blk0 !                         ( set current loaded block )
   buf0 ;                         ( return block buffer loc. )
-\ TODO: No need to bget if block loaded
-: block 
-  dup blk0 @ = if drop buf0 exit then
+: block
+  loaded? if drop buf0 exit then ( already loaded )
   dup buffer swap bget ; ( k -- a )
 [then]
 
+:s .emit dup bl [ $80 ] literal within 
+   0= if drop [char] . then emit ;s
 : blank bl fill ; ( a u -- : blank an area of memory )
-\ TODO: update scr after block
 : list ( k -- : display a block )
    page cr         ( clean the screen )
-   dup scr ! block ( update "scr" and load block )
+   dup >r block ( save block number and call "block" )
    [ $F ] literal for       ( for each line in the block )
      [ $F ] literal r@ - [ $3 ] literal u.r space
-     [ $40 ] literal 2dup type cr +         ( print line )
-   ( [ $3F ] literal for count emit next cr ( print line )
-   next drop ;
+     [ $3F ] literal for count .emit next cr ( print line )
+   next drop r> scr ! ;
 
 \ # The Read-Eval-Loop
 \
@@ -8855,12 +8857,12 @@ opt.multi [if]
 \ The editor is only 16 lines long itself, so it will fit
 \ perfectly within a single block.
 \
-\ To use the editor type "editor", this will replace the
-\ current vocabulary so only the editor commands are visible,
-\ they are; "q", "?", "l", "x", "ia", "a", "w", "s", "n", "p",
-\ "r", "z", and finally "d". Some of the words are not
-\ strictly necessary in this editor, but they are not large
-\ and are useful.
+\ To use the editor type "editor", this will add the
+\ editor vocabulary to the search order so the commands are 
+\ visible, the commands are; "q", "?", "l", "x", "ia", "a", 
+\ "w", "s", "n", "p", "r", "z", and finally "d". Some of 
+\ the words are not strictly necessary in this editor, but they 
+\ are not large and are useful.
 \
 \ Here is a short description of each of the commands:
 \
@@ -8887,7 +8889,7 @@ opt.multi [if]
 \
 \ A command to enter a mode to enter 16 consecutive lines
 \ would aid in editing larger amounts of text. Perhaps empty
-\ lines would exit this mode early.
+\ lines would exit this mode early. 
 \
 \ Specific words, or a mode, for displaying and editing
 \ sections of memory as hexadecimal values would be a useful.
@@ -8915,7 +8917,7 @@ opt.multi [if]
 \        l
 \        x
 \
-\ This will make the block containing the following text:
+\ This will make a block containing the following text:
 \
 \        ( HELLO WORLD PROGRAM VERSION 3.4 )
 \        : ahoy cr ." HELLO, WORLD" ;
@@ -8930,20 +8932,30 @@ opt.multi [if]
 \ to what you prefer, or add new ones.
 \
 \ The only complex word is "ia", which also forms the basis
-\ for "i", it inserts a line of text into a line at a location
+\ for "a", it inserts a line of text into a line at a location
 \ after making sure there are at least two items on the stack.
 \ The word "ia" does not do range checking on those variables
 \ unfortunately, a common "feature" of Forth.
 \
-\ It looks at the Terminal Input Buffer, with "\>in" and "tib",
-\ copying the results into the location within the block
+\ "ia" looks at the Terminal Input Buffer, with "\>in" and 
+\ "tib", copying the results into the location within the block
 \ specified, and then skips over the line so it is not
-\ executed. It also calls "update", which marks the current
-\ block as dirty (as it has just been modified), this means the
-\ block is automatically saved when moving to the next or
-\ previous block. Of course, as there is no mass storage in
-\ this SUBLEQ machine, so nothing is written to it, however it
-\ is a nice feature for portabilities sake.
+\ executed. It does not call "update", which marks the current
+\ block as dirty, this means the block is not automatically 
+\ saved when moving to the next or previous block.
+\
+\ There is a notable difference when using this editor if
+\ the "simple" (and incorrect) definition of "block":
+\
+\        : block b/buf * ;
+\
+\ Detailed in the section on block storage, is used. The
+\ behavior of this simpler "block" can be mimicked for 
+\ portability reasons by calling "flush" each time a command 
+\ performs an edit, or editing the command so it calls flush.
+\
+\ For more compliant "block" systems, as mentioned, changes
+\ are not reflected automatically.
 \
 \ Most of the other commands are simple, they manipulate the
 \ screen pointer by adding to it, or retrieving it.
@@ -8957,19 +8969,16 @@ opt.multi [if]
 \ necessary, complications which are not needed.
 \
 opt.editor [if]
-\ TODO: Editor test above to reflect changes
-\ TODO: List only editor commands with 'w'
-\ : editor [ {editor} ] literal #1 set-order ; ( BLOCK editor )
-\ :e q only forth ;e ( -- : exit back to Forth interpreter )
 : editor [ {editor} ] literal +order ; ( BLOCK editor )
-:e q [ {editor} ] literal -order ;e
+:e q [ {editor} ] literal -order ;e ( -- : quit editor )
 :e ? scr @ . ;e    ( -- : print block number of current block )
 :e l scr @ list ;e ( -- : list current block )
 :e x q scr @ load editor ;e ( -- : evaluate current block )
 :e ia #2 ?depth [ $6 ] literal lshift + scr @ block + tib
-  >in @ + swap source nip >in @ - cmove tib @ >in ! update l ;e
+  >in @ + swap source nip >in @ - cmove tib @ >in ! l ;e
 :e a #0 swap ia ;e ( line --, "line" : insert line at )
-:e w words ;e ( -- : list editor cmds )
+:e w get-order [ {editor} ] literal #1 ( -- : list cmds )
+     set-order words set-order ;e 
 :e s update flush ;e ( -- : save edited block )
 :e n  #1 scr +! l ;e ( -- : display next block )
 :e p #-1 scr +! l ;e ( -- : display previous block )
@@ -8988,7 +8997,6 @@ opt.editor [if]
 \
 
 opt.control [if]
-
 
 : rpick ( n -- u, R: ??? -- ??? : pick a value off ret. stk. )
   rp@ swap - 1- 2* @ ;
@@ -10729,6 +10737,7 @@ it being run.
 \                pc = c;
 \              m[L(b)] = r;
 \            }
+\            /*pc &= msk(N); // Optional */
 \          }
 \          return 0;
 \        }
@@ -12770,7 +12779,7 @@ editor 30 r z
  9 a        XXXXX XXXX X@XXXX  ..X
 10 a            X      XXX  XXXXXX
 11 a            XXXXXXXX
-n z
+s n z
  1 a       XXXXXXXXXXXX
  2 a       X..  X     XXX
  3 a       X..  X *  *  X
@@ -12781,7 +12790,7 @@ n z
  8 a         X *  * * * X
  9 a         X    X     X
 10 a         XXXXXXXXXXXX
-? n z
+s n z
  1 a               XXXXXXXX
  2 a               X     @X
  3 a               X *X* XX
@@ -12792,7 +12801,7 @@ n z
  8 a       XX...    *  *   X
  9 a       X....  XXXXXXXXXX
 10 a       XXXXXXXX
-n z
+s n z
  1 a                     XXXXXXXX
  2 a                     X  ....X
  3 a          XXXXXXXXXXXX  ....X
@@ -12806,7 +12815,7 @@ n z
 11 a       X **X** @X
 12 a       X   X   XX
 13 a       XXXXXXXXX
-q
+s q
 
 system +order ' ok <ok> ! only forth definitions decimal
 .( LOADED ) cr
