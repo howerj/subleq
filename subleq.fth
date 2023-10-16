@@ -716,7 +716,6 @@ only forth definitions hex
 0 constant opt.optimize   ( Enable extra optimization )
 0 constant opt.iffy-compare ( Enable faster/incorrect compare )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
-0 constant opt.simple-blk ( Simple block layer )
 0 constant opt.self       ( Enable self-interpreter )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
@@ -7989,37 +7988,35 @@ opt.better-see [if] ( Start conditional compilation )
 \ before another block is loaded, otherwise the changes to
 \ that block are discarded.
 \
-\ Note that because this implementation of the block word set
-\ just maps 1024 chunks of memory to each block the changes
-\ are always reflected and there are no block transfers, this
-\ is one feature of the system that could be changed to make
-\ the behavior more consistent with other implementations,
-\ however that this would require memory to store at least one,
-\ preferably two, block buffers. It would not require any new
-\ peripheral support. We could also use the block system to
-\ access the full 65536 cells that are available to the SUBLEQ
-\ VM, using "\[@\]", transferring the block from memory not
-\ normally accessible to the Forth implementation with "@"
-\ alone.
+\ This implementation of "block" maps all of the memory
+\ available, even areas not usually available to "@" and "!"
+\ because of the limitations of 16-bit byte-oriented addresses
+\ which can only access 65536 bytes and not the full 65536 
+\ cells, into blocks labelled 1 to 126 (the last 1024 cells
+\ are not available because the last cell, with an address of
+\ "65535" or "-1" is used for memory mapped I/O). Block zero
+\ is also an invalid block number, block one contains the first
+\ 1024 bytes of memory however, the block two the next 1024
+\ bytes, and so on.
 \
-\ That is the rough description of how things work in a normal
-\ Forth block system. The three main words are "block",
-\ "update" and "flush". The latter two words do nothing on
-\ this system.
+\ This block system provides all of the Forth block words and
+\ a few more internal ones, placed in the system vocabulary,
+\ that might be useful. These words are; "b/buf", "buffer",
+\ "block", "empty-buffers", "update", "flush", "save-buffers",
+\ "list", "load", "scr" and "blk".
 \
 \ The word "block" is the core of the block system, given a
 \ block number, "k", it will return an address to a block
 \ buffer (or thrown an exception if there is an error), it
 \ will perform the task of checking if the current block is
 \ dirty, of potentially writing the changes back, of loading
-\ the new block, of assigning the new block buffer. It does
-\ all of the work.
+\ the new block, of assigning the new block buffer. 
 \
-\ If the block number is the same as the one
-\ loaded then it does nothing but return a pointer to the
-\ already loaded block. This version of "block" also checks
-\ that there is at least one value on the stack and it also
-\ calls "pause", described in the multi-threading chapter.
+\ If the block number is the same as the one loaded then it 
+\ does nothing but return a pointer to the already loaded 
+\ block. This version of "block" also checks that there is at 
+\ least one value on the stack and it also calls "pause", 
+\ indirectly, described in the multi-threading chapter.
 \
 \ The word "update" marks the last loaded block as dirty,
 \ allowing the block system to determine what to write back,
@@ -8029,13 +8026,12 @@ opt.better-see [if] ( Start conditional compilation )
 \ within code that uses these block words for portability
 \ reasons.
 \
-\ The words "list" "blank", "b/buf" are defined in this
-\ chapter. It would also be a good time to describe
-\ how the block system interacts with "source-id", when we
-\ are executing code from a block (with "load", defined later)
-\ "source-id" is set to -1 (it is set to -1 when any string
-\ is being evaluated also), when reading from a terminal
-\ "source-id" is set to zero.
+\ "empty-buffers" is like "flush" but it does not write back
+\ all of the dirty buffers, it just discards them.
+\
+\ "save-buffers" writes back all dirty buffers but does not
+\ discard them.
+\
 \
 \ "b/buf" is a constant which contains the number of bytes in
 \ a block, on most Forth system it is 1024 bytes, it does
@@ -8056,6 +8052,13 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \ If we wanted to format block "47" for editing.
 \
+\ It would also be a good time to describe
+\ how the block system interacts with "source-id", when we
+\ are executing code from a block (with "load", defined later)
+\ "source-id" is set to -1 (it is set to -1 when any string
+\ is being evaluated also), when reading from a terminal
+\ "source-id" is set to zero.
+\
 \ Replacing "emit" with ".emit" in "list":
 \
 \         : within over - >r - r> u< ; ( u lo hi -- f )
@@ -8065,18 +8068,32 @@ opt.better-see [if] ( Start conditional compilation )
 \           emit ;
 \
 \ Renders "list" a little more forgiving when printing
-\ binary data. You will need to add back in the line with
-\ "emit" and remove the line with "type".
+\ binary data, which has been implemented.
 \
 \ It might be worth having a compile time switch for more
-\ or less complicated versions of "block", the simplest and
-\ least functional block implementation is:
+\ or less complicated versions of "block", the simplest 
+\ block implementation is:
 \
 \        : block 1024 * ;
 \
-\ A little too spartan. Switching between this version of
-\ "block" and one that can access all memory along with proper
-\ block buffers would be useful, however.
+\ Which is a little too spartan, and non-compliant for this 
+\ Forth. 
+\
+\ The following definitions of the "block" words were used
+\ for quite a while, again they are non-compliant and many
+\ of the words were deliberately non-functional.
+\
+\        : block ( k -- a ) 
+\          #1 ?depth 1- [ $A ] literal lshift pause ; 
+\        : buffer block ; ( k -- a )
+\        : flush ; ( -- )
+\        : save-buffers ; ( -- )
+\        : empty-buffers ; ( -- )
+\        : update ; ( -- : mark cur. buf. as dirty )
+\
+\ Changes to a block buffer (which was really just direct
+\ memory access) were reflected immediately, and only 65536
+\ bytes could be accessed, not the full 65536 cells.
 \
 \ "thru" and "screens" for loading a block range and listing
 \ a block range are listed in the appendix.
@@ -8119,20 +8136,6 @@ opt.better-see [if] ( Start conditional compilation )
 \
 
 $400 constant b/buf ( -- u : size of the block buffer )
-
-opt.simple-blk [if]
-: block #1 ?depth 1- [ $A ] literal lshift pause ; ( k -- a )
-: buffer block ; ( k -- a )
-: flush ; ( -- )
-: save-buffers ; ( -- )
-: empty-buffers ; ( -- )
-: update ; ( -- : mark cur. buf. as dirty )
-
-[else]
-\ TODO: Multiple buffers, testing, document
-\
-\ N.B. Block to block transfer without an intermediary buffer
-\ will not work!
 
 system[
 variable <block> ( -- a : xt for "block" word )
@@ -8181,9 +8184,8 @@ t' (block) t' <block> >tbody t!
 : block
   loaded? if drop buf0 exit then ( already loaded )
   dup buffer swap bget ; ( k -- a )
-[then]
 
-:s .emit dup bl [ $80 ] literal within 
+:s .emit dup bl [ $7F ] literal within 
    0= if drop [char] . then emit ;s
 : blank bl fill ; ( a u -- : blank an area of memory )
 : list ( k -- : display a block )
@@ -9204,8 +9206,9 @@ opt.allocate [if]
 \ "\>length".
 \
 \ * "pool" is the location of the default pool, located at
-\ address "$F800" (just before the first or main thread of
-\ execution) and is $400 bytes in size (or 1024 bytes).
+\ address "$F400" (just before the first or main thread of
+\ execution and block buffer) and is $400 bytes in size 
+\ (or 1024 bytes).
 \ * "arena?" is used to check whether a pointer is within
 \ the given arena. There are other checks that could be
 \ done, for example it is possible to determine whether a
@@ -9231,7 +9234,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 
 : >length #2 cells + ; ( freelist -- length-field )
 : pool ( default memory pool )
-  [ $F800 ] literal [ $400 ] literal ;
+  [ $F400 ] literal [ $400 ] literal ;
 : arena! ( start-addr len -- : initialize memory pool )
   >r dup [ $80 ] literal u< if
     [ -$B ] literal throw ( arena too small )
@@ -9773,7 +9776,7 @@ $8000 $4001 2constant fone ( 1.0 fconstant fone )
   [ $B8AA $4001 ] 2literal ( [ 1.4427 ] fliteral ) f* exp ;
 : falog ( r -- r )
   [ $D49A $4002 ] 2literal ( [ 3.3219 ] fliteral ) f* exp ;
-:s get ( "123" -- : get a single signed number )
+:s nget ( "123" -- : get a single signed number )
   bl word dup 1+ c@ [char] - = tuck -
   #0 #0 rot convert drop ( should throw if not number... )
   -+ ;s
@@ -9794,8 +9797,8 @@ mdecimal
   if [ 10 ] literal s>f f* r> 1- >r then
   <# r@ abs #0 #s r> sign 2drop
   [char] e hold f# #> r> over - spaces type ;
-: e ( f "123" -- usage "1.23 e 10", input scientific notation )
-  f get >r r@ abs [ 13301 ] literal [ 4004 ] literal */mod
+ : e ( f "123" -- usage "1.23 e 10", input scientific notation )
+  f nget >r r@ abs [ 13301 ] literal [ 4004 ] literal */mod
   >r s>f [ 4004 ] literal s>f f/ exp r> +
   r> 0< if f/ else f* then ;
 mhex
