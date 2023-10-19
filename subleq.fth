@@ -1529,6 +1529,7 @@ defined eforth [if] system -order [then]
    A,   t, NADDR
    r> t, 0 t, NADDR
    A, A, NADDR ;m
+
 \ The previous version of "iSTORE" leveraged the "MOV" macro
 \ and produced a larger indirect store.
 \
@@ -1763,7 +1764,7 @@ meta.1 +order definitions
 
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
-  -1 t,            \ system entry point
+  -1 t,            \ system entry point, set later
 opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
                    \ #4=info, #8=die on EOF
   0 tvar primitive \ any address lower must be a VM primitive
@@ -2592,7 +2593,6 @@ assembler.1 -order
 :a opExit ip {rp} iLOAD (fall-through); ( !!! ) ( R: a -- )
 :a rdrop --rp ;a ( R: u -- )
 
-
 \ "opJump" and "opJumpZ" implement unconditional and
 \ conditional jumps respectively. The actual jump is performed
 \ by "ip ip iLOAD", as "ip" has been incremented before the
@@ -3285,18 +3285,6 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :m : :t ;m ( -- ???, "name" : start cross-compilation )
 :m ; ;t ;m ( ??? -- : end cross-compilation of a target word )
 
-\ TODO: Get this working, which will require VM changes and
-\ the wholesale replacement of all primitives, it should be
-\ slightly faster and require a little less space. It will
-\ also make it easier to check what is and what is not a
-\ primitive
-
-0 [if] 
-: o+ tos {sp} iADD t' opDrop JMP ; ( n n -- n )
-
-there 2/ primitive t! ( set 'primitive', needed for VM )
-[then]
-
 \ It is interesting to see just how simple and easy it is
 \ to define a set of words for creating control structures.
 \ Making a compiler is actually easy, making a good
@@ -3451,6 +3439,8 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 \ There is not much else to say about these words. Some of them
 \ go into the system vocabulary, but should also not be
 \ referenced later on either.
+\
+\ TODO: Describe merging this into SUBLEQ VM instructions
 \
 
 :to + + ; ( n n -- n : addition )
@@ -8140,7 +8130,8 @@ $400 constant b/buf ( -- u : size of the block buffer )
 system[
 variable <block> ( -- a : xt for "block" word )
 
-$F800 constant buf0 ( -- a : location of block buffer )
+\ TODO: Memory map, also talk about allocator location
+$F400 constant buf0 ( -- a : location of block buffer )
 variable dirty0     ( -- a : is block buffer dirty? )
 variable blk0       ( -- a : what block is stored in buffer? )
 -1 t' blk0 >tbody t! ( set initial loaded block to be invalid )
@@ -9206,9 +9197,9 @@ opt.allocate [if]
 \ "\>length".
 \
 \ * "pool" is the location of the default pool, located at
-\ address "$F400" (just before the first or main thread of
-\ execution and block buffer) and is $400 bytes in size 
-\ (or 1024 bytes).
+\ address "$F800" (just before the first, or main thread, of
+\ execution and next to the block buffers) and is $400 bytes 
+\ in size (or 1024 bytes).
 \ * "arena?" is used to check whether a pointer is within
 \ the given arena. There are other checks that could be
 \ done, for example it is possible to determine whether a
@@ -9234,7 +9225,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 
 : >length #2 cells + ; ( freelist -- length-field )
 : pool ( default memory pool )
-  [ $F400 ] literal [ $400 ] literal ;
+  [ $F800 ] literal [ $400 ] literal ;
 : arena! ( start-addr len -- : initialize memory pool )
   >r dup [ $80 ] literal u< if
     [ -$B ] literal throw ( arena too small )
