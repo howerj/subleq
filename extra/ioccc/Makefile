@@ -27,8 +27,15 @@ width: ${IMAGE} ${NBIT}
 	./${NBIT} 32 $<
 	echo ".( Ahoy, World! ) cr bye " | ./${NBIT} 16 $<
 
-single: oneline
-	./oneline ${IMAGE}
+#!/bin/sh
+# Portability concerns:
+# - Not tested a machine where sizeof(int)==16
+# - Stack usage is determined by number of arguments passed in
+# - Loading a program is done via the number of arguments passed
+# via the command line, large programs may cause problems
+PROG=$(shell cat ${IMAGE})
 
-alternate: atoi
-	./atoi 
+single: oneline
+	@echo "SINGLE LINE RUNNING - PROG SZ:" $(shell tr -d '\n' < oneline.c | wc | awk '{print $$3}')
+	@./oneline ${PROG}
+	@echo BYE

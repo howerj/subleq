@@ -15,3 +15,5 @@
   program and nbit.c)
 - [ ] Make a permutation of the function pointers to obfuscate
   things further.
+- [ ] Shrink one-line candidate to under 140 characters if possible,
+  ideally 120 characters, but that is probably impossible.
