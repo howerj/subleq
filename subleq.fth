@@ -8131,6 +8131,8 @@ system[
 variable <block> ( -- a : xt for "block" word )
 
 \ TODO: Memory map, also talk about allocator location
+\ BUG: Cannot access address above 64k because of overflow of
+\ 16-bit integers. Should use cell address instead...
 $F400 constant buf0 ( -- a : location of block buffer )
 variable dirty0     ( -- a : is block buffer dirty? )
 variable blk0       ( -- a : what block is stored in buffer? )

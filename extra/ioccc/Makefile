@@ -26,3 +26,9 @@ width: ${IMAGE} ${NBIT}
 	./${NBIT} 31 $<
 	./${NBIT} 32 $<
 	echo ".( Ahoy, World! ) cr bye " | ./${NBIT} 16 $<
+
+single: oneline
+	./oneline ${IMAGE}
+
+alternate: atoi
+	./atoi 
