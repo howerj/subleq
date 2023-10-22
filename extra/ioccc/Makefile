@@ -4,18 +4,18 @@ SELF=../self/self.dec
 
 .PHONY: all try run clobber clean
 
-all: prog
+all: 1
 
-run try: prog ${IMAGE}
-	./prog 16 ${IMAGE}
+run try: 1 ${IMAGE}
+	./1 16 ${IMAGE}
 
-self: prog ${SELF} ${IMAGE}
-	./prog 16 ${SELF} ${IMAGE}
+self: 1 ${SELF} ${IMAGE}
+	./1 16 ${SELF} ${IMAGE}
 
 clobber clean:
-	rm -f prog 
+	rm -f 1 2 3 *.exe
 
-NBIT=prog
+NBIT=1
 width: ${IMAGE} ${NBIT}
 	./${NBIT}  8 $<
 	./${NBIT}  9 $<
@@ -36,10 +36,10 @@ width: ${IMAGE} ${NBIT}
 PROG=$(shell cat ${IMAGE})
 CSPG=$(shell cat ${IMAGE} | tr '\n\t ' ',')
 
-single: oneline
-	@echo "SINGLE LINE RUNNING - PROG SZ:" $(shell tr -d '\n' < oneline.c | wc | awk '{print $$3}')
-	@./oneline ${PROG}
+single: 2
+	@echo "SINGLE LINE RUNNING - PROG SZ:" $(shell tr -d '\n' < 2.c | wc | awk '{print $$3}')
+	@./2 ${PROG}
 	@echo BYE
 
-def: def.c
-	${CC} ${CFLAGS} -DX="${CSPG}" $< -o $@
+3: 3.c
+	${CC} ${CFLAGS} -Du="${CSPG}" $< -o $@
