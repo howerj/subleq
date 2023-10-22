@@ -1,4 +1,4 @@
-CFLAGS=-Wall -Wextra -std=c11 -pedantic -O3
+CFLAGS=-Wall -Wextra -std=c11 -pedantic -O3 -g
 IMAGE=../../subleq.dec
 SELF=../self/self.dec
 
@@ -34,8 +34,12 @@ width: ${IMAGE} ${NBIT}
 # - Loading a program is done via the number of arguments passed
 # via the command line, large programs may cause problems
 PROG=$(shell cat ${IMAGE})
+CSPG=$(shell cat ${IMAGE} | tr '\n\t ' ',')
 
 single: oneline
 	@echo "SINGLE LINE RUNNING - PROG SZ:" $(shell tr -d '\n' < oneline.c | wc | awk '{print $$3}')
 	@./oneline ${PROG}
 	@echo BYE
+
+def: def.c
+	${CC} ${CFLAGS} -DX="${CSPG}" $< -o $@
