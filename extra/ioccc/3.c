@@ -1,5 +1,5 @@
-short s[1<<16]={u},b,l,e,q;main(){
-for(;~q;){
-e=s[b=s[q++]],l=s[q],q+=2;
-~b?~l?q=(s[l]-=e)>0?q:s[q-1]:putchar(e):(s[l]=getchar());
+short s[8<<13]={u},b,l,e;main(q){
+for(;~e;){
+q=s[b=s[e++]],l=s[e],e+=2;
+~b?~l?e=(s[l]-=q)>0?e:s[e-1]:putchar(q):(s[l]=getchar());
 }}

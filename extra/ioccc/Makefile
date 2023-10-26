@@ -33,13 +33,8 @@ width: ${IMAGE} ${NBIT}
 # - Stack usage is determined by number of arguments passed in
 # - Loading a program is done via the number of arguments passed
 # via the command line, large programs may cause problems
-PROG=$(shell cat ${IMAGE})
 CSPG=$(shell cat ${IMAGE} | tr '\n\t ' ',')
-
-single: 2
-	@echo "SINGLE LINE RUNNING - PROG SZ:" $(shell tr -d '\n' < 2.c | wc | awk '{print $$3}')
-	@./2 ${PROG}
-	@echo BYE
 
 3: 3.c
 	${CC} ${CFLAGS} -Du="${CSPG}" $< -o $@
+

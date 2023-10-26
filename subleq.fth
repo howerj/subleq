@@ -714,9 +714,9 @@ only forth definitions hex
 0 constant opt.glossary   ( Add in "glossary" word )
 0 constant opt.sm-vm-err  ( Smaller VM error message )
 0 constant opt.optimize   ( Enable extra optimization )
-0 constant opt.iffy-compare ( Enable faster/incorrect compare )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
 0 constant opt.self       ( Enable self-interpreter )
+0 constant opt.test-code  ( Enable test code )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -2233,30 +2233,30 @@ label: self-loop
   {b} {pc} iLOAD {pc} INC
   {c} {pc} iLOAD {pc} INC
 
-  \ TODO: Implement this
-  \ {x} = iLOAD {b} \ Not on PUT though...
-  \ if {a} != -1 && {b} != -1: \ Replace with > 32767?
-  \   if ({x} > 32768 || {x} == 0):
-  \     {c} = {x} 
-  \   else:
-  \     {c} INC 
-  \ {x} &= 65535
-  \ iSTORE {x} -> {b} 
+	\ TODO: Implement this
+	\ {x} = iLOAD {b} \ Not on PUT though...
+	\ if {a} != -1 && {b} != -1: \ Replace with > 32767?
+	\   if ({x} > 32768 || {x} == 0):
+	\     {c} = {x} 
+	\   else:
+	\     {c} INC 
+	\ {x} &= 65535
+	\ iSTORE {x} -> {b} 
  
-\    {a} {v0} MOV
-\    {high} {v0} SUB {v0} +if 
-\    else 
-\      {b} {v0} SUB {v0} +if
-\      else
-\        {a} {a} iLOAD
-\        {v0} {b} iLOAD
-\        {v0} {a} SUB
-\        \ TODO: {v0} &= 0xFFFF
-\        {v0} {b} iSTORE
-\        \ TODO: Jump if leq0
-\      then
-\    then
-  
+	\    {a} {v0} MOV
+	\    {high} {v0} SUB {v0} +if 
+	\    else 
+	\      {b} {v0} SUB {v0} +if
+	\      else
+	\        {a} {a} iLOAD
+	\        {v0} {b} iLOAD
+	\        {v0} {a} SUB
+	\        \ TODO: {v0} &= 0xFFFF
+	\        {v0} {b} iSTORE
+	\        \ TODO: Jump if leq0
+	\      then
+	\    then
+	  
   ( N.B. "+if" is modified by the MOV instructions! )
   there {a} swap $C $C + 2* 0 2* + + MOV
   there {b} swap $C $0 + 2* 1 2* + + MOV
@@ -3118,6 +3118,35 @@ opt.multi [if]
 :m pause ;m ( -- [disabled] )
 [then]
 
+
+\ TODO: Remove from image / turn into macro / optimize
+\ Needed for self interpreter...
+opt.test-code [if]
+$FF tvar #lsb
+0   tvar r5
+2   tvar two
+
+:a lsb
+  bwidth r0 MOV
+  r5 ZERO
+  #lsb r2 MOV
+  begin r0 while
+   r5 r5 ADD
+   tos r1 MOV r3 ZERO
+   r1 -if r3 NG1! then r1 INC r1 -if r3 NG1! then
+   r2 r1 MOV r4 ZERO
+   r1 -if r4 NG1! then r1 INC r1 -if r4 NG1! then
+   r3 r4 ADD two r4 ADD r3 ONE!
+   r4 if r3 ZERO then r3 r5 ADD
+   r2 r2 ADD
+   tos tos ADD
+   r0 DEC
+  repeat
+  r5 tos MOV ;a
+
+
+[then]
+
 \ The following assembly routine is one way adding support for
 \ assembly routines callable from within the Forth interpreter
 \ and without relying on hacks. This is the absolute bare
@@ -3457,6 +3486,9 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
 
+\ TODO: Remove this test code
+opt.test-code [if] :to lsb lsb ; [then]
+
 \ If "opAsm" is defined, so should this:
 \
 \        :so asm opAsm ;s
@@ -3729,7 +3761,7 @@ system[
 \ makes everything else more difficult to debug.
 \
 
-: invert #0 swap - 1- ;           ( u -- u : bitwise invert )
+: invert #-1 swap - ;             ( u -- u : bitwise invert )
 : xor >r dup invert swap r> mux ; ( u u -- u : bitwise xor )
 : or over mux ;                   ( u u -- u : bitwise or )
 : and #0 swap mux ;               ( u u -- u : bitwise and )
@@ -4244,16 +4276,15 @@ system[
 : 0<> 0= 0= ;  ( n -- f : not equal to zero )
 : 0<= 0> 0= ;  ( n -- f : less than or equal to zero )
 
-opt.iffy-compare [if]
 \ Enabling this faster and smaller, but broken, compare, breaks
 \ many things, especially the unsigned comparison operators
 \ which build upon these operators. You can swap these out,
 \ recompile, and watch what breaks. The incorrect operators
 \ work, but not for the entire range of values.
 \
-: > - 0> ;   ( n1 n2 -- f : signed greater than )
-: < swap > ; ( n1 n2 -- f : less than, is n1 less than n2 )
-[else]
+\        : > - 0> ;   ( n1 n2 -- f : signed greater than )
+\        : < swap > ; ( n1 n2 -- f : signed less than )
+\
 \ This, slower, larger, version of the comparison function
 \ works as should for all values.
 \
@@ -4272,7 +4303,6 @@ opt.iffy-compare [if]
    then
    2drop #0 ;
 : > swap < ;   ( n1 n2 -- f : signed greater than )
-[then]
 
 : 0< #0 < ;   ( n -- f : less than zero )
 : 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
@@ -4914,14 +4944,19 @@ system[ user tup =cell tallot ]system
 \ character, replacing non-graphic characters with ".", for
 \ example.
 \
+\ To make it easy to replace "emit" with a version that does
+\ filtering, ".emit" is defined as well, which replaces
+\ non-graphic character with "." as mentioned.
+\
 \ As with the numeric output words, it may be useful to call
 \ "single" and "multi" at the start and end of this procedure,
 \ to help prevent garbled output in a multithreading
 \ environment.
 \
 
-: type ( a u -- : print out a string )
-  begin dup while swap count emit swap 1- repeat 2drop ;
+:s .emit ( c -- : print char, replacing non-graphic ones )
+  dup bl [ $7F ] literal within [char] . swap mux emit ;s
+: type 1- for count emit next drop ;
 
 \ "fill" is used to fill a section of memory with a repeated
 \ byte, hence the name. More frequently "erase" is used, which
@@ -8049,16 +8084,10 @@ opt.better-see [if] ( Start conditional compilation )
 \ is being evaluated also), when reading from a terminal
 \ "source-id" is set to zero.
 \
-\ Replacing "emit" with ".emit" in "list":
-\
-\         : within over - >r - r> u< ; ( u lo hi -- f )
-\         : .emit ( c -- )
-\           dup bl [ $7F ] literal within
-\           0= if drop [char] . then
-\           emit ;
-\
-\ Renders "list" a little more forgiving when printing
-\ binary data, which has been implemented.
+\ Replacing "emit" with ".emit" in "list", defined and
+\ described next to the definition of "type", renders "list" a
+\ little more forgiving when printing binary data, which has 
+\ been implemented.
 \
 \ It might be worth having a compile time switch for more
 \ or less complicated versions of "block", the simplest 
@@ -8178,8 +8207,6 @@ t' (block) t' <block> >tbody t!
   loaded? if drop buf0 exit then ( already loaded )
   dup buffer swap bget ; ( k -- a )
 
-:s .emit dup bl [ $7F ] literal within 
-   0= if drop [char] . then emit ;s
 : blank bl fill ; ( a u -- : blank an area of memory )
 : list ( k -- : display a block )
    page cr         ( clean the screen )
@@ -8306,7 +8333,7 @@ t' (block) t' <block> >tbody t!
 \ had the space) to break down the information provided into
 \ a word for "author", and "version", such as this:
 \
-\        :s project $" eForth v1.8" ;s
+\        :s project $" eForth v?.?" ;s
 \        :s author $" Richard James Howe" ;s
 \        :s email $" howe.r.j.89@gmail.com" ;s
 \        :s repo $" https://github.com/howerj/subleq" ;s
@@ -8321,12 +8348,12 @@ t' (block) t' <block> >tbody t!
 \ not the book!
 \
 root[
-  $0109 constant eforth ( --, version )
+  $FFFF constant eforth ( --, version )
 ]root
 
 opt.info [if]
   :s info cr ( --, print system info )
-    ." eForth v1.9, Public Domain,"  here . cr
+    ." eForth vX.X, Public Domain,"  here . cr
     ." Richard James Howe, howe.r.j.89@gmail.com" cr
     ." https://github.com/howerj/subleq" cr ;s
 [else]
@@ -8641,6 +8668,7 @@ opt.info [if]
 \ An example program, that uses the tasks (make sure the system
 \ vocabulary is loaded prior to executing this):
 \
+\         system +order
 \         task: rx
 \         task: tx1
 \         task: tx2
@@ -12005,57 +12033,57 @@ it being run.
 \
 :a opOr
   bwidth r0 MOV
-  x ZERO
+  r5 ZERO
   r2 {sp} iLOAD
   --sp
   begin r0 while
-    x x ADD
+    r5 r5 ADD
     tos r1 MOV r3 ZERO
     r1 -if r3 NG1! then r1 INC r1 -if r3 NG1! then
     r2   r1 MOV r4 ZERO
     r1 -if r4 NG1! then r1 INC r1 -if r4 NG1! then
-    r3 r4 ADD r4 if x INC then
+    r3 r4 ADD r4 if r5 INC then
     r2 r2 ADD
     tos tos ADD
     r0 DEC
   repeat
-  x tos MOV ;a
-:a opXor
+  r5 tos MOV ;a
+:a opr5or
   bwidth r0 MOV
-  x ZERO
+  r5 ZERO
   r2 {sp} iLOAD
   --sp
   begin r0 while
-    x x ADD
+    r5 r5 ADD
     tos r1 MOV r3 ZERO r1
     -if r3 NG1! then r1 INC r1 -if r3 NG1! then
     r2   r1 MOV r4 ZERO r1
     -if r4 NG1! then r1 INC r1 -if r4 NG1! then
     r3 r4 ADD r4 INC r3 ONE!
-    r4 if r3 ZERO then r3 x ADD
+    r4 if r3 ZERO then r3 r5 ADD
     r2 r2 ADD
     tos tos ADD
     r0 DEC
   repeat
-  x tos MOV ;a
+  r5 tos MOV ;a
 :a opAnd
   bwidth r0 MOV
-  x ZERO
+  r5 ZERO
   r2 {sp} iLOAD
   --sp
   begin r0 while
-   x x ADD
+   r5 r5 ADD
    tos r1 MOV r3 ZERO r1
    -if r3 NG1! then r1 INC r1 -if r3 NG1! then
    r2   r1 MOV r4 ZERO r1
    -if r4 NG1! then r1 INC r1 -if r4 NG1! then
    r3 r4 ADD two r4 ADD r3 ONE!
-   r4 if r3 ZERO then r3 x ADD
+   r4 if r3 ZERO then r3 r5 ADD
    r2 r2 ADD
    tos tos ADD
    r0 DEC
   repeat
-  x tos MOV ;a
+  r5 tos MOV ;a
 
 \ ## Extra Code
 \
