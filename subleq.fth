@@ -2170,6 +2170,8 @@ assembler.1 +order
 \ put a copy at the end of this document.
 \ * Make this a 16-bit version
 \ * Describe this section and tidy it up.
+\ * Move this code out of the way, to allow size detection 
+\ to work on 8-bit machine
 \ * Correct negative numbers, which need to be turned into
 \ positive ones using "$FFFF - m[i] + 1".
 \
@@ -2217,9 +2219,46 @@ opt.self [if]
 -1 tvar {-1}
 $58 tvar {x}
 $7FFF tvar {high}
+$FFFF tvar {mask}
+16 tvar {width}
 
 0 tvar {zreg} {zreg} 2/ tzreg !
 0 tvar {areg} {areg} 2/ tareg !
+
+\ ===== AND ==================================================
+
+
+0 tvar xcount
+0 tvar xt
+0 tvar xmask
+0 tvar xout
+
+:m LSBM ( width variable mask -- : mask off source )
+  swap >r swap
+  ( width ) xcount MOV
+  xout ZERO
+  ( mask ) xmask MOV
+  begin xcount while
+   xout xout ADD
+   r@ xt MOV
+   xt +if 
+   else 
+     xt INC
+     xt +if 
+     else 
+       xmask xt MOV
+       xt -if xout INC else xt INC xt -if xout INC then then 
+     then 
+   then
+   xmask xmask ADD
+   r@ r@ ADD
+   xcount DEC
+  repeat
+  xout r> MOV ;m
+
+
+\ ===== AND ==================================================
+
 
 label: self
   {virtual} ONE!
@@ -2309,6 +2348,7 @@ label: chk16
   r0 +if chk16 JMP then            \ check if still positive
 opt.self [if] \ if width > 16, jump to 16-bit emulator
   r1 r2 MOV
+  r1 {width} MOV \ Save actual machine width
   bwidth r2 SUB r2 +if self JMP then
 [then]
   bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be 0
@@ -2806,8 +2846,8 @@ assembler.1 -order
   label: shift.loop
     r1 r1 ADD \ double r1, equivalent to left shift by one
     \ work out what bit to shift into r1
-    tos -if r1 INC else
-      tos r2 MOV r2 INC r2 -if r1 INC then then
+    tos +if else
+      tos r2 MOV r2 INC r2 +if else r1 INC then then
     tos tos ADD \ double tos, equivalent to left shift by one
     r0 DEC \ decrement loop counter
   r0 +if shift.loop JMP then 
@@ -2907,6 +2947,9 @@ assembler.1 -order
 \ arithmetic).
 \
 
+\ TODO: A single level call-return mechanism could be used
+\ to save space, using indirect jumps, perhaps. This could be
+\ useful for iLOAD/iSTORE. It would require a link register
 :a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
   \ tos contains multiplexor value
   bwidth r0 MOV \ load loop counter initial value [16]
@@ -2919,19 +2962,14 @@ assembler.1 -order
 
     \ determine topmost bit of 'tos', place result in 'r2'
     \ this is used to select whether to use r3 or r4
-    \ The following code *almost* works:
-    \ 
-    \    tos r2 MOV r2 INC r2 -if r4 r2 MOV else r3 r2 MOV then
-    \ 
-    \ But is not quite right.
-    tos -if label: opMuxR4 r4 r2 MOV else
+    tos +if label: opMux.r3 r3 r2 MOV else
       tos r2 MOV
-      r2 INC r2 -if
-        opMuxR4 JMP ( space saving ) else
-        r3 r2 MOV then then
+      r2 INC r2 +if
+        opMux.r3 JMP ( space saving ) else
+        r4 r2 MOV then then
 
     \ determine whether we should add 0/1 into result
-    r2 -if r1 INC else r2 INC r2 -if r1 INC then then
+    r2 +if else r2 INC r2 +if else r1 INC then then
 
     tos tos ADD \ shift tos
     r3 r3 ADD \ shift r3
@@ -3119,32 +3157,10 @@ opt.multi [if]
 [then]
 
 
-\ TODO: Remove from image / turn into macro / optimize
-\ Needed for self interpreter...
+\ TODO: Changeable bwidth, Needed for self interpreter...
 opt.test-code [if]
 $FF tvar #lsb
-0   tvar r5
-2   tvar two
-
-:a lsb
-  bwidth r0 MOV
-  r5 ZERO
-  #lsb r2 MOV
-  begin r0 while
-   r5 r5 ADD
-   tos r1 MOV r3 ZERO
-   r1 -if r3 NG1! then r1 INC r1 -if r3 NG1! then
-   r2 r1 MOV r4 ZERO
-   r1 -if r4 NG1! then r1 INC r1 -if r4 NG1! then
-   r3 r4 ADD two r4 ADD r3 ONE!
-   r4 if r3 ZERO then r3 r5 ADD
-   r2 r2 ADD
-   tos tos ADD
-   r0 DEC
-  repeat
-  r5 tos MOV ;a
-
-
+:a lsb bwidth tos #lsb LSBM ;a ( x -- x )
 [then]
 
 \ The following assembly routine is one way adding support for

@@ -2,7 +2,7 @@ CFLAGS=-Wall -Wextra -std=c11 -pedantic -O3 -g
 IMAGE=../../subleq.dec
 SELF=../self/self.dec
 
-.PHONY: all try run clobber clean
+.PHONY: all try run clobber clean width
 
 all: 1
 
@@ -35,6 +35,6 @@ width: ${IMAGE} ${NBIT}
 # via the command line, large programs may cause problems
 CSPG=$(shell cat ${IMAGE} | tr '\n\t ' ',')
 
-3: 3.c
+2: 2.c
 	${CC} ${CFLAGS} -Du="${CSPG}" $< -o $@
 
