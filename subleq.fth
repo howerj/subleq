@@ -2165,6 +2165,9 @@ assembler.1 +order
 \ TODO: {option}'al 16-bit self interpreter that runs when
 \ the machine width is greater than 16-bits.
 \ * Debug options (tracing, debug variables, ...)
+\   - Print out when branching, or not
+\   - Prompt on getch/putch?
+\   - Print address in hex
 \ * Mention Homomorphic Encryption SUBLEQ somewhere?
 \ * Mention assembly version of self interpreter and
 \ put a copy at the end of this document.
@@ -2172,8 +2175,13 @@ assembler.1 +order
 \ * Describe this section and tidy it up.
 \ * Move this code out of the way, to allow size detection 
 \ to work on 8-bit machine
+\ * SUBLEQ interpreter in Forth, put in appendix
 \ * Correct negative numbers, which need to be turned into
 \ positive ones using "$FFFF - m[i] + 1".
+\ * Make this accessible for running programs within the
+\ SUBLEQ VM, make a SUBLEQ instruction for executing SUBLEQ
+\ programs in Forth (separate from this)
+\ * Boot back into this system via options in "{options}"
 \
 \ Original, machine width version:
 \
@@ -2215,7 +2223,7 @@ opt.self [if]
  0 tvar {b}     ( Emulated 'b' operand )
  0 tvar {c}     ( Emulated 'c' operand )
  0 tvar {pc}    ( Emulated SUBLEQ Machine program counter )
- 0 tvar {v0}
+ 0 tvar {v}
 -1 tvar {-1}
 $58 tvar {x}
 $7FFF tvar {high}
@@ -2226,7 +2234,6 @@ $FFFF tvar {mask}
 0 tvar {areg} {areg} 2/ tareg !
 
 \ ===== AND ==================================================
-
 
 0 tvar xcount
 0 tvar xt
@@ -2259,10 +2266,8 @@ $FFFF tvar {mask}
 
 \ ===== AND ==================================================
 
-
 label: self
   {virtual} ONE!
-  \ TODO: Correct image values
   \ for (i = pc; pc < 65534; i++)
   \   m[i] &= 0xFFFF;
 label: self-loop
@@ -2272,37 +2277,34 @@ label: self-loop
   {b} {pc} iLOAD {pc} INC
   {c} {pc} iLOAD {pc} INC
 
-	\ TODO: Implement this
-	\ {x} = iLOAD {b} \ Not on PUT though...
-	\ if {a} != -1 && {b} != -1: \ Replace with > 32767?
-	\   if ({x} > 32768 || {x} == 0):
-	\     {c} = {x} 
-	\   else:
-	\     {c} INC 
-	\ {x} &= 65535
-	\ iSTORE {x} -> {b} 
- 
-	\    {a} {v0} MOV
-	\    {high} {v0} SUB {v0} +if 
-	\    else 
-	\      {b} {v0} SUB {v0} +if
-	\      else
-	\        {a} {a} iLOAD
-	\        {v0} {b} iLOAD
-	\        {v0} {a} SUB
-	\        \ TODO: {v0} &= 0xFFFF
-	\        {v0} {b} iSTORE
-	\        \ TODO: Jump if leq0
-	\      then
-	\    then
-	  
-  ( N.B. "+if" is modified by the MOV instructions! )
-  there {a} swap $C $C + 2* 0 2* + + MOV
-  there {b} swap $C $0 + 2* 1 2* + + MOV
-  0 +if 
- \   {pc} INC
+  \ TODO: Range check and then apply AND or not (speed up)
+\  {width} {a} {mask} LSBM
+\  {width} {b} {mask} LSBM
+
+  \ TODO: Mask with 0x8000 and use that for negative check
+  {a} {v} MOV {v} INC
+  {v} +if \ TODO: Change to == $FFFF
+    {b} {v} MOV {v} INC
+    {v} +if
+      {a} {a} iLOAD
+      {v} {b} iLOAD
+      {a} {v} SUB
+      {v} +if
+       ( {pc} INC \ already done )
+      else
+        {c} {pc} MOV
+      then
+      {width} {v} {mask} LSBM
+      {v} {b} iSTORE
+    else
+      {a} {a} iLOAD
+      {a} PUT
+\     {x} PUT
+    then
   else
-    {c} {pc} MOV
+    {v} GET
+    {width} {v} {mask} LSBM
+    {v} {b} ISTORE
   then
   self-loop JMP
 
@@ -2351,9 +2353,12 @@ opt.self [if] \ if width > 16, jump to 16-bit emulator
   r1 {width} MOV \ Save actual machine width
   bwidth r2 SUB r2 +if self JMP then
 [then]
-  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be 0
+  bwidth r1 SUB r1 if \ r1 - bwidth should be 0
+\    opt.self [if] self JMP [else] die JMP [then]
+    die JMP
+  then 
 opt.self [if] 
- ( self JMP )
+  self JMP
   there 2/ {pc} t!  
 [then]
 
@@ -2491,6 +2496,18 @@ assembler.1 -order
 \ There is nothing much to say about them, but see if you can
 \ understand how they work. The stack effect comments describe
 \ them in their entirety.
+\
+\ The assembly instruction macro "iLOAD" and "iSTORE" (along
+\ with a stack adjustment) are used quite a bit here, as these
+\ VM instructions are primarily used to manipulate the variable
+\ and return stacks. It may be possible to save some space at
+\ the expense of extra complexity and execution time by
+\ implementing a primitive call/return mechanism using "iJMP"
+\ and a link register. Common runs of code like 
+\ "++sp tos {sp} iSTORE" could be jumped to directly, prior
+\ to that jump the place to return to would be set in a
+\ link register. This would allow code reuse without a full
+\ blown call-stack.
 \
 :a opSwap tos r0 MOV tos {sp} iLOAD r0 {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
@@ -2946,10 +2963,6 @@ assembler.1 -order
 \ and it will fail on machines with arbitrary precision
 \ arithmetic).
 \
-
-\ TODO: A single level call-return mechanism could be used
-\ to save space, using indirect jumps, perhaps. This could be
-\ useful for iLOAD/iSTORE. It would require a link register
 :a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
   \ tos contains multiplexor value
   bwidth r0 MOV \ load loop counter initial value [16]
@@ -3156,8 +3169,7 @@ opt.multi [if]
 :m pause ;m ( -- [disabled] )
 [then]
 
-
-\ TODO: Changeable bwidth, Needed for self interpreter...
+\ TODO: Remove this test code
 opt.test-code [if]
 $FF tvar #lsb
 :a lsb bwidth tos #lsb LSBM ;a ( x -- x )
@@ -3485,7 +3497,11 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 \ go into the system vocabulary, but should also not be
 \ referenced later on either.
 \
-\ TODO: Describe merging this into SUBLEQ VM instructions
+\ One possible optimization would be to place the headers for
+\ these words next to the assembly definitions of these words
+\ instead of having a layer of indirection here, this could
+\ potentially save on space, but would require a different
+\ threading model to be employed by our out VM.
 \
 
 :to + + ; ( n n -- n : addition )
@@ -3502,8 +3518,7 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
 
-\ TODO: Remove this test code
-opt.test-code [if] :to lsb lsb ; [then]
+opt.test-code [if] :to lsb lsb ; [then] \ TODO: Remove this
 
 \ If "opAsm" is defined, so should this:
 \
