@@ -2184,6 +2184,7 @@ assembler.1 +order
 \ SUBLEQ VM, make a SUBLEQ instruction for executing SUBLEQ
 \ programs in Forth (separate from this)
 \ * Boot back into this system via options in "{options}"
+\ * Print out message warning user of very slow system
 \
 \ Original, machine width version:
 \
