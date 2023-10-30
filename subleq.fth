@@ -2162,6 +2162,8 @@ label: die
    HALT (a); ( ...like tears in rain. Time to die. )
 assembler.1 +order
 
+\ This works now!
+\
 \ TODO: {option}'al 16-bit self interpreter that runs when
 \ the machine width is greater than 16-bits.
 \ * Debug options (tracing, debug variables, ...)
@@ -2227,11 +2229,12 @@ opt.self [if]
  0 tvar {t}
 -1 tvar {-1}
 $58 tvar {x}
+$10 tvar {16}
 $4000 tvar {4000}
 $8000 tvar {high}
 $7FFF tvar {rest}
 $FFFF tvar {mask}
-16 tvar {width}
+$10 tvar {width}
 
 0 tvar {zreg} {zreg} 2/ tzreg !
 0 tvar {areg} {areg} 2/ tareg !
@@ -2270,6 +2273,7 @@ $FFFF tvar {mask}
   swap >r >r xcount MOV r> xcount SUB
   begin xcount while r@ r> ADD xcount DEC repeat ;
 
+:m topbit >r {width} r> {16} SHIFTB ;
 
 \ ===== AND ==================================================
 
@@ -2300,13 +2304,14 @@ label: self-loop
   \ {x} PUT
   \ TODO: Mask with 0x8000 and use that for negative check
 
-  {a} {v} MOV {v} INC {v} +if \ TODO: Change to == $FFFF
-    {b} {v} MOV {v} INC {v} +if
+  {a} {v} MOV {v} topbit {v} INC {v} +if \ TODO: Change to == $FFFF
+    {b} {v} MOV {v} topbit {v} INC {v} +if
       {a} {a} iLOAD
       {v} {b} iLOAD
       {a} {v} SUB
       {width} {v} {mask} LSBM
-      {v} +if \ TODO: Change to {v} == 0 || {v} & 0x8000
+      {v} {t} MOV {t} topbit
+      {t} +if \ TODO: Change to {v} == 0 || {v} & 0x8000
        ( {pc} INC \ already done )
       else
         {c} {pc} MOV
