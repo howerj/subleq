@@ -2224,9 +2224,12 @@ opt.self [if]
  0 tvar {c}     ( Emulated 'c' operand )
  0 tvar {pc}    ( Emulated SUBLEQ Machine program counter )
  0 tvar {v}
+ 0 tvar {t}
 -1 tvar {-1}
 $58 tvar {x}
-$7FFF tvar {high}
+$4000 tvar {4000}
+$8000 tvar {high}
+$7FFF tvar {rest}
 $FFFF tvar {mask}
 16 tvar {width}
 
@@ -2254,7 +2257,7 @@ $FFFF tvar {mask}
      xt +if 
      else 
        xmask xt MOV
-       xt -if xout INC else xt INC xt -if xout INC then then 
+       xt +if else xt INC xt +if else xout INC then then 
      then 
    then
    xmask xmask ADD
@@ -2263,13 +2266,25 @@ $FFFF tvar {mask}
   repeat
   xout r> MOV ;m
 
+:m SHIFTB ( width variable bit -- variable : shift bit )
+  swap >r >r xcount MOV r> xcount SUB
+  begin xcount while r@ r> ADD xcount DEC repeat ;
+
 
 \ ===== AND ==================================================
 
 label: self
-  {virtual} ONE!
+  {virtual} ONE! \ Tell rest of system we are virtual
+
+  \ Synthesize constants, avoiding negative numbers
+  {4000} {high} MOV {high} {high} ADD
+  {mask} ZERO {high} {mask} ADD {rest} {mask} ADD  
+
   \ for (i = pc; pc < 65534; i++)
   \   m[i] &= 0xFFFF;
+  \ NOTE: Might need to synthesize 0xFFFF, as it is stored
+  \ as "-1" in the decimal file, which will be different
+  \ depending on the machine width.
 label: self-loop
   {pc} {c} MOV
   {-1} 2/ t, {c} 2/ t, -1 t, \ Conditionally halt on '{c}'
@@ -2278,23 +2293,24 @@ label: self-loop
   {c} {pc} iLOAD {pc} INC
 
   \ TODO: Range check and then apply AND or not (speed up)
-\  {width} {a} {mask} LSBM
-\  {width} {b} {mask} LSBM
+\ {width} {a} {mask} LSBM
+\ {width} {b} {mask} LSBM
+\ {width} {c} {mask} LSBM
 
+  \ {x} PUT
   \ TODO: Mask with 0x8000 and use that for negative check
-  {a} {v} MOV {v} INC
-  {v} +if \ TODO: Change to == $FFFF
-    {b} {v} MOV {v} INC
-    {v} +if
+
+  {a} {v} MOV {v} INC {v} +if \ TODO: Change to == $FFFF
+    {b} {v} MOV {v} INC {v} +if
       {a} {a} iLOAD
       {v} {b} iLOAD
       {a} {v} SUB
-      {v} +if
+      {width} {v} {mask} LSBM
+      {v} +if \ TODO: Change to {v} == 0 || {v} & 0x8000
        ( {pc} INC \ already done )
       else
         {c} {pc} MOV
       then
-      {width} {v} {mask} LSBM
       {v} {b} iSTORE
     else
       {a} {a} iLOAD
@@ -2358,7 +2374,7 @@ opt.self [if] \ if width > 16, jump to 16-bit emulator
     die JMP
   then 
 opt.self [if] 
-  self JMP
+\  self JMP
   there 2/ {pc} t!  
 [then]
 
@@ -3172,7 +3188,9 @@ opt.multi [if]
 \ TODO: Remove this test code
 opt.test-code [if]
 $FF tvar #lsb
+$8  tvar #bcpy
 :a lsb bwidth tos #lsb LSBM ;a ( x -- x )
+:a bs bwidth tos #bcpy SHIFTB ;a ( x -- x )
 [then]
 
 \ The following assembly routine is one way adding support for
@@ -3518,7 +3536,10 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
 
-opt.test-code [if] :to lsb lsb ; [then] \ TODO: Remove this
+opt.test-code [if] \ TODO: Remove this
+:to lsb lsb ;
+:to bs bs ;
+[then] 
 
 \ If "opAsm" is defined, so should this:
 \
