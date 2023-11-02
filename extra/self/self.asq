@@ -1,54 +1,58 @@
-# SUBLEQ Self Interpreter
+# SUBLEQ Self Interpreter: Assembly version
 #
-# This is a "Self Interpreter" for SUBLEQ, that is, it is
-# an interpreter that executes a SUBLEQ program written
-# for a SUBLEQ machine. It expects the SUBLEQ program to be
-# appended to the end of this program, as such it has to patch
-# up the program and subtract the length of this program from
-# each of the cells before execution, excepting the special
-# addresses for when one of the operands is negative one.
+# This is a "Self Interpreter" for SUBLEQ, that is, 
+# it is an interpreter that executes a SUBLEQ program 
+# written for a SUBLEQ machine. It expects the SUBLEQ 
+# program to be appended to the end of this program, 
+# as such it has to patch up the program and subtract 
+# the length of this program from each of the cells 
+# before execution, excepting the special addresses 
+# for when one of the operands is negative one.
 #
 # A single SUBLEQ instruction is written as:
 #
 # 	SUBLEQ a, b, c
 #
-# Which is as there is only one instruction possible, SUBLEQ,
-# is often just written as:
+# Which is as there is only one instruction possible, 
+# SUBLEQ, is often just written as:
 #
 # 	a b c
 #
-# These three operands are stored in three continuous memory
-# locations. Each operand is an address, They perform the 
-# following pseudo-code:
+# These three operands are stored in three continuous 
+# memory locations. Each operand is an address, They 
+# perform the following pseudo-code:
 #
 # 	[b] = [b] - [a]
 # 	if [b] <= 0:
 # 		goto c;
 # 	
-# There are three special cases, if 'c' is negative then
-# execution halts (or sometimes if it is refers to somewhere
-# outside of addressable memory). The other two are for Input
-# and Output. If 'a' is -1 then a byte is loaded from input
-# into address 'b', if 'b' is negative then a byte is output
-# from address 'a'.
+# There are three special cases, if 'c' is negative 
+# then execution halts (or sometimes if it is refers 
+# to somewhere outside of addressable memory). The 
+# other two are for Input and Output. If 'a' is -1 
+# then a byte is loaded from input into address 'b', 
+# if 'b' is negative then a byte is output from 
+# address 'a'.
 #
-# Note that apart from I/O nothing is said about how numbers
-# are represented, what bit length they are (or if each cell is 
-# an arbitrary precision number) and how negative numbers
-# implemented (twos' compliment, sign magnitude, etcetera).
-# Usually two's complement is used, but 8, 16, 32 and 64-bit
-# versions of SUBLEQ are all common, with 32-bit versions being
-# the most so.
+# Note that apart from I/O nothing is said about how 
+# numbers are represented, what bit length they are 
+# (or if each cell is an arbitrary precision number) 
+# and how negative numbers implemented (twos' 
+# compliment, sign magnitude, etcetera).
 #
-# Despite the simplicity of the instruction set it is possible
-# to compute anything computable with it (given infinite memory 
-# and time).
+# Usually two's complement is used, but 8, 16, 32 and 
+# 64-bit versions of SUBLEQ are all common, with 
+# 32-bit versions being the most so.
 #
-# To implement anything non-trivial self-modifying code is
-# very common. This program is no exception.
+# Despite the simplicity of the instruction set it is 
+# possible to compute anything computable with it 
+# (given infinite memory and time).
 #
-# The self interpreter is actually quite simple to implement
-# for this language.
+# To implement anything non-trivial self-modifying 
+# code is very common. This program is no exception.
+#
+# The self interpreter is actually quite simple to 
+# implement for this language.
 #
 # The original SUBLEQ self interpreter was from:
 #
@@ -57,77 +61,65 @@
 #
 # However it does not deal with I/O.
 #
-# An improved version deals with output, but not input is
-# available from:
+# An improved version deals with output, but not 
+# input is available from:
 #
 # <http://mazonka.com/subleq/>
 #
-# Which is a dead link as of 03/01/2023, an archived version
-# is available at:
+# Which is a dead link as of 03/01/2023, an archived 
+# version is available at:
 #
 # <https://archive.ph/8EYZv> 
 # 
-# This version deals with input and output and has fewer
-# superfluous instructions. There are a number of improvements
-# that could be made, which include:
-#
-# * Using something like this as the basis for a SUBLEQ
-# debugger. You could use this to contain and debug SUBLEQ
-# programs within the Forth interpreter.
-# * A version that could simulate smaller bit-width devices,
-# which would be especially useful for simulating 16-bit
-# devices on a 32-bit platform (allowing the Forth interpreter
-# that requires a 16-bit SUBLEQ Machine to run).
-#
-# TODO:
-# 	- Comment everything.
-# 	- Make an inline version, which would not subtract 
-# 	the length of the program from the operands.
-#	- Make a 16-bit only version, this requires a signed
-#	modulo operation.
-#       - If the inline version is used within the main Forth
-#       image, it could be made into an instruction for the VM
-#       as well, allowing (relatively) fast emulation from 
-#       within the Forth environment.
+# This version deals with input and output and has 
+# fewer superfluous instructions. There are a number 
+# of improvements that could be made, which include:
 #
 ## Notes on the SUBLEQ assembler:
 #
 # * Statements are terminated by ';' or new lines.
 # * Each statement is a single SUBLEQ instruction.
 # * Labels are denoted with ':' and are used for both
-# data and jump locations, the initial value is an expression
-# to the right of the colon which will be placed at the memory
-# location of the labels.
-# * Operands can be omitted, in which case default values
-# will be used. 
-# * If the last operand, the jump location is omitted, it
-# will be replaced with the location of the next instruction.
-# * If both of the last two operands are omitted then the
-# last will be replaced with the location of the next
-# instruction and the second operand will be replaced with a 
-# copy of the first operand, effectively zeroing the contents 
-# at the location of the first operand.
-# * '?' represents the address of the next cell, not the 
-# next instruction.
+# data and jump locations, the initial value is an 
+# expression to the right of the colon which will be 
+# placed at the memory location of the labels.
+# * Operands can be omitted, in which case default 
+# values will be used. 
+# * If the last operand, the jump location is 
+# omitted, it will be replaced with the location of 
+# the next instruction.
+# * If both of the last two operands are omitted then 
+# the last will be replaced with the location of the 
+# next instruction and the second operand will be 
+# replaced with a copy of the first operand, 
+# effectively zeroing the contents at the location of 
+# the first operand.
+# * '?' represents the address of the next cell, not 
+# the next instruction.
 #
 ## Special Registers
 #
-# * 'Z', A register that should start and end up as zero,
-# it is known as the Zero Register. 
-# * 'pc', the program counter for the simulated device.
-# * 'IOV', contains the value for the special I/O address
-# values. This stands for I/O Value.
-# * 'neg1', contains negative one. Used for incrementing
-# usually be subtracting negative one against a value. The
-# same value is used for 'IOV'.
-# * 'len', contains the length of this program image, as
-# such the variable must be the last one defined in the file.
+# * 'Z', A register that should start and end up as 
+# zero, it is known as the Zero Register. 
+# * 'pc', the program counter for the simulated 
+# device.
+# * 'IOV', contains the value for the special I/O 
+# address values. This stands for I/O Value.
+# * 'neg1', contains negative one. Used for 
+# incrementing # usually be subtracting negative one 
+# against a value. The same value is used for 'IOV'.
+# * 'len', contains the length of this program image, 
+# as # such the variable must be the last one defined 
+# in the file.
 # * 'a', Operand 'a' of SUBLEQ instruction
 # * 'b', Operand 'b' of SUBLEQ instruction
 # * 'c', Operand 'c' of SUBLEQ instruction
-# * 'a1', used to load 'a' before indirection and as temp reg
-# * 'b1', used to load 'b' before indirection and as temp reg
-# * 'c1', used to load 'c' before indirection and as temp reg
+# * 'a1', used to load 'a' before indirection and as 
+# temp reg
+# * 'b1', used to load 'b' before indirection and as 
+# temp reg
+# * 'c1', used to load 'c' before indirection and as 
+# temp reg
 #
 # On to the program itself:
 #
@@ -145,9 +137,9 @@ a; a1:0 Z a2; a2:Z a; Z;
 # if [a] != -1:
 #    [a] = [a] + [len]
 #
-a1; a Z; Z a1; Z;   # [a1] = [a]
-IOV a1 ?+3;         # If [a1] is negative, jump over next line
-len a;              # [a] = [a] + [len] 
+a1; a Z; Z a1; Z; # [a1] = [a]
+IOV a1 ?+3; # If [a1] is negative jump over next line
+len a; # [a] = [a] + [len] 
 
 neg1 pc; # [pc] = [pc] + 1
 b1; pc Z; Z b1; Z;
@@ -162,10 +154,11 @@ b1; b Z; Z b1; Z;
 IOV b1 ?+3;
 len b;
 
-# We need to copy 'pc' into 'c' and not use it directly later
-# on as the SUBLEQ instruction might modify 'c', if it does
-# the *old* value of 'pc' must be used (it would be more useful
-# if the new value was used, however that is not the case).
+# We need to copy 'pc' into 'c' and not use it 
+# directly later on as the SUBLEQ instruction might 
+# modify 'c', if it does the *old* value of 'pc' must 
+# be used (it would be more useful if the new value 
+# was used, however that is not the case).
 #
 neg1 pc;                 # [pc] = [pc] + 1
 c1; pc Z; Z c1; Z;       # [c1] = [pc]
@@ -173,13 +166,15 @@ c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
 
 # Execute the SUBLEQ instruction.
 #
-# Note that 'a' and 'b' have been modified from above.
+# Note that 'a' and 'b' have been modified from 
+# above.
 #
-# The result stored in 'b' will need to subject to a signed
-# modulo operation in order to emulate a 16-bit machine on
-# machine widths larger than the current one, as this is an
-# expensive operation this should be skipped by detecting the
-# machine width and jumping over the modulo on 16-bit machines,
+# The result stored in 'b' will need to subject to a 
+# signed modulo operation in order to emulate a 
+# 16-bit machine on machine widths larger than the 
+# current one, as this is an expensive operation this 
+# should be skipped by detecting the machine width 
+# and jumping over the modulo on 16-bit machines,
 # when this is implemented...
 #
 
@@ -188,9 +183,9 @@ a:0 b:0 leqz;   # Emulate subtraction / instruction
   Z Z start;    # Jump back to beginning
 leqz: 
   pc; c Z; Z pc; Z; # [pc] = [c]
-  neg1 c -1;      # Check if [c] is negative, halt if it is.
-  len pc;         # [pc] = [pc] + [len]
-  Z Z start;      # Jump back to the beginning
+  neg1 c -1; # Check if [c] is negative, halt if so.
+  len pc; # [pc] = [pc] + [len]
+  Z Z start; # Jump back to the beginning
 
 # Declare and set some registers, 'len' must be last.
 . Z:0 pc:len+1 c:0 IOV: neg1:-1 len:-? 

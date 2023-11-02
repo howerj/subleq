@@ -59,16 +59,17 @@ eforth.fth: subleq.fth
 	sed -e 's/^\\.*//' -e '/^$$/d' < $< > $@
 
 NBIT=extra/nbit
+MSG=".( Ahoy, World! ) cr bye "
 width: ${IMAGE} ${NBIT}
-	./${NBIT}  8 $<
-	./${NBIT}  9 $<
-	./${NBIT} 15 $<
-	./${NBIT} 17 $<
-	./${NBIT} 18 $<
-	./${NBIT} 32 $<
-	./${NBIT} 63 $<
-	./${NBIT} 64 $<
-	echo ".( Ahoy, World! ) cr bye " | ./${NBIT} 16 $<
+	echo ${MSG} | ./${NBIT}  8 $<
+	echo ${MSG} | ./${NBIT}  9 $<
+	echo ${MSG} | ./${NBIT} 15 $<
+	echo ${MSG} | ./${NBIT} 17 $<
+	echo ${MSG} | ./${NBIT} 18 $<
+	echo ${MSG} | ./${NBIT} 32 $<
+	echo ${MSG} | ./${NBIT} 63 $<
+	echo ${MSG} | ./${NBIT} 64 $<
+	echo ${MSG} | ./${NBIT} 16 $<
 
 gforth.dec: ${FORTH}
 	gforth $< > $@

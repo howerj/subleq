@@ -716,14 +716,14 @@ only forth definitions hex
 0 constant opt.optimize   ( Enable extra optimization )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
 0 constant opt.self       ( Enable self-interpreter )
-0 constant opt.test-code  ( Enable test code )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
-: sys.info     4 or ; ( bit #4 = print info msg on startup )
-: sys.eof      8 or ; ( bit #8 = die if received EOF )
+: sys.info     4 or ; ( bit #3 = print info msg on startup )
+: sys.eof      8 or ; ( bit #4 = die if received EOF )
+: sys.warnv  $10 or ; ( bit #5 = warn if virtualized )
 
-0 sys.cksum sys.eof sys.echo-off constant opt.sys
+0 ( sys.cksum ) sys.eof sys.echo-off sys.warnv constant opt.sys
 
 \ ## Order!
 \
@@ -1772,13 +1772,13 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
 $10 tvar bwidth    \ must contain 16
-$40 tvar mwidth    \ must contain 64
-  0 tvar {virtual} \ running in a virtualized SUBLEQ machine?
+$40 tvar mwidth    \ maximum machine width
   0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
   0 tvar r3        \ register 3
   0 tvar r4        \ register 4
+  0 tvar {virtual} \ are we virtualized?
 
   0 tvar h         \ dictionary pointer
   =thread half tvar {up} \ Current task addr. (Half size)
@@ -2162,31 +2162,22 @@ label: die
    HALT (a); ( ...like tears in rain. Time to die. )
 assembler.1 +order
 
-\ This works now!
+\ ## Backup 16-bit Virtual Machine
 \
-\ TODO: {option}'al 16-bit self interpreter that runs when
-\ the machine width is greater than 16-bits.
-\ * Debug options (tracing, debug variables, ...)
-\   - Print out when branching, or not
-\   - Prompt on getch/putch?
-\   - Print address in hex
-\ * Mention Homomorphic Encryption SUBLEQ somewhere?
-\ * Mention assembly version of self interpreter and
-\ put a copy at the end of this document.
-\ * Make this a 16-bit version
-\ * Describe this section and tidy it up.
-\ * Move this code out of the way, to allow size detection 
-\ to work on 8-bit machine
-\ * SUBLEQ interpreter in Forth, put in appendix
-\ * Correct negative numbers, which need to be turned into
-\ positive ones using "$FFFF - m[i] + 1".
-\ * Make this accessible for running programs within the
-\ SUBLEQ VM, make a SUBLEQ instruction for executing SUBLEQ
-\ programs in Forth (separate from this)
-\ * Boot back into this system via options in "{options}"
-\ * Print out message warning user of very slow system
+\ This, optional and large in terms of code size, section 
+\ implements a SUBLEQ virtual machine that can execute 16-bit
+\ SUBLEQ programs on SUBLEQ machines with a equal or larger 
+\ bit-width. Of course there is no point in using this
+\ simulator on 16-bit machines, but it can provide a way of
+\ executing this eForth image on machines with a larger width,
+\ albeit with a hefty speed penalty.
 \
-\ Original, machine width version:
+\ There are multiple implementations of a SUBLEQ VM written
+\ in SUBLEQ, here is one that does no adjustment for the
+\ machine width, it is smaller and faster:
+\
+\         0 tvar {zreg} {zreg} 2/ tzreg !
+\         0 tvar {areg} {areg} 2/ tareg !
 \
 \         0 tvar {a}
 \         0 tvar {b}
@@ -2195,11 +2186,7 @@ assembler.1 +order
 \        -1 tvar {-1}
 \        $58 tvar {x}
 \        
-\        0 tvar {zreg} {zreg} 2/ tzreg !
-\        0 tvar {areg} {areg} 2/ tareg !
-\        
 \        label: self
-\          {virtual} ONE!
 \        label: self-loop
 \          {pc} {c} MOV
 \          {-1} 2/ t, {c} 2/ t, -1 t,
@@ -2220,121 +2207,157 @@ assembler.1 +order
 \        
 \        0 tzreg !
 \        1 tareg !
-
+\
+\ To distinguish this Virtual Machine from the (many) others
+\ within this system the term "Self-Interpreter" is used, as
+\ this is a program that emulates its own instruction set, or
+\ emulates itself.
+\
+\ It would be possible to extend this "Self-Interpreter" to
+\ perform debugging and tracing functions, which would make
+\ it useful when debugging SUBLEQ programs in general and
+\ not just for executing on machines with a bigger cell width.
+\
+\ Features for debugging could include; a monitor, printing
+\ out the program counter, operands, when I/O is taking place,
+\ cycle counter, and returning to the eForth system. This has
+\ not been implemented because of the space required to do so,
+\ for example printing out a human-readable number requires
+\ multiplication and division, possible to implement in SUBLEQ
+\ but expensive.
+\
+\
+\ TODO: 
+\ * Mention Homomorphic Encryption SUBLEQ somewhere?
+\ * Move this code out of the way, to allow size detection 
+\ to work on 8-bit machine
+\ * Make this accessible for running programs within the
+\ SUBLEQ VM, make a SUBLEQ instruction for executing SUBLEQ
+\ programs in Forth (separate from this)
+\ * Boot back into this system via options in "{options}"
+\ * Custom iSUB?
+\ * What happens if we warm boot back into this? i.e. "0 >r"
+\
 opt.self [if]
- 0 tvar {a}     ( Emulated 'a' operand )
- 0 tvar {b}     ( Emulated 'b' operand )
- 0 tvar {c}     ( Emulated 'c' operand )
- 0 tvar {pc}    ( Emulated SUBLEQ Machine program counter )
- 0 tvar {v}
- 0 tvar {t}
--1 tvar {-1}
-$58 tvar {x}
-$10 tvar {16}
-$4000 tvar {4000}
-$8000 tvar {high}
-$7FFF tvar {rest}
-$FFFF tvar {mask}
-$10 tvar {width}
 
+\ Setup temporary registers for macro instructions, they need
+\ to be different from the normal machine locations for the
+\ "A" and "Z" registers as they will be used at the same time.
 0 tvar {zreg} {zreg} 2/ tzreg !
 0 tvar {areg} {areg} 2/ tareg !
 
-\ ===== AND ==================================================
+\ These registers are used by the SUBLEQ VM to hold operands,
+\ for temporary storage, or to hold constants.
+\
+\ "{width}" should contain the machine width and be set by
+\ the size determining routines at startup. It can be used to
+\ detect whether we are executing in a virtual environment,
+\ as if the "{width}" is anything but 16 then we are executing
+\ in our virtual Self-Interpreter. However, if it is equal to
+\ 16, then we *may& be executing in the Self-Interpreter, but
+\ most likely will not be.
+\
+ 0000 tvar {a}     ( Emulated 'a' operand )
+ 0000 tvar {b}     ( Emulated 'b' operand )
+ 0000 tvar {pc}    ( Emulated SUBLEQ Machine program counter )
+ 0000 tvar {v}     ( Temporary register 'v' )
+$0010 tvar {width} ( set by size detection routines )
+ 0000 tvar {count} ( Instruction macro loop counter )
 
-0 tvar xcount
-0 tvar xt
-0 tvar xmask
-0 tvar xout
+\ "(top)" shifts an arbitrary bit within a word to the top
+\ most bit position. It does not take care not to move or mask
+\ off bits lower than the one you ask for.
+\
 
-:m LSBM ( width variable mask -- : mask off source )
-  swap >r swap
-  ( width ) xcount MOV
-  xout ZERO
-  ( mask ) xmask MOV
-  begin xcount while
-   xout xout ADD
-   r@ xt MOV
-   xt +if 
-   else 
-     xt INC
-     xt +if 
-     else 
-       xmask xt MOV
-       xt +if else xt INC xt +if else xout INC then then 
-     then 
-   then
-   xmask xmask ADD
-   r@ r@ ADD
-   xcount DEC
-  repeat
-  xout r> MOV ;m
+:m (top) ( width variable bit -- : shift bit )
+  swap >r >r {count} MOV r> {count} SUB
+  begin 
+    {count} 
+  while 
+    r@ r> ADD {count} DEC 
+  repeat ;m
 
-:m SHIFTB ( width variable bit -- variable : shift bit )
-  swap >r >r xcount MOV r> xcount SUB
-  begin xcount while r@ r> ADD xcount DEC repeat ;
+:m topbit >r {width} r> bwidth (top) ;m ( a -- )
 
-:m topbit >r {width} r> {16} SHIFTB ;
 
-\ ===== AND ==================================================
+\ The SUBLEQ Self-Interpreter begins here. The entry point is
+\ the label "self".
 
 label: self
-  {virtual} ONE! \ Tell rest of system we are virtual
 
-  \ Synthesize constants, avoiding negative numbers
-  {4000} {high} MOV {high} {high} ADD
-  {mask} ZERO {high} {mask} ADD {rest} {mask} ADD  
+\ Signal to the rest of the system that we are executing in
+\ virtual mode.
+\
+  {virtual} NG1!
 
-  \ for (i = pc; pc < 65534; i++)
-  \   m[i] &= 0xFFFF;
-  \ NOTE: Might need to synthesize 0xFFFF, as it is stored
-  \ as "-1" in the decimal file, which will be different
-  \ depending on the machine width.
+\ It might be best to mask off any cell that is to be executed
+\ as a program to this machine. This could be done here. This
+\ would be the equivalent to doing the following pseudocode:
+\
+\        for (i = program_start; i < program_end; i++)
+\                m[i] &= 0xFFFF;
+\
+\ It turns out this is not needed, so it is not done.
+\
+\ The Self-interpreter VM loop begins here.
+\ 
+
 label: self-loop
-  {pc} {c} MOV
-  {-1} 2/ t, {c} 2/ t, -1 t, \ Conditionally halt on '{c}'
+  {pc} {v} MOV \ Copy {pc} for next instruction
+  neg1 2/ t, {v} 2/ t, -1 t, \ Conditionally halt on '{c}'
   {a} {pc} iLOAD {pc} INC
   {b} {pc} iLOAD {pc} INC
-  {c} {pc} iLOAD {pc} INC
 
-  \ TODO: Range check and then apply AND or not (speed up)
-\ {width} {a} {mask} LSBM
-\ {width} {b} {mask} LSBM
-\ {width} {c} {mask} LSBM
+\ It is possible to use the instruction:
+\
+\        {x} PUT
+\
+\ Where "{x}" is declared as "tvar $58 {x}"
+\
+\ As a primitive form of debugging, it was used frequently in
+\ the construction of this Self-Interpreter. Even the ability
+\ to output a single character, sometimes conditional or at
+\ certain points, allows for some measure of debugging. 
+\
+\ The next if-statements are not strictly accurate, 
+\ these "+if" test just check to see if "{a}" and "{b}" are 
+\ non-zero and negative, and not for "$FFFF" (or -1 on a 16-bit 
+\ SUBLEQ machine). This is a possible improvement that could
+\ be made at the cost of code-size and an even greater slow
+\ down.
+\
+  {a} {v} MOV {v} topbit {v} INC {v} +if ( Input byte? )
+    {b} {v} MOV {v} topbit {v} INC {v} +if ( Output byte? )
+      ( Neither Input nor Output, must be normal instruction )
 
-  \ {x} PUT
-  \ TODO: Mask with 0x8000 and use that for negative check
-
-  {a} {v} MOV {v} topbit {v} INC {v} +if \ TODO: Change to == $FFFF
-    {b} {v} MOV {v} topbit {v} INC {v} +if
-      {a} {a} iLOAD
-      {v} {b} iLOAD
-      {a} {v} SUB
-      {width} {v} {mask} LSBM
-      {v} {t} MOV {t} topbit
-      {t} +if \ TODO: Change to {v} == 0 || {v} & 0x8000
-       ( {pc} INC \ already done )
+      \ This section performs "m[b] = m[b] - m[a]" and loads
+      \ the result back into {a}
+      {a} {a} iLOAD  \ a = m[a]
+      {a} {b} iSUB   \ m[b] = m[b] - a
+      {a} {b} iLOAD  \ a = m[b]
+      {a} topbit {a} +if \ !(v == 0 || v & 0x8000)
       else
-        {c} {pc} MOV
+        {pc} {pc} iLOAD \ pc = m[c]
+        self-loop JMP
       then
-      {v} {b} iSTORE
-    else
+    else ( Output byte from m[a] )
       {a} {a} iLOAD
       {a} PUT
-\     {x} PUT
     then
-  else
-    {v} GET
-    {width} {v} {mask} LSBM
-    {v} {b} ISTORE
+  else ( Input byte and store in m[b] )
+    {a} GET
+    {a} {b} ISTORE
   then
-  self-loop JMP
+  {pc} INC
+  self-loop JMP ( And do it again... )
 
-0 tzreg !
-1 tareg !
+\ Reset "Z" and "A" register locations.
+  0 tzreg !
+  1 tareg !
 [then]
 
-
+\ ## Start Routine
+\
 \ Here is the "start" routine, we set the system entry point
 \ to the location in the label, do the cell bit-width test
 \ (and jump to the failure handler if we are a system with
@@ -2368,21 +2391,15 @@ label: chk16
   r0 r0 ADD                        \ r0 = r0 * 2
   r1 INC                           \ r1++
   r1 r2 MOV                        \ r2 = r1
-  mwidth r2 SUB r2 +if die JMP then \ check length < 64
+  mwidth r2 SUB r2 +if die JMP then \ check length < max width
   r0 +if chk16 JMP then            \ check if still positive
 opt.self [if] \ if width > 16, jump to 16-bit emulator
   r1 r2 MOV
   r1 {width} MOV \ Save actual machine width
   bwidth r2 SUB r2 +if self JMP then
 [then]
-  bwidth r1 SUB r1 if \ r1 - bwidth should be 0
-\    opt.self [if] self JMP [else] die JMP [then]
-    die JMP
-  then 
-opt.self [if] 
-\  self JMP
-  there 2/ {pc} t!  
-[then]
+  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be 0
+opt.self [if] ( self JMP ) there 2/ {pc} t!  [then]
 
 \ Back to setting up registers
 \
@@ -3191,14 +3208,6 @@ opt.multi [if]
 :m pause ;m ( -- [disabled] )
 [then]
 
-\ TODO: Remove this test code
-opt.test-code [if]
-$FF tvar #lsb
-$8  tvar #bcpy
-:a lsb bwidth tos #lsb LSBM ;a ( x -- x )
-:a bs bwidth tos #bcpy SHIFTB ;a ( x -- x )
-[then]
-
 \ The following assembly routine is one way adding support for
 \ assembly routines callable from within the Forth interpreter
 \ and without relying on hacks. This is the absolute bare
@@ -3541,11 +3550,6 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :so leq0 leq0 ;s ( n -- 0|1 : less than or equal to zero )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
 :so pause pause ;s ( -- : pause current task, task switch )
-
-opt.test-code [if] \ TODO: Remove this
-:to lsb lsb ;
-:to bs bs ;
-[then] 
 
 \ If "opAsm" is defined, so should this:
 \
@@ -8418,6 +8422,17 @@ opt.info [if]
   :s info ;s ( --, [disabled] print system info )
 [then]
 
+\ This optionally included word is only used and available
+\ when the "Self-Interpreter" is included in the build, it is
+\ used to print a warning out when the system is executing 
+\ under that interpreter so as to warn the user as to why the
+\ system is so slow.
+opt.self [if]
+:s warnv [ {virtual} ] literal @ if
+    ." WARNING: VM EXE" cr
+    then ;s
+[then]
+
 \ ## Task Initialization
 \
 \ "task-init" is a poor Forth function, it really should be
@@ -8646,13 +8661,21 @@ opt.info [if]
 \       again after defining new words would mean the checksum
 \       would fail. If the checksum fails it prints an error
 \       messages and halts.
+\    d. If the "Self-Interpreter" is included in this build 
+\       check the 5th bit and print a warning if it is set
+\       and we are executing under that interpreter, as
+\       execution is very slow.
 \ 4. Calls "quit" to enter into the Forth interpreter loop.
 \
 \ And that completes the Forth boot sequence.
 \
+
 :s (cold) ( -- : Forth boot sequence )
   forth definitions ( un-mess-up dictionary / set it )
   ini ( initialize the current thread correctly )
+  opt.self [if]
+    [ {options} ] literal @ [ $10 ] literal and if warnv then
+  [then]
   [ {options} ] literal @ [ 4 ] literal and if info then
   [ {options} ] literal @ #2 and if ( checksum on? )
   [ primitive ] literal @ 2* dup here swap - cksum
@@ -11876,7 +11899,7 @@ it being run.
 \          return 0;
 \        }
 \
-
+\
 \ ## Faster SUBLEQ Assembly Operations
 \
 \ Here is an alternate set of assembly instruction macros for
@@ -12142,6 +12165,266 @@ it being run.
    r0 DEC
   repeat
   r5 tos MOV ;a
+
+\ ## Assembly "Self Interpreter"
+\ 
+\ Unlike the "Self-Interpreter" optionally included in the
+\ eForth image for running on machines with a greater cell
+\ width than 16 bits, this "Self-Interpreter" does no 
+\ correction for bit-width. It can however be prepended to
+\ any valid SUBLEQ program and execute that. The program is
+\ given in a SUBLEQ assembly variant, and the resulting binary
+\
+\ ### Assembly "Self-Interpreter" ASM
+\ 
+# SUBLEQ Self Interpreter: Assembly version
+#
+# This is a "Self Interpreter" for SUBLEQ, that is, 
+# it is an interpreter that executes a SUBLEQ program 
+# written for a SUBLEQ machine. It expects the SUBLEQ 
+# program to be appended to the end of this program, 
+# as such it has to patch up the program and subtract 
+# the length of this program from each of the cells 
+# before execution, excepting the special addresses 
+# for when one of the operands is negative one.
+#
+# A single SUBLEQ instruction is written as:
+#
+# 	SUBLEQ a, b, c
+#
+# Which is as there is only one instruction possible, 
+# SUBLEQ, is often just written as:
+#
+# 	a b c
+#
+# These three operands are stored in three continuous 
+# memory locations. Each operand is an address, They 
+# perform the following pseudo-code:
+#
+# 	[b] = [b] - [a]
+# 	if [b] <= 0:
+# 		goto c;
+# 	
+# There are three special cases, if 'c' is negative 
+# then execution halts (or sometimes if it is refers 
+# to somewhere outside of addressable memory). The 
+# other two are for Input and Output. If 'a' is -1 
+# then a byte is loaded from input into address 'b', 
+# if 'b' is negative then a byte is output from 
+# address 'a'.
+#
+# Note that apart from I/O nothing is said about how 
+# numbers are represented, what bit length they are 
+# (or if each cell is an arbitrary precision number) 
+# and how negative numbers implemented (twos' 
+# compliment, sign magnitude, etcetera).
+#
+# Usually two's complement is used, but 8, 16, 32 and 
+# 64-bit versions of SUBLEQ are all common, with 
+# 32-bit versions being the most so.
+#
+# Despite the simplicity of the instruction set it is 
+# possible to compute anything computable with it 
+# (given infinite memory and time).
+#
+# To implement anything non-trivial self-modifying 
+# code is very common. This program is no exception.
+#
+# The self interpreter is actually quite simple to 
+# implement for this language.
+#
+# The original SUBLEQ self interpreter was from:
+#
+# <https://eigenratios.blogspot.com/2006/08>
+# (Written by Clive Gifford, 29/30 August 2006).
+#
+# However it does not deal with I/O.
+#
+# An improved version deals with output, but not 
+# input is available from:
+#
+# <http://mazonka.com/subleq/>
+#
+# Which is a dead link as of 03/01/2023, an archived 
+# version is available at:
+#
+# <https://archive.ph/8EYZv> 
+# 
+# This version deals with input and output and has 
+# fewer superfluous instructions. There are a number 
+# of improvements that could be made, which include:
+#
+## Notes on the SUBLEQ assembler:
+#
+# * Statements are terminated by ';' or new lines.
+# * Each statement is a single SUBLEQ instruction.
+# * Labels are denoted with ':' and are used for both
+# data and jump locations, the initial value is an 
+# expression to the right of the colon which will be 
+# placed at the memory location of the labels.
+# * Operands can be omitted, in which case default 
+# values will be used. 
+# * If the last operand, the jump location is 
+# omitted, it will be replaced with the location of 
+# the next instruction.
+# * If both of the last two operands are omitted then 
+# the last will be replaced with the location of the 
+# next instruction and the second operand will be 
+# replaced with a copy of the first operand, 
+# effectively zeroing the contents at the location of 
+# the first operand.
+# * '?' represents the address of the next cell, not 
+# the next instruction.
+#
+## Special Registers
+#
+# * 'Z', A register that should start and end up as 
+# zero, it is known as the Zero Register. 
+# * 'pc', the program counter for the simulated 
+# device.
+# * 'IOV', contains the value for the special I/O 
+# address values. This stands for I/O Value.
+# * 'neg1', contains negative one. Used for 
+# incrementing # usually be subtracting negative one 
+# against a value. The same value is used for 'IOV'.
+# * 'len', contains the length of this program image, 
+# as # such the variable must be the last one defined 
+# in the file.
+# * 'a', Operand 'a' of SUBLEQ instruction
+# * 'b', Operand 'b' of SUBLEQ instruction
+# * 'c', Operand 'c' of SUBLEQ instruction
+# * 'a1', used to load 'a' before indirection and as 
+# temp reg
+# * 'b1', used to load 'b' before indirection and as 
+# temp reg
+# * 'c1', used to load 'c' before indirection and as 
+# temp reg
+#
+# On to the program itself:
+#
+
+start:
+
+# Load PC: [a1] = [pc]
+a1; pc Z; Z a1; Z;
+
+# [a] = [[a1]] (after modification from above)
+a; a1:0 Z a2; a2:Z a; Z;
+
+# Patch up operand 'A' if it is not -1
+#
+# if [a] != -1:
+#    [a] = [a] + [len]
+#
+a1; a Z; Z a1; Z; # [a1] = [a]
+IOV a1 ?+3; # If [a1] is negative jump over next line
+len a; # [a] = [a] + [len] 
+
+neg1 pc; # [pc] = [pc] + 1
+b1; pc Z; Z b1; Z;
+b; b1:0 Z b2; b2:Z b; Z;
+
+# Patch up operand 'b' if it is not -1
+#
+# if [b] != -1:
+#    [b] = [b] + [len]
+#
+b1; b Z; Z b1; Z;
+IOV b1 ?+3;
+len b;
+
+# We need to copy 'pc' into 'c' and not use it 
+# directly later on as the SUBLEQ instruction might 
+# modify 'c', if it does the *old* value of 'pc' must 
+# be used (it would be more useful if the new value 
+# was used, however that is not the case).
+#
+neg1 pc;                 # [pc] = [pc] + 1
+c1; pc Z; Z c1; Z;       # [c1] = [pc]
+c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
+
+# Execute the SUBLEQ instruction.
+#
+# Note that 'a' and 'b' have been modified from 
+# above.
+#
+# The result stored in 'b' will need to subject to a 
+# signed modulo operation in order to emulate a 
+# 16-bit machine on machine widths larger than the 
+# current one, as this is an expensive operation this 
+# should be skipped by detecting the machine width 
+# and jumping over the modulo on 16-bit machines,
+# when this is implemented...
+#
+
+a:0 b:0 leqz;   # Emulate subtraction / instruction
+  neg1 pc;      # [pc] = [pc] + 1
+  Z Z start;    # Jump back to beginning
+leqz: 
+  pc; c Z; Z pc; Z; # [pc] = [c]
+  neg1 c -1; # Check if [c] is negative, halt if so.
+  len pc; # [pc] = [pc] + [len]
+  Z Z start; # Jump back to the beginning
+
+# Declare and set some registers, 'len' must be last.
+. Z:0 pc:len+1 c:0 IOV: neg1:-1 len:-? 
+
+\ ### Assembly "Self-Interpreter" Image
+\
+\ This section contains the pre-assembled image of the
+\ above program.
+\
+
+15 15 3 
+145 144 6 
+144 15 9 
+144 144 12 
+114 114 15 
+0 144 18 
+144 114 21 
+144 144 24 
+15 15 27 
+114 144 30 
+144 15 33 
+144 144 36 
+147 15 42 
+148 114 42 
+147 145 45 
+60 60 48 
+145 144 51 
+144 60 54 
+144 144 57 
+115 115 60 
+0 144 63 
+144 115 66 
+144 144 69 
+60 60 72 
+115 144 75 
+144 60 78 
+144 144 81 
+147 60 87 
+148 115 87 
+147 145 90 
+105 105 93 
+145 144 96 
+144 105 99 
+144 144 102 
+146 146 105 
+0 144 108 
+144 146 111 
+144 144 114 
+0 0 123 
+147 145 120 
+144 144 0 
+145 145 126 
+146 144 129 
+144 145 132 
+144 144 135 
+147 146 -1 
+148 145 141 
+144 144 0 
+0 149 0 
+-1 -149 
 
 \ ## Extra Code
 \
