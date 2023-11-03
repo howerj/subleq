@@ -715,7 +715,7 @@ only forth definitions hex
 0 constant opt.sm-vm-err  ( Smaller VM error message )
 0 constant opt.optimize   ( Enable extra optimization )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
-0 constant opt.self       ( Enable self-interpreter )
+1 constant opt.self       ( Enable self-interpreter )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -1778,7 +1778,12 @@ $40 tvar mwidth    \ maximum machine width
   0 tvar r2        \ register 2
   0 tvar r3        \ register 3
   0 tvar r4        \ register 4
+opt.self [if]
   0 tvar {virtual} \ are we virtualized?
+  0 tvar {self}    \ location of the self interpreter
+  0 tvar {pc}      \ Emulated SUBLEQ Machine program counter
+$10 tvar {width}   \ set by size detection routines
+[then]
 
   0 tvar h         \ dictionary pointer
   =thread half tvar {up} \ Current task addr. (Half size)
@@ -2162,6 +2167,86 @@ label: die
    HALT (a); ( ...like tears in rain. Time to die. )
 assembler.1 +order
 
+\ ## Start Routine
+\
+\ Here is the "start" routine, we set the system entry point
+\ to the location in the label, do the cell bit-width test
+\ (and jump to the failure handler if we are a system with
+\ the wrong bit-width), set up the stacks and get the first
+\ Forth VM instruction to execute. We then fall into the
+\ Forth VM proper, no need to jump to it as it is the next
+\ instruction after "start" is finished.
+\
+\ The checksum code could be moved here to enable (nearly)
+\ the entire image to be checked, it would not be too
+\ difficult to do.
+\
+
+label: start         \ System Entry Point
+  start 2/ entry t!  \ Set the system entry point
+
+\ This routine doubles "w" until it becomes negative, which
+\ will happen on twos compliment machines upon reaching the
+\ maximum bit-width.
+\
+\ This routine really should be much closer to the beginning
+\ of the file, before (many of, but not all of) the variable
+\ declarations as we have a limited number of bytes to work
+\ with (bytes that are addressable that is) when on machines
+\ with smaller bit widths than 16. 
+\
+
+  r0 ONE!                          \ r0 = shift bit loop count
+  r1 ONE!                          \ r1 = number of bits
+label: chk16
+  r0 r0 ADD                        \ r0 = r0 * 2
+  r1 INC                           \ r1++
+  r1 r2 MOV                        \ r2 = r1
+  mwidth r2 SUB r2 +if die JMP then \ check length < max width
+  r0 +if chk16 JMP then            \ check if still positive
+opt.self [if] \ if width > 16, jump to 16-bit emulator
+  r1 r2 MOV
+  r1 {width} MOV \ Save actual machine width
+  bwidth r2 SUB r2 +if {self} iJMP then
+[then]
+  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be 0
+opt.self [if] ( self JMP ) there 2/ {pc} t!  [then]
+
+\ Back to setting up registers
+\
+
+  {sp0} {sp} MOV     \ Setup initial variable stack
+  {rp0} {rp} MOV     \ Setup initial return stack
+  {cold} ip MOV      \ Get the first instruction to execute
+  ( fall-through )
+
+\ This is the Forth Virtual Machine itself. A very short
+\ routine. It just needs to call, or jump, depending on the
+\ instruction it is given.
+\
+
+label: vm ( Forth Inner Interpreter )
+  r0 ip iLOAD         \ Get instruction to execute from IP
+  ip INC              \ IP now points to next instruction!
+  primitive r1 MOV    \ Copy as SUB is destructive
+  r0 r1 SUB           \ Check if it is a primitive
+  r1 +if r0 iJMP then \ Jump straight to VM functions if it is
+  ++rp                \ If it wasn't a VM instruction, inc {rp}
+  ip {rp} iSTORE      \ and store ip to return stack
+  r0 ip MOV vm a-optim \ "r0" holds our next instruction
+  vm JMP              \ Ad infinitum...
+
+
+\ This meta-compiler word, ";a", used to end the definition of
+\ assembly word, requires that the VM has been implemented
+\ first, as it jumps back to it, so we define it here instead
+\ of using a forward reference (which we could have used, but
+\ have studiously avoided as many forward references as is
+\ possible).
+\
+
+:m ;a (fall-through); vm a-optim vm JMP ;m
+
 \ ## Backup 16-bit Virtual Machine
 \
 \ This, optional and large in terms of code size, section 
@@ -2226,11 +2311,8 @@ assembler.1 +order
 \ multiplication and division, possible to implement in SUBLEQ
 \ but expensive.
 \
-\
 \ TODO: 
 \ * Mention Homomorphic Encryption SUBLEQ somewhere?
-\ * Move this code out of the way, to allow size detection 
-\ to work on 8-bit machine
 \ * Make this accessible for running programs within the
 \ SUBLEQ VM, make a SUBLEQ instruction for executing SUBLEQ
 \ programs in Forth (separate from this)
@@ -2259,9 +2341,7 @@ opt.self [if]
 \
  0000 tvar {a}     ( Emulated 'a' operand )
  0000 tvar {b}     ( Emulated 'b' operand )
- 0000 tvar {pc}    ( Emulated SUBLEQ Machine program counter )
  0000 tvar {v}     ( Temporary register 'v' )
-$0010 tvar {width} ( set by size detection routines )
  0000 tvar {count} ( Instruction macro loop counter )
 
 \ "(top)" shifts an arbitrary bit within a word to the top
@@ -2279,11 +2359,11 @@ $0010 tvar {width} ( set by size detection routines )
 
 :m topbit >r {width} r> bwidth (top) ;m ( a -- )
 
-
 \ The SUBLEQ Self-Interpreter begins here. The entry point is
 \ the label "self".
 
 label: self
+self 2/ {self} t!
 
 \ Signal to the rest of the system that we are executing in
 \ virtual mode.
@@ -2356,86 +2436,11 @@ label: self-loop
   1 tareg !
 [then]
 
-\ ## Start Routine
-\
-\ Here is the "start" routine, we set the system entry point
-\ to the location in the label, do the cell bit-width test
-\ (and jump to the failure handler if we are a system with
-\ the wrong bit-width), set up the stacks and get the first
-\ Forth VM instruction to execute. We then fall into the
-\ Forth VM proper, no need to jump to it as it is the next
-\ instruction after "start" is finished.
-\
-\ The checksum code could be moved here to enable (nearly)
-\ the entire image to be checked, it would not be too
-\ difficult to do.
-\
-
-label: start         \ System Entry Point
-  start 2/ entry t!  \ Set the system entry point
-
-\ This routine doubles "w" until it becomes negative, which
-\ will happen on twos compliment machines upon reaching the
-\ maximum bit-width.
-\
-\ This routine really should be much closer to the beginning
-\ of the file, before (many of, but not all of) the variable
-\ declarations as we have a limited number of bytes to work
-\ with (bytes that are addressable that is) when on machines
-\ with smaller bit widths than 16. 
-\
-
-  r0 ONE!                          \ r0 = shift bit loop count
-  r1 ONE!                          \ r1 = number of bits
-label: chk16
-  r0 r0 ADD                        \ r0 = r0 * 2
-  r1 INC                           \ r1++
-  r1 r2 MOV                        \ r2 = r1
-  mwidth r2 SUB r2 +if die JMP then \ check length < max width
-  r0 +if chk16 JMP then            \ check if still positive
-opt.self [if] \ if width > 16, jump to 16-bit emulator
-  r1 r2 MOV
-  r1 {width} MOV \ Save actual machine width
-  bwidth r2 SUB r2 +if self JMP then
-[then]
-  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be 0
-opt.self [if] ( self JMP ) there 2/ {pc} t!  [then]
-
-\ Back to setting up registers
-\
-
-  {sp0} {sp} MOV     \ Setup initial variable stack
-  {rp0} {rp} MOV     \ Setup initial return stack
-  {cold} ip MOV      \ Get the first instruction to execute
-  ( fall-through )
-
-\ This is the Forth Virtual Machine itself. A very short
-\ routine. It just needs to call, or jump, depending on the
-\ instruction it is given.
-\
-
-label: vm ( Forth Inner Interpreter )
-  r0 ip iLOAD         \ Get instruction to execute from IP
-  ip INC              \ IP now points to next instruction!
-  primitive r1 MOV    \ Copy as SUB is destructive
-  r0 r1 SUB           \ Check if it is a primitive
-  r1 +if r0 iJMP then \ Jump straight to VM functions if it is
-  ++rp                \ If it wasn't a VM instruction, inc {rp}
-  ip {rp} iSTORE      \ and store ip to return stack
-  r0 ip MOV vm a-optim \ "r0" holds our next instruction
-  vm JMP              \ Ad infinitum...
 
 assembler.1 -order
 
-\ This meta-compiler word, ";a", used to end the definition of
-\ assembly word, requires that the VM has been implemented
-\ first, as it jumps back to it, so we define it here instead
-\ of using a forward reference (which we could have used, but
-\ have studiously avoided as many forward references as is
-\ possible).
-\
 
-:m ;a (fall-through); vm a-optim vm JMP ;m
+
 
 \ # Forth Virtual Machine Instructions
 \
@@ -8429,7 +8434,7 @@ opt.info [if]
 \ system is so slow.
 opt.self [if]
 :s warnv [ {virtual} ] literal @ if
-    ." WARNING: VM EXE" cr
+    ." Warning: Virtual 16-bit SUBLEQ VM" cr
     then ;s
 [then]
 
