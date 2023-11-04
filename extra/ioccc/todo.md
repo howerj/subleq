@@ -3,8 +3,8 @@
   This can be done with more "higher level" Forth, mux, lsb
   and shift removal.
 - [ ] <https://github.com/ioccc-src/mkiocccentry>
-- [ ] Separate Self-interpreter program that can be prepended.
-  - [ ] Deal with arbitrary bit length 
+- [x] Separate Self-interpreter program that can be prepended.
+  - [x] Deal with arbitrary bit length 
 - [ ] LZ\_XOR / LZ\_SUB to compress image?
 - [ ] Test on 16/32/64 bit systems and windows.
 - [ ] Tidy up build system once a new image has been made.
@@ -15,5 +15,5 @@
   program and nbit.c)
 - [ ] Make a permutation of the function pointers to obfuscate
   things further.
-- [ ] Shrink one-line candidate to under 140 characters if possible,
+- [x] Shrink one-line candidate to under 140 characters if possible,
   ideally 120 characters, but that is probably impossible.

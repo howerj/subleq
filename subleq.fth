@@ -2305,20 +2305,18 @@ label: vm ( Forth Inner Interpreter )
 \
 \ Features for debugging could include; a monitor, printing
 \ out the program counter, operands, when I/O is taking place,
-\ cycle counter, and returning to the eForth system. This has
-\ not been implemented because of the space required to do so,
-\ for example printing out a human-readable number requires
+\ cycle counter, executing blocks of memory as SUBLEQ programs,
+\ and returning to the eForth system on the "bare metal". This 
+\ has not been implemented because of the space required to do 
+\ so, for example printing out a human-readable number requires
 \ multiplication and division, possible to implement in SUBLEQ
 \ but expensive.
 \
-\ TODO: 
-\ * Mention Homomorphic Encryption SUBLEQ somewhere?
-\ * Make this accessible for running programs within the
-\ SUBLEQ VM, make a SUBLEQ instruction for executing SUBLEQ
-\ programs in Forth (separate from this)
-\ * Boot back into this system via options in "{options}"
-\ * Custom iSUB?
-\ * What happens if we warm boot back into this? i.e. "0 >r"
+\ When executing without this "Self-Interpreter" it is possible
+\ to perform a warm reset using the phrase "0 \>r" (which has 
+\ to be defined inside a word definition as "\>r" is a
+\ "compile-only" word). This does not work under when executing
+\ under this "Self-Interpreter".
 \
 opt.self [if]
 
@@ -2331,14 +2329,6 @@ opt.self [if]
 \ These registers are used by the SUBLEQ VM to hold operands,
 \ for temporary storage, or to hold constants.
 \
-\ "{width}" should contain the machine width and be set by
-\ the size determining routines at startup. It can be used to
-\ detect whether we are executing in a virtual environment,
-\ as if the "{width}" is anything but 16 then we are executing
-\ in our virtual Self-Interpreter. However, if it is equal to
-\ 16, then we *may& be executing in the Self-Interpreter, but
-\ most likely will not be.
-\
  0000 tvar {a}     ( Emulated 'a' operand )
  0000 tvar {b}     ( Emulated 'b' operand )
  0000 tvar {v}     ( Temporary register 'v' )
@@ -2348,7 +2338,9 @@ opt.self [if]
 \ most bit position. It does not take care not to move or mask
 \ off bits lower than the one you ask for.
 \
+\
 
+\ TODO: Inline this
 :m (top) ( width variable bit -- : shift bit )
   swap >r >r {count} MOV r> {count} SUB
   begin 
@@ -2406,28 +2398,35 @@ label: self-loop
 \ be made at the cost of code-size and an even greater slow
 \ down.
 \
-  {a} {v} MOV {v} topbit {v} INC {v} +if ( Input byte? )
-    {b} {v} MOV {v} topbit {v} INC {v} +if ( Output byte? )
+\ TODO: Use subtraction by 0x8000 instead of topbit? Also
+\ make a better iSUB.
+
+  {a} {v} MOV {v} INC {v} +if ( Input byte? )
+    {b} {v} MOV {v} INC {v} +if ( Output byte? )
       ( Neither Input nor Output, must be normal instruction )
 
       \ This section performs "m[b] = m[b] - m[a]" and loads
-      \ the result back into {a}
+      \ the result back into "{a}". A custom "iSUB" routine
+      \ might speed things up here, one that stored the result
+      \ in "{b}" but also kept a copy in "{a}".
       {a} {a} iLOAD  \ a = m[a]
       {a} {b} iSUB   \ m[b] = m[b] - a
       {a} {b} iLOAD  \ a = m[b]
+
       {a} topbit {a} +if \ !(v == 0 || v & 0x8000)
-      else
-        {pc} {pc} iLOAD \ pc = m[c]
+        {pc} INC
         self-loop JMP
       then
-    else ( Output byte from m[a] )
-      {a} {a} iLOAD
-      {a} PUT
-    then
-  else ( Input byte and store in m[b] )
-    {a} GET
-    {a} {b} ISTORE
-  then
+      {pc} {pc} iLOAD \ pc = m[c]
+      self-loop JMP
+    then ( Output byte from m[a] )
+    {a} {a} iLOAD
+    {a} PUT
+    {pc} INC
+    self-loop JMP
+  then ( Input byte and store in m[b] )
+  {a} GET
+  {a} {b} iSTORE
   {pc} INC
   self-loop JMP ( And do it again... )
 
@@ -8223,24 +8222,33 @@ opt.better-see [if] ( Start conditional compilation )
 
 $400 constant b/buf ( -- u : size of the block buffer )
 
+\ The block buffer used in this implementation is stored at
+\ the address $F400, 1024 bytes after this is space reserved
+\ for the optional memory allocation, another 1024 bytes, and
+\ after that is a 1024 byte block for the first thread.
+\
+\ $F400 is used so block buffers can be reserved 1024 bytes
+\ before this location is we need multiple block buffers, this
+\ implementation currently only uses one array for temporary
+\ storage.
+\
 system[
-variable <block> ( -- a : xt for "block" word )
-
-\ TODO: Memory map, also talk about allocator location
-\ BUG: Cannot access address above 64k because of overflow of
-\ 16-bit integers. Should use cell address instead...
-$F400 constant buf0 ( -- a : location of block buffer )
-variable dirty0     ( -- a : is block buffer dirty? )
-variable blk0       ( -- a : what block is stored in buffer? )
+$200 constant c/buf  ( -- cu : cells in the block buffer )
+variable <block>     ( -- a : xt for "block" word )
+$F400 constant buf0  ( -- ca : location of block buffer )
+variable dirty0      ( -- a : is block buffer dirty? )
+variable blk0        ( -- a : what block is stored in buffer? )
 -1 t' blk0 >tbody t! ( set initial loaded block to be invalid )
-
 ]system
 
-:s >addr ( a -- a/2 : convert to SUBLEQ VM address )
-  dup #1 and 0<> [ -9 ] literal and throw 2/ ;s 
-:s (block) ( a a u -- : transfer to/from "mass storage" )
+\ "(block)" deals in cell addresses and cell amounts, this
+\ is to avoid using double precision numbers which would
+\ require the use of "du/". This allows "(block)" to access
+\ all 128 kibibytes of memory, which would not be possible if
+\ normal, byte sized addresses were to be used.
+\
+:s (block) ( ca ca cu -- : transfer to/from "mass storage" )
   pause ( pause for multitasking )
-  >r >addr swap >addr swap r> >addr ( convert addrs/length )
   for 
     aft 2dup [@] swap [!] 1+ swap 1+ swap
     then
@@ -8248,14 +8256,15 @@ variable blk0       ( -- a : what block is stored in buffer? )
 
 t' (block) t' <block> >tbody t!
 
+( :s swap? 0= ?exit swap ;s ( x y sel -- x y | y x )
 :s valid? dup #1 [ $80 ] literal within ;s ( k -- k f )
 :s transfer <block> @ execute ;s ( a a u -- )
-:s >blk 1- b/buf * ;s ( k -- a : convert blk addr to addr )
+:s >blk 1- c/buf * ;s ( k -- ca )
 :s clean #0 dirty0 ! ;s ( -- : opposite of 'update' )
 :s invalidate #-1 blk0 ! ;s ( -- : store invalid block # )
-:s bput valid? if >blk buf0 b/buf transfer exit then drop ;s
+:s bput valid? if >blk buf0 2/ c/buf transfer exit then drop ;s
 :s bget 
-  valid? if >blk buf0 swap b/buf transfer exit then drop ;s
+  valid? if >blk buf0 2/ swap c/buf transfer exit then drop ;s
 :s loaded? dup blk0 @ = ;s ( k -- k f )
 
 : update #-1 dirty0 ! ; ( -- )
@@ -14118,6 +14127,10 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 
 
 \ ## Future Direction and Additional tasks.
+\
+\ TODO: 
+\ * Mention Homomorphic Encryption SUBLEQ somewhere?
+\ * Cleanup this section
 \
 \ There is still a lot that could be done with this system,
 \ there are many programs and extensions that could be written
