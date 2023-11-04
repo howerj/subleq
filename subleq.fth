@@ -2332,24 +2332,7 @@ opt.self [if]
  0000 tvar {a}     ( Emulated 'a' operand )
  0000 tvar {b}     ( Emulated 'b' operand )
  0000 tvar {v}     ( Temporary register 'v' )
- 0000 tvar {count} ( Instruction macro loop counter )
-
-\ "(top)" shifts an arbitrary bit within a word to the top
-\ most bit position. It does not take care not to move or mask
-\ off bits lower than the one you ask for.
-\
-\
-
-\ TODO: Inline this
-:m (top) ( width variable bit -- : shift bit )
-  swap >r >r {count} MOV r> {count} SUB
-  begin 
-    {count} 
-  while 
-    r@ r> ADD {count} DEC 
-  repeat ;m
-
-:m topbit >r {width} r> bwidth (top) ;m ( a -- )
+-0010 tvar {count} ( Top bit count, modified later )
 
 \ The SUBLEQ Self-Interpreter begins here. The entry point is
 \ the label "self".
@@ -2361,6 +2344,7 @@ self 2/ {self} t!
 \ virtual mode.
 \
   {virtual} NG1!
+  {width} {count} ADD
 
 \ It might be best to mask off any cell that is to be executed
 \ as a program to this machine. This could be done here. This
@@ -2413,7 +2397,17 @@ label: self-loop
       {a} {b} iSUB   \ m[b] = m[b] - a
       {a} {b} iLOAD  \ a = m[b]
 
-      {a} topbit {a} +if \ !(v == 0 || v & 0x8000)
+      \ This section prepares "{a}" for the next "+if", it
+      \ shifts the 16-bit into the top place depending on the
+      \ machine width. The bits lower than the 16-bit do not
+      \ matter unless they are all zero, in which case this
+      \ shifting has no effect anyway.
+      {count} {v} MOV
+      label: self.bit
+        {a} {a} ADD {v} DEC 
+      {v} +if self.bit JMP then
+
+      {a} +if \ !(v == 0 || v & 0x8000)
         {pc} INC
         self-loop JMP
       then
