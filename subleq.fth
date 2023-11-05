@@ -30,7 +30,6 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \             CHAMPAIGN, IL 61820
 \             PHONE: 217/826-2734
 \
-
 \ The way this cross compiler works is the following:
 \
 \ 1. An assembler for the SUBLEQ machine is made.
@@ -92,15 +91,17 @@ only forth definitions hex
 0 constant opt.control    ( Add in more control structures )
 0 constant opt.allocate   ( Add in "allocate"/"free" )
 0 constant opt.float      ( Add in floating point code )
+0 constant opt.glossary   ( Add in "glossary" word )
 0 constant opt.sm-vm-err  ( Smaller VM error message )
 0 constant opt.optimize   ( Enable extra optimization )
-0 constant opt.iffy-compare ( Enable faster/incorrect compare )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
+1 constant opt.self       ( Enable self-interpreter )
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
-: sys.info     4 or ; ( bit #4 = print info msg on startup )
-: sys.eof      8 or ; ( bit #8 = die if received EOF )
-0 sys.cksum sys.eof sys.echo-off constant opt.sys
+: sys.info     4 or ; ( bit #3 = print info msg on startup )
+: sys.eof      8 or ; ( bit #4 = die if received EOF )
+: sys.warnv  $10 or ; ( bit #5 = warn if virtualized )
+0 ( sys.cksum ) sys.eof sys.echo-off sys.warnv constant opt.sys
 defined (order) 0= [if]
 : (order) ( w wid*n n -- wid*n w n )
   dup if
@@ -132,6 +133,8 @@ FC00 constant =thread \ Initial start of thread area
 000D constant =cr     \ Carriage Return character value
 007F constant =del    \ Delete character
 create tflash tflash size cells allot size erase
+variable tzreg 0 tzreg !
+variable tareg 1 tareg !
 variable tdp 0 tdp ! ( target dictionary pointer )
 variable tlast 0 tlast ! ( last defined target word pointer )
 variable tlocal 0 tlocal ! ( local variable allocator )
@@ -237,18 +240,18 @@ defined eforth [if]
    if abort" unstructured" then assembler.1 -order ;m
 :m (a); (fall-through); ;m
 defined eforth [if] system -order [then]
-:m Z 0 t, ;m ( -- : Address 0 must contain 0 )
-:m A, 0 t, ;m ( -- : Synonym for 'Z', temporary location )
-:m V, 1 t, ;m ( -- : Address 1 also contains 0, temp location )
+:m Z tzreg @ t, ;m ( -- : Address 0 must contain 0 )
+:m A, Z ;m ( -- : Synonym for 'Z', temporary location )
+:m V, tareg @ t, ;m ( -- : Address 1 also contains 0, tmp loc )
 :m NADDR there 2/ 1+ t, ;m ( --, jump to next cell )
-:m HALT 0 t, 0 t, -1 t, ;m ( --, Halt but do not catch fire )
+:m HALT Z Z -1 t, ;m ( --, Halt but do not catch fire )
 :m JMP 2/ Z Z t, ;m ( a --, Jump to location )
 :m ADD swap 2/ t, Z NADDR Z 2/ t, NADDR Z Z NADDR ;m
 :m SUB swap 2/ t, 2/ t, NADDR ;m ( a a -- : subtract )
 :m NOOP Z Z NADDR ;m ( -- : No operation )
 :m ZERO dup 2/ t, 2/ t, NADDR ;m ( a -- : zero a location )
 :m PUT 2/ t, -1 t, NADDR ;m ( a -- : put a byte )
-( :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
+:m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
 :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
@@ -302,7 +305,7 @@ assembler.1 -order
 meta.1 +order definitions
   0 t, 0 t,        \ both locations must be zero
 label: entry       \ used to set entry point in next cell
-  -1 t,            \ system entry point
+  -1 t,            \ system entry point, set later
 opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
                    \ #4=info, #8=die on EOF
   0 tvar primitive \ any address lower must be a VM primitive
@@ -310,11 +313,18 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
 $10 tvar bwidth    \ must contain 16
+$40 tvar mwidth    \ maximum machine width
   0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
   0 tvar r3        \ register 3
   0 tvar r4        \ register 4
+opt.self [if]
+  0 tvar {virtual} \ are we virtualized?
+  0 tvar {self}    \ location of the self interpreter
+  0 tvar {pc}      \ Emulated SUBLEQ Machine program counter
+$10 tvar {width}   \ set by size detection routines
+[then]
   0 tvar h         \ dictionary pointer
   =thread half tvar {up} \ Current task addr. (Half size)
   0 tvar check     \ used for system checksum
@@ -393,8 +403,16 @@ label: start         \ System Entry Point
 label: chk16
   r0 r0 ADD                        \ r0 = r0 * 2
   r1 INC                           \ r1++
+  r1 r2 MOV                        \ r2 = r1
+  mwidth r2 SUB r2 +if die JMP then \ check length < max width
   r0 +if chk16 JMP then            \ check if still positive
-  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be zero
+opt.self [if] \ if width > 16, jump to 16-bit emulator
+  r1 r2 MOV
+  r1 {width} MOV \ Save actual machine width
+  bwidth r2 SUB r2 +if {self} iJMP then
+[then]
+  bwidth r1 SUB r1 if die JMP then \ r1 - bwidth should be 0
+opt.self [if] ( self JMP ) there 2/ {pc} t!  [then]
   {sp0} {sp} MOV     \ Setup initial variable stack
   {rp0} {rp} MOV     \ Setup initial return stack
   {cold} ip MOV      \ Get the first instruction to execute
@@ -409,8 +427,62 @@ label: vm ( Forth Inner Interpreter )
   ip {rp} iSTORE      \ and store ip to return stack
   r0 ip MOV vm a-optim \ "r0" holds our next instruction
   vm JMP              \ Ad infinitum...
-assembler.1 -order
 :m ;a (fall-through); vm a-optim vm JMP ;m
+opt.self [if]
+0 tvar {zreg} {zreg} 2/ tzreg !
+0 tvar {areg} {areg} 2/ tareg !
+ 0000 tvar {a}     ( Emulated 'a' operand )
+ 0000 tvar {b}     ( Emulated 'b' operand )
+ 0000 tvar {v}     ( Temporary register 'v' )
+-0010 tvar {count} ( Top bit count, modified later )
+label: self
+self 2/ {self} t!
+  {virtual} NG1!
+  {width} {count} ADD
+label: self-loop
+  {pc} {v} MOV \ Copy {pc} for next instruction
+  neg1 2/ t, {v} 2/ t, -1 t, \ Conditionally halt on '{c}'
+  {a} {pc} iLOAD {pc} INC
+  {b} {pc} iLOAD {pc} INC
+  {a} {v} MOV {v} INC {v} +if ( Input byte? )
+    {b} {v} MOV {v} INC {v} +if ( Output byte? )
+      ( Neither Input nor Output, must be normal instruction )
+      \ This section performs "m[b] = m[b] - m[a]" and loads
+      \ the result back into "{a}". A custom "iSUB" routine
+      \ might speed things up here, one that stored the result
+      \ in "{b}" but also kept a copy in "{a}".
+      {a} {a} iLOAD  \ a = m[a]
+      {a} {b} iSUB   \ m[b] = m[b] - a
+      {a} {b} iLOAD  \ a = m[b]
+      \ This section prepares "{a}" for the next "+if", it
+      \ shifts the 16-bit into the top place depending on the
+      \ machine width. The bits lower than the 16-bit do not
+      \ matter unless they are all zero, in which case this
+      \ shifting has no effect anyway.
+      {count} {v} MOV
+      label: self.bit
+        {a} {a} ADD {v} DEC 
+      {v} +if self.bit JMP then
+      {a} +if \ !(v == 0 || v & 0x8000)
+        {pc} INC
+        self-loop JMP
+      then
+      {pc} {pc} iLOAD \ pc = m[c]
+      self-loop JMP
+    then ( Output byte from m[a] )
+    {a} {a} iLOAD
+    {a} PUT
+    {pc} INC
+    self-loop JMP
+  then ( Input byte and store in m[b] )
+  {a} GET
+  {a} {b} iSTORE
+  {pc} INC
+  self-loop JMP ( And do it again... )
+  0 tzreg !
+  1 tareg !
+[then]
+assembler.1 -order
 :a opSwap tos r0 MOV tos {sp} iLOAD r0 {sp} iSTORE ;a
 :a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
 :a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
@@ -421,10 +493,6 @@ assembler.1 -order
 :a opEmit tos PUT t' opDrop JMP (a); ( n -- )
 :a opExit ip {rp} iLOAD (fall-through); ( !!! ) ( R: a -- )
 :a rdrop --rp ;a ( R: u -- )
-:a r@ ++sp tos {sp} iSTORE tos {rp} iLOAD ;a ( R: u --, -- u )
-:a rp@ ++sp tos {sp} iSTORE {rp} tos MOV ;a ( R: ???, -- u )
-:a rp! tos {rp} MOV t' opDrop JMP (a); ( u -- R: ??? )
-:a sp! tos {sp} MOV ;a ( u -- ??? : set stack pointer )
 :a opIpInc ip INC ;a ( -- : increment instruction pointer )
 :a opJumpZ ( u -- : Conditional jump on zero )
   tos r0 MOV
@@ -433,7 +501,7 @@ assembler.1 -order
   (fall-through); ( !!! )
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
 :a opNext r0 {rp} iLOAD ( R: n -- | n-1 )
-   r0 if r0 DEC r0 {rp} iSTORE t' opJump JMP then
+   r0 +if r0 DEC r0 {rp} iSTORE t' opJump JMP then
    --rp t' opIpInc JMP (a);
 :a op0= ( n -- f : not equal to zero )
  ( does not work: "tos if tos ZERO else tos NG1! then vm JMP" )
@@ -457,8 +525,8 @@ assembler.1 -order
   label: shift.loop
     r1 r1 ADD \ double r1, equivalent to left shift by one
     \ work out what bit to shift into r1
-    tos -if r1 INC else
-      tos r2 MOV r2 INC r2 -if r1 INC then then
+    tos +if else
+      tos r2 MOV r2 INC r2 +if else r1 INC then then
     tos tos ADD \ double tos, equivalent to left shift by one
     r0 DEC \ decrement loop counter
   r0 +if shift.loop JMP then 
@@ -474,18 +542,13 @@ assembler.1 -order
     r1 r1 ADD \ shift results register
     \ determine topmost bit of 'tos', place result in 'r2'
     \ this is used to select whether to use r3 or r4
-    \ The following code *almost* works:
-    \ 
-    \    tos r2 MOV r2 INC r2 -if r4 r2 MOV else r3 r2 MOV then
-    \ 
-    \ But is not quite right.
-    tos -if label: opMuxR4 r4 r2 MOV else
+    tos +if label: opMux.r3 r3 r2 MOV else
       tos r2 MOV
-      r2 INC r2 -if
-        opMuxR4 JMP ( space saving ) else
-        r3 r2 MOV then then
+      r2 INC r2 +if
+        opMux.r3 JMP ( space saving ) else
+        r4 r2 MOV then then
     \ determine whether we should add 0/1 into result
-    r2 -if r1 INC else r2 INC r2 -if r1 INC then then
+    r2 +if else r2 INC r2 +if else r1 INC then then
     tos tos ADD \ shift tos
     r3 r3 ADD \ shift r3
     r4 r4 ADD \ shift r4
@@ -500,11 +563,11 @@ opt.divmod [if]
     r1 INC     ( increment quotient )
     tos r0 SUB ( repeated subtraction )
     r0 -if 
-      tos r0 ADD   ( correct remainder )
-      r1 DEC       ( correct quotient )
-      r1 tos MOV   ( store results back to tos )
+      tos r0 ADD     ( correct remainder )
+      r1 DEC         ( correct quotient )
+      r1 tos MOV     ( store results back to tos )
       r0 {sp} iSTORE ( ...and stack )
-      vm JMP ( finish... )
+      vm JMP         ( finish... )
     then
   divStep JMP ( perform another division step )
   (a);
@@ -526,14 +589,14 @@ opt.multi [if]
       ip r1 iSTORE r1 INC \ save registers to current task
      tos r1 iSTORE r1 INC \ only a few need to be saved
     {rp} r1 iSTORE r1 INC
-    {sp} r1 iSTORE r1 INC
+    {sp} r1 iSTORE
       r0 {rp0} MOV stacksz {rp0} ADD \ change {rp0} to new loc
    {rp0} {sp0} MOV stacksz {sp0} ADD \ same but for {sp0}
       r0 {up} MOV r0 INC \ set next task
       ip r0 iLOAD r0 INC \ reverse of save registers
      tos r0 iLOAD r0 INC
     {rp} r0 iLOAD r0 INC
-    {sp} r0 iLOAD r0 INC \ we're all golden
+    {sp} r0 iLOAD        \ we're all golden
   then ;a
 [else]
 :m pause ;m ( -- [disabled] )
@@ -597,7 +660,6 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 :to rshift shift ; ( u n -- u : logical right shift by "n" )
 :so [@] [@] ;s ( vma -- : fetch -VM Address- )
 :so [!] [!] ;s ( u vma -- : store to -VM Address- )
-:to sp! sp! ; ( a -- ??? : set the variable stack location )
 :to 0= op0= ; ( n -- f : equal to zero )
 :so leq0 leq0 ;s ( n -- 0|1 : less than or equal to zero )
 :so mux opMux ;s ( u1 u2 sel -- u : bitwise multiplex op. )
@@ -610,6 +672,7 @@ system[
  1 constant #1  ( --  1 : push one onto the stack )
 -1 constant #-1 ( -- -1 : push negative one onto the stack )
  2 constant #2  ( --  2 : push two onto the stack )
+-2 constant -cell  ( -- -2 : push negative two onto the stack )
 ]system
 : 1+ #1 + ; ( n -- n : increment value in cell )
 : 1- #1 - ; ( n -- n : decrement value in cell )
@@ -630,7 +693,7 @@ system[
 :m user :t mdrop (user) local? =cell lallot t, munorder ;m
 :to ) ; immediate ( -- : NOP, terminate comment )
 : over swap dup >r swap r> ; ( n1 n2 -- n1 n2 n1 )
-: invert #0 swap - 1- ;           ( u -- u : bitwise invert )
+: invert #-1 swap - ;             ( u -- u : bitwise invert )
 : xor >r dup invert swap r> mux ; ( u u -- u : bitwise xor )
 : or over mux ;                   ( u u -- u : bitwise or )
 : and #0 swap mux ;               ( u u -- u : bitwise and )
@@ -655,7 +718,7 @@ system[
   [ {root-voc} ] literal ;
 : this [ 0 ] up ; ( -- a : address of task thread memory )
 : pad this [ 3C0 ] literal + ; ( -- a : index into pad area )
-: #vocs [ 8 ] literal ; ( -- u : number of vocabularies )
+8 constant #vocs ( -- u : number of vocabularies )
 : context [ {context} ] literal ; ( -- a )
 variable blk ( -- a : loaded block )
 variable scr ( -- a : latest listed block )
@@ -670,13 +733,16 @@ $20 constant bl ( -- 32 : push space character )
 system[
        h constant h?  ( -- a : push the location of dict. ptr )
 {cycles} constant cycles ( -- a : number of "cycles" ran for )
-    {sp} constant sp ( -- a : address of v.stk ptr. )
-  {user} constant user? ( -- a : address of user alloc var )
+    {sp} constant sp     ( -- a : address of v.stk ptr. )
+  {user} constant user?  ( -- a : address of user alloc var )
          variable calibration 1400 t' calibration >tbody t!
 ]system
 :s radix base @ ;s ( -- u : retrieve base )
-: here h? @ ; ( -- u : push the dictionary pointer )
+: here h? @ ;      ( -- u : push the dictionary pointer )
 : sp@ sp @ 1+ ; ( -- a : Fetch variable stack pointer )
+: sp! 1- [ {sp} half ] literal [!] #1 drop ;
+: rp@ [ {rp} half ] literal [@] 1- ; compile-only
+: rp! r> swap [ {rp} half ] literal [!] >r ; compile-only
 : hex [ $10 ] literal base ! ; ( -- : hexadecimal base )
 : decimal [ $A ] literal base ! ; ( -- : decimal base )
 :to ] #-1 state ! ; ( -- : return to compile mode )
@@ -684,6 +750,7 @@ system[
 : nip swap drop ;   ( x y -- y : remove second item on stack )
 : tuck swap over ;  ( x y -- y x y : save item for rainy day )
 : ?dup dup if dup then ; ( x -- x x | 0 : conditional dup )
+: r@ r> r> tuck >r >r ; compile-only ( R: n -- n, -- n )
 : rot >r swap r> swap ; ( x y z -- y z x : "rotate" stack )
 : -rot rot rot ; ( x y z -- z x y : "rotate" stack backwards )
 : 2drop drop drop ; ( x x -- : drop it like it is hot )
@@ -694,10 +761,6 @@ system[
 : 0> leq0 0= ; ( n -- f : greater than zero )
 : 0<> 0= 0= ;  ( n -- f : not equal to zero )
 : 0<= 0> 0= ;  ( n -- f : less than or equal to zero )
-opt.iffy-compare [if]
-: > - 0> ;   ( n1 n2 -- f : signed greater than )
-: < swap > ; ( n1 n2 -- f : less than, is n1 less than n2 )
-[else]
 : < ( n1 n2 -- f : less than, is n1 less than n2 )
    2dup leq0 swap leq0 if
      if
@@ -713,7 +776,6 @@ opt.iffy-compare [if]
    then
    2drop #0 ;
 : > swap < ;   ( n1 n2 -- f : signed greater than )
-[then]
 : 0< #0 < ;   ( n -- f : less than zero )
 : 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
 : >= < 0= ;   ( n1 n2 -- f : greater than or equal to )
@@ -726,20 +788,20 @@ opt.iffy-compare [if]
 : negate 1- invert ; ( n -- n : twos compliment negation )
 : s>d dup 0< ; ( n -- d : signed to double width cell )
 : abs s>d if negate then ; ( n -- u : absolute value )
-: cell #2 ;   ( -- u : push bytes in cells to stack )
+2 constant cell ( -- u : push bytes in cells to stack )
 : cell+ cell + ; ( a -- a : increment address by cell width )
 : cells 2* ;     ( u -- u : multiply # of cells to get bytes )
 : cell- cell - ; ( a -- a : decrement address by cell width )
 : execute 2/ >r ; ( xt -- : execute an execution token )
 :s @execute ( ?dup 0= ?exit ) @ execute ;s ( xt -- )
 : ?exit if rdrop then ; compile-only ( u --, R: -- |??? )
-: key? #-1 [@] negate ( -- c 0 | -1 : get byte of input )
+: key? pause #-1 [@] negate ( -- c 0 | -1 : get byte of input )
    s>d if
      [ {options} ] literal @
      [ 8 ] literal and if bye then drop #0 exit
    then #-1 ;
-: key begin pause <key> @execute until ; ( -- c )
-: emit pause <emit> @execute ; ( c -- : output byte )
+: key begin <key> @execute until ; ( -- c )
+: emit <emit> @execute ; ( c -- : output byte )
 : cr ( -- : emit new line )
   [ =cr ] literal emit 
   [ =lf ] literal emit ;
@@ -773,8 +835,9 @@ system[ user tup =cell tallot ]system
 : c, here c! #1 allot ; ( c -- : write character into dict. )
 : count dup 1+ swap c@ ; ( b -- b c : advance string )
 : +string #1 over min rot over + -rot - ; ( b u -- b u )
-: type ( a u -- : print out a string )
-  begin dup while swap count emit swap 1- repeat 2drop ;
+:s .emit ( c -- : print char, replacing non-graphic ones )
+  dup bl [ $7F ] literal within [char] . swap mux emit ;s
+: type 1- for count emit next drop ;
 : cmove ( b1 b2 n -- : move character blocks around )
   #0 max for aft >r c@+ r@ c! 1+ r> 1+ then next 2drop ;
 : fill ( b n c -- : write byte 'c' to array 'b' of 'u' length )
@@ -795,12 +858,12 @@ system[ user tup =cell tallot ]system
    rdrop                  ( )     \ discard saved stack ptr
    #0 ;                   ( 0 )   \ normal completion
 : throw ( ??? exception# -- ??? exception# )
-    ?dup if              ( exc# )     \ 0 throw is no-op
-      [ {handler} ] up @ rp! ( exc# ) \ restore prev ret. stack
-      r> [ {handler} ] up !  ( exc# ) \ restore prev handler
-      r> swap >r         ( saved-sp ) \ exc# on return stack
-      sp! drop r>        ( exc# )     \ restore stack
-    then ;
+  ?dup if              ( exc# )     \ 0 throw is no-op
+    [ {handler} ] up @ rp! ( exc# ) \ restore prev ret. stack
+    r> [ {handler} ] up !  ( exc# ) \ restore prev handler
+    r> swap >r         ( saved-sp ) \ exc# on return stack
+    sp! r>        ( exc# )     \ restore stack
+  then ;
 : abort #-1 throw ; ( -- : Time to die. )
 :s (abort) do$ swap if count type abort then drop ;s ( n -- )
 :s depth [ {sp0} ] literal @ sp@ - 1- ;s ( -- n : stk. depth )
@@ -836,7 +899,7 @@ system[ user tup =cell tallot ]system
 : /mod over 0< swap m/mod ; ( u1 u2 -- u1%u2 u1/u2 )
 : mod /mod drop ; ( u1 u2 -- u1%u2 )
 : /   /mod nip ; ( u1 u2 -- u1/u2 )
-:s (emit) opEmit ;s ( c -- : output byte to terminal )
+:s (emit) pause opEmit ;s ( c -- : output byte to terminal )
 : echo <echo> @execute ; ( c -- : emit a single character )
 :s tap dup echo over c! 1+ ;s ( bot eot cur c -- bot eot cur )
 :s ktap ( bot eot cur c -- bot eot cur )
@@ -895,7 +958,7 @@ system[ user tup =cell tallot ]system
 :s extract ( ud ud -- ud u : extract digit from number )
   dup >r um/mod r> swap >r um/mod r> rot ;s
 :s digit ( u -- c : extract a character from number )
-   [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s
+  [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s
 : #  #2 ?depth #0 radix extract digit hold ; ( d -- d )
 : #s begin # 2dup ( d0= -> ) or 0= until ; ( d -- 0 )
 : <# this [ =num ] literal + hld ! ; ( -- : start num. output )
@@ -928,9 +991,10 @@ opt.divmod [if]
 : number? ( a u -- d -1 | a u 0 : easier to use than >number )
   #-1 dpl !
   radix >r
-  over c@ [char] - = dup >r if         +string then
-  over c@ [char] $ =        if hex     +string then
-( over c@ [char] # =        if decimal +string then )
+  over c@ [char] - = dup >r if +string then
+  over c@ [char] $ = if hex +string 
+    ( dup 0= if dup rdrop r> base ! exit then ) 
+  then
   2>r #0 dup 2r>
   begin
     >number dup
@@ -951,7 +1015,7 @@ opt.divmod [if]
   next 2drop #0 ;
 : nfa cell+ ; ( pwd -- nfa : move word ptr to name field )
 : cfa ( pwd -- cfa : move to Code Field Address )
-  nfa c@+ [ 1F ] literal and + cell+ cell negate and ;
+  nfa c@+ [ 1F ] literal and + cell+ -cell and ;
 :s (search) ( a wid -- PWD PWD 1 | PWD PWD -1 | 0 a 0 )
   \ Search for word "a" in "wid"
   swap >r dup
@@ -1112,8 +1176,8 @@ root[
 : create state @ >r postpone : drop r> state ! compile (var)
    get-current ! ;
 :to variable create #0 , ;
-:to constant create cell negate allot compile (const) , ;
-:to user create cell negate allot compile (user)
+:to constant create -cell allot compile (const) , ;
+:to user create -cell allot compile (user)
    cell user? +! user? @ , ;
 : >body cell+ ; ( a -- a : move to a create words body )
 :s (does) 2r> 2* swap >r ;s compile-only
@@ -1124,18 +1188,15 @@ root[
   ! ;s compile-only
 : does> compile (comp) compile (does) ;
    immediate compile-only
-:to marker last align here create cell negate allot compile
+:to marker last align here create -cell allot compile
     (marker) , , ; ( --, "name" )
-:to rp! compile rp! ; immediate compile-only
-:to rp@ compile rp@ ; immediate compile-only
 :to >r compile opToR ; immediate compile-only
 :to r> compile opFromR ; immediate compile-only
-:to r@ compile r@ ; immediate compile-only
 :to rdrop compile rdrop ; immediate compile-only
 :to exit compile opExit ; immediate compile-only
 :s (s) align [char] " word count nip 1+ allot align ;s
-:to ." compile .$ (s)  ; immediate compile-only
-:to $" compile ($) (s)  ; immediate compile-only
+:to ." compile .$ (s) ; immediate compile-only
+:to $" compile ($) (s) ; immediate compile-only
 :to abort" compile (abort) (s) ; immediate compile-only
 :to ( [char] ) parse 2drop ; immediate ( c"xxx" -- )
 :to .( [char] ) parse type ; immediate ( c"xxx" -- )
@@ -1155,7 +1216,7 @@ opt.better-see [unless]
 opt.better-see [if] ( Start conditional compilation )
 :s ndrop for aft drop then next ;s ( x0...xn n -- )
 :s validate ( pwd cfa -- nfa | 0 )
-   over cfa <> if drop #0 exit then nfa ;s
+  over cfa <> if drop #0 exit then nfa ;s
 :s cfa? ( wid cfa -- nfa | 0 : search for CFA in a wordlist )
   cells >r
   begin
@@ -1251,20 +1312,55 @@ opt.better-see [if] ( Start conditional compilation )
 : page csi ." 2J" csi ." 1;1H" ( csi ." 0m" ) ;
 : at-xy radix decimal ( x y -- : set cursor position )
    >r csi #0 u.r ." ;" #0 u.r ." H" r> base ! ;
-( system[ variable dirty ]system )
-: b/buf [ $400 ] literal ; ( -- u : size of the block buffer )
-: block #1 ?depth 1- [ $A ] literal lshift pause ; ( k -- u )
-: flush ( dirty @ if save-buffers empty-buffers then ) ;
-: update ( #-1 dirty ! ) ; ( -- : mark cur. buf. as dirty )
+$400 constant b/buf ( -- u : size of the block buffer )
+system[
+$200 constant c/buf  ( -- cu : cells in the block buffer )
+variable <block>     ( -- a : xt for "block" word )
+$F400 constant buf0  ( -- ca : location of block buffer )
+variable dirty0      ( -- a : is block buffer dirty? )
+variable blk0        ( -- a : what block is stored in buffer? )
+-1 t' blk0 >tbody t! ( set initial loaded block to be invalid )
+]system
+:s (block) ( ca ca cu -- : transfer to/from "mass storage" )
+  pause ( pause for multitasking )
+  for 
+    aft 2dup [@] swap [!] 1+ swap 1+ swap
+    then
+  next 2drop ;s
+t' (block) t' <block> >tbody t!
+( :s swap? 0= ?exit swap ;s ( x y sel -- x y | y x )
+:s valid? dup #1 [ $80 ] literal within ;s ( k -- k f )
+:s transfer <block> @ execute ;s ( a a u -- )
+:s >blk 1- c/buf * ;s ( k -- ca )
+:s clean #0 dirty0 ! ;s ( -- : opposite of 'update' )
+:s invalidate #-1 blk0 ! ;s ( -- : store invalid block # )
+:s bput valid? if >blk buf0 2/ c/buf transfer exit then drop ;s
+:s bget 
+  valid? if >blk buf0 2/ swap c/buf transfer exit then drop ;s
+:s loaded? dup blk0 @ = ;s ( k -- k f )
+: update #-1 dirty0 ! ; ( -- )
+: save-buffers dirty0 @ if blk0 @ bput clean then ; ( -- )
+: flush save-buffers invalidate ; ( -- )
+: empty-buffers clean invalidate ; ( -- )
+: buffer ( k -- a )
+  #1 ?depth                      ( sanity check stack depth )
+  valid?                         ( validity check )
+  0= [ -$23 ] literal and throw  ( throw if invalid )
+  loaded? if drop buf0 exit then ( already loaded )
+  save-buffers                   ( save buffer if dirty )
+  blk0 !                         ( set current loaded block )
+  buf0 ;                         ( return block buffer loc. )
+: block
+  loaded? if drop buf0 exit then ( already loaded )
+  dup buffer swap bget ; ( k -- a )
 : blank bl fill ; ( a u -- : blank an area of memory )
 : list ( k -- : display a block )
    page cr         ( clean the screen )
-   dup scr ! block ( update "scr" and load block )
+   dup >r block ( save block number and call "block" )
    [ $F ] literal for       ( for each line in the block )
      [ $F ] literal r@ - [ $3 ] literal u.r space
-     [ $40 ] literal 2dup type cr +         ( print line )
-   ( [ $3F ] literal for count emit next cr ( print line )
-   next drop ;
+     [ $3F ] literal for count .emit next cr ( print line )
+   next drop r> scr ! ;
 : get-input source >in @ source-id <ok> @ ; ( -- n1...n5 )
 : set-input <ok> ! [ {id} ] up ! >in ! tup 2! ; ( n1...n5 -- )
 :s ok state @ ?exit ."  ok" cr ;s ( -- : okay prompt )
@@ -1284,14 +1380,21 @@ opt.better-see [if] ( Start conditional compilation )
 : load ( k -- : execute a block )
    blk @ >r dup blk ! #0 [ $F ] literal for
    2dup 2>r loadline 2r> 1+ next 2drop r> blk ! ;
-:r eforth [ $0109 ] literal ;r ( --, version )
+root[
+  $FFFF constant eforth ( --, version )
+]root
 opt.info [if]
   :s info cr ( --, print system info )
-    ." eForth v1.9, Public Domain,"  here . cr
+    ." eForth vX.X, Public Domain,"  here . cr
     ." Richard James Howe, howe.r.j.89@gmail.com" cr
     ." https://github.com/howerj/subleq" cr ;s
 [else]
   :s info ;s ( --, [disabled] print system info )
+[then]
+opt.self [if]
+:s warnv [ {virtual} ] literal @ if
+    ." Warning: Virtual 16-bit SUBLEQ VM" cr
+    then ;s
 [then]
 :s xio ( xt xt xt -- : exchange I/O )
   [ t' accept ] literal <expect> ! <tap> ! <echo> ! <ok> ! ;s
@@ -1342,6 +1445,9 @@ opt.info [if]
 :s (cold) ( -- : Forth boot sequence )
   forth definitions ( un-mess-up dictionary / set it )
   ini ( initialize the current thread correctly )
+  opt.self [if]
+    [ {options} ] literal @ [ $10 ] literal and if warnv then
+  [then]
   [ {options} ] literal @ [ 4 ] literal and if info then
   [ {options} ] literal @ #2 and if ( checksum on? )
   [ primitive ] literal @ 2* dup here swap - cksum
@@ -1379,15 +1485,16 @@ opt.multi [if]
   #0 [ {sender} ] up ! ;s
 [then]
 opt.editor [if]
-: editor [ {editor} ] literal #1 set-order ; ( BLOCK editor )
-:e q only forth ;e ( -- : exit back to Forth interpreter )
-:e ? scr @ . ;e ( -- : print block number of current block )
+: editor [ {editor} ] literal +order ; ( BLOCK editor )
+:e q [ {editor} ] literal -order ;e ( -- : quit editor )
+:e ? scr @ . ;e    ( -- : print block number of current block )
 :e l scr @ list ;e ( -- : list current block )
 :e x q scr @ load editor ;e ( -- : evaluate current block )
 :e ia #2 ?depth [ $6 ] literal lshift + scr @ block + tib
-  >in @ + swap source nip >in @ - cmove tib @ >in ! update l ;e
+  >in @ + swap source nip >in @ - cmove tib @ >in ! l ;e
 :e a #0 swap ia ;e ( line --, "line" : insert line at )
-:e w words ;e ( -- : display block editor commands )
+:e w get-order [ {editor} ] literal #1 ( -- : list cmds )
+     set-order words set-order ;e 
 :e s update flush ;e ( -- : save edited block )
 :e n  #1 scr +! l ;e ( -- : display next block )
 :e p #-1 scr +! l ;e ( -- : display previous block )
@@ -1456,7 +1563,7 @@ opt.control [if]
 :s (macro) r> 2* 2@ swap evaluate ;s
 : macro ( c" xxx" --, : create a late-binding macro )
   create postpone immediate
-  cell negate allot compile (macro)
+  -cell allot compile (macro)
   align here #2 cells + ,
   #0 parse dup , scopy 2drop ;
 [then] ( opt.control )
@@ -1579,7 +1686,7 @@ system[
 : 2over ( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
   >r >r 2dup r> swap >r swap r> r> -rot ;
 : 2, , , ; ( n n -- : write to values into dictionary )
-:to 2constant create cell negate allot compile (2const) 2, ;
+:to 2constant create -cell allot compile (2const) 2, ;
 :to 2variable create #0 , #0 , ; \ does> ; ( d --, Run: -- a )
 :to 2literal swap postpone literal postpone literal ; immediate
 :s +- 0< if negate then ;s ( n n -- n : copy sign )
@@ -1764,7 +1871,7 @@ $8000 $4001 2constant fone ( 1.0 fconstant fone )
   [ $B8AA $4001 ] 2literal ( [ 1.4427 ] fliteral ) f* exp ;
 : falog ( r -- r )
   [ $D49A $4002 ] 2literal ( [ 3.3219 ] fliteral ) f* exp ;
-:s get ( "123" -- : get a single signed number )
+:s nget ( "123" -- : get a single signed number )
   bl word dup 1+ c@ [char] - = tuck -
   #0 #0 rot convert drop ( should throw if not number... )
   -+ ;s
@@ -1783,8 +1890,8 @@ mdecimal
   if [ 10 ] literal s>f f* r> 1- >r then
   <# r@ abs #0 #s r> sign 2drop
   [char] e hold f# #> r> over - spaces type ;
-: e ( f "123" -- usage "1.23 e 10", input scientific notation )
-  f get >r r@ abs [ 13301 ] literal [ 4004 ] literal */mod
+ : e ( f "123" -- usage "1.23 e 10", input scientific notation )
+  f nget >r r@ abs [ 13301 ] literal [ 4004 ] literal */mod
   >r s>f [ 4004 ] literal s>f f/ exp r> +
   r> 0< if f/ else f* then ;
 mhex
@@ -1898,6 +2005,33 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 : fasin fdup fsq fone fswap f- fsqrt f/ fatan ; ( r -- r )
 : facos fasin fhpi fswap f- ; ( r -- r )
 [then] ( opt.float )
+opt.glossary [if]
+:s .n . ;s ( n -- : display an address )
+:s .pwd dup ." PWD:" .n ;s ( pwd -- pwd )
+:s .nfa dup ."  NFA:" nfa .n ;s ( pwd -- pwd : print NFA addr )
+:s .cfa dup ."  CFA:" cfa .n ;s ( pwd -- pwd : print CFA addr )
+:s .blank ." --- " ;s ( -- : print attribute not set )
+:s .immediate ( nfa -- nfa : is word an "immediate" word? )
+   dup [ $40 ] literal and if ." IMM " exit then .blank ;s
+:s .compile-only  ( nfa -- nfa : is word "compile-only"? )
+   dup [ $20 ] literal and if ." CMP " exit then .blank ;s
+:s .hidden ( nfa -- nfa : is word hidden? )
+   dup [ $80 ] literal and if ." HID " exit then .blank ;s
+:s =vm [ to' pause ] literal @ ;s ( pause = last defined BLT )
+:s =exit [ to' pause ] literal cell+ @ ;s ( exit follows BLT )
+:s rvm? dup @ =vm u<= swap cell+ @ =exit = and ;s ( cfa -- f ) 
+:s cvm? ( cfa -- f )
+   dup @ [ t' compile ] literal 2/ = swap cell+ rvm? and ;s
+:s vm? dup rvm? swap cvm? or ;s ( cfa -- f )
+:s .built-in dup cfa vm? if ." BLT " exit then .blank ;s
+:s display ( pwd -- pwd : display info about single word )
+  dup .pwd .nfa .cfa space .built-in nfa count 
+  .immediate .compile-only .hidden
+  [ $1F ] literal and type cr ;s
+:s (w) begin ?dup while display @ repeat ;s ( voc -- )
+:s .voc dup  ." voc: " . cr ;s ( voc -- voc )
+: glossary get-order for aft .voc @ (w) then next ; ( -- )
+[then]
 : cold [ {cold} ] literal 2* @execute ; ( -- )
 t' (cold) half {cold} t!      \ Set starting Forth word
 atlast {forth-wordlist} t!    \ Make wordlist work
@@ -1911,3 +2045,1125 @@ save-target                   \ Output target
 bye                           \ Auf Wiedersehen
 As we have called "bye", we can write what we want here without
 it being run.
+:a opOr
+  bwidth r0 MOV
+  r5 ZERO
+  r2 {sp} iLOAD
+  --sp
+  begin r0 while
+    r5 r5 ADD
+    tos r1 MOV r3 ZERO
+    r1 -if r3 NG1! then r1 INC r1 -if r3 NG1! then
+    r2   r1 MOV r4 ZERO
+    r1 -if r4 NG1! then r1 INC r1 -if r4 NG1! then
+    r3 r4 ADD r4 if r5 INC then
+    r2 r2 ADD
+    tos tos ADD
+    r0 DEC
+  repeat
+  r5 tos MOV ;a
+:a opr5or
+  bwidth r0 MOV
+  r5 ZERO
+  r2 {sp} iLOAD
+  --sp
+  begin r0 while
+    r5 r5 ADD
+    tos r1 MOV r3 ZERO r1
+    -if r3 NG1! then r1 INC r1 -if r3 NG1! then
+    r2   r1 MOV r4 ZERO r1
+    -if r4 NG1! then r1 INC r1 -if r4 NG1! then
+    r3 r4 ADD r4 INC r3 ONE!
+    r4 if r3 ZERO then r3 r5 ADD
+    r2 r2 ADD
+    tos tos ADD
+    r0 DEC
+  repeat
+  r5 tos MOV ;a
+:a opAnd
+  bwidth r0 MOV
+  r5 ZERO
+  r2 {sp} iLOAD
+  --sp
+  begin r0 while
+   r5 r5 ADD
+   tos r1 MOV r3 ZERO r1
+   -if r3 NG1! then r1 INC r1 -if r3 NG1! then
+   r2   r1 MOV r4 ZERO r1
+   -if r4 NG1! then r1 INC r1 -if r4 NG1! then
+   r3 r4 ADD two r4 ADD r3 ONE!
+   r4 if r3 ZERO then r3 r5 ADD
+   r2 r2 ADD
+   tos tos ADD
+   r0 DEC
+  repeat
+  r5 tos MOV ;a
+# SUBLEQ Self Interpreter: Assembly version
+#
+# This is a "Self Interpreter" for SUBLEQ, that is, 
+# it is an interpreter that executes a SUBLEQ program 
+# written for a SUBLEQ machine. It expects the SUBLEQ 
+# program to be appended to the end of this program, 
+# as such it has to patch up the program and subtract 
+# the length of this program from each of the cells 
+# before execution, excepting the special addresses 
+# for when one of the operands is negative one.
+#
+# A single SUBLEQ instruction is written as:
+#
+# 	SUBLEQ a, b, c
+#
+# Which is as there is only one instruction possible, 
+# SUBLEQ, is often just written as:
+#
+# 	a b c
+#
+# These three operands are stored in three continuous 
+# memory locations. Each operand is an address, They 
+# perform the following pseudo-code:
+#
+# 	[b] = [b] - [a]
+# 	if [b] <= 0:
+# 		goto c;
+# 	
+# There are three special cases, if 'c' is negative 
+# then execution halts (or sometimes if it is refers 
+# to somewhere outside of addressable memory). The 
+# other two are for Input and Output. If 'a' is -1 
+# then a byte is loaded from input into address 'b', 
+# if 'b' is negative then a byte is output from 
+# address 'a'.
+#
+# Note that apart from I/O nothing is said about how 
+# numbers are represented, what bit length they are 
+# (or if each cell is an arbitrary precision number) 
+# and how negative numbers implemented (twos' 
+# compliment, sign magnitude, etcetera).
+#
+# Usually two's complement is used, but 8, 16, 32 and 
+# 64-bit versions of SUBLEQ are all common, with 
+# 32-bit versions being the most so.
+#
+# Despite the simplicity of the instruction set it is 
+# possible to compute anything computable with it 
+# (given infinite memory and time).
+#
+# To implement anything non-trivial self-modifying 
+# code is very common. This program is no exception.
+#
+# The self interpreter is actually quite simple to 
+# implement for this language.
+#
+# The original SUBLEQ self interpreter was from:
+#
+# <https://eigenratios.blogspot.com/2006/08>
+# (Written by Clive Gifford, 29/30 August 2006).
+#
+# However it does not deal with I/O.
+#
+# An improved version deals with output, but not 
+# input is available from:
+#
+# <http://mazonka.com/subleq/>
+#
+# Which is a dead link as of 03/01/2023, an archived 
+# version is available at:
+#
+# <https://archive.ph/8EYZv> 
+# 
+# This version deals with input and output and has 
+# fewer superfluous instructions. There are a number 
+# of improvements that could be made, which include:
+#
+## Notes on the SUBLEQ assembler:
+#
+# * Statements are terminated by ';' or new lines.
+# * Each statement is a single SUBLEQ instruction.
+# * Labels are denoted with ':' and are used for both
+# data and jump locations, the initial value is an 
+# expression to the right of the colon which will be 
+# placed at the memory location of the labels.
+# * Operands can be omitted, in which case default 
+# values will be used. 
+# * If the last operand, the jump location is 
+# omitted, it will be replaced with the location of 
+# the next instruction.
+# * If both of the last two operands are omitted then 
+# the last will be replaced with the location of the 
+# next instruction and the second operand will be 
+# replaced with a copy of the first operand, 
+# effectively zeroing the contents at the location of 
+# the first operand.
+# * '?' represents the address of the next cell, not 
+# the next instruction.
+#
+## Special Registers
+#
+# * 'Z', A register that should start and end up as 
+# zero, it is known as the Zero Register. 
+# * 'pc', the program counter for the simulated 
+# device.
+# * 'IOV', contains the value for the special I/O 
+# address values. This stands for I/O Value.
+# * 'neg1', contains negative one. Used for 
+# incrementing # usually be subtracting negative one 
+# against a value. The same value is used for 'IOV'.
+# * 'len', contains the length of this program image, 
+# as # such the variable must be the last one defined 
+# in the file.
+# * 'a', Operand 'a' of SUBLEQ instruction
+# * 'b', Operand 'b' of SUBLEQ instruction
+# * 'c', Operand 'c' of SUBLEQ instruction
+# * 'a1', used to load 'a' before indirection and as 
+# temp reg
+# * 'b1', used to load 'b' before indirection and as 
+# temp reg
+# * 'c1', used to load 'c' before indirection and as 
+# temp reg
+#
+# On to the program itself:
+#
+start:
+# Load PC: [a1] = [pc]
+a1; pc Z; Z a1; Z;
+# [a] = [[a1]] (after modification from above)
+a; a1:0 Z a2; a2:Z a; Z;
+# Patch up operand 'A' if it is not -1
+#
+# if [a] != -1:
+#    [a] = [a] + [len]
+#
+a1; a Z; Z a1; Z; # [a1] = [a]
+IOV a1 ?+3; # If [a1] is negative jump over next line
+len a; # [a] = [a] + [len] 
+neg1 pc; # [pc] = [pc] + 1
+b1; pc Z; Z b1; Z;
+b; b1:0 Z b2; b2:Z b; Z;
+# Patch up operand 'b' if it is not -1
+#
+# if [b] != -1:
+#    [b] = [b] + [len]
+#
+b1; b Z; Z b1; Z;
+IOV b1 ?+3;
+len b;
+# We need to copy 'pc' into 'c' and not use it 
+# directly later on as the SUBLEQ instruction might 
+# modify 'c', if it does the *old* value of 'pc' must 
+# be used (it would be more useful if the new value 
+# was used, however that is not the case).
+#
+neg1 pc;                 # [pc] = [pc] + 1
+c1; pc Z; Z c1; Z;       # [c1] = [pc]
+c; c1:0 Z c2; c2:Z c; Z; # [c] = [[c1]]
+# Execute the SUBLEQ instruction.
+#
+# Note that 'a' and 'b' have been modified from 
+# above.
+#
+# The result stored in 'b' will need to subject to a 
+# signed modulo operation in order to emulate a 
+# 16-bit machine on machine widths larger than the 
+# current one, as this is an expensive operation this 
+# should be skipped by detecting the machine width 
+# and jumping over the modulo on 16-bit machines,
+# when this is implemented...
+#
+a:0 b:0 leqz;   # Emulate subtraction / instruction
+  neg1 pc;      # [pc] = [pc] + 1
+  Z Z start;    # Jump back to beginning
+leqz: 
+  pc; c Z; Z pc; Z; # [pc] = [c]
+  neg1 c -1; # Check if [c] is negative, halt if so.
+  len pc; # [pc] = [pc] + [len]
+  Z Z start; # Jump back to the beginning
+# Declare and set some registers, 'len' must be last.
+. Z:0 pc:len+1 c:0 IOV: neg1:-1 len:-? 
+15 15 3 
+145 144 6 
+144 15 9 
+144 144 12 
+114 114 15 
+0 144 18 
+144 114 21 
+144 144 24 
+15 15 27 
+114 144 30 
+144 15 33 
+144 144 36 
+147 15 42 
+148 114 42 
+147 145 45 
+60 60 48 
+145 144 51 
+144 60 54 
+144 144 57 
+115 115 60 
+0 144 63 
+144 115 66 
+144 144 69 
+60 60 72 
+115 144 75 
+144 60 78 
+144 144 81 
+147 60 87 
+148 115 87 
+147 145 90 
+105 105 93 
+145 144 96 
+144 105 99 
+144 144 102 
+146 146 105 
+0 144 108 
+144 146 111 
+144 144 114 
+0 0 123 
+147 145 120 
+144 144 0 
+145 145 126 
+146 144 129 
+144 145 132 
+144 144 135 
+147 146 -1 
+148 145 141 
+144 144 0 
+0 149 0 
+-1 -149 
+<ok> @ ' ) <ok> !
+: debug source type ."  ok" cr ; ' debug <ok> !
+system +order
+ 0 constant false
+-1 constant true
+variable seed here seed !
+: random ( -- u : 16-bit xorshift )
+  seed @ dup 0= if 0= then ( seed must not be zero )
+  dup 13 lshift xor
+  dup  9 rshift xor
+  dup  7 lshift xor
+  dup seed ! ;
+: anonymous ( -- : make anonymous vocabulary and enable it )
+  get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
+: undefined? bl word find nip 0= ; ( "name", -- f )
+: defined? undefined? 0= ; ( "name", -- f: word defined ? )
+: ?\ 0= if postpone \ then ; ( f --, <string>| : cond comp. )
+: rdup r> r> dup >r >r >r ; ( R: n -- n n )
+: umin 2dup swap u< if swap then drop ; ( u u -- u )
+: umax 2dup      u< if swap then drop ; ( u u -- u )
+: off false swap ! ; ( a -- )
+: on true swap ! ; ( a -- )
+: tab 9 emit ; ( -- : emit the tab character )
+: spaces ( n -- : equiv. bl banner  )
+    ?dup 0> if for aft space then next then ;
+: 2+ 2 + ; ( u -- u : increment by two )
+: 2- 2 - ; ( u -- u : decrement by two )
+: 2, , , ; ( n n -- : write two numbers into the dictionary )
+: not -1 xor ; ( u -- u : same as 'invert' in this Forth )
+: binary $2 base ! ; ( -- : set numeric radix to binary )
+: octal $8 base ! ; ( -- : set numeric base to octal )
+: .base base @ dup decimal . base ! ; ( -- )
+: also get-order over swap 1+ set-order ; ( -- )
+: previous get-order nip 1- set-order ; ( -- )
+( : buffer block ; ( k -- a )
+: enum dup constant 1+ ; ( n --, <string> )
+: logical 0= 0= ; ( n -- f : turn a number into a 0 or -1 )
+: limit rot min max ; ( n lo hi -- n )
+: odd 1 and logical ; ( n -- f )
+: even odd invert ; ( n -- f )
+: nor or invert ; ( u u -- u )
+: nand and invert ; ( u u -- u )
+( : under >r dup r> ; ( n1 n2 -- n1 n1 n2 )
+: under over swap ; ( n1 n2 -- n1 n1 n2 )
+: 2nip >r >r 2drop r> r> ; ( n1 n2 n3 n4 -- n3 n4 )
+( n1 n2 n3 n4 -- n1 n2 n3 n4 n1 n2 )
+: 2over >r >r 2dup r> swap >r swap r> r> -rot ;
+: 2swap >r -rot r> -rot ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 )
+: 2tuck 2swap 2over ; ( n1 n2 n3 n4 -- n3 n4 n1 n2 n3 n4 )
+: 4drop 2drop 2drop ; ( n1 n2 n3 n4 -- )
+: 2rot >r >r 2swap r> r> 2swap ; ( d1 d2 d3 -- d2 d3 d1 )
+: trip dup dup ; ( n -- n n n : triplicate )
+: 2pick dup >r pick r> 2+ pick swap ;
+: log  >r 0 swap ( u base -- u : integer logarithm )
+  begin swap 1+ swap r@ / dup 0= until drop 1- rdrop ;
+: log2 0 swap ( u -- u : integer logarithm in base 2 )
+  begin swap 1+ swap 2/ dup 0= until drop 1- ;
+: average um+ 2 um/mod nip ; ( u u -- u )
+: <=> 2dup > if 2drop -1 exit then < ;
+: bounds over + swap ;
+: d>s drop ; ( d -- n : convert dubs to single )
+: dabs s>d if dnegate then ; ( d -- ud )
+: d- dnegate d+ ; ( d d -- d )
+: d< rot 2dup >                    ( d -- f )
+   if = nip nip if 0 exit then -1 exit then
+   2drop u< ;
+: d>= d< invert ;            ( d -- f )
+: d>  2swap d< ;             ( d -- f )
+: d<= d> invert ;            ( d -- f )
+: d0< nip 0< ; ( d -- f )
+: d0>= d0< 0= ; ( d -- f )
+: d0= or 0= ;                ( d -- f )
+: d0<> d0= 0= ;              ( d -- f )
+: du<  rot swap u< if 2drop #-1 exit then u< ; ( ud ud -- f )
+: du> 2swap du< ; ( ud -- t )
+: d=  rot = -rot = and ; ( d d -- f )
+: d<> d= 0= ;                ( d d -- f )
+: dmax 2over 2over d< if 2swap then 2drop ; ( d1 d2 -- d )
+: dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
+: d.r >r tuck dabs <# #s rot sign #> r> over - bl banner type ;
+: ud.r >r <# #s #> r> over - bl banner type ; ( ud +n -- )
+: d. 0 d.r space ;           ( d -- )
+: ud. 0 ud.r space ;         ( ud -- )
+: 2rdrop r> rdrop rdrop >r ; ( R: n n -- )
+: 2. swap . . ; ( n n -- )
+: m* 2dup xor 0< >r abs swap abs um* r> if dnegate then ;
+: */mod  >r m* r> m/mod ;  ( n n n -- r q )
+: */  */mod nip ;          ( n n n -- q )
+: holds begin dup while 1- 2dup + c@ hold repeat 2drop ;
+: roll ?dup if swap >r 1- recurse r> swap then ; 
+: -roll ?dup if rot >r 1- recurse r> then ; 
+: reverse for aft r@ -roll then next ; ( x0...xn n -- xn...x0 )
+: unpick 1+ sp@ + [!] ; ( n0..nx y nu -- n0..y..nx )
+: flip -rot swap ; ( a b c -- c b a ) 
+: signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )
+: >< dup 8 rshift swap 8 lshift or ; ( u -- u : swap bytes )
+: #digits >r dup 0= if 1+ exit then r> log 1+ ; ( u b -- u )
+: ** ( n u -- n : integer exponentiation )
+  ?dup if
+    over >r
+    begin
+      dup 1 >
+    while
+      swap r@ * swap 1-
+    repeat rdrop drop
+  else logical 1 and then ;
+: ur. base @ >r base ! u. r> base ! ; ( u base -- )
+: r. base @ >r base ! . r> base ! ; ( n base -- )
+: b. $2 ur. ;  ( u -- )
+: h. $10 ur. ; ( u -- )
+: o. $8 ur. ;  ( u -- )
+: d. $A r. ;   ( n -- )
+( : b. base @ swap 2 base ! . base ! ; ( u -- )
+( : h. base @ swap hex . base ! ;      ( u -- )
+( : o. base @ swap 8 base ! . base ! ; ( u -- )
+( : d. base @ swap decimal . base ! ;  ( n -- )
+: @bits swap @ and ; ( a u -- u )
+: ?\ if postpone \ then ; immediate
+: ?( if postpone ( then ; immediate ( )
+: ?if compile dup postpone if ; immediate
+: screens ( k1 k2 -- : list blocks k1 to k2 )
+  over -
+  for
+    dup . dup list 1+ key $D = if rdrop drop exit then
+  next drop ;
+: thru over - for dup >r load r> 1+ next drop ; ( k1 k2 -- )
+: /string over min rot over + -rot - ;
+: ndrop for aft drop then next ; ( 0...n n -- )
+: unused $FFFF here - ; ( 65536 bytes available in this VM )
+: char+ 1+ ; ( b -- b )
+: str= compare 0= ; ( a1 u1 a2 u2 -- f : string equality )
+: str< compare 0< ; ( a1 u1 a2 u2 -- f )
+: str> 2swap compare 0< ; ( a1 u1 a2 u2 -- f )
+: str>= str< 0= ; ( a1 u1 a2 u2 -- f )
+: str<= str> 0= ; ( a1 u1 a2 u2 -- f )
+: mux dup >r and swap r> invert and or ; ( x1 x2 mask -- x )
+: square dup * ; ( n -- n : square a number )
+: sqrt ( n -- u : integer square root )
+  1 ?depth
+  s>d  if -$B throw then ( does not work for neg. values )
+  dup 2 < if exit then   ( return 0 or 1 )
+  dup                    ( u u )
+  2 rshift recurse 2*    ( u sc )
+  dup                    ( u sc sc )
+  1+ dup square          ( u sc lc lc^2 )
+  >r rot r> <            ( sc lc bool )
+  if drop else nip then ; ( return small or large candidate )
+: log ( u base -- u : the integer logarithm of u in 'base' )
+  >r
+  dup 0= -$B and throw ( logarithm of zero is an error )
+  0 swap
+  begin
+    swap 1+ swap r@ / dup 0= ( keep dividing until 'u' is 0 )
+  until
+  drop 1- rdrop ;
+: clz ( u -- : count leading zeros )
+  ?dup 0= if $10 exit then
+  $8000 0 >r begin
+   2dup and 0=
+  while
+   r> 1+ >r 2/
+  repeat
+  2drop r> ;
+( : log2 2 log ; ( u -- u : binary integer logarithm )
+: log2 ( u -- u )
+  ?dup 0= -$B and throw clz $10 swap - 1- ;
+: count-bits ( number -- bits )
+  dup $5555 and swap 1 rshift $5555 and +
+  dup $3333 and swap 2 rshift $3333 and +
+  dup $0F0F and swap 4 rshift $0F0F and +
+  $FF mod ;
+: first-bit ( number -- first-bit )
+  dup   1 rshift or
+  dup   2 rshift or
+  dup   4 rshift or
+  dup   8 rshift or
+  dup $10 rshift or
+  dup   1 rshift xor ;
+: gray-encode dup 1 rshift xor ; ( gray -- u )
+: gray-decode ( u -- gray )
+  \ dup $10 rshift xor ( <- 32 bit )
+  dup   8 rshift xor
+  dup   4 rshift xor
+  dup   2 rshift xor
+  dup   1 rshift xor ;
+: n>r ( xn..x1 n -- , R: -- x1..xn n )
+  dup
+  begin dup
+  while rot r> swap >r >r 1-
+  repeat
+  drop r> swap >r >r ; compile-only
+: nr> ( -- xn..x1 n, R: x1..xn n -- )
+  r> r> swap >r dup
+  begin dup
+  while r> r> swap >r -rot 1-
+  repeat
+  drop ; compile-only
+: +leading ( b u -- b u: skip leading space )
+  begin over c@ dup bl = swap 9 = or while 1 /string repeat ;
+system -order
+.( DONE ) cr
+: struct 0 ;
+: field:  ( offset size -- offset' )
+  create over , +
+  does> @ + ;
+: byte:   1 field: ;
+: cell:   2 field: ;
+: long:   4 field: ;
+: union:  0 field: ;
+: unused  +  ;
+: size:  constant ;
+: ;struct drop ;
+: mark
+  $" defined (mark) [if] (mark) [then] marker (mark) "
+  count evaluate ;
+mark
+' ) <ok> !
+.( LOADED EFORTH. ) cr
+.( DICTIONARY: ) here . cr
+.( EFORTH:     ) ' 1- u. cr
+<ok> !
+<ok> @ ' ) <ok> !
+system +order
+: wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
+( NB. Bitwise ops must be masked off on non 16-bit machines )
+: crc ( b u -- u : calculate ccitt-ffff CRC )
+  $FFFF >r begin ?dup while
+   over c@ r> swap
+   ( CCITT polynomial $1021, or "x16 + x12 + x5 + 1" )
+   over $8 rshift xor ( crc x )
+   dup  $4 rshift xor ( crc x )
+   dup  $5 lshift xor ( crc x )
+   dup  $C lshift xor ( crc x )
+   swap $8 lshift xor ( crc )
+   >r +string
+  repeat r> nip ;
+( A primitive user login system [that is super insecure]. )
+wordlist +order definitions
+wordlist constant users
+constant (prompt) ( -- xt : store prompt for later use )
+variable proceed 0 proceed !
+: conceal $1B emit ." [8m" ; ( NB. Could also override <emit> )
+: reveal $1B emit ." [28m" ;
+: secure users 1 set-order ; ( load password database )
+: restore only forth definitions decimal (prompt) <ok> ! ;
+: message ." user: " ; ( -- : prompt asking for user-name )
+: fail ." Invalid username or password" cr ; ( -- error msg )
+: success 1 proceed ! ." logged in." ; ( signal success )
+: pass token count crc ; ( "xxx" -- u : super-secure <_< )
+: ask ." pass: " conceal query reveal ;
+: empty depth for aft drop then next ; ( ??? -- : empty stack )
+: prompt secure message ' ) <ok> ! ;
+: get query eval ; ( "xxx" -- : get user name )
+: retry begin prompt ' get catch drop empty proceed @ until ;
+forth-wordlist +order definitions
+: user: ( "user" "password" -- : create new user entry )
+  users +order definitions create pass , only forth definitions
+  does> ask @ pass = if restore success exit then fail ;
+: login 0 proceed ! retry ; ( -- : enter login system )
+: .users get-order secure words set-order ; ( -- : list users )
+user: guest guest
+user: admin password1
+user: archer dangerzone
+user: cyril figgis
+user: lana stirling
+.( EFORTH ONLINE ) cr
+login
+' ( <ok> !
+.( LOADING... ) cr
+only forth definitions hex
+variable sokoban-wordlist
+sokoban-wordlist +order definitions
+$20    constant maze    ( blank, or space, can be moved on )
+char X constant wall    ( wall, a lovely brick construction )
+char * constant boulder ( the burden of Sisyphus )
+char . constant off     ( switch / pressure plate )
+char & constant on      ( boulder + switch )
+char @ constant player  ( player character - amazing graphics )
+char ~ constant player+ ( player + off pad )
+$10    constant l/b     ( lines   per block )
+$40    constant c/b     ( columns per block )
+     7 constant bell    ( bell character )
+variable position  ( current player position )
+variable moves     ( moves made by player )
+variable lblk      ( last block loaded )
+( used to store rule being processed )
+create rule 3 c, 0 c, 0 c, 0 c,
+: n1+ swap 1+ swap ; ( n n -- n n : inc. second item on stk. )
+: match ( a a -- f )
+  n1+ ( replace with umin of both counts? )
+  count
+  for aft
+    count rot count rot <> if 2drop rdrop 0 exit then
+  then next 2drop -1 ;
+: beep bell emit ; ( -- : emit bell character )
+: ?apply ( a a a -- a, R: ? -- ?| )
+  >r over swap match if drop r> rdrop exit then rdrop ;
+: apply ( a -- a : check for a rule and apply it )
+ $" @ "  $"  @"  ?apply
+ $" @."  $"  ~"  ?apply
+ $" @* " $"  @*" ?apply
+ $" @*." $"  @&" ?apply
+ $" @&." $"  ~&" ?apply
+ $" @& " $"  ~*" ?apply
+ $" ~ "  $" .@"  ?apply
+ $" ~."  $" .~"  ?apply
+ $" ~* " $" .@*" ?apply
+ $" ~*." $" .@&" ?apply
+ $" ~&." $" .~&" ?apply
+ $" ~& " $" .~*" ?apply beep ;
+: pack ( c0...cn b n -- )
+  2dup swap c! for aft 1+ tuck c! then next drop ;
+: locate ( b u c -- u f : locate 'c' in buffer b/u )
+  >r
+  begin
+    ?dup
+  while
+    1- 2dup + c@ r@ = if nip rdrop -1 exit then
+  repeat
+  rdrop
+  drop
+  0 0 ;
+: relative swap c/b * + + ( $3ff and ) ; ( +x +y pos -- pos )
+: +position position @ relative ; ( +x +y -- pos )
+: double 2* swap 2* swap ;  ( u u -- u u )
+: arena lblk @ block b/buf ; ( -- b u )
+: >arena arena drop + ; ( pos -- a )
+: fetch ( +x +y -- a a a )
+  2dup   +position >arena >r
+  double +position >arena r> swap
+  position @ >arena -rot ;
+: rule@ fetch c@ rot c@ rot c@ rot ; ( +x +y -- c c c )
+: 3reverse -rot swap ;               ( 1 2 3 -- 3 2 1 )
+: rule! rule@ 3reverse rule 3 pack ; ( +x +y -- )
+: think 2dup rule! rule apply >r fetch r> ; ( +x +y --a a a a )
+: count! count rot c! ; ( a a -- )
+: act ( a a a a -- )
+  count swap >r 2 =
+  if
+    drop swap r> count! count!
+  else
+    3reverse r> count! count! count!
+  then drop ;
+: #boulders ( -- n : number of boulders left on the map )
+   0 arena
+   for aft
+     dup c@ boulder = if n1+ then
+     1+
+   then next drop ;
+: input key ; ( -- c : get a character of input )
+: instructions ( -- : help could be stored in blocks )
+  ." THIS IS A GAME OF SOKOBAN, A GAME OF SKILL, DARING AND" cr
+  ." DARING SKILL. THE OBJECT OF THE GAME IS TO MOVE THE" cr
+  ." BOULDERS ON TO THE SWITCHES / PRESSURE PLATES IN THE" cr
+  ." FEWEST MOVES. TO PLAY THIS GAME YOU CAN TYPE:" cr cr
+  ."         30 sokoban" cr cr
+  ." THE PLAYER AND BOULDERS CAN ONLY BE PUSHED, AND ONLY" cr
+  ." PUSHED IN THE CARDINAL DIRECTIONS [NORTH, EAST, SOUTH" cr
+  ." AND WEST]. THE 'w', 'a', 's' AND 'd' KEYS ARE USED FOR" cr
+  ." MOVEMENT. 'q' CAN BE USED TO QUIT." cr
+  ." TILE KEY:" cr
+  ." ' ' : AN EMPTY, NAVIGABLE TILE" cr
+  ." 'X' : AN IMPASSIBLE WALL." cr
+  ." '*' : YOUR ARCH NEMESIS. THE BOULDER." cr
+  ." '.' : A SWITCH / PRESSURE PLATE." cr
+  ." '@' : YOU, THE HANDSOME AND WISE PLAYER CHARACTER." cr
+  ." '&' : BOULDER ON TOP OF SWITCH." cr
+  ." '~' : PLAYER ON TOP OF SWITCH." cr cr
+  ." THE GAME IS WON WHEN ALL '*' ARE ON TOP OF '.'" cr
+  ." GOOD LUCK COMMANDER." cr cr input drop ;
+: .boulders  ." BOLDERS: " #boulders u. cr ; ( -- )
+: .moves     ." MOVES:   " moves    @ u. cr ; ( -- )
+: .help      ." WASD:     MOVEMENT" cr ( -- : short help )
+             ." H:        HELP" cr ;
+: .maze lblk @ list ; ( -- : display the maze )
+: show ( page cr ) .maze .boulders .moves .help ; ( -- )
+: solved? #boulders 0= ; ( -- : no boulders left = WIN )
+: finished? solved? if 1 throw then ; ( -- : throw on victory )
+: where >r arena r> locate ; ( c -- u f )
+: player? player where 0= if drop player+ where else -1 then ;
+: player! player? 0= -2 and throw position ! ; ( -- )
+: start player! 0 moves ! ; ( -- : reset some state )
+: .winner show cr ." SOLVED!" cr ; ( -- : Win message )
+: .quit cr ." Quitter!" cr ; ( -- : Quit message )
+: finish 1 = if .winner exit then .quit ; ( n -- )
+: rules think act player! ; ( +x +y -- )
+: +move 1 moves +! ; ( -- : increment move counter )
+: ?ignore over <> if rdrop then ; ( c1 c2 --, R: x -- | x )
+: left  [char] a ?ignore -1  0 rules +move ; ( c -- c )
+: right [char] d ?ignore  1  0 rules +move ; ( c -- c )
+: up    [char] w ?ignore  0 -1 rules +move ; ( c -- c )
+: down  [char] s ?ignore  0  1 rules +move ; ( c -- c )
+: help  [char] h ?ignore instructions ; ( c -- c )
+: end  [char] q ?ignore drop 2 throw ; ( c -- | c, R ? -- | ? )
+: default drop ;  ( c -- : action for unknown command )
+: command up down left right help end default finished? ;
+: maze! dup lblk ! block drop ; ( k -- : set block to use )
+sokoban-wordlist -order definitions
+sokoban-wordlist +order
+: sokoban ( k -- : play a game of sokoban given a Forth block )
+  maze! start
+  begin ( loop until something throws )
+    show input ' command catch ?dup
+  until finish ;
+only forth definitions decimal
+editor 30 r z
+ 1 a            XXXXX
+ 2 a            X   X
+ 3 a            X*  X
+ 4 a          XXX  *XXX
+ 5 a          X  *  * X
+ 6 a        XXX X XXX X     XXXXXX
+ 7 a        X   X XXX XXXXXXX  ..X
+ 8 a        X *  *             ..X
+ 9 a        XXXXX XXXX X@XXXX  ..X
+10 a            X      XXX  XXXXXX
+11 a            XXXXXXXX
+s n z
+ 1 a       XXXXXXXXXXXX
+ 2 a       X..  X     XXX
+ 3 a       X..  X *  *  X
+ 4 a       X..  X*XXXX  X
+ 5 a       X..    @ XX  X
+ 6 a       X..  X X  * XX
+ 7 a       XXXXXX XX* * X
+ 8 a         X *  * * * X
+ 9 a         X    X     X
+10 a         XXXXXXXXXXXX
+s n z
+ 1 a               XXXXXXXX
+ 2 a               X     @X
+ 3 a               X *X* XX
+ 4 a               X *  *X
+ 5 a               XX* * X
+ 6 a       XXXXXXXXX * X XXX
+ 7 a       X....  XX *  *  X
+ 8 a       XX...    *  *   X
+ 9 a       X....  XXXXXXXXXX
+10 a       XXXXXXXX
+s n z
+ 1 a                     XXXXXXXX
+ 2 a                     X  ....X
+ 3 a          XXXXXXXXXXXX  ....X
+ 4 a          X    X  * *   ....X
+ 5 a          X ***X*  * X  ....X
+ 6 a          X  *     * X  ....X
+ 7 a          X ** X* * *XXXXXXXX
+ 8 a       XXXX  * X     X
+ 9 a       X   X XXXXXXXXX
+10 a       X    *  XX
+11 a       X **X** @X
+12 a       X   X   XX
+13 a       XXXXXXXXX
+s q
+system +order ' ok <ok> ! only forth definitions decimal
+.( LOADED ) cr
+.( Type '# sokoban' to play, where '#' is a block number ) cr
+.( For example "30 sokoban" ) cr
+.( Follow the on screen instructions to play a game. ) cr
+: nul? count nip 0= ; ( a -- f : is counted word empty? )
+: grab ( <word> -- a : get word from input stream  )
+  begin token dup nul? 0= ?exit drop query again ;
+: integer grab count number? nip ; ( <num> -- n f : get int. )
+: integer? integer 0= ( dpl @ 0>= or ) -$18 and throw ;
+: ingest ( a u -- : opposite of 'dump', load nums into mem )
+  cell / for aft integer? over ! cell+ then next drop ;
+: debug source type ."  ok" cr ; ' debug <ok> !
+only forth definitions system +order
+: ?\ 0= if postpone \ then ; ( f --, <string>| : cond. comp. )
+: 1+! 1 swap +! ;
+: dabs s>d if dnegate then ;   ( d -- ud )
+: +- 0< if negate then ; ( n n -- n : copy sign )
+: >< dup 8 rshift swap 8 lshift or ; ( u -- u : byte swap )
+: m* ( n n -- d : mixed multiplication )
+  2dup xor 0< >r abs swap abs um* r> if dnegate then ;
+: /string ( b u1 u2 -- b u : advance string u2 )
+  over min rot over + -rot - ;
+: sm/rem ( dl dh nn -- rem quo: symmetric division )
+  over >r >r         ( dl dh nn -- dl dh,   R: -- dh nn )
+  dabs r@ abs um/mod ( dl dh    -- rem quo, R: dh nn -- dh nn )
+  r> r@ xor +- swap r> +- swap ;
+.( BEGIN TEST SUITE DEFINITIONS ) here . cr
+.( SET MARKER 'XXX' ) cr
+marker xxx
+variable test
+system +order
+test +order definitions
+variable total    ( total number of tests )
+variable passed   ( number of tests that passed )
+variable vsp      ( stack depth at execution of '->' )
+variable vsp0     ( stack depth at execution of 'T{' )
+variable n        ( temporary store for 'equal' )
+variable verbose  ( verbosity level of the tests )
+1 verbose !
+: quine source type cr ; ( -- : print out current input line )
+: ndrop for aft drop then next ;  ( a0...an n -- )
+: ndisplay for aft . then next ;  ( a0...an n -- )
+: empty-stacks depth ndrop ;      ( a0...an -- )
+: .pass   verbose @ 1 > if ."   ok: " space quine then ; ( -- )
+: .failed verbose @ 0 > if ." fail: " space quine then ; ( -- )
+: pass passed 1+! ;               ( -- )
+: fail empty-stacks -$B throw ;   ( -- )
+: equal ( a0...an b0...bn n -- a0...an b0...bn n f )
+  dup n !
+  for aft
+    r@ pick r@ n @ 1+ + pick xor if rdrop n @ 0 exit then
+  then next n @ -1 ;
+: ?stacks ( u u -- )
+  2dup xor
+  if
+    .failed ." Too Few/Many Arguments Provided" cr
+    ." Expected:  " u. cr
+    ." Got: "       u. cr
+    ." Full Stack:" .s cr
+    fail exit
+  else 2drop then ;
+: ?equal ( a0...an b0...bn n -- )
+  dup >r
+  equal nip 0= if
+    .failed ." Argument Value Mismatch" cr
+    ." Expected:  " r@ ndisplay cr
+    ." Got: "       r@ ndisplay cr
+    fail exit
+  then r> 2* ndrop ;
+only forth definitions system +order test +order
+: }T depth vsp0 @ - vsp @ 2* ?stacks vsp @ ?equal pass .pass ;
+: -> depth vsp0 @ - vsp ! ;
+: T{ depth vsp0 ! total 1+! ;
+: statistics total @ passed @ ;
+: throws? ( "name" -- n  )
+  postpone ' catch >r empty-stacks r> ;
+: logger( ( "line" -- : print line if verbose set high )
+  verbose @ 1 > if postpone .( cr exit then postpone ( ;
+: logger\ verbose @ 1 > if exit then postpone \ ;
+system +order
+test +order
+.( BEGIN FORTH TEST SUITE ) cr
+logger( DECIMAL BASE )
+decimal
+T{  1.           ->  1 0 }T
+T{               ->  }T
+T{  1            ->  1 }T
+T{  1 2 3        ->  1 2 3 }T
+T{  1 1+         ->  2 }T
+T{  2 2 +        ->  4 }T
+T{  3 2 4 within -> -1 }T
+T{  2 2 4 within -> -1 }T
+T{  4 2 4 within ->  0 }T
+T{ 98  4 min     ->  4 }T
+T{  1  5 min     ->  1 }T
+T{ -1  5 min     -> -1 }T
+T{ -6  0 min     -> -6 }T
+T{  55 3 max     -> 55 }T
+T{ -55 3 max     ->  3 }T
+T{  3 10 max     -> 10 }T
+T{ -2 negate     ->  2 }T
+T{  0 negate     ->  0 }T
+T{  2 negate     -> -2 }T
+T{ $8000 negate  -> $8000 }T
+T{  0 aligned    ->  0 }T
+T{  1 aligned    ->  2 }T
+T{  2 aligned    ->  2 }T
+T{  3 aligned    ->  4 }T
+T{  3  4 >       ->  0 }T
+T{  3 -4 >       -> -1 }T
+T{  5  5 >       ->  0 }T
+T{  6  6 u>      ->  0 }T
+T{  9 -8 u>      ->  0 }T
+T{  5  2 u>      -> -1 }T
+T{ -4 abs        ->  4 }T
+T{  0 abs        ->  0 }T
+T{  7 abs        ->  7 }T
+T{ $100 $10 $8  /string -> $108 $8 }T
+T{ $100 $10 $18 /string -> $110 $0 }T
+T{ 1 2 3 4 5 1 pick -> 1 2 3 4 5 4 }T
+T{ 1 2 3 4 5 0 pick -> 1 2 3 4 5 5 }T
+T{ 1 2 3 4 5 3 pick -> 1 2 3 4 5 2 }T
+T{ 3 4 / -> 0 }T
+T{ 4 4 / -> 1 }T
+T{ 1   0 throws? / -> -10 }T
+T{ -10 0 throws? / -> -10 }T
+T{ 2 2   throws? / -> 0 }T
+marker string-tests
+: s1 $" xxx"   count ;
+: s2 $" hello" count ;
+: s3 $" 123"   count ;
+: s4 $" aBc"   count ;
+: s5 $" abc"   count ;
+: <#> 0 <# #s #> ; ( n -- b u )
+logger( Test Strings: )
+logger\ .( s1:  ) space s1 type cr
+logger\ .( s2:  ) space s2 type cr
+logger\ .( s3:  ) space s3 type cr
+T{ s1 s2 compare 0= ->  0 }T
+T{ s2 s1 compare 0= ->  0 }T
+T{ s1 s1 compare 0= -> -1 }T
+T{ s2 s2 compare 0= -> -1 }T
+.( COMPARE ) cr
+T{ s3  123 <#> compare 0= -> -1 }T
+T{ s3 -123 <#> compare 0= ->  0 }T
+T{ s3   99 <#> compare 0= ->  0 }T
+string-tests
+T{ 0 ?dup -> 0 }T
+T{ 3 ?dup -> 3 3 }T
+T{ 1 2 3  rot -> 2 3 1 }T
+T{ 1 2 3 -rot -> 3 1 2 }T
+T{ 2 3 ' + execute -> 5 }T
+T{ : test-1 [ $5 $3 * ] literal ; test-1 -> $F }T
+marker variable-test
+logger( Defined variable 'x' )
+variable x
+T{ 9 x  ! x @ ->  9 }T
+T{ 1 x +! x @ -> $A }T
+variable-test
+T{     0 invert -> -1 }T
+T{    -1 invert -> 0 }T
+T{ $5555 invert -> $AAAA }T
+T{     0     0 and ->     0 }T
+T{     0    -1 and ->     0 }T
+T{    -1     0 and ->     0 }T
+T{    -1    -1 and ->    -1 }T
+T{ $FA50 $05AF and -> $0000 }T
+T{ $FA50 $FA00 and -> $FA00 }T
+T{     0     0  or ->     0 }T
+T{     0    -1  or ->    -1 }T
+T{    -1     0  or ->    -1 }T
+T{    -1    -1  or ->    -1 }T
+T{ $FA50 $05AF  or -> $FFFF }T
+T{ $FA50 $FA00  or -> $FA50 }T
+T{     0     0 xor ->     0 }T
+T{     0    -1 xor ->    -1 }T
+T{    -1     0 xor ->    -1 }T
+T{    -1    -1 xor ->     0 }T
+T{ $FA50 $05AF xor -> $FFFF }T
+T{ $FA50 $FA00 xor -> $0050 }T
+system +order
+T{ $FFFF     1 um+ -> 0 1  }T
+T{ $40   $FFFF um+ -> $3F 1  }T
+T{ 4         5 um+ -> 9 0  }T
+T{ $FFFF     1 um* -> $FFFF     0 }T
+T{ $FFFF     2 um* -> $FFFE     1 }T
+T{ $1004  $100 um* ->  $400   $10 }T
+T{     3     4 um* ->    $C     0 }T
+system -order
+T{     1     1   < ->  0 }T
+T{     1     2   < -> -1 }T
+T{    -1     2   < -> -1 }T
+T{    -2     0   < -> -1 }T
+T{ $8000     5   < -> -1 }T
+T{     5    -1   < -> 0 }T
+T{     1     1  u< ->  0 }T
+T{     1     2  u< -> -1 }T
+T{    -1     2  u< ->  0 }T
+T{    -2     0  u< ->  0 }T
+T{ $8000     5  u< ->  0 }T
+T{     5    -1  u< -> -1 }T
+T{     1     1   = ->  -1 }T
+T{    -1     1   = ->   0 }T
+T{     1     0   = ->   0 }T
+T{   2 dup -> 2 2 }T
+T{ 1 2 nip -> 2 }T
+T{ 1 2 over -> 1 2 1 }T
+T{ 1 2 tuck -> 2 1 2 }T
+T{ 1 negate -> -1 }T
+T{ 3 4 swap -> 4 3 }T
+T{ 0 0= -> -1 }T
+T{ 3 0= ->  0 }T
+T{ -5 0< -> -1 }T
+T{ 1 2 3 2drop -> 1 }T
+T{ 1 2 lshift -> 4 }T
+T{ 1 $10 lshift -> 0 }T
+T{ $4001 4 lshift -> $0010 }T
+T{ 8     2 rshift -> 2 }T
+T{ $4001 4 rshift -> $0400 }T
+T{ $8000 1 rshift -> $4000 }T
+T{ 99 throws? throw -> 99 }T
+T{ 50 10 /mod ->  0  5 }T
+( T{ -4 3  /mod -> -1 -1 }T )
+( T{ -8 3  /mod -> -2 -2 }T )
+T{     0 ><   -> 0     }T
+T{    -1 ><   -> -1    }T
+T{ $0001 ><   -> $0100 }T
+T{ $CAFE ><   -> $FECA }T
+T{ $1234 ><   -> $3412 }T
+marker definition-test
+logger( Created word 'y' 0 , 0 , )
+create y 0 , 0 ,
+T{ 4 5 y 2! -> }T
+T{ y 2@ -> 4 5 }T
+: e1 $" 2 5 + " count ;
+: e2 $" 4 0 / " count ;
+: e3 $" : z [ 4 dup * ] literal ; " count ;
+logger\ .( e1: ) space e1 type cr
+logger\ .( e2: ) space e2 type cr
+logger\ .( e3: ) space e3 type cr
+T{ e1 evaluate -> 7 }T
+T{ e2 throws? evaluate -> $A negate }T
+T{ e3 evaluate z -> $10 }T
+definition-test
+T{ here 4 , @ -> 4 }T
+T{ here 0 , here swap cell+ = -> -1 }T
+T{ char 0     -> $30 }T
+T{ char 1     -> $31 }T
+T{ char g     -> $67 }T
+T{ char ghijk -> $67 }T
+T{ #vocs 8 min -> 8 }T    \ minimum number of vocabularies is 8
+T{ b/buf       -> $400 }T  \ b/buf should always be 1024
+T{ here 4 allot -4 allot here = -> -1 }T
+$FFFF constant min-int
+$7FFF constant max-int
+$FFFF constant 1s
+T{       0 s>d              1 sm/rem ->  0       0 }T
+T{       1 s>d              1 sm/rem ->  0       1 }T
+T{       2 s>d              1 sm/rem ->  0       2 }T
+T{      -1 s>d              1 sm/rem ->  0      -1 }T
+T{      -2 s>d              1 sm/rem ->  0      -2 }T
+T{       0 s>d             -1 sm/rem ->  0       0 }T
+T{       1 s>d             -1 sm/rem ->  0      -1 }T
+T{       2 s>d             -1 sm/rem ->  0      -2 }T
+T{      -1 s>d             -1 sm/rem ->  0       1 }T
+T{      -2 s>d             -1 sm/rem ->  0       2 }T
+T{       2 s>d              2 sm/rem ->  0       1 }T
+T{      -1 s>d             -1 sm/rem ->  0       1 }T
+T{      -2 s>d             -2 sm/rem ->  0       1 }T
+T{       7 s>d              3 sm/rem ->  1       2 }T
+T{       7 s>d             -3 sm/rem ->  1      -2 }T
+T{      -7 s>d              3 sm/rem -> -1      -2 }T
+T{      -7 s>d             -3 sm/rem -> -1       2 }T
+T{ max-int s>d              1 sm/rem ->  0 max-int }T
+T{ min-int s>d              1 sm/rem ->  0 min-int }T
+T{ max-int s>d        max-int sm/rem ->  0       1 }T
+T{ min-int s>d        min-int sm/rem ->  0       1 }T
+T{      1s 1                4 sm/rem ->  3 max-int }T
+T{       2 min-int m*       2 sm/rem ->  0 min-int }T
+T{       2 min-int m* min-int sm/rem ->  0       2 }T
+T{       2 max-int m*       2 sm/rem ->  0 max-int }T
+T{       2 max-int m* max-int sm/rem ->  0       2 }T
+T{ min-int min-int m* min-int sm/rem ->  0 min-int }T
+T{ min-int max-int m* min-int sm/rem ->  0 max-int }T
+T{ min-int max-int m* max-int sm/rem ->  0 min-int }T
+T{ max-int max-int m* max-int sm/rem ->  0 max-int }T
+T{ :noname 2 6 + ; execute -> 8 }T
+.( TESTS COMPLETE ) cr
+decimal
+.( passed: ) statistics u. space .( / ) 0 u.r cr
+.( here:   ) here . cr
+statistics <> ?\ .( [FAILED]     ) cr  \ abort
+statistics  = ?\ .( [ALL PASSED] ) cr
+.( CALLING MARKER 'XXX' ) cr
+xxx
+( FORTH-83 FLOATING POINT.
+  ----------------------------------
+  COPYRIGHT 1985 BY ROBERT F. ILLYES
+        PO BOX 2516, STA. A
+        CHAMPAIGN, IL 61820
+        PHONE: 217/826-2734  )     HEX
+: ZERO  OVER 0= IF DROP 0 THEN ;
+: FNEGATE 8000 XOR ZERO ;
+: FABS  7FFF AND ;
+: NORM  >R 2DUP OR
+        IF BEGIN DUP 0< NOT
+           WHILE D2* R> 1- >R
+           REPEAT SWAP 0< - ?DUP
+           IF R> ELSE 8000 R> 1+ THEN
+        ELSE R> DROP THEN ;
+: F2*   1+ ZERO ;
+: F*    ROT + 4000 - >R UM* R> NORM ;
+: FSQ   2DUP F* ;
+: F2/   1- ZERO ;
+: UM/   DUP >R UM/MOD SWAP R>
+        OVER 2* 1+ U< SWAP 0< OR - ;
+: F/    ROT SWAP - 4000 + >R
+        0 ROT ROT 2DUP U<
+        IF   UM/ R> ZERO
+        ELSE >R D2/ FABS R> UM/ R> 1+
+        THEN ;
+: ALIGN 20 MIN 0 DO D2/ LOOP ;
+: RALIGN 1- ?DUP IF ALIGN THEN
+        1 0 D+ D2/ ;
+: FSIGN FABS OVER 0< IF >R DNEGATE R>
+        8000 OR THEN ;
+: F+    ROT 2DUP >R >R FABS SWAP FABS -
+        DUP IF DUP 0<
+                IF   ROT SWAP  NEGATE
+                     R> R> SWAP >R >R
+                THEN 0 SWAP RALIGN
+        THEN SWAP 0 R> R@ XOR 0<
+        IF   R@ 0< IF 2SWAP THEN D-
+             R> FSIGN ROT SWAP NORM
+        ELSE D+ IF 1+ 2/ 8000 OR R> 1+
+                ELSE R> THEN THEN ;
+: F-    FNEGATE F+ ;
+: F<    F- 0< SWAP DROP ;
+( FLOATING POINT INPUT/OUTPUT ) DECIMAL
+CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
+          ,100 , ,            1,000 , ,
+        10,000 , ,          100,000 , ,
+     1,000,000 , ,       10,000,000 , ,
+   100,000,000 , ,    1,000,000,000 , ,
+: TENS  2* 2* LITERAL + 2@ ;     HEX
+: PLACES PL ! ;
+: SHIFTS FABS 4010 - DUP 0< NOT
+        ABORT" TOO BIG" NEGATE ;
+: F#    >R PL @ TENS DROP UM* R> SHIFTS
+        RALIGN PL @ ?DUP IF 0 DO # LOOP
+        ". HOLD THEN #S ROT SIGN ;
+: TUCK  SWAP OVER ;
+: F.    TUCK <# F# #> TYPE SPACE ;
+: DFLOAT 4020 FSIGN NORM ;
+: F     DFLOAT POINT TENS DFLOAT F/ ;
+: FCONSTANT F 2CONSTANT ;
+: FLOAT DUP 0< DFLOAT ;
+: -+    DROP SWAP 0< IF NEGATE THEN ;
+: FIX   TUCK 0 SWAP SHIFTS RALIGN -+ ;
+: INT   TUCK 0 SWAP SHIFTS  ALIGN -+ ;
+1.      FCONSTANT ONE DECIMAL
+34.6680 FCONSTANT X1
+-57828. FCONSTANT X2
+2001.18 FCONSTANT X3
+1.4427  FCONSTANT X4
+: EXP   2DUP INT DUP >R FLOAT F-
+        F2* X2 2OVER FSQ X3 F+ F/
+        2OVER F2/ F-     X1 F+ F/
+        ONE F+ FSQ R> + ;
+: FEXP  X4 F* EXP ;
+: GET   BL WORD DUP 1+ C@ "- = TUCK -
+        0 0 ROT CONVERT DROP -+ ;
+: E     F GET >R R@ ABS 13301 4004 */MOD
+        >R FLOAT 4004 FLOAT F/ EXP R> +
+        R> 0< IF F/ ELSE F* THEN ;
+: E.    TUCK FABS 16384 TUCK -
+        4004 13301 */MOD >R
+        FLOAT 4004 FLOAT F/ EXP F*
+        2DUP ONE F<
+        IF 10 FLOAT F* R> 1- >R THEN
+        <# R@ ABS 0 #S R> SIGN 2DROP
+        "E HOLD F# #>     TYPE SPACE ;
+
