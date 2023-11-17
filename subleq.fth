@@ -328,7 +328,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ Other OISCs can be found online, such as SUBNEG (subtract
 \ and branch if negative), SUBLEQ with an accumulator, SBNZ
-\ (Subtract and Branch if not zero) and others. They
+\ (Subtract and Branch if not zero) and more. They
 \ are all difficult to use, some more than others. SUBLEQ
 \ appears to be the more popular of the OISCs. Those
 \ instructions are the universal ones (given infinite memory).
@@ -2318,6 +2318,11 @@ label: vm ( Forth Inner Interpreter )
 \ "compile-only" word). This does not work under when executing
 \ under this "Self-Interpreter".
 \
+\ It should also be possible to detect when we are executing
+\ on subtly different OISC variants, such as SUBNEG (subtract
+\ and branch if negative) and perhaps write an emulator for
+\ a SUBLEQ machine on those. An interesting possibility.
+\
 opt.self [if]
 
 \ Setup temporary registers for macro instructions, they need
@@ -2382,9 +2387,6 @@ label: self-loop
 \ be made at the cost of code-size and an even greater slow
 \ down.
 \
-\ TODO: Use subtraction by 0x8000 instead of topbit? Also
-\ make a better iSUB.
-
   {a} {v} MOV {v} INC {v} +if ( Input byte? )
     {b} {v} MOV {v} INC {v} +if ( Output byte? )
       ( Neither Input nor Output, must be normal instruction )
@@ -10358,7 +10360,10 @@ it being run.
 \ <http://forth.sourceforge.net/standard/fst83/FORTH-83.PRN>
 \ - DPANS84 FORTH standard:
 \ <http://forth.sourceforge.net/std/dpans/>
-\
+\ - A Self-Interpreter with no I/O:
+\   <https://eigenratios.blogspot.com/2006/08>.
+\ - <https://esolangs.org/wiki/Binary_lambda_calculus>
+\ For an alternate basis of computation.
 \
 \ # Appendix
 \
@@ -14122,10 +14127,6 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 
 \ ## Future Direction and Additional tasks.
 \
-\ TODO: 
-\ * Mention Homomorphic Encryption SUBLEQ somewhere?
-\ * Cleanup this section
-\
 \ There is still a lot that could be done with this system,
 \ there are many programs and extensions that could be written
 \ for it. Some of them have already been mentioned.
@@ -14142,7 +14143,7 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ game written for more constrained systems, see
 \ <https://nanochess.org/chess.html> for more information.
 \ Given 32k of code space, no doubt a decent engine could be
-\ made, even if not by me.
+\ made, if not by me.
 \
 \ Interactive games that would require non-blocking input and
 \ perhaps a better timing mechanism include; Tetris, Snake,
@@ -14161,38 +14162,6 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ magazines, usually written in a dialect of BASIC and
 \ requiring only a terminal for the display of the games
 \ graphics.
-\
-\ It would be quite easy to add in words for "free", "allocate"
-\ and "resize", from
-\ <http://lars.nocrew.org/forth2012/memory.html>. A simple
-\ allocator only requires a handful of words and could be done
-\ in two blocks of Forth code. We have seen though that you do
-\ not need such an allocator package in order to produce
-\ useful programs. In order to write an allocator you just need
-\ a static section of memory (perhaps as little as 4KiB)
-\ to divide up into sections, you do not need support from the
-\ operating system or special system calls, this can be done in
-\ pure Forth.
-\
-\ Again, links to a Floating Point implementation in Forth
-\ have been given. However adding floating point words is
-\ a more tasking operation, it interacts with more of the
-\ system and there are design decisions that will have to be
-\ made that mean one Floating Point system could differ greatly
-\ from another. It could still be done in pure Forth and left
-\ as an optional extra, however you must ask yourself if it
-\ is worth the trouble. Forth is not good at making application
-\ level programs, it is good at tinkering around with hardware,
-\ with cross assemblers and the like, but anything that demands
-\ floating points would be better either being rewritten to
-\ used Fixed Point arithmetic, or being done in a different
-\ language.
-\
-\ There are a number of optimizations, or just changes, that
-\ could be done to the system. Removing SUBLEQ assembly
-\ routines, or at least making them compile time switches,
-\ and implementing the routine in Forth where doable is one
-\ way to save space.
 \
 \ Writing an LZSS CODEC in pure Forth would be a utility that
 \ could find use elsewhere, and compression routines in
@@ -14290,22 +14259,6 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ to consist of is the ability to send UDP packets to another
 \ SUBLEQ eForth system, which would be trivial to integrate.
 \
-\ For this image itself the best feature that could be added
-\ would be to include a self-interpreter, which is mentioned
-\ in the startup code. A correctly designed self-interpreter
-\ would allow the system to execute (albeit much more slowly)
-\ on systems that were the wrong bit-width, or even on systems
-\ that used a different arithmetic (such as ones compliment,
-\ or bignums) by simulating the correct system. Such self
-\ interpreters have been written before, such as the one
-\ from <https://eigenratios.blogspot.com/2006/08>.
-\
-\ There is a real "risk" of the eForth image being run on a
-\ SUBLEQ machine that has the wrong bit-width, if that happens
-\ then the image will not run (although the system does print
-\ out an error message for width greater than 16-bits)
-\ hampering use of the system.
-\
 \ Another project would be to implement a SUBLEQ machine in
 \ hardware, either in 7400 series logic gates with a UART
 \ for the interface and RAM chips for the main memory (loading
@@ -14325,15 +14278,34 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \
 \ There are some things that are missing in this Forth that
 \ could be added, which are present in the ANS Forth standard,
-\ some control structures ("case", "do" loops), the locals word
-\ set which allows Forth words to create and use named
-\ parameters (which would be too complex to implement), the
-\ file access word-set (which requires a file system, although
-\ the DOS extensions could be used as a basis to implement
-\ them), words for dealing with structures (such as "+field",
-\ "field:", "begin-structure", "end-structure"), and more. The
-\ main aim implementing these words would be for portability
-\ purposes.
+\ the locals word set which allows Forth words to create and 
+\ use named parameters (which would be too complex to 
+\ implement), the file access word-set (which requires a file 
+\ system, although the DOS extensions could be used as a basis 
+\ to implement them), words for dealing with structures (such 
+\ as "+field", "field:", "begin-structure", "end-structure"), 
+\ and more. The main aim implementing these words would be for 
+\ portability purposes.
+\
+\ There are other variants of this OISC that could be targeted,
+\ for example SUBNEQ or the even more exotic Cryptoleq that
+\ involves the very interesting concept of Homomorphic 
+\ Encryption.
+\
+\ It would be interesting to compare and contrast this system,
+\ the SUBLEQ OISC, with other Turing complete systems, such as
+\ the Binary Lambda Calculus, and other Turing Tarpits.
+\ 
+\ Binary Lambda Calculus is especially interesting as it uses
+\ an entirely different form of computation based around 
+\ functions and their application to perform calculations. A
+\ SUBLEQ system is closer to a Turing Machine, and it is 
+\ possible to make a SUBLEQ system in hardware using 
+\ traditional methods (either using a Hardware Description
+\ Language or discrete Integrated Circuits), a system make
+\ using Binary Language Calculus would have a very different
+\ flavor however (and potentially be much smaller, albeit more
+\ difficult to implement in hardware).
 \
 \ What would the purpose of these little programs and
 \ extensions however? A lot of effort could be dedicated to
