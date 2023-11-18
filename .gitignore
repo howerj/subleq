@@ -6,3 +6,6 @@ full
 
 embed/subleq-dec.c
 embed/subleq-embed
+
+boot/boot.com
+boot/subleq-boot.flp
