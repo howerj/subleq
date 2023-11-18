@@ -3,3 +3,6 @@
 *.dec
 subleq
 full
+
+embed/subleq-dec.c
+embed/subleq-embed
