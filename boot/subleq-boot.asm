@@ -24,8 +24,8 @@
 
     call cls
 
-	mov dx, 0x0000
-	call moveto
+    mov dx, 0x0000
+    call moveto
 
     mov si, data
 
@@ -59,9 +59,9 @@ cls:
 
 moveto:                         ; move cursor to DH = Row, DL = Column
     mov ah, 0x02
-	mov bh, 0x00
-	int 10h
-	ret
+    mov bh, 0x00
+    int 10h
+    ret
 
 putchar:                        ; put char in al
     mov ah, 0x0E
