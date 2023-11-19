@@ -43,6 +43,11 @@
     mov al, [si]
     call putchar
 
+    jmp exit
+
+;;;************************************
+;;;          Subroutines              *
+;;;************************************
 exit:
     cli
     hlt
