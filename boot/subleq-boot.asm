@@ -27,23 +27,67 @@
     mov dx, 0x0000
     call moveto
 
-    mov si, data
+    xor si, si                  ; sp = SI
 
-    mov al, [si]
-    call putchar
+    ;; 0. if (pc < 0) halt
+    ;; pc += 3
+    ;; 1. A < 0  [B] = getchar
+    ;; 2. B < 0  putchar [A]
+    ;; 3. [B] = [B] - [A]; if ([B] <= 0) pc = C
 
-    add si, 2
-    mov al, [si]
-    call putchar
 
+subleq:
+    cmp si, 0
+    jl  exit
+
+    mov ax, [data + si]         ; A = AX
+    mov bx, [data + si + 2]     ; B = BX
+    mov cx, [data + si + 4]     ; C = CX
+
+    add si, 6
+
+    cmp ax, 0                   ; 1. A < 0  [B] = getchar; pc += 3
+    jl  .A_NEG
+
+    cmp bx, 0                   ; 2. B < 0  putchar [A]
+    jl  .B_NEG
+
+    jmp .ELSE                   ; 3. [B] = [B] - [A]; if ([B] <= 0) pc = C
+
+ .A_NEG:
     call getchar
-    call putchar
+    xor ah, ah
+    shl bx, 1
+    mov [data + bx], ax
+    jmp subleq
 
-    add si, 2
-    mov al, [si]
+  .B_NEG:
+    mov di, ax
+    shl di, 1
+    mov ax, [data + di]
     call putchar
+    jmp subleq
 
-    jmp exit
+ .ELSE
+    mov di, ax                   ; 3. [B] = [B] - [A]
+    shl di, 1
+    mov ax, [data + di]
+
+    mov di, bx
+    shl di, 1
+    mov bx, [data + di]
+
+    sub bx, ax
+
+    mov [data + di], bx
+
+    cmp bx, 0                   ; if ([B] <= 0) pc = C
+    ja subleq
+
+    shl cx, 1
+    mov si, cx
+    jmp subleq
+
 
 ;;;************************************
 ;;;          Subroutines              *
@@ -88,8 +132,12 @@ getchar:                        ; get char in al
     dw 0xAA55
 
                                  ; more than 512 bytes program
-data: dw 97, 98, 99, 15, 17, -1, 17, -1, -1, 16, 1, -1, 16, 3, -1, 15, 15, 0, 0, -1, 72, \
-    101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33, 10, 0
+data: dw \
+    15, 17, -1,      17, -1, -1,    16, 1, -1,       16, 3, -1,     15, 15, 0,     0, -1, 72, \
+    101, 108, 108,   111, 44, 32,   119, 111, 114,   108, 100, 33,  0, 0
+
+    ;;  3, -10, 0, 98, \  ; print char
+    ;;  -1, 3, 0, \ ; putchar
 
                                 ; amount of zeros = 512 + (number of sectors read * 512)
     times 1024-($-$$) db 0
