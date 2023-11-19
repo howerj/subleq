@@ -67,7 +67,12 @@ putchar:                        ; put char in al
     mov ah, 0x0E
     mov bh, 0x00
     int 0x10
+    cmp al, 13
+    je  .LF
     ret
+ .LF:
+    mov al, 10
+    jmp putchar
 
 getchar:                        ; get char in al
     mov ah, 0x00
