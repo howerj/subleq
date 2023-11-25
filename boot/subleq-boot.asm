@@ -1,5 +1,6 @@
 ;;; Source: https://stackoverflow.com/questions/21846342/how-to-use-more-than-512-bytes-of-my-own-bootable-floppy/69622813#69622813
 	bits 16
+	cpu	8086
 
 	[org 0x7c00]
 								; stack and segment setup
@@ -35,7 +36,6 @@
 	;; 1. A < 0  [B] = getchar
 	;; 2. B < 0  putchar [A]
 	;; 3. [B] = [B] - [A]; if ([B] <= 0) pc = C
-
 
 subleq:
 	cmp si, 0
@@ -83,7 +83,7 @@ subleq:
 	mov [data + di], bx
 
 	cmp bx, 0                   ; if ([B] <= 0) pc = C
-	ja subleq
+	jg subleq
 
 	shl cx, 1
 	mov si, cx
@@ -136,7 +136,7 @@ getchar:                        ; get char in al
 
 data:
 	%include "./hello-world-dec.asm"
-	;; 	%include "./eforth-dec.asm"
+	;; %include "./eforth-dec.asm"
 
 	;; 15, 17, -1,      17, -1, -1,    16, 1, -1,       16, 3, -1,     15, 15, 0,     0, -1, 72, \
 	;; 101, 108, 108,   111, 44, 32,   119, 111, 114,   108, 100, 33,  0, 0
