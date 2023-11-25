@@ -29,6 +29,9 @@
 	mov dx, 0x0000
 	call moveto
 
+	mov ax, 97
+	call putchar
+
 	xor si, si                  ; sp = SI
 
 	;; 0. if (pc < 0) halt
