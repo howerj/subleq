@@ -5,30 +5,57 @@
 \ 
 \ A SUBLEQ interpreter written in Forth.
 \
-\ TODO: Key Vs Key?, refactor, vocabulary,
-\ remove need for pick, add to
-\ "subleq.fth" file and write about it, 
-\ n-bit version.
+\ TODO: Key Vs Key?, refactor, vocabulary, remove need for 
+\ pick? Add to "subleq.fth" file and write about it, add
+\ "N-bit" as a parameter to the function, better exit 
+\ conditions.
 \
  
-0 constant vm
-1 constant select
-0 constant tron
+2 constant vm     \ Select SUBLEQ VM implementation
+5 constant select \ Select program
+0 constant tron   \ Turn tracing on
+
+defined eforth 0= [if] ( assume Gforth )
+: key key dup 4 = if drop -1 exit then ; cr
+[then]
+
+: width ( -- n | -1 : word width, needs 2s compliment )
+  1 1
+  begin
+    swap 1+ swap
+    2*
+    over 64 > if drop -1 then
+    dup 0<
+  until drop ;
+
+.( WIDTH: ) width u. cr
 
 vm 0 = [if] \ 16-bit SUBLEQ machine
+
 \ anonymous definitions
-: A swap 0 + cells + @ ; ( pc base -- A )
+\ get-order wordlist swap 1+ set-order definitions
+
+\ TODO: If nbit == width, remove mask words?
+16 constant nbit \ if nbit == machine width this could be a nop
+1 nbit lshift 1- constant allset
+1 nbit 1- lshift constant hibit
+
+.( NBIT: ) nbit u. cr 
+.( ALL: ) allset u. cr 
+.( HIGH: ) hibit u. cr 
+
+: A swap     cells + @ ; ( pc base -- A )
 : B swap 1+  cells + @ ; ( pc base -- B )
 : C swap 2 + cells + @ ; ( pc base -- C )
 : m+A tuck A cells swap + ; ( pc base -- m+A )
 : m+B tuck B cells swap + ; ( pc base -- m+B )
 : m[A] m+A @ ; ( pc base -- m[A] )
 : m[B] m+B @ ; ( pc base -- m[B] )
-: mask $FFFF and ;
-: match mask ( 0<= ) dup 0= swap $8000 and or ;
-: io? mask $FFFF = ( -1 = ) ;
-: output emit ;
-: input key ( dup output ) ; 
+: mask allset and ; ( u -- u )
+: match ( 0<= ) mask  dup 0= swap hibit and or ; ( u -- u )
+: io? ( -1 = ) mask allset = ; ( u -- u )
+: output emit ; ( ch -- )
+: input ( dup output ) key ; ( -- ch )
 : debug ( pc base -- )
   tron 0= if 2drop exit then
   over ." PC:" .
@@ -90,6 +117,52 @@ vm 1 = [if]
   2 pick < or
   until rdrop rdrop 0 ; 
 [then]
+
+vm 2 = [if]
+
+\ TODO: debugging?
+
+: (subleq) ( a u n -- n )
+  1 1 begin ( determine machine width )
+    swap 1+ swap 2* over 64 > if 2drop 2drop drop -1 exit then
+    dup 0<
+  until drop
+  over u< if 2drop drop -1 exit then ( check n isn't greater )
+
+  -rot >r >r ( move a/u [program mem&len] to return stack )
+  1 over lshift 1-       ( calculate mask )
+  swap 1 swap 1- lshift  ( calculate high bit )
+
+  0 ( pc start value )
+  begin
+    dup r@ swap cells + @ 3 pick and 3 pick = 
+    if    ( a == -1? If so get check and store in m[b] )
+      dup r@ tuck swap 1+ cells + @ cells swap + key swap ! 
+      3 + ( pc += 3 )
+    else  ( b == -1? If so emit char from m[a] )
+      dup r@ swap 1+ cells + @ 3 pick and 3 pick = if
+        dup r@ tuck swap cells + @ cells swap + @ emit 
+        3 + ( pc += 3 )
+      else ( Normal instruction )
+        dup r@ tuck swap cells + @ cells swap + @     ( m[A] )
+        over r@ tuck swap 1+ cells + @ cells swap + @ ( m[B] )
+        swap -                    ( m[B]-m[A] )
+        3 pick and                ( mask off result )
+        dup 0= over 4 pick and or ( m[b] <= 0 )
+        2 pick r@ swap 2 + cells + @         
+        rot                 
+        3 pick r@ tuck swap 1+ cells + @ cells 
+        + ! swap
+        if nip else drop 3 + then ( pc=m[b] <= 0 ? c : pc+3 )
+      then
+    then
+  dup 0<
+  r> r> tuck >r >r
+  2 pick < or
+  until 2drop rdrop rdrop 0 ; 
+: subleq 16 (subleq) ;
+[then]
+
 variable (program)
 : {{ 0 (program) ! ;
 : }} ;

@@ -12474,6 +12474,7 @@ variable seed here seed !
   dup  7 lshift xor
   dup seed ! ;
 
+( : wordlist here dup 1 cells allot 0 swap ! ; )
 : anonymous ( -- : make anonymous vocabulary and enable it )
   get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
 : undefined? bl word find nip 0= ; ( "name", -- f )

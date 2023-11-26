@@ -12,8 +12,8 @@
 #define HI(X)  (1ull << ((X) - 1))
 
 static inline uint64_t msk(int n) {
-  return n < 64 ? 
-    (1ull << n) + 0xFFFFFFFFFFFFFFFFull :
+  return n < 64 ?
+    (1ull << n) - 1ull: 
     0xFFFFFFFFFFFFFFFFull;
 }
 
