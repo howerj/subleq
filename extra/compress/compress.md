@@ -19,6 +19,8 @@ to a compressed eForth image.
 The compressor and decompressor operate on 16-bit space delimited ASCII 
 signed decimals, so a smaller binary image could result in larger ASCII file.
 
+Bouncing ideas around the <https://encode.su> forum might help.
+
 # Ideas
 
 1) Zero compression
@@ -29,6 +31,8 @@ one indicating the number of zeroes to output, a negative value of -1
 could represent the next value is a literal, and anything else is to be treated
 as a literal. This achieves a tiny saving, but no doubt an decoder written in
 SUBLEQ would eat this saving up.
+
+*This works*.
 
 2) Range based LZSS
 
@@ -41,4 +45,12 @@ instead of bytes, a range of values (easier to check in SUBLEQ assembly) could
 represent a length of a match, subtracting the lower value of that range would
 give the offset. A similar encoding strategy to first idea could be used.
 
+*This works*.
 
+3) Packing small values
+
+Many of the values are "small" (smaller than 127), we can use this and an
+escaping mechanism to pack two bytes into a cell and allow for literal values
+with that escaping mechanism.
+
+*This works*

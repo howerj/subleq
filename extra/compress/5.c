@@ -1,3 +1,117 @@
+#include "c.h"
+
+static u16 m[1<<16], n[1<<16], prog = 0, oprog = 0;
+
+int main(int argc, char **argv) {
+	if (argc < 4)
+		return 1;
+	const int t = mode(argv[1]);
+	if (t < 0)
+		return 2;
+	if (load(m, &prog, argc - 3, &argv[2]) < 0)
+		return 3;
+	if (t) {
+
+		for (long i = 0; i < prog; i++) {
+			u16 o = m[i];
+			/* TODO: Find matches of 2-5 cells in length, brute force encoder,
+			 * this requires a lookahead pointer/buffer */
+			long pos = 0, len = -1;
+
+			/*f1 = (F <= bufferend - r) ? F : bufferend - r;
+			x = 0;  y = 1;  c = buffer[r];
+			for (i = r - 1; i >= s; i--)
+			    if (buffer[i] == c) {
+				for (j = 1; j < f1; j++)
+				    if (buffer[i + j] != buffer[r + j]) break;
+				if (j > y) {
+				    x = i;  y = j;
+				}
+			    }
+			if (y <= P) {  y = 1;  output1(c);  }
+			else output2(x & (N - 1), y - 2);*/
+
+			for (int j = 2; j <= 5; j++) {
+
+			}
+
+#if 0
+			if (i > 5*2) {
+				for (int j = 2; j <= 5; j++) {
+					for (long k = i - (j*2); k > MAX(0, i - 0xFFF); k--)
+						if (!memcmp(&m[i-j],&m[k], k * sizeof(u16))) {
+							if (j > len) {
+								pos = k;
+								len = j;
+							}
+						}
+				}
+			}
+
+
+			for (long j = prog; j >= 0; j--) {
+				if (j > 0xFFF) /* match length exceeded */
+					break;
+				if (m[j] == m[i]) {
+				}
+			}
+
+			/*for (long j = 2; j < 5; j++) {
+				for (long k = MIN(j, prog - 0xFFF); k < i; k++) {
+					if (x != y) {
+						break;
+					}
+				}
+			}*/
+#endif
+			if (len > 2 || (len == 2 && pos != 1)) {
+				o = pos;
+				if (len == 5) { o += 0x4000; } 
+				else if (len == 4) { o += 0x2000; } 
+				else if (len == 3) { o += 0x1000; } 
+				else { }
+				o = -o;
+				n[oprog++] = o;
+			} else {
+				if (0x8000 & o) {
+					n[oprog++] = 0xFFFF;
+					n[oprog++] = m[i];
+				}  else {
+					n[oprog++] = o;
+				}
+			}
+		}
+
+	} else {
+		for (long i = 0; i < prog; i++) {
+			u16 o = m[i];
+			if (o == 0xFFFF) {
+				n[oprog++] = m[++i];
+			} else if (o & 0x8000) {
+				o = -o;
+				u16 mlen = 2;
+				if (o > 0x4000) { o -= 0x4000; mlen = 5; } 
+				else if (o > 0x2000) { o -= 0x2000; mlen = 4; } 
+				else if (o > 0x1000) { o -= 0x1000; mlen = 3; } 
+				else { }
+				for (int i = 0; i < mlen; i++) {
+					n[oprog] = m[oprog - o];
+					oprog++;
+				}
+			} else {
+				n[oprog++] = o;
+			}
+
+		}
+	}
+	if (save(n, oprog, argv[argc - 1]) < 0)
+		return 4;
+	if (stats(stderr, prog, oprog) < 0)
+		return 5;
+	return 0;
+}
+
+#if 0
 /* Based off of LZSS encoder-decoder (Haruhiko Okumura; public domain),
  * 16-bit version */
 
@@ -144,3 +258,6 @@ int main(int argc, char **argv) {
 	if (fprintf(stderr, "in=%d out=%d diff=%d ratio=%.3f%%\n", (int)prog*2, (int)oprog*2, diff, percent) < 0)
 		return 6;
 }
+#endif
+
+

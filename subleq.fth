@@ -6742,12 +6742,10 @@ root[
 :to :noname ( "name", -- xt : make a definition with no name )
   align here #0 [ $CAFE ] literal postpone ] ;
 
-\ "'" is an immediate word that attempts to
-\ find a word in the dictionary (and throws an error if one
-\ is not found), it then calls "literal" on the execution token
-\ to resolve the compile/command behavior of the word. "'"
-\ either pushes the execution token of a word when in command
-\ mode, or compiles it into the dictionary in compile mode.
+\ "'" attempts to find a word in the dictionary (and throws an 
+\ error if one is not found), it then pushes the execution
+\ token of that word onto the stack if it is found, if not
+\ it throws an exception.
 \
 \ When in command mode, "2 2 ' + execute" is the same as
 \ "2 2 +".
@@ -6829,7 +6827,7 @@ root[
 \
 
 :to ' ( "name" -- xt : get xt of word [or throw] )
-  token find ?found cfa postpone literal ; immediate
+  token find ?found cfa postpone literal ;
 :to recurse ( -- : recursive call to current definition )
     [ {last} ] literal @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
@@ -7578,6 +7576,20 @@ opt.better-see [if] ( Start conditional compilation )
       >r 1- ndrop r> rdrop exit then
   1- repeat rdrop ;s
 
+\ "instruction" takes a number and attempts to resolve it to
+\ either a VM instruction, a word (in which case the name of
+\ the word is printed out) or if not that then it prints out
+\ a number.
+\
+\ It is used by "decompile".
+\
+:s instruction ( u -- )
+  [ primitive ] literal @ over u> if ."  VM    " 2* else
+    dup name ?dup if space count [ $1F ] literal
+    and type drop exit then
+  then
+  u. ;s
+
 \ "decompile" takes an instruction "u" and an address of where
 \ the decompilation is currently taking place, "a". It decides
 \ what to do based on the current instruction, and it might
@@ -7592,12 +7604,9 @@ opt.better-see [if] ( Start conditional compilation )
 \ is found, it must print out a string containing "push" and
 \ then the contents of the next cell. Strings are only a little
 \ more complex, it must print out the string and skip over that
-\ string. If none of those actions match, then it attempt to
-\ look up what the possible word definition is with "name", and
 \ as mentioned if that fails, it just prints out "u".
 \
-
-\ N.B. We could "(2const)" here, but it is in an optional
+\ N.B. We could put "(2const)" here, but it is in an optional
 \ component.
 \
 :s decompile ( a u -- a )
@@ -7611,6 +7620,10 @@ opt.better-see [if] ( Start conditional compilation )
 
   dup [ =next ] literal = if
     drop ."  next  " cell+ dup @ 2* u. exit
+  then
+
+  dup [ to' compile half ] literal = if
+     drop ."  compile" cell+ dup @ instruction exit 
   then
 
   dup [ to' (up) half ] literal = if drop
@@ -7643,15 +7656,12 @@ opt.better-see [if] ( Start conditional compilation )
   emit space
     cell+ count 2dup type [char] " emit + aligned cell -
   exit then
-  [ primitive ] literal @ over u> if ."  VM    " 2* else
-    dup name ?dup if space count [ $1F ] literal
-    and type drop exit then
-  then
-  u. ;s
+
+  instruction ;s
 
 \ These two words, "compile-only?" and "immediate?" tell us
 \ whether a word is compile-only or immediate respectively,
-\ all they do is analyze a specific bit a pointer to a given
+\ all they do is analyze a specific bit in a pointer to a given
 \ word header. Nothing complex.
 \
 :s compile-only? ( pwd -- f )

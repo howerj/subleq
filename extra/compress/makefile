@@ -6,10 +6,13 @@ VMOBJ=${VMSRC:.c=.o}
 
 .PHONY: all run test forth clean
 
-all run test: ${VER}c ${VER}d ${IMAGE}
-	./${VER}c ${IMAGE} ${VER}c.dec
-	./${VER}d ${VER}c.dec ${VER}d.dec
+all run test: ${VER} ${IMAGE}
+	./${VER} compress ${IMAGE} ${VER}c.dec
+	./${VER} decompress ${VER}c.dec ${VER}d.dec
 	diff -w ${IMAGE} ${VER}d.dec
+
+${VER}: ${VER}.c c.o
+	${CC} ${CFLAGS} $^ -o $@
 
 subleq: ${VMSRC}
 	${CC} ${CFLAGS} $^ -o $@
