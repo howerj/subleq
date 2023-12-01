@@ -6827,7 +6827,7 @@ root[
 \
 
 :to ' ( "name" -- xt : get xt of word [or throw] )
-  token find ?found cfa postpone literal ;
+  token find ?found cfa ;
 :to recurse ( -- : recursive call to current definition )
     [ {last} ] literal @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
