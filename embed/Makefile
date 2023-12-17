@@ -9,10 +9,5 @@ subleq-embed: subleq-dec.c subleq-embed.c
 test: subleq-embed
 	echo "words bye" | ./subleq-embed
 
-prep-hello: hello-world-dec.c
-	cp hello-world-dec.c subleq-dec.c
-
-hello: prep-hello subleq-embed
-
 clean:
 	rm -f subleq-embed subleq-dec.c
