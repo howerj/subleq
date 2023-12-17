@@ -13,7 +13,7 @@
 	mov sp, bp
 								; load more than 512 bytes into memory
 	mov ah, 0x02                ; read sectors
-	mov al, 0x01                ; sectors to read
+	mov al, 65	                ; number of sectors to read
 	mov ch, 0x00                ; cylinder idx
 	mov dh, 0x00                ; head idx
 	mov cl, 0x02                ; sector idx
@@ -44,31 +44,31 @@ subleq:
 	cmp si, 0
 	jl  exit
 
-	mov ax, [data + si]         ; A = AX
-	mov bx, [data + si + 2]     ; B = BX
-	mov cx, [data + si + 4]     ; C = CX
+	mov ax,[data + si]         			; A = AX
+	mov bx, word [data + si + 2]     	; B = BX
+	mov cx, word [data + si + 4]     	; C = CX
 
 	add si, 6
 
-	cmp ax, 0                   ; 1. A < 0  [B] = getchar; pc += 3
-	jl  .A_NEG
+	cmp ax, -1                   ; 1. A == -1 ?  [B] = getchar
+	je  .A_NEG_GETCHAR
 
-	cmp bx, 0                   ; 2. B < 0  putchar [A]
-	jl  .B_NEG
+	cmp bx, -1                   ; 2. B == -1 ?  putchar [A]
+	je  .B_NEG_PUTCHAR
 
 	jmp .ELSE                   ; 3. [B] = [B] - [A]; if ([B] <= 0) pc = C
 
- .A_NEG:
+ .A_NEG_GETCHAR:
+	mov di, bx
+	shl di, 1
 	call getchar
-	xor ah, ah
-	shl bx, 1
-	mov [data + bx], ax
+	mov word [data + di], ax
 	jmp subleq
 
-  .B_NEG:
+ .B_NEG_PUTCHAR:
 	mov di, ax
 	shl di, 1
-	mov ax, [data + di]
+	mov ax, word [data + di]
 	call putchar
 	jmp subleq
 
@@ -79,16 +79,16 @@ subleq:
 
 	mov di, bx
 	shl di, 1
-	mov bx, [data + di]
+	mov bx, word [data + di]
 
 	sub bx, ax
 
-	mov [data + di], bx
+	mov word [data + di], bx
 
-	cmp bx, 0                   ; if ([B] <= 0) pc = C
-	jg subleq
+	cmp bx, 0
+	jg subleq					; [B] > 0
 
-	shl cx, 1
+	shl cx, 1					; [B] <= 0 ! pc = c
 	mov si, cx
 	jmp subleq
 
@@ -97,6 +97,9 @@ subleq:
 ;;;          Subroutines              *
 ;;;************************************
 exit:
+	mov ax, 88
+	call putchar
+
 	cli
 	hlt
 
@@ -130,22 +133,24 @@ putchar:                        ; put char in al
 getchar:                        ; get char in al
 	mov ah, 0x00
 	int 0x16
+	xor ah, ah
+
+	push ax
+	push bx
+	call putchar
+	pop bx
+	pop ax
 	ret
 
 	times 510-($-$$) db 0
 	dw 0xAA55
 
-								 ; more than 512 bytes program
-
+	;; more than 512 bytes program
 data:
-	%include "./hello-world-dec.asm"
-	;; %include "./eforth-dec.asm"
+	;;%include "./simple-dec.asm"
+	;;%include "./test-3rd-dec.asm"
+	;;%include "./hello-world-dec.asm"
+	%include "./eforth-dec.asm"
 
-	;; 15, 17, -1,      17, -1, -1,    16, 1, -1,       16, 3, -1,     15, 15, 0,     0, -1, 72, \
-	;; 101, 108, 108,   111, 44, 32,   119, 111, 114,   108, 100, 33,  0, 0
-
-	;;  3, -10, 0, 98, \  ; print char
-	;;  -1, 3, 0, \ ; putchar
-
-								; amount of zeros = 512 + (number of sectors read * 512)
-	times 20240-($-$$) db 0
+	;; amount of zeros = 512 + (number of sectors read * 512)
+	times 32768-($-$$) db 0
