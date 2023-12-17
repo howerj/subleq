@@ -135,7 +135,10 @@ getchar:                        ; get char in al
 	int 0x16
 	xor ah, ah
 
-	push ax
+	;; Uncomment for an FR keyboard (azerty)
+	;; %include "./keyb-FR.asm"
+
+	push ax						; echo char
 	push bx
 	call putchar
 	pop bx
