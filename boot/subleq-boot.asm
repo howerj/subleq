@@ -139,7 +139,7 @@ getchar:                        ; get char in al
     xor ah, ah
 
     ;; Uncomment for an FR keyboard (azerty)
-    %include "./keyb-FR.asm"
+    ;; %include "./keyb-FR.asm"
 
     push ax                     ; echo char
     push bx
