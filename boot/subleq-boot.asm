@@ -139,8 +139,7 @@ getchar:                        ; get char in al
     int 0x16
     xor ah, ah
 
-    ;; Uncomment for an FR keyboard (azerty)
-    ;; %include "./keyb-FR.asm"
+    call translate_char
 
     push ax                     ; echo char
     push bx
@@ -161,3 +160,8 @@ data:
 
     ;; amount of zeros = 512 + (number of sectors read * 512)
     times 32768-($-$$) db 0
+
+translate_char:
+    ;; Uncomment for an FR keyboard (azerty)
+    ;; %include "./keyb-FR.asm"
+    ret
