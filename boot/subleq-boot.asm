@@ -21,8 +21,9 @@
     mov bx, data                ; address of more than 512 bytes
     int 0x13
 
-                                ; because i'm tired you can do the error checking by checking if al is the
-                                ; same as what you set it to and checking for the carry flag
+    jc  exit                    ; check int 13h errors
+    cmp al, 65
+    jne exit
 
     call cls
 
