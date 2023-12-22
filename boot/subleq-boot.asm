@@ -43,42 +43,42 @@
     ;; 2. B == -1  putchar [A]
     ;; 3. [B] = [B] - [A]; if ([B] <= 0) pc = C
 
-    xor si, si                  ; pc = SI
+    xor si, si                          ; pc = SI
 
 subleq:
     cmp si, 0
     jl  exit
 
-    mov ax,[data + si]                  ; A = AX
-    mov bx, word [data + si + 2]        ; B = BX
-    mov cx, word [data + si + 4]        ; C = CX
+    mov ax, [data + si]                 ; A = AX
+    mov bx, [data + si + 2]             ; B = BX
+    mov cx, [data + si + 4]             ; C = CX
 
     add si, 6
 
-    cmp ax, -1                   ; 1. A == -1 ?  [B] = getchar
+    cmp ax, -1                          ; 1. A == -1 ?  [B] = getchar
     je  .A_NEG_GETCHAR
 
-    cmp bx, -1                   ; 2. B == -1 ?  putchar [A]
+    cmp bx, -1                          ; 2. B == -1 ?  putchar [A]
     je  .B_NEG_PUTCHAR
 
-    jmp .ELSE                   ; 3. [B] = [B] - [A]; if ([B] <= 0) pc = C
+    jmp .ELSE                           ; 3. [B] = [B] - [A]; if ([B] <= 0) pc = C
 
  .A_NEG_GETCHAR:
     mov di, bx
     shl di, 1
     call getchar
-    mov word [data + di], ax
+    mov [data + di], ax
     jmp subleq
 
  .B_NEG_PUTCHAR:
     mov di, ax
     shl di, 1
-    mov ax, word [data + di]
+    mov ax, [data + di]
     call putchar
     jmp subleq
 
  .ELSE:
-    mov di, ax                   ; 3. [B] = [B] - [A]
+    mov di, ax                          ; 3. [B] = [B] - [A]
     shl di, 1
     mov ax, [data + di]
 
@@ -91,9 +91,9 @@ subleq:
     mov word [data + di], bx
 
     cmp bx, 0
-    jg subleq                   ; [B] > 0
+    jg subleq                           ; [B] > 0
 
-    shl cx, 1                   ; [B] <= 0 ! pc = c
+    shl cx, 1                           ; [B] <= 0 ! pc = c
     mov si, cx
     jmp subleq
 
