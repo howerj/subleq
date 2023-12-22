@@ -11,10 +11,10 @@ build: subleq-boot.asm eforth-dec.asm
 	dd status=noxfer conv=notrunc if=boot.com of=subleq-boot.flp
 
 run: build
-	qemu-system-i386 -boot order=a -fda subleq-boot.flp
+	qemu-system-i386 -drive file=subleq-boot.flp,format=raw,index=0,if=floppy,readonly=on
 
 dbg: build
-	qemu-system-i386 -boot order=a -fda subleq-boot.flp -s -S
+	qemu-system-i386 -drive file=subleq-boot.flp,format=raw,index=0,if=floppy,readonly=on -s -S
 
 clean:
 	rm -f boot.com subleq-boot.flp eforth-dec.asm
