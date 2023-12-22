@@ -154,7 +154,9 @@ getchar:                        ; get char in al
     times 510-($-$$) db 0
     dw 0xAA55
 
-    ;; more than 512 bytes program
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; more than 512 bytes program                    ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 data:
     ;;%include "./simple-dec.asm"
     ;;%include "./test-3rd-dec.asm"
