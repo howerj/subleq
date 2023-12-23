@@ -87,11 +87,11 @@ subleq:
 
     mov di, bx
     shl di, 1
-    mov bx, word [data + di]
+    mov bx, [data + di]
 
     sub bx, ax
 
-    mov word [data + di], bx
+    mov [data + di], bx
 
     cmp bx, 0
     jg subleq                           ; [B] > 0
