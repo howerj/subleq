@@ -117,13 +117,13 @@ cls:
     mov cx, 0x00                ; specifies top left of screen as (0,0)
     mov dh, 0x18                ; 18h = 24 rows of chars
     mov dl, 0x4f                ; 4fh = 79 cols of chars
-    int 10h                     ; calls video interrupt
+    int 0x10                    ; calls video interrupt
     ret
 
 moveto:                         ; move cursor to DH = Row, DL = Column
     mov ah, 0x02
     mov bh, 0x00
-    int 10h
+    int 0x10
     ret
 
 putchar:                        ; put char in al
