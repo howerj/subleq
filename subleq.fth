@@ -6352,14 +6352,14 @@ opt.divmod [if]
   \ not a word
   dup >r count number? if rdrop \ it is numeric!
     dpl @ 0< if \ <- dpl is -1 if it's a single cell number
-       drop     \ drop high cell from 'number?' for single cell
-    else        \ <- dpl is not -1, it is a double cell number
-       state @ if swap then
-       postpone literal \ literal executed twice if # is double
+      drop     \ drop high cell from 'number?' for single cell
+    else       \ <- dpl is not -1, it is a double cell number
+      state @ if swap then
+      postpone literal \ literal executed twice if # is double
     then \ NB. "literal" is state aware
     postpone literal exit
   then
-  \ NB. Could vector ?found here, to handle arbitrary words
+  \ N.B. Could vector ?found here, to handle arbitrary words
   r> #0 ?found ;
 
 \ # The Root Vocabulary

@@ -3,6 +3,9 @@
 	: defer create 0 , does> @ ?dup 0= -9 and throw execute ;
 	: is ' >body ! ; immediate
 
+* Implement metacompile "recurse"
+* Add hook for processing floating point numbers if a word cannot
+be found.
 * Write about alternate about subjects below
 
 # Notes on the SUBLEQ Machine and alternatives
