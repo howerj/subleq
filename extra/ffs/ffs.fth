@@ -33,7 +33,7 @@ b/buf fs.fat-size 8 / / constant fepb ( FAT Entries Per Block )
 \ FAT Entry Values (anything else is part of a FAT Chain)
 $FFFF constant fat.invalid  ( Not allocated to the table )
 $FFFE constant fat.error    ( Read/Write error on block )
-$FFFE constant fat.special  ( Special use block )
+$FFFD constant fat.special  ( Special use block )
 $0000 constant fat.free     ( Free block )
 $0001 constant fat.end      ( Marks the end of FAT chain )
 
@@ -72,9 +72,13 @@ defined 0= [if] : 2+ 2 + ; [then]
   fs.fat-size swap 16,
   fs.blk.start swap 16, 0 swap 16,
   fs.blk.end swap 16, 0 swap 16,
-  \ Add time to header?
-  \ Add dirty flag?
-  \ Add CRC?
+  0 swap 16, \ Flags (bootable, dirty, CRC present, ...)
+  0 swap 16, \ CRC (optional)
+
+  $0 b, $0 b, $0 b, 0 b, \ Time
+
+  0 swap 16, \ boot block
+
   flush
   drop ;
 
@@ -97,11 +101,18 @@ defined 0= [if] : 2+ 2 + ; [then]
 : fat.next ; ( k -- k )
 : fat.last ; ( k -- k )
 
-: fat.foreach.cell ;
+: fat.foreach.cell ( k xt -- )
+  swap block swap
+  b/buf 1- 2/ for
+    2dup 2>r execute 2r> swap 2+ swap
+  next update 2drop ; 
 
-: fat.foreach ( k1 k2 xt -- n )
+: fat.foreach ( k1 k2 xt -- )
   dup fat? swap fat? swap
-;
+
+  >r over - r> -rot 1- for
+  2dup 2>r swap execute 2r>
+  next 2drop ;
 
 : format ( k u -- ior )
   2dup
