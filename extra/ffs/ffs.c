@@ -29,6 +29,7 @@
 #define ID "eFORTH FFS HOWE "
 #define VERSION (0x0001)
 #define SIZE (0x0010)
+#define NELEMS(X) (sizeof(X) / sizeof((X)[0]))
 
 static int eline(FILE *out, const char *file, const char *func, int line) {
 	assert(out);
@@ -73,12 +74,14 @@ typedef struct {
 } dirent_t;
 
 enum { /* TODO: Implement these flags / error out on unimplemented features */
-	FLAG_CRC_ON              = 1 << 0, /* CRC is on, modifying system will invalidate this */
-	FLAG_GROWABLE_DIRS       = 1 << 1, /* Directories can grow, if off then there is a 32 file limit per directory */
-	FLAG_TIME_ON             = 1 << 2, /* A time source is on and present */
-	FLAG_MULTIPLE_FAT_BLOCKS = 1 << 3, /* Multiple FAT blocks are present instead of one (limit to 512 blocks if off */
-	FLAG_BOOTABLE            = 1 << 4, /* Bootable block is present */
-	FLAG_DIRTY               = 1 << 5, /* File system could be in inconsistent state */
+	FLAG_CRC_ON                  = 1 << 0, /* CRC is on, modifying system will invalidate this */
+	FLAG_SINGLE_BLOCK_DIRS_ON    = 1 << 1, /* If on directories cannot grow and there is a 32 file limit per directory */
+	FLAG_SINGLE_BLOCK_FILES_ON   = 1 << 2, /* */
+	FLAG_DIRECTOR_RECURSION_OFF  = 1 << 3, /* */
+	FLAG_TIME_ON                 = 1 << 4, /* A time source is on and present */
+	FLAG_MULTIPLE_FAT_BLOCKS_ON  = 1 << 5, /* Multiple FAT blocks are present instead of one (limit to 512 blocks if off */
+	FLAG_BOOTABLE                = 1 << 6, /* Bootable block is present */
+	FLAG_DIRTY                   = 1 << 7, /* File system could be in inconsistent state */
 };
 
 typedef struct {
@@ -101,7 +104,7 @@ typedef struct {
 	header_t header;
 } ffs_t;
 
-static inline uint16_t r16(uint8_t *m) {
+static inline uint16_t r16(const uint8_t *m) {
 	assert(m);
 	return (((uint16_t)m[0]) << 0) | (((uint16_t)m[1]) << 8);
 }
@@ -110,6 +113,22 @@ static inline void w16(uint8_t *m, uint16_t v) {
 	assert(m);
 	m[0] = v >> 0;
 	m[1] = v >> 8;
+}
+
+static inline uint16_t fr16(ffs_t *f, const uint8_t *m) {
+	if (!m) {
+		f->error = true;
+		return 0;
+	}
+	return r16(m);
+}
+
+static inline void fw16(ffs_t *f, uint8_t *m, uint16_t v) {
+	if (!m) {
+		f->error = true;
+		return;
+	}
+	w16(m, v);
 }
 
 static int convert(const char *s, long *o) {
@@ -289,18 +308,51 @@ static int header_write(ffs_t *f, int blkno) {
 	return 0;
 }
 
-/*typedef struct {
-	uint8_t type;
-	uint8_t reserved1;
-	uint16_t bytes_used_in_last_block;
-	uint16_t file_start_block;
-	uint16_t reserved2;
-	uint8_t time[4];
-	uint8_t reserved3[4];
-	uint8_t name[MAX_FILE_LENGTH];
-} dirent_t;*/
+static int header_print(ffs_t *f) {
+	assert(f);
+	header_t *h = &f->header;
+	uint8_t id[sizeof (h->id) + 1] = { 0, };
+	memcpy(id, h->id, sizeof (h->id));
+	if (fprintf(f->out, "id: %s\n", id) < 0)
+		goto fail;
+	if (fprintf(f->out, "version: %d\n", h->version) < 0)
+		goto fail;
+	if (fprintf(f->out, "size: %d\n", h->size) < 0)
+		goto fail;
+	if (fprintf(f->out, "start: %d\n", h->start) < 0)
+		goto fail;
+	if (fprintf(f->out, "end: %d\n", h->end) < 0)
+		goto fail;
+	if (fprintf(f->out, "flags: %d\n", h->flags) < 0)
+		goto fail;
+	if (fprintf(f->out, "CRC: %d\n", h->crc) < 0)
+		goto fail;
+	if (fprintf(f->out, "time: %d.%d.%d.%d\n", h->time[0], h->time[1], h->time[2], h->time[3]) < 0)
+		goto fail;
 
-static int dirent_read(ffs_t *f, dirent_t *d, uint8_t *b) {
+	return 0;
+fail:
+	f->error = true;
+	return ELINE;
+}
+
+static bool is_valid_type(const uint8_t type) {
+	return type == DIR_UNUSED || type == DIR_SPECIAL || type == DIR_FILE || type == DIR_DIR;
+}
+
+static bool dirent_is_valid(ffs_t *f, const dirent_t *d) {
+	assert(f);
+	assert(d);
+	if (!is_valid_type(d->type))
+		return false;
+	/*if (!valid(f, d->file_start_block))
+		return false;*/
+	if (d->reserved1 || d->reserved2 || d->reserved3[0] || d->reserved3[1] || d->reserved3[2] || d->reserved3[3])
+		return false;
+	return true;
+}
+
+static int dirent_read(ffs_t *f, dirent_t *d, const uint8_t *b) {
 	assert(f);
 	assert(d);
 	assert(b);
@@ -309,16 +361,72 @@ static int dirent_read(ffs_t *f, dirent_t *d, uint8_t *b) {
 	d->bytes_used_in_last_block = r16(&b[2]);
 	d->file_start_block = r16(&b[4]);
 	d->reserved2 = r16(&b[6]);
-	
+	memcpy(d->time, &b[8], sizeof(d->time));
+	memcpy(d->reserved3, &b[12], sizeof(d->reserved3));
+	memcpy(d->name, &b[15], sizeof(d->name));
+	if (!dirent_is_valid(f, d)) {
+		f->error = true;
+		return ELINE;
+	}
+	return 0;
+}
+
+static int dirent_write(ffs_t *f, const dirent_t *d, uint8_t *b) {
+	assert(f);
+	assert(d);
+	assert(b);
+	if (!dirent_is_valid(f, d)) {
+		f->error = true;
+		return ELINE;
+	}
+	b[0] = d->type;
+	b[1] = d->reserved1;
+	w16(&b[2], d->bytes_used_in_last_block);
+	w16(&b[4], d->file_start_block);
+	w16(&b[6], d->reserved2);
+	memcpy(&b[8], d->time, sizeof(d->time));
+	memcpy(&b[12], d->reserved3, sizeof(d->reserved3));
+	memcpy(&b[15], d->name, sizeof (d->name));
 
 	return 0;
 }
 
-static int dirent_write(ffs_t *f, dirent_t *d, uint8_t *b) {
+static int dirent_print(ffs_t *f, const dirent_t *d) {
 	assert(f);
 	assert(d);
-	assert(b);
+	if (!dirent_is_valid(f, d)) {
+		f->error = true;
+		return ELINE;
+	}
+	const char *type[] = {
+		[DIR_DIR]     = "DIR",
+		[DIR_FILE]    = "FIL",
+		[DIR_SPECIAL] = "SPC",
+		[DIR_UNUSED]  = "   ",
+	};
+	assert(d->type < NELEMS(type));
+
+	uint8_t name[sizeof (d->name) + 1] = { 0, };
+	memcpy(name, d->name, sizeof(d->name));
+	if (fprintf(f->out, "%s ", d->name) < 0)
+		goto fail;
+
+	/*
+	b[0] = d->type;
+	b[1] = d->reserved1;
+	w16(&b[2], d->bytes_used_in_last_block);
+	w16(&b[4], d->file_start_block);
+	w16(&b[6], d->reserved2);
+	memcpy(&b[8], d->time, sizeof(d->time));
+	memcpy(&b[12], d->reserved3, sizeof(d->reserved3));
+	memcpy(&b[15], d->name, sizeof (d->name));
+*/
+
+
 	return 0;
+fail:
+	f->error = true;
+	return ELINE;
 }
 
 static uint8_t *indx(ffs_t *f, int blkno, int cell) {
@@ -335,7 +443,6 @@ error:
 	f->error = true;
 	return NULL;
 }
-
 
 static uint8_t *bindx(ffs_t *f, int blkno, int cell) {
 	assert(f);
@@ -401,46 +508,25 @@ static int format(ffs_t *f) {
 	const int fat_invalid_blocks = (BBUF/2) - (blocks % (BBUF/2));
 	if (fprintf(f->out, "fat: start=%d, needed=%d, invalid=%d\n", fat_start, fat_blocks_needed, fat_invalid_blocks) < 0)
 		return ELINE;
-
 	
-
-	w16(baindx(f, 0), FAT_SPECIAL); /* Contains file system header */
-	w16(baindx(f, 1), FAT_SPECIAL); 
-	w16(baindx(f, 2), FAT_USED);    /* First directory entry */
-
-	int i = 0;
-	for (i = 0; i < fat_blocks_needed; i++) {
+	for (int i = 0; i < fat_blocks_needed; i++) {
+		for (int j = 0; j < (BBUF/2); j++) {
+			fw16(f, baindx(f, (i*BBUF/2) + j), FAT_INVALID);
+			update(f);
+		}
 	}
-
+	fw16(f, baindx(f, 0), FAT_SPECIAL); /* Contains file system header */
+	int i = 0;
+	for (i = 1; i < fat_blocks_needed + 1; i++)
+		fw16(f, baindx(f, i + 1), FAT_SPECIAL); /* Blocks containing FAT entries */
+	for (; i < f->end; i++)
+		fw16(f, baindx(f, i), FAT_FREE);
+	fw16(f, baindx(f, fat_blocks_needed + 1), FAT_USED); /* First directory entry */
 
 	update(f);
-
-#if 0
-	const int fat_start = f->start + 1;
-	const int fat_blocks_needed = (blocks / (BBUF/2)) + !!(blocks % (BBUF/2));
-	const int fat_invalid_blocks = (BBUF/2) - (blocks % (BBUF/2));
-	const int loop = ((fat_start + fat_blocks_needed) * BBUF) + fat_invalid_blocks*2;
-	if (fprintf(f->out, "fat: start=%d, needed=%d, invalid=%d\n", fat_start, fat_blocks_needed, fat_invalid_blocks) < 0)
-		return ELINE;
-
-	for (int i = fat_start*BBUF; i < loop; i+=2) {
-		const int bindx = i / BBUF;
-		const int aindx = i % BBUF;
-		uint8_t *b = block(f, fat_start + bindx);
-		uint16_t v = FAT_FREE;
-		if (i < (fat_start*BBUF))
-			v = FAT_SPECIAL;
-		if (i > ((fat_start+fat_blocks_needed)*BBUF))
-			v = FAT_INVALID;
-		fprintf(f->out, "w(%d) %d/%d %d\n", i, bindx, aindx, v);
-		w16(b + aindx, v);
-		update(f);
-	}
-#endif
-
 	flush(f);
 
-	/* TODO: Meta-data, file header, version, ... */
+	/* TODO: Feature check */
 	return 0;
 }
 
