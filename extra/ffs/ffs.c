@@ -10,6 +10,8 @@
  * - Shell; DOS like shell, integrate Forth interpreter
  * - Turn into library?
  * - Help / documentation
+ * - Pre/Post conditions, stop write/modify on error, system
+ *   check, tests
  * - Feature Flags; CRC, File CRC, Arbitrary length directories,
  *   multiple fat blocks, arbitrary length files, ...
  * - Include SUBLEQ/eFORTH access */
@@ -30,6 +32,9 @@
 #define VERSION (0x0001)
 #define SIZE (0x0010)
 #define NELEMS(X) (sizeof(X) / sizeof((X)[0]))
+#define MAX_DIR_DEPTH (8)
+#define DIRENT_SIZE (32) 
+#define DIRS_PER_BLOCK (BBUF / DIRENT_SIZE) /* TODO BUILD_BUG_ON remainder */
 
 static int eline(FILE *out, const char *file, const char *func, int line) {
 	assert(out);
@@ -62,6 +67,7 @@ enum {
 	DIR_SPECIAL,
 };
 
+// TODO: RWX permissions, BLOCK type?
 typedef struct {
 	uint8_t type;
 	uint8_t reserved1;
@@ -94,6 +100,7 @@ typedef struct {
 	uint16_t crc;
 	uint8_t time[4];
 	uint16_t boot_block;
+	/* TODO: Add block size, Max directory depth, max path length, etc */
 } header_t;
 
 typedef struct {
@@ -102,6 +109,9 @@ typedef struct {
 	int loaded, start, end;
 	bool dirty, error;
 	header_t header;
+
+	dirent_t cwd[MAX_DIR_DEPTH];
+	int dir_depth;
 } ffs_t;
 
 static inline uint16_t r16(const uint8_t *m) {
@@ -410,19 +420,14 @@ static int dirent_print(ffs_t *f, const dirent_t *d) {
 	memcpy(name, d->name, sizeof(d->name));
 	if (fprintf(f->out, "%s ", d->name) < 0)
 		goto fail;
-
-	/*
-	b[0] = d->type;
-	b[1] = d->reserved1;
-	w16(&b[2], d->bytes_used_in_last_block);
-	w16(&b[4], d->file_start_block);
-	w16(&b[6], d->reserved2);
-	memcpy(&b[8], d->time, sizeof(d->time));
-	memcpy(&b[12], d->reserved3, sizeof(d->reserved3));
-	memcpy(&b[15], d->name, sizeof (d->name));
-*/
-
-
+	if (fprintf(f->out, "%s ", type[d->type]) < 0)
+		goto fail;
+	if (fprintf(f->out, "%4x ", (int)d->file_start_block) < 0)
+		goto fail;
+	if (fprintf(f->out, "%4x ", (int)d->bytes_used_in_last_block) < 0)
+		goto fail;
+	if (fprintf(f->out, "\n") < 0)
+		goto fail;
 	return 0;
 fail:
 	f->error = true;
@@ -467,12 +472,47 @@ static uint8_t *baindx(ffs_t *f, int addr) {
 
 static uint8_t *next(ffs_t *f, int blkno) {
 	assert(f);
-	return NULL;
+	return baindx(f, blkno);
 }
 
 static uint8_t *find_free(ffs_t *f) {
 	assert(f);
 	return NULL;
+}
+
+static int pushd(ffs_t *f, dirent_t *d) {
+	assert(f);
+	assert(d);
+	assert(f->dir_depth >= 0 && f->dir_depth < (int)NELEMS(f->cwd));
+	if (f->dir_depth < ((int)NELEMS(f->cwd) - 1))
+		return -1;
+	f->cwd[f->dir_depth++] = *d;
+	return 0;
+}
+
+static dirent_t *popd(ffs_t *f) {
+	assert(f);
+	assert(f->dir_depth >= 0 && f->dir_depth < (int)NELEMS(f->cwd));
+	if (f->dir_depth <= 0)
+		return NULL;
+	return &f->cwd[--f->dir_depth];
+}
+
+static dirent_t *peekd(ffs_t *f) {
+	if (f->dir_depth <= 0)
+		return NULL;
+	return &f->cwd[f->dir_depth - 1];
+}
+
+static int mount(ffs_t *f, int start) {
+	assert(f);
+
+	if (header_read(f, start) < 0)
+		return ELINE;
+	dirent_t dir = { .type = DIR_DIR, }, *d = &dir;
+	if (pushd(f, d) < 0)
+		return ELINE;
+	return 0;
 }
 
 static int format(ffs_t *f) {
@@ -541,9 +581,9 @@ static int create(ffs_t *f, const char *file, int blocks) {
 		return ELINE;
 	}
 	blocks = blocks < MIN_BLOCKS ? MIN_BLOCKS : blocks;
-	uint8_t block[BBUF] = { 0, };
+	uint8_t blk[BBUF] = { 0, };
 	for (int i = 0; i < blocks; i++) {
-		if (fwrite(block, 1, sizeof(block), b) != sizeof(block))
+		if (fwrite(blk, 1, sizeof(blk), b) != sizeof(blk))
 			goto fail;
 	}
 	if (fclose(b) < 0)
@@ -610,6 +650,69 @@ fail:
 	return ELINE;
 }
 
+static int ls(ffs_t *f) {
+	assert(f);
+	assert(f->dir_depth >= 0 && f->dir_depth < (int)NELEMS(f->cwd));
+
+	dirent_t *cwd = peekd(f);
+	if (!cwd)
+		return ELINE;
+	int blk = cwd->file_start_block;
+	uint8_t *b = bindx(f, blk, 0);
+
+	for (int i = 0; i < DIRS_PER_BLOCK; i++) {
+		dirent_t dir = { .type = DIR_UNUSED, }, *d = &dir;
+		if (dirent_read(f, d, &b[i*DIRENT_SIZE]) < 0)
+			return ELINE;
+		if (d->type == DIR_UNUSED)
+			continue; /* or, break */
+		if (dirent_print(f, d) < 0)
+			return ELINE;
+	}
+
+	/* TODO: Feature test; growable directories */
+	//next();
+
+	return 0;
+}
+
+static int find_dir(ffs_t *f, const char *dirname) {
+	assert(f);
+	assert(dirname);
+	for (int i = 0; i < DIRS_PER_BLOCK; i++) {
+		dirent_t dir = { .type = DIR_UNUSED, }, *d = &dir;
+		if (dirent_read(f, d, &b[i*DIRENT_SIZE]) < 0)
+			return ELINE;
+	}
+
+	/* TODO: Feature test; growable directories */
+	//next();
+
+	return 0;
+}
+
+static int cd(ffs_t *f, const char *dirname) {
+	assert(f);
+	assert(dirname);
+	//if (!find_dir(f, dirname)) { return ERROR; }
+	//if DIRDEPTH Exceeded return ERROR;
+	//if (!valid_name(dirname)) return ERROR;
+	return 0;
+}
+
+static int mkdir(ffs_t *f, const char *dirname) {
+	assert(f);
+	assert(dirname);
+	//if (find_dir(f, dirname)) { return ERROR; }
+	return 0;
+}
+
+static int rmdir(ffs_t *f, const char *dirname) {
+	assert(f);
+	assert(dirname);
+	return 0;
+}
+
 static int help(FILE *output, const char *arg0) {
 	assert(output);
 	assert(arg0);
@@ -624,9 +727,7 @@ Repo:    " REPO    "\n\
 }
 
 int main(int argc, char **argv) {
-	ffs_t ffs = {
-		.in = stdin, .out = stdout,
-	}, *f = &ffs;
+	ffs_t ffs = { .in = stdin, .out = stdout, }, *f = &ffs;
 
 	if (argc < 2)
 		goto help_fail;
@@ -636,6 +737,20 @@ int main(int argc, char **argv) {
 	} else if (!strcmp(argv[1], "pack")) {
 	} else if (!strcmp(argv[1], "unpack")) {
 	} else if (!strcmp(argv[1], "list")) {
+		int mount_block = 1;
+		const char *fb = argv[2];
+		if (argc > 3) {
+			if (iconvert(argv[3], &mount_block) < 0)
+				goto help_fail;
+		}
+		if (use(f, fb) < 0)
+			goto fail;
+		if (mount(f, mount_block) < 0)
+			goto fail;
+		if (header_print(f) < 0)
+			goto fail;
+		if (ls(f) < 0)
+			goto fail;
 	} else if (!strcmp(argv[1], "format")) {
 		if (argc < 5)
 			goto help_fail;
@@ -653,10 +768,13 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
+	if (cleanup(f) < 0)
+		return 1;
 	return 0;
 help_fail:
 	(void)help(stderr, argv[0]);
 fail:
+	(void)cleanup(f);
 	return 1;
 }
 
