@@ -233,6 +233,7 @@ static int load(ffs_t *f, int blkno) {
 	errno = 0;
 	if (fread(f->block, 1, BBUF, f->use) != BBUF)
 		return fatal(f, "fread failed of size %d: %s", BBUF, strerror(errno));
+	f->loaded = blkno;
 	return 0;
 }
 
@@ -260,9 +261,13 @@ static int flush(ffs_t *f) {
 	if (f->error)
 		return fatal(f, "flush failed, fatal error occurred previously");
 	if (f->dirty) {
-		if (valid(f, f->loaded))
-			if (store(f, f->loaded) < 0)
+		printf("loaded: start=%d end=%d %d\n", f->start, f->end, f->loaded);
+		if (valid(f, f->loaded)) {
+			printf("HERE\n");
+			if (store(f, f->loaded) < 0) {
 				return fatal(f, "stored failed");
+			}
+		}
 		f->dirty = 0;
 	}
 	return 0;
@@ -321,6 +326,7 @@ static int header_read(ffs_t *f, int blkno) {
 	b += 2;
 	memcpy(h->time, b, sizeof(h->time));
 	b += 4;
+
 
 	const int blocks = h->end - h->start;
 	if (blocks < MIN_BLOCKS || h->end <= h->start)
@@ -512,9 +518,29 @@ static uint8_t *next(ffs_t *f, int blkno) {
 	return baindx(f, blkno);
 }
 
-static uint8_t *find_free(ffs_t *f) {
+static uint8_t *find_free_block(ffs_t *f, int *bno) {
 	assert(f);
+	*bno = -1;
+
+	const int fat_start = f->start + 1;
+	for (int i = fat_start; i < f->after_fat; i++) {
+		uint8_t *b = block(f, i);
+		if (!b)
+			return fatal(f, "block failed: %d", i), NULL;
+		for (int j = 0; j < BBUF; j += 2) {
+			uint16_t v = r16(&b[j]);
+			if (v == FAT_FREE) {
+				*bno = (i * (BBUF/2)) + (j / 2);
+				return &b[j];
+			}
+		}
+	}
 	return NULL;
+}
+
+static int free_block(ffs_t *f, int blkno) {
+	assert(f);
+	return 0;
 }
 
 static int pushd(ffs_t *f, dirent_t *d) {
@@ -550,6 +576,8 @@ static int mount(ffs_t *f, int start) {
 
 	if (header_read(f, start) < 0)
 		return ELINE;
+	f->start = f->header.start;
+	f->end = f->header.end;
 
 	// TODO: Turn into function, error check / validate
 	const int blocks = f->end - f->start;
@@ -823,20 +851,27 @@ static int mkdir(ffs_t *f, const char *dirname) {
 
 	if (find_dir(f, cwdblk(f), dirname))
 		return warning(f, "directory name already exists: %s", dirname), 1;
+
+	int bno = -1;
+	uint8_t *fb = find_free_block(f, &bno);
+	fw16(f, fb, FAT_USED);
+	update(f);
+
 	uint8_t *b = find_free_dir(f, cwdblk(f));
 	if (!b)
 		return fatal(f, "OOM");
 
-	dirent_t dir = { .type = DIR_DIR, }, *d = &dir;
+	dirent_t dir = { .type = DIR_DIR, .file_start_block = bno, }, *d = &dir;
 	const size_t dlen = strlen(dirname);
 	if (dlen > MAX_FILE_LENGTH)
 		return warning(f, "file name too long: %s", dirname), 1;
 	memcpy(d->name, dirname, dlen);
 	if (dirent_write(f, d, b) < 0)
 		return fatal(f, "dirent write failed");
-	//dirent_print(f, d);
+	dirent_print(f, d);
 	if (update(f) < 0)
 		return fatal(f, "updated failed");
+	printf("FLUSH\n");
 	if (flush(f) < 0)
 		return fatal(f, "flush failed");
 	return 0;
@@ -903,7 +938,7 @@ Repo:    " REPO    "\n\
 }
 
 int main(int argc, char **argv) {
-	ffs_t ffs = { .in = stdin, .out = stdout, .err = stderr, }, *f = &ffs;
+	ffs_t ffs = { .in = stdin, .out = stdout, .err = stderr, .loaded = -1, }, *f = &ffs;
 
 	if (argc < 2)
 		goto help_fail;
