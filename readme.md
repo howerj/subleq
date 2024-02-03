@@ -47,6 +47,14 @@ to try it out directly <https://howerj.github.io/subleq.htm>.
 Happy hacking, and a shiny penny for anyone that manages to
 do something useful with this project!
 
+## Other SUBLEQ projects
+
+* <https://github.com/pbrochard/subleq-eForthOS>
+* <https://github.com/howerj/subleq-python>
+* <https://github.com/howerj/subleq-perl>
+* <https://github.com/howerj/subleq-js>
+* <https://github.com/howerj/subleq-forth>
+
 ## References
 
 * <https://en.wikipedia.org/wiki/Forth_(programming_language)>

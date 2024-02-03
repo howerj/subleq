@@ -776,7 +776,7 @@ defined [unless] 0= [if]
 \                ( CODE EXECUTED IN GFORTH )
 \        [then]
 \
-\ Is used, seldomly. Here it is used because "wordlist" is not
+\ Is seldom used. Here it is used because "wordlist" is not
 \ defined in the base eForth image, but is in gforth. To bring
 \ them up to parity, "wordlist" is defined for the eForth
 \ image.
@@ -3111,13 +3111,12 @@ opt.divmod [if]
 \
 \ Despite the underlying SUBLEQ machine being spartan,
 \ it is possible to implement or approximate peripherals
-\ and other systems.
-\
-\ We will see that later on with the delay loop based "ms", and
-\ with the fake Forth Block system. "pause" and the eForth
-\ system however implements a usable multitasking system of a
-\ type which is more common in embedded control systems than on
-\ desktop computers.
+\ and other systems. We will see this later on with the delay 
+\ loop based "ms", and with the fake Forth Block system. 
+\ "pause" and the eForth system however implements a usable 
+\ multitasking system of a type which is more common in 
+\ embedded control systems than on desktop computers and is
+\ not faked like "ms" and the Forth Block systems are.
 \
 \ As the multitasking is not preemptive we do not need a way
 \ of handling interrupts. The multitasking system has
@@ -6599,7 +6598,7 @@ root[
 \
 \ Obviously we know that ":" and ";" can be used to create
 \ new functions, you would not have been able to get
-\ far in this book having not know that. When we call ":" it
+\ far in this book having not known that. When we call ":" it
 \ does the following things, it parses the next word in the
 \ input stream, creates a header for that word, and then
 \ makes it so that everything we type in (barring "immediate"
