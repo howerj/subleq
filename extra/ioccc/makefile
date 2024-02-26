@@ -16,17 +16,18 @@ self: 1 ${SELF} ${IMAGE}
 clean clobber:
 	rm -f 1 2 3 *.exe
 
+PROG=".( Ahoy, World! ) cr bye "
 NBIT=1
 width: ${IMAGE} ${NBIT}
-	./${NBIT}  8 $<
-	./${NBIT}  9 $<
-	./${NBIT} 15 $<
-	./${NBIT} 17 $<
-	./${NBIT} 18 $<
-	./${NBIT} 30 $<
-	./${NBIT} 31 $<
-	./${NBIT} 32 $<
-	echo ".( Ahoy, World! ) cr bye " | ./${NBIT} 16 $<
+	echo ${PROG} | ./${NBIT}  8 $<
+	echo ${PROG} | ./${NBIT}  9 $<
+	echo ${PROG} | ./${NBIT} 15 $<
+	echo ${PROG} | ./${NBIT} 17 $<
+	echo ${PROG} | ./${NBIT} 18 $<
+	echo ${PROG} | ./${NBIT} 30 $<
+	echo ${PROG} | ./${NBIT} 31 $<
+	echo ${PROG} | ./${NBIT} 32 $<
+	echo ${PROG} | ./${NBIT} 16 $<
 
 
 2: 2.c
