@@ -54,6 +54,7 @@ do something useful with this project!
 * <https://github.com/howerj/subleq-perl>
 * <https://github.com/howerj/subleq-js>
 * <https://github.com/howerj/subleq-forth>
+* <https://github.com/howerj/subleq-vhdl>
 
 ## References
 

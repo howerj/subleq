@@ -11453,6 +11453,239 @@ it being run.
 \ A report is printed to standard error at the end of
 \ execution.
 \
+\ ## SUBLEQ: A single or a three instruction machine?
+\ 
+\ SUBLEQ is a One Instruction Set Computer instruction set,
+\ however the vast majority of SUBLEQ implementations are
+\ really three instruction machines. This section will argue
+\ against that mattering.
+\ 
+\ SUBLEQ is usually defined by the following pseudo-code:
+\ 
+\ 	while pc >= 0:
+\ 		a = m[pc]
+\ 		b = m[pc + 1]
+\ 		c = m[pc + 2]
+\ 		pc = pc + 3
+\ 
+\ 		if a == -1:
+\ 			m[b] = input_byte()
+\ 		else if b == -1:
+\ 			output_byte(m[a])
+\ 		else
+\ 			r = m[b] - m[a]
+\ 			if (r <= 0)
+\ 				pc = c
+\ 			m[b] = r
+\ 
+\ The core, with no I/O can be defined as:
+\ 
+\ 	forever:
+\ 		a = m[pc]
+\ 		b = m[pc + 1]
+\ 		c = m[pc + 2]
+\ 		pc = pc + 3
+\ 		r = m[b] - m[a]
+\ 		if (r <= 0)
+\ 			pc = c
+\ 		m[b] = r
+\ 
+\ SUBLEQ is Turing Complete, can be implemented in
+\ hardware (see https://github.com/howerj/subleq-vhdl), and is
+\ even capable of running a full blown Forth interpreter.
+\ 
+\ There are a few different ways that SUBLEQ can be
+\ implemented. The following interpreter will be used as a
+\ starting point.
+\ 
+\ 	#include <stdint.h>
+\ 	#include <stdio.h>
+\ 
+\ 	typedef uint16_t u16;
+\ 	static const u16 n = -1;
+\ 	static u16 m[1<<16], prog = 0, pc = 0;
+\ 
+\ 	int main(int argc, char **argv) {
+\ 		for (long i = 1, d = 0; i < argc; i++) {
+\ 			FILE *f = fopen(argv[i], "rb");
+\ 			if (!f)
+\ 				return 1;
+\ 			while (fscanf(f, "%ld,", &d) > 0)
+\ 				m[prog++] = d;
+\ 			if (fclose(f) < 0)
+\ 				return 2;
+\ 		}
+\ 		for (pc = 0; pc < 32768;) {
+\ 			u16 a = m[pc++];
+\			u16 b = m[pc++];
+\			u16 c = m[pc++];
+\ 			if (a == n) {
+\ 				m[b] = getchar();
+\ 			} else if (b == n) {
+\ 				if (putchar(m[a]) < 0)
+\ 					return 3;
+\ 				if (fflush(stdout) < 0)
+\ 					return 4;
+\ 			} else {
+\ 				u16 r = m[b] - m[a];
+\ 				if (r == 0 || r & 32768)
+\ 					pc = c;
+\ 				m[b] = r;
+\ 			}
+\ 		}
+\ 		return 0;
+\ 	}
+\ 
+\ This interpreter, written in C, is larger than it has to be
+\ (even though it is quite small), this is because it has
+\ to load the program and also because it avoids the usage
+\ of signed integers for portability reasons (overflows and
+\ underflows of signed integers being undefined behavior in
+\ C). It also flushes the output stream after outputting a
+\ byte (alternatively `setvbuf` could be called).
+\ 
+\ Note that `c` is stored in a temporary variable, it is
+\ possible for writes to `m[b]` to modify the data in the
+\ location that `c` came from. Some implementations differ
+\ on this point.
+\ 
+\ There are some design decisions that have to be made
+\ immediately; how many cells are present and the width
+\ in bits of those cells. We also assume (or in this case
+\ emulate) twos-compliment arithmetic.
+\ 
+\ Note that input is byte oriented and blocking. The
+\ program consists of space (or optionally comma in this
+\ implementation) delimited signed decimal values stored in
+\ a text file. The program also exists on an output failure
+\ in `putchar`, most C programs ignore output errors of any
+\ kind in printing family of functions.
+\ 
+\ Some SUBLEQ versions have minor and incompatible handling
+\ off I/O (especially hardware implementations) such as
+\ subtracting the result of `getchar` from `m[b]`.
+\ 
+\ Let us use this less opinionated version of the SUBLEQ
+\ machine, which uses `int` for the cell size (which could
+\ be anything from 16 bits plus, but mostly commonly 32-bits,
+\ depending on the platform):
+\ 
+\ 	#include <stdint.h>
+\ 	#include <stdio.h>
+\ 
+\ 	int main(int argc, char **argv) {
+\ 		int m[65536] = { 0, }, prog = 0;
+\ 		for (int i = 1, d = 0; i < argc; i++) {
+\ 			FILE *f = fopen(argv[i], "rb");
+\ 			if (!f)
+\ 				return 1;
+\ 			while (fscanf(f, "%d,", &d) > 0)
+\ 				m[prog++] = d;
+\ 			if (fclose(f) < 0)
+\ 				return 2;
+\ 		}
+\ 		for (int pc = 0; pc >= 0;) {
+\ 			int a = m[pc++];
+\			int b = m[pc++]; 
+\			int c = m[pc++];
+\ 			if (a == -1) {
+\ 				m[b] = getchar();
+\ 			} else if (b == -1) {
+\ 				if (putchar(m[a]) < 0)
+\ 					return 3;
+\ 			} else {
+\ 				int r = m[b] - m[a];
+\ 				if (r <= 0)
+\ 					pc = c;
+\ 				m[b] = r;
+\ 			}
+\ 		}
+\ 		return 0;
+\ 	}
+\ 
+\ 
+\ The abstract SUBLEQ instruction, one with infinite cells
+\ that can store positive or negative infinite values, is
+\ Turing complete. As we are implementing a real machine we
+\ do not have infinite memory, we can just hope that we have
+\ enough for the problems we would like to solve.
+\ 
+\ A criticism of SUBLEQ is that it is really three
+\ instructions (SUBLEQ, INPUT, OUTPUT) masquerading as
+\ one instruction, which is technically true and valid,
+\ but not very useful. This is without mentioning the
+\ HALT condition. There are two ways of dealing with this;
+\ ignore the need for input and output and instead use an
+\ external method entering and getting data (e.g. Modifying
+\ the program and viewing the memory after execution) or
+\ memory mapping input and output.
+\ 
+\ Ignoring I/O whilst easy and is more "pure" greatly limits
+\ the system, it hobbles it, for no gain. Interactive
+\ programs are no longer possible, and the machinery for
+\ exchanging data tends to be larger and more complex (one
+\ solution would be to save the image after running it,
+\ the data would then need to be separated from the program,
+\ a convention would need to be established and explained,
+\ etcetera).
+\ 
+\ Memory mapping is our only other option left, instead of
+\ loading and storing directly from memory we could call
+\ functions to load and store, and if those functions detect
+\ a special value we can perform loading or storing of data.
+\ 
+\ We can do this like so:
+\ 
+\ 	#include <stdint.h>
+\ 	#include <stdio.h>
+\ 
+\ 	int load(int *m, int addr) {
+\ 		return addr == -1 ? getchar() : m[addr];
+\ 	}
+\ 
+\ 	void store(int *m, int addr, int val) {
+\ 		if (addr == -1)
+\ 			putchar(val);
+\ 		else
+\ 			m[addr] = val;
+\ 	}
+\ 
+\ 	int main(int argc, char **argv) {
+\ 		int m[65536] = { 0, }, prog = 0;
+\ 		for (int i = 1, d = 0; i < argc; i++) {
+\ 			FILE *f = fopen(argv[i], "rb");
+\ 			if (!f)
+\ 				return 1;
+\ 			while (fscanf(f, "%d,", &d) > 0)
+\ 				m[prog++] = d;
+\ 			if (fclose(f) < 0)
+\ 				return 2;
+\ 		}
+\ 		for (int pc = 0; pc >= 0;) {
+\ 			int a = load(m, pc++);
+\ 			int b = load(m, pc++);
+\ 			int c = load(m, pc++);
+\ 			int r = load(m, a) - load(m, b);
+\ 			if (r <= 0)
+\ 				pc = c;
+\ 			store(m, b, r);
+\ 		}
+\ 		return 0;
+\ 	}
+\ 
+\ This is now truly a single instruction machine, but it
+\ is not simpler, smaller, faster, nor easier to program
+\ or understand. It is however truly a single instruction
+\ machine and a viable alternative.
+\ 
+\ Another avenue for criticism is the halt condition,
+\ which is not part of the instruction format and so is
+\ another critique of its' purity. Instead, a convention
+\ that an instruction that jumps to itself and does not
+\ modify anything halts the machine, which can be detected
+\ if needed, but again this would lead to a larger program,
+\ for no gain.
+\ 
 \ ## Error Code list
 \
 \ This is a list of Standard Forth Error Codes, not all of
