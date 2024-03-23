@@ -1191,7 +1191,7 @@ defined eforth [if]
 \ functions, available to the system, the "words" each have a
 \ header, and the dictionary and headers looks like this:
 \
-\ ![Dictionary Format](img/dictionary.png)
+\ ![Dictionary Format](extra/img/dictionary.png)
 \
 \ (See the appendix for the ASCII ART version of this diagram)
 \
@@ -6184,7 +6184,7 @@ opt.divmod [if]
 \ compile only words (not shown in the diagram below),
 \ immediate words, numbers, and compile and command mode.
 \
-\ ![Interpreter Control Flow](img/flow.png)
+\ ![Interpreter Control Flow](extra/img/flow.png)
 \
 \ (See the Appendix for ASCII Art Version)
 \

@@ -89,7 +89,7 @@ subleq.md: subleq.fth subleq 1.dec extra/convert.fth extra/self/self.dec extra/s
 	echo "lang: \"en\"" >> $@
 	echo "titlepage: true," >> $@
 	echo "titlepage-rule-color: \"360049\"" >> $@
-	#echo "titlepage-background: \"img/subleq-ebook.png\"" >> $@
+	#echo "titlepage-background: \"extra/img/subleq-ebook.png\"" >> $@
 	echo "---" >> $@
 	cat extra/convert.fth subleq.fth | ./subleq 1.dec >> $@
 	dos2unix $@
@@ -102,9 +102,6 @@ subleq.md: subleq.fth subleq 1.dec extra/convert.fth extra/self/self.dec extra/s
 	echo "## Source code without (major) comments:" >> $@
 	echo >> $@
 	grep '^[^\\]' subleq.fth | sed 's/^/\t/' >> $@
-	echo >> $@
-	echo "## Self Interpreter (source)" >> $@
-	cat extra/self/self.asq >> $@
 	echo >> $@
 	echo "## Self Interpreter (data)" >> $@
 	cat extra/self/self.dec | tr '\n' ' ' | fmt -w 48 | sed 's/^/\t/' >> $@
