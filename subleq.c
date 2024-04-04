@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
 			m[b] = getchar();
 		} else if (b == n) {
 			if (putchar(m[a]) < 0)
-				return 3;
+				return 4;
 		} else {
 			u16 r = m[b] - m[a];
 			if (r == 0 || r & 32768)
