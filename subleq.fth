@@ -1795,9 +1795,9 @@ $10 tvar {width}   \ set by size detection routines
 \ brackets, so for example the word "cold", defined later on,
 \ is defined as:
 \
-\        : cold {cold} lit @execute ;
+\        : cold {boot} lit @execute ;
 \
-\ It just refers to "{cold}", what "cold" does will be
+\ It just refers to "{boot}", what "cold" does will be
 \ described later at a more appropriate juncture.
 \
 
@@ -1807,7 +1807,8 @@ $10 tvar {width}   \ set by size detection routines
   0 tvar {editor}   \ editor vocabulary
   0 tvar {root-voc} \ absolute minimum vocabulary
   0 tvar {system}   \ system functions vocabulary
-  0 tvar {cold}     \ entry point of VM program, set later on
+  0 tvar {boot}     \ entry point of VM program, set later on
+  0 tvar {quit}     \ Execution token called after init
   0 tvar {last}     \ last defined word
   0 tvar {cycles}   \ number of times we have switched tasks
   1 tvar {single}   \ is multi processing off? +ve = off
@@ -1924,7 +1925,7 @@ opt.optimize [if] ( optimizations on )
 \ on startup naturally, it sets up the initial stack
 \ positions in "{sp}" and "{rp}" for the data and return stacks
 \ respectively. It also sets the first instruction to be
-\ executed by moving the contents of "{cold}" into "ip", the
+\ executed by moving the contents of "{boot}" into "ip", the
 \ Instruction Pointer.
 \
 \ The "vm" label does all the work. It implements a small
@@ -2217,7 +2218,7 @@ opt.self [if] ( self JMP ) there 2/ {pc} t!  [then]
 
   {sp0} {sp} MOV     \ Setup initial variable stack
   {rp0} {rp} MOV     \ Setup initial return stack
-  {cold} ip MOV      \ Get the first instruction to execute
+  {boot} ip MOV      \ Get the first instruction to execute
   ( fall-through )
 
 \ This is the Forth Virtual Machine itself. A very short
@@ -3912,15 +3913,15 @@ system[
 \ provided by a word with a name like "(name)", the word that
 \ executes the hook will be called just "name".
 \
-\ NB. "{cold}" should contain a cell address, not a Forth
+\ N.B. "{boot}" should contain a cell address, not a Forth
 \ address!
 \
 \ That is,
 \
-\        ' (cold) <cold> !
+\        ' (boot) <boot> !
 \
 \ Will not work, this works for setting most execution vectors,
-\ but not this one, "{cold}" needs to be executed by the
+\ but not this one, "{boot}" needs to be executed by the
 \ Forth Virtual Machine, it cannot divide a number by two
 \ efficiently (or at all, and would slow everything down if
 \ implemented), so it only operates on cell address. This is
@@ -3929,7 +3930,7 @@ system[
 \
 \ The following should work:
 \
-\        ' (cold) 2/ <cold> !
+\        ' (boot) 2/ <boot> !
 \
 
 user <ok> ( -- a : okay prompt xt loc. )
@@ -3944,7 +3945,8 @@ system[
   user <error>   ( -- a : <error> xt container. )
 ]system
 
-:s <cold> [ {cold} ] literal ;s ( -- a : cold xt loc. )
+:s <boot> [ {boot} ] literal ;s ( -- a : cold xt loc. )
+:s <quit> [ {quit} ] literal ;s ( -- a : quit xt loc. )
 
 \ ### Forth Variables
 \
@@ -7117,8 +7119,11 @@ root[
 :s (does) 2r> 2* swap >r ;s compile-only
 :s (comp)
   r> [ {last} ] literal @ cfa
-  ( check we are running does> on a created word )
-  @+ [ to' (var) half ] literal <> [ -$1F ] literal and throw
+\ Check we are running "does>" on a created word. This
+\ does not work for definitions with multiple "does>"
+\ statements, so has been elided.
+\
+\  @+ [ to' (var) half ] literal <> [ -$1F ] literal and throw
   ! ;s compile-only
 : does> compile (comp) compile (does) ;
    immediate compile-only
@@ -7790,7 +7795,7 @@ opt.better-see [if] ( Start conditional compilation )
 \
 \ The meta-compiler calculates the checksum later on, and sets
 \ a known location to the checksum value. It is checked as
-\ part of the initial Forth word "(cold)".
+\ part of the initial Forth word "(boot)".
 \
 
 :s cksum aligned dup [ $C0DE ] literal - >r ( a u -- u )
@@ -8304,7 +8309,7 @@ t' (block) t' <block> >tbody t!
 \ interpreter loop, where we read in a line, parse it, execute
 \ it and catch any errors. New support words will be
 \ defined, but the main ones are "evaluate", "load",
-\ "task-init", "quit" and "(cold)". It has an odd name, but
+\ "task-init", "quit" and "(boot)". It has an odd name, but
 \ traditionally the main interpreter loop is called "quit"
 \ in Forth systems.
 \
@@ -8607,7 +8612,7 @@ opt.self [if]
 \ up at boot time, and where "ini" is executed is critical,
 \ before it is called none of the words that rely on the
 \ execution tokens being set can be executed without causing
-\ the system to reboot. It is called from "(cold)", the first
+\ the system to reboot. It is called from "(boot)", the first
 \ forth word to run.
 \
 :s ini ( -- : initialize current task )
@@ -8663,7 +8668,7 @@ opt.self [if]
    ?dup if <error> @execute then ( error? )
   again ;                        ( do it all again... )
 
-\ "(cold)" is the first word that gets executed, it performs
+\ "(boot)" is the first word that gets executed, it performs
 \ the task of continuing to setup the environment before
 \ normal running. It must:
 \
@@ -8676,7 +8681,7 @@ opt.self [if]
 \    c. Check 2nd bit and perform a checksum over the
 \       Forth image, it then toggles the 2nd bit making
 \       it so the image is not checked again (as adding
-\       new definitions modifies the image, calling "(cold)"
+\       new definitions modifies the image, calling "(boot)"
 \       again after defining new words would mean the checksum
 \       would fail. If the checksum fails it prints an error
 \       messages and halts.
@@ -8685,11 +8690,14 @@ opt.self [if]
 \       and we are executing under that interpreter, as
 \       execution is very slow.
 \ 4. Calls "quit" to enter into the Forth interpreter loop.
+\    This actually execute "<quit>", allowing the user to
+\    replace the starting word after the high level 
+\    initialization routines have been run.
 \
 \ And that completes the Forth boot sequence.
 \
 
-:s (cold) ( -- : Forth boot sequence )
+:s (boot) ( -- : Forth boot sequence )
   forth definitions ( un-mess-up dictionary / set it )
   ini ( initialize the current thread correctly )
   opt.self [if]
@@ -8700,7 +8708,8 @@ opt.self [if]
   [ primitive ] literal @ 2* dup here swap - cksum
   [ check ] literal @ <> if ." bad cksum" bye then ( oops... )
   [ {options} ] literal @ #2 xor [ {options} ] literal !
-  then quit ;s ( call the interpreter loop AKA "quit" )
+  then 
+  <quit> @ execute ;s ( call the interpreter loop AKA "quit" )
 
 \ # Cooperative Multitasking
 \
@@ -10213,7 +10222,7 @@ opt.glossary [if]
 \
 \ Finally "cold" is defined, the last word we will define,
 \ it deserves its own section. The word "cold" restarts the
-\ system by executing the execution token stored in "{cold}".
+\ system by executing the execution token stored in "{boot}".
 \
 \ Note the "2\*"! Cold has to be executed by the Forth VM
 \ as well, so it contains a cell address, meaning it has to
@@ -10240,7 +10249,7 @@ opt.glossary [if]
 \ "primitive" are treated as jump locations by the VM).
 \
 
-: cold [ {cold} ] literal 2* @execute ; ( -- )
+: cold [ {boot} ] literal 2* @execute ; ( -- )
 
 \ # Image Generation
 \
@@ -10269,7 +10278,8 @@ opt.glossary [if]
 \ image we have produced in this file.
 \
 
-t' (cold) half {cold} t!      \ Set starting Forth word
+t' (boot) half {boot} t!      \ Set starting Forth word
+t' quit {quit} t!             \ Set initial Forth word
 atlast {forth-wordlist} t!    \ Make wordlist work
 {forth-wordlist} {current} t! \ Set "current" dictionary
 there h t!                    \ Assign dictionary pointer
@@ -10959,7 +10969,7 @@ it being run.
 \ speed up the SUBLEQ part of the system the Forth VM and
 \ associated instructions were emulated instead. This would
 \ require knowing the address of "opDup" and the like, as well
-\ as the entry point stored in "{cold}".
+\ as the entry point stored in "{boot}".
 \
 \        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
 \         * programs (it might break them) and tries to
@@ -13150,7 +13160,7 @@ forth-wordlist +order definitions
 \ contain any control characters.
 \
 \ We could turn this into a turnkey system by replacing the
-\ initialization vector in "<cold>" with a new word that
+\ initialization vector in "<boot>" with a new word that
 \ calls the normal initialization code, then "login".
 \
 \ This could be done like so:
@@ -13158,7 +13168,7 @@ forth-wordlist +order definitions
 \        system +order
 \        : restart 0 >r ;
 \        : boot only forth definitions ini login quit ;
-\        ' boot 2/ <cold> !
+\        ' boot 2/ <boot> !
 \        system -order
 \        0 here dump    ( if we want to save the image )
 \        restart
