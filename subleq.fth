@@ -334,7 +334,8 @@ $10 tvar {width}   \ set by size detection routines
   0 tvar {editor}   \ editor vocabulary
   0 tvar {root-voc} \ absolute minimum vocabulary
   0 tvar {system}   \ system functions vocabulary
-  0 tvar {cold}     \ entry point of VM program, set later on
+  0 tvar {boot}     \ entry point of VM program, set later on
+  0 tvar {quit}     \ Execution token called after init
   0 tvar {last}     \ last defined word
   0 tvar {cycles}   \ number of times we have switched tasks
   1 tvar {single}   \ is multi processing off? +ve = off
@@ -415,7 +416,7 @@ opt.self [if] \ if width > 16, jump to 16-bit emulator
 opt.self [if] ( self JMP ) there 2/ {pc} t!  [then]
   {sp0} {sp} MOV     \ Setup initial variable stack
   {rp0} {rp} MOV     \ Setup initial return stack
-  {cold} ip MOV      \ Get the first instruction to execute
+  {boot} ip MOV      \ Get the first instruction to execute
   ( fall-through )
 label: vm ( Forth Inner Interpreter )
   r0 ip iLOAD         \ Get instruction to execute from IP
@@ -711,7 +712,8 @@ system[
   user <expect>  ( -- a : expect xt loc. )
   user <error>   ( -- a : <error> xt container. )
 ]system
-:s <cold> [ {cold} ] literal ;s ( -- a : cold xt loc. )
+:s <boot> [ {boot} ] literal ;s ( -- a : cold xt loc. )
+:s <quit> [ {quit} ] literal ;s ( -- a : quit xt loc. )
 : current ( -- a : get current vocabulary )
   [ {current} ] literal ;
 : root-voc ( -- a : get root vocabulary )
@@ -1071,14 +1073,14 @@ opt.divmod [if]
   \ not a word
   dup >r count number? if rdrop \ it is numeric!
     dpl @ 0< if \ <- dpl is -1 if it's a single cell number
-       drop     \ drop high cell from 'number?' for single cell
-    else        \ <- dpl is not -1, it is a double cell number
-       state @ if swap then
-       postpone literal \ literal executed twice if # is double
+      drop     \ drop high cell from 'number?' for single cell
+    else       \ <- dpl is not -1, it is a double cell number
+      state @ if swap then
+      postpone literal \ literal executed twice if # is double
     then \ NB. "literal" is state aware
     postpone literal exit
   then
-  \ NB. Could vector ?found here, to handle arbitrary words
+  \ N.B. Could vector ?found here, to handle arbitrary words
   r> #0 ?found ;
 : get-order ( -- widn...wid1 n : get current search order )
   context
@@ -1152,7 +1154,7 @@ root[
 :to :noname ( "name", -- xt : make a definition with no name )
   align here #0 [ $CAFE ] literal postpone ] ;
 :to ' ( "name" -- xt : get xt of word [or throw] )
-  token find ?found cfa postpone literal ; immediate
+  token find ?found cfa ;
 :to recurse ( -- : recursive call to current definition )
     [ {last} ] literal @ cfa compile, ; immediate compile-only
 :s toggle tuck @ xor swap ! ;s ( u a -- : toggle bits at addr )
@@ -1183,8 +1185,6 @@ root[
 :s (does) 2r> 2* swap >r ;s compile-only
 :s (comp)
   r> [ {last} ] literal @ cfa
-  ( check we are running does> on a created word )
-  @+ [ to' (var) half ] literal <> [ -$1F ] literal and throw
   ! ;s compile-only
 : does> compile (comp) compile (does) ;
    immediate compile-only
@@ -1235,6 +1235,12 @@ opt.better-see [if] ( Start conditional compilation )
     swap r@ cfa? ?dup if
       >r 1- ndrop r> rdrop exit then
   1- repeat rdrop ;s
+:s instruction ( u -- )
+  [ primitive ] literal @ over u> if ."  VM    " 2* else
+    dup name ?dup if space count [ $1F ] literal
+    and type drop exit then
+  then
+  u. ;s
 :s decompile ( a u -- a )
   dup [ =jumpz ] literal = if
     drop ."  jumpz " cell+ dup @ 2* u. exit
@@ -1244,6 +1250,9 @@ opt.better-see [if] ( Start conditional compilation )
   then
   dup [ =next ] literal = if
     drop ."  next  " cell+ dup @ 2* u. exit
+  then
+  dup [ to' compile half ] literal = if
+     drop ."  compile" cell+ dup @ instruction exit 
   then
   dup [ to' (up) half ] literal = if drop
      ."  (up) " cell+ dup @ u. exit
@@ -1269,11 +1278,7 @@ opt.better-see [if] ( Start conditional compilation )
   emit space
     cell+ count 2dup type [char] " emit + aligned cell -
   exit then
-  [ primitive ] literal @ over u> if ."  VM    " 2* else
-    dup name ?dup if space count [ $1F ] literal
-    and type drop exit then
-  then
-  u. ;s
+  instruction ;s
 :s compile-only? ( pwd -- f )
    nfa [ $20 ] literal swap @ and 0<> ;s
 :s immediate? ( pwd -- f )
@@ -1442,7 +1447,7 @@ opt.self [if]
    query [ t' eval ] literal catch ( evaluate a line )
    ?dup if <error> @execute then ( error? )
   again ;                        ( do it all again... )
-:s (cold) ( -- : Forth boot sequence )
+:s (boot) ( -- : Forth boot sequence )
   forth definitions ( un-mess-up dictionary / set it )
   ini ( initialize the current thread correctly )
   opt.self [if]
@@ -1453,7 +1458,8 @@ opt.self [if]
   [ primitive ] literal @ 2* dup here swap - cksum
   [ check ] literal @ <> if ." bad cksum" bye then ( oops... )
   [ {options} ] literal @ #2 xor [ {options} ] literal !
-  then quit ;s ( call the interpreter loop AKA "quit" )
+  then 
+  <quit> @ execute ;s ( call the interpreter loop AKA "quit" )
 opt.multi [if]
 :s task: ( "name" -- : create a named task )
   create here b/buf allot 2/ task-init ;s
@@ -2032,8 +2038,9 @@ opt.glossary [if]
 :s .voc dup  ." voc: " . cr ;s ( voc -- voc )
 : glossary get-order for aft .voc @ (w) then next ; ( -- )
 [then]
-: cold [ {cold} ] literal 2* @execute ; ( -- )
-t' (cold) half {cold} t!      \ Set starting Forth word
+: cold [ {boot} ] literal 2* @execute ; ( -- )
+t' (boot) half {boot} t!      \ Set starting Forth word
+t' quit {quit} t!             \ Set initial Forth word
 atlast {forth-wordlist} t!    \ Make wordlist work
 {forth-wordlist} {current} t! \ Set "current" dictionary
 there h t!                    \ Assign dictionary pointer
@@ -2341,6 +2348,7 @@ variable seed here seed !
   dup  9 rshift xor
   dup  7 lshift xor
   dup seed ! ;
+( : wordlist here dup 1 cells allot 0 swap ! ; )
 : anonymous ( -- : make anonymous vocabulary and enable it )
   get-order 1+ here dup 1 cells allot 0 swap ! swap set-order ;
 : undefined? bl word find nip 0= ; ( "name", -- f )
@@ -3166,4 +3174,3 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
         IF 10 FLOAT F* R> 1- >R THEN
         <# R@ ABS 0 #S R> SIGN 2DROP
         "E HOLD F# #>     TYPE SPACE ;
-
