@@ -1,7 +1,7 @@
 defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ # Information
 \
-\ * Edition: X.X.0
+\ * Edition: 2.0.0
 \ * Project: Cross Compiler / eForth for a SUBLEQ CPU
 \ * Author:  Richard James Howe
 \ * Email:   howe.r.j.89@gmail.com
@@ -1644,7 +1644,7 @@ assembler.1 +order definitions
 : begin talign there ; ( -- a )
 : again JMP ; ( a -- )
 : mark there 0 t, ; ( -- a : create hole in dictionary )
-: if talign ( a -- a : NB. "if" does not work for $8000 )
+: if talign ( a -- a : N.B. "if" does not work for $8000 )
    2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t,
    mark ;
 : until 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t,
@@ -5131,7 +5131,7 @@ system[ user tup =cell tallot ]system
 \ to achieve greatness is "?exit", previously defined.
 \
 :s do$ 2r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
-:s ($) do$ ;s           ( -- a : do string NB. )
+:s ($) do$ ;s           ( -- a : do string )
 :s .$ do$ count type ;s ( -- : print string in next cells )
 :m ." .$ $literal ;m ( --, ccc" : compile string )
 :m $" ($) $literal ;m ( --, ccc" : compile string )
@@ -5774,7 +5774,7 @@ system[ user tup =cell tallot ]system
 \ formed in hold space by using combinations of "\<#",
 \ "\#" and "hold".
 \
-: #> 2drop hld @ this [ =num ] literal + over - ; ( u -- b u )
+: #> 2drop hld @ this [ =num ] literal + over - ; ( d -- b u )
 
 \ "extract" extracts (hence the name) a single number from
 \ a double cell, it should do this with the divide/modulo
@@ -5807,7 +5807,7 @@ system[ user tup =cell tallot ]system
 \ the output, you can use these set of words to achieve that.
 \
 : #  #2 ?depth #0 radix extract digit hold ; ( d -- d )
-: #s begin # 2dup ( d0= -> ) or 0= until ; ( d -- 0 )
+: #s begin # 2dup ( d0= -> ) or 0= until ; ( d -- 0 0 )
 : <# this [ =num ] literal + hld ! ; ( -- : start num. output )
 
 \ "sign" adds a "-" character to hold space if the
@@ -6357,7 +6357,7 @@ opt.divmod [if]
     else       \ <- dpl is not -1, it is a double cell number
       state @ if swap then
       postpone literal \ literal executed twice if # is double
-    then \ NB. "literal" is state aware
+    then \ N.B. "literal" is state aware
     postpone literal exit
   then
   \ N.B. Could vector ?found here, to handle arbitrary words
@@ -6480,7 +6480,7 @@ opt.divmod [if]
   context - 2/ dup >r 1- s>d [ -$32 ] literal and throw
   for aft @+ swap cell- then next @ r> ;
 :r set-order ( widn ... wid1 n -- : set current search order )
-  \ NB. Uses recursion, however the meta-compiler does not use
+  \ N.B. Uses recursion, however the meta-compiler does not use
   \ the Forth compilation mechanism, so the current definition
   \ of "set-order" is available immediately.
   dup #-1 = if drop root-voc #1 set-order exit then
@@ -6714,7 +6714,7 @@ root[
 : word ( c -- b : parse a character delimited word )
   #1 ?depth parse here aligned dup >r 2dup ! 1+ swap cmove r> ;
 :s token bl word ;s ( -- b : get space delimited word )
-:s ?unique ( a -- a : warn if word definition is not unique )
+:s ?unique ( b -- b : warn if word definition is not unique )
  dup get-current (search) 0= ?exit space
  2drop [ {last} ] literal @ .id ." redefined" cr ;s ( b -- b )
 :s ?nul ( b -- b : check not null )
@@ -7115,7 +7115,7 @@ root[
 :to user create -cell allot compile (user)
    cell user? +! user? @ , ;
 
-: >body cell+ ; ( a -- a : move to a create words body )
+: >body cell+ ; ( a -- a : move to a created words body )
 :s (does) 2r> 2* swap >r ;s compile-only
 :s (comp)
   r> [ {last} ] literal @ cfa
@@ -7357,7 +7357,7 @@ root[
 \        1 ?\ .( BRAVO )
 \         ( Only "BRAVO" is printed )
 \
-\ NB. ")" is defined earlier so it can be used as a
+\ N.B. ")" is defined earlier so it can be used as a
 \ "no-operation" word.
 \
 
@@ -8419,7 +8419,7 @@ t' (block) t' <block> >tbody t!
 \ had the space) to break down the information provided into
 \ a word for "author", and "version", such as this:
 \
-\        :s project $" eForth v?.?" ;s
+\        :s project $" eForth v2.0" ;s
 \        :s author $" Richard James Howe" ;s
 \        :s email $" howe.r.j.89@gmail.com" ;s
 \        :s repo $" https://github.com/howerj/subleq" ;s
@@ -8439,22 +8439,11 @@ root[
 
 opt.info [if]
   :s info cr ( --, print system info )
-    ." eForth vX.X, Public Domain,"  here . cr
+    ." eForth v2.0, Public Domain,"  here . cr
     ." Richard James Howe, howe.r.j.89@gmail.com" cr
     ." https://github.com/howerj/subleq" cr ;s
 [else]
   :s info ;s ( --, [disabled] print system info )
-[then]
-
-\ This optionally included word is only used and available
-\ when the "Self-Interpreter" is included in the build, it is
-\ used to print a warning out when the system is executing 
-\ under that interpreter so as to warn the user as to why the
-\ system is so slow.
-opt.self [if]
-:s warnv [ {virtual} ] literal @ if
-    ." Warning: Virtual 16-bit SUBLEQ VM" cr
-    then ;s
 [then]
 
 \ ## Task Initialization
@@ -8573,9 +8562,8 @@ opt.self [if]
   [ t' accept ] literal <expect> ! <tap> ! <echo> ! <ok> ! ;s
 :s hand ( -- )
   [ t' ok ] lit
-  [ t' (emit) ] literal ( Default: echo on )
-  [ {options} ] literal @ #1 and
-    if drop [ to' drop ] literal then
+  [ t' (emit) ] literal [ to' drop ] literal
+  [ {options} ] literal @ #1 and 0= mux  ( Default: echo on )
   [ t' ktap ] literal postpone [ xio ;s
 :s pace [ $B ] literal emit ;s ( -- : emit pacing character )
 :s file ( -- )
@@ -8588,7 +8576,7 @@ opt.self [if]
   hand ;s
 :s io! console ;s ( -- : setup system I/O )
 
-\ NB. It might be slightly more efficient to copy a block of
+\ N.B. It might be slightly more efficient to copy a block of
 \ constants into the new task, patching things up after.
 :s task-init ( task-addr -- : initialize USER task )
   [ {up} ] literal @ swap [ {up} ] literal !
@@ -8701,7 +8689,13 @@ opt.self [if]
   forth definitions ( un-mess-up dictionary / set it )
   ini ( initialize the current thread correctly )
   opt.self [if]
-    [ {options} ] literal @ [ $10 ] literal and if warnv then
+    [ {options} ] literal @ [ $10 ] literal and if 
+      \ Print out warning if we are running a virtualized
+      \ and thus very slow system
+      [ {virtual} ] literal @ if
+        ." Warning: Virtual 16-bit SUBLEQ VM" cr
+      then
+    then
   [then]
   [ {options} ] literal @ [ 4 ] literal and if info then
   [ {options} ] literal @ #2 and if ( checksum on? )
@@ -9175,7 +9169,7 @@ opt.control [if]
    [ $1E ] literal <> [ -$16 ] literal and throw
    compile (endcase) ; compile-only immediate
 
-:s r+ 1+ ;s ( NB. Should be cell+ on most platforms )
+:s r+ 1+ ;s ( N.B. Should be cell+ on most platforms )
 :s (unloop) r> rdrop rdrop rdrop >r ;s compile-only
 :s (leave) rdrop rdrop rdrop ;s compile-only
 :s (j) [ $4 ] literal rpick ;s compile-only
@@ -9187,7 +9181,7 @@ opt.control [if]
    then 2drop ;s compile-only
 :s (loop)
   r> r> 1+ r> 2dup <> if
-    >r >r 2* @ >r exit \ NB. 2* and 2/ cause porting problems
+    >r >r 2* @ >r exit \ N.B. 2* and 2/ cause porting problems
   then >r 1- >r r+ >r ;s compile-only
 :s (+loop)
    r> swap r> r> 2dup - >r
@@ -9656,7 +9650,7 @@ system[
 
 \ ## CORDIC CODE
 \
-\ NB. This CORDIC code could be extended to perform many more
+\ N.B. This CORDIC code could be extended to perform many more
 \ functions, not just sine and cosine, examples of this are
 \ in <https://github.com/howerj/q> and
 \ <https://en.wikibooks.org/wiki/Digital_Circuits/CORDIC>,
@@ -11398,7 +11392,7 @@ it being run.
 \              }
 \              }
 \              break;
-\            /* NB. We might be able to run more programs
+\            /* N.B. We might be able to run more programs
 \             * correctly if we disable these instructions if
 \             * a write occurs within the bounds of an
 \             * instruction macro, this would slow things down
@@ -13105,7 +13099,7 @@ mark
 system +order
 : wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
 
-( NB. Bitwise ops must be masked off on non 16-bit machines )
+( N.B. Bitwise ops must be masked off on non 16-bit machines )
 : crc ( b u -- u : calculate ccitt-ffff CRC )
   $FFFF >r begin ?dup while
    over c@ r> swap
