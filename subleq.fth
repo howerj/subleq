@@ -8434,11 +8434,12 @@ t' (block) t' <block> >tbody t!
 \ not the book!
 \
 root[
-  $FFFF constant eforth ( --, version )
+  $0200 constant eforth ( --, version )
 ]root
 
 opt.info [if]
-  :s info cr ( --, print system info )
+  :s info  ( --, print system info )
+    cr
     ." eForth v2.0, Public Domain,"  here . cr
     ." Richard James Howe, howe.r.j.89@gmail.com" cr
     ." https://github.com/howerj/subleq" cr ;s

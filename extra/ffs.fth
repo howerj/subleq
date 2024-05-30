@@ -16,18 +16,20 @@
 \ blocks and it is expected that a Forth interpreter is
 \ available to execute files if needed.
 \
-\ A file system consists of a maximum of 512 blocks, which is
-\ the maximum number of 16-byte entries that can fit in a
-\ single block. This limits the maximum file system size of
-\ 512KiB. In the future this restriction may be lifted and
-\ multiple blocks used to store the FAT, which would raise
-\ the limit to approximated 64MIB.
+\ Formerly the file system consisted of a maximum of 512 
+\ blocks, which is the maximum number of 16-byte entries that 
+\ can fit in a single block. This limited the maximum file 
+\ system size to 512KiB. Now multiple blocks can be used to
+\ store the FAT table meaning this file system can store
+\ up to 64MiB of data (less some overhead and some blocks that
+\ cannot be used).
 \
 \ The FAT is stored as a binary file. Directories are fixed
 \ format text files. Files consist of potentially non
 \ contiguous Forth Blocks, and thus files must be multiples
-\ of 1024 bytes (a limitation that might be removed in the
-\ future).
+\ of 1024 bytes when allocating space to them (that is a file
+\ that occupies 3 bytes of space must take up 1024 bytes,
+\ excluding the directory entry itself).
 \
 \ The file system is designed to be forwards compatible to
 \ a degree with various potential changes, or at least offer
@@ -199,9 +201,7 @@
 \ implement (such as hard or symbolic links), partly due to
 \ file system limitations and partly due to a lack of need.
 \
-\ TODO: Multiple FAT blocks
 \ TODO: Better path parsing?
-\ TODO: File exists word?
 \
 
 defined (order) 0= [if]
@@ -439,7 +439,7 @@ defined eforth [if]
 $F000 constant copy-store      \ Used to copy blocks
 [else]
 1 constant start               \ Starting block
-128 constant end               \ End block
+1024 constant end               \ End block
 0 constant init                \ Initial program block
 create copy-store b/buf allot  \ Used to copy blocks
 [then]
@@ -563,22 +563,22 @@ cell 2 = little-endian and [if]
 
 : fat? dup [ b/buf 2/ fats * ] literal u<= ; ( blk -- blk f )
 : decompose [ b/buf 2/ ] literal /mod swap ; ( blk -- blk n )
-: fatidx 
+: fataddr 
 \   fat? 0= throw
    fat addr? ; ( blk -- addr )
-: >fat 
-  \ TODO: Extra FAT tables go here. They must be protect also,
-  \ also prevent freeing and allocating these blocks...
+: f@t ( blk -- u : read from FAT record )
   fat? 0= throw
-  2* fatidx + 16@ ;
-: f@t ;
+  decompose 2* swap fat + addr? + 16@ ;
+: f!t ( u blk -- : write to FAT record )
+  fat? 0= throw
+  decompose 2* swap fat + addr? + 16! modify ;
 : linkable 
   dup 1 end 1+ within 
   \ TODO: if block.end then we are linkable in a way
-  over >fat blk.lastv u< swap and ; ( blk -- blk f )
+  over f@t blk.lastv u< swap and ; ( blk -- blk f )
 \ : linkable dup dirstart 1+ end 1+ within ; ( blk -- blk f )
 : link ( blk -- blk : load next block from FAT )
-  linkable 0= if drop blk.end exit then >fat ; 
+  linkable 0= if drop blk.end exit then f@t ; 
 : previous ( head-blk prior-to-blk -- blk )
   swap
   begin
@@ -589,15 +589,12 @@ cell 2 = little-endian and [if]
     link
     dup blk.end =
   until drop ;
-
-\ TODO: Modify to support multiple FAT blocks
-: reserve 2* fatidx + 16! modify ; ( blk blk -- )
 : setrange ( val blk u )
   rot >r
   begin
     ?dup
   while
-    over r@ swap reserve
+    over r@ swap f!t
     +string
   repeat drop rdrop ;
 : btotal end start - ; ( -- n )
@@ -605,34 +602,32 @@ cell 2 = little-endian and [if]
 : bblk addr? b/buf blank save ; ( blk -- )
 : fblk addr? b/buf erase save ; ( blk -- )
 : free? ( -- blk f )
-  fatidx dirstart 1+
+  dirstart 1+
   begin
     dup end <
   while
-    \ TODO: Modify
-    2dup 2* + 16@ blk.free = if nip -1 exit then
+    dup f@t blk.free = if -1 exit then
     1+
   repeat 2drop 0 0 ;
 : balloc? ( -- blk -1 | -1 0 )
   free? 0= if -1 0 exit then
-  dup blk.end swap reserve save -1 ;
+  dup blk.end swap f!t save -1 ;
 : balloc ( -- blk : allocate single block )
   balloc? 0= EFULL error dup fblk ;
 : btally ( blk-type -- n )
-  0 fatidx end 1- for
-    \ TODO: Modify
-    dup 16@ 3 pick = if 
-     swap 1+ swap
-    then
-    2 +
-  next drop nip ;
+  >r 0 end begin
+    dup start >=
+  while 
+    dup f@t r@ = if swap 1+ swap then
+    1-
+  repeat drop rdrop ;
 : ballocs ( n -- blk : allocate `n` non-contiguous blocks )
   ?dup 0= EINTN error
   dup 1 = if drop balloc exit then
   dup blk.free btally > EFULL error
   blk.end swap
   1- for
-    balloc tuck reserve
+    balloc tuck f!t
   next ;
 : bvalid? ( blk -- blk : can we free this block? )
   dup dirstart <= EIBLK error
@@ -647,7 +642,7 @@ cell 2 = little-endian and [if]
   \ 
   \   linkable 0= if drop exit then )
   begin
-  dup link swap blk.free swap bvalid? reserve
+  dup link swap blk.free swap bvalid? f!t
   dup blk.end = until drop save ; 
 : bcount ( blk -- n )
   0 swap begin swap 1+ swap link dup blk.end = until drop ;
@@ -655,14 +650,14 @@ cell 2 = little-endian and [if]
   >r dup 1 r@ bcount within 0= if rdrop drop exit then
   r@ swap r> swap
   1- for nip dup link
-  next bfree blk.end swap reserve save ;
+  next bfree blk.end swap f!t save ;
 : reserve-range ( blk n -- : force allocate contiguous blocks )
   begin
     ?dup
   while
     dup 1 <= 
     if over blk.end swap 
-    else over dup 1+ swap then reserve 
+    else over dup 1+ swap then f!t 
     1- swap 1+ swap
   repeat drop save ;
 : fmt.init ( -- )
@@ -672,7 +667,7 @@ cell 2 = little-endian and [if]
 : fmt.fat
   fat fats 1- for dup fblk 1+ next drop
   0 fats [ b/buf 2/ ] literal * 1- for
-    blk.unmapped over reserve 1+
+    blk.unmapped over f!t 1+
   next drop
   init if 0 init 1- reserve-range then
   fat fats reserve-range
@@ -682,7 +677,7 @@ cell 2 = little-endian and [if]
   begin
     end start - over >
   while
-    blk.free over reserve 1+
+    blk.free over f!t 1+
   repeat
   drop
   save ;
@@ -754,12 +749,12 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 \ `blk.end`, `balloc` does however. This is so another linked
 \ list can be appended. It could set it intelligently 
 \ however...
-: fat-append fat-end reserve save ; ( blk file -- )
+: fat-append fat-end f!t save ; ( blk file -- )
 : contiguous? ( blk n -- f : is contiguous range free? )
   begin
     ?dup
   while
-    over >fat blk.free <> if 2drop 0 exit then
+    over f@t blk.free <> if 2drop 0 exit then
     1- swap 1+ swap
   repeat drop -1 ;
 : contiguous ( n -- blk f : find contiguous slab )
@@ -773,9 +768,8 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
     1+ ( This could be sped up by incrementing past failure )
   repeat rdrop drop 0 0 ;
 : largest ( -- n : largest block that we can allocate )
-  0 btotal for
-    r@ contiguous nip if r@ max then
-  next ;
+  blk.free btally 
+  begin dup while dup contiguous nip ?exit 1- repeat ;
 : cballoc ( n -- blk f : allocate contiguous slab )
   dup contiguous if tuck swap reserve-range -1 exit then 0 ;
 : dirp? ( -- )
@@ -874,7 +868,7 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 : is-unempty? empty? dsl <> ; ( blk -- f )
 : fmt.root ( -- : format root directory )
   nclear namebuf dirstart
-  fmtdir blk.end dirstart reserve save ;
+  fmtdir blk.end dirstart f!t save ;
 : /root dirp @ for popd drop next ;
 : dir? dirent-type@ [char] D = ; ( dir line -- f )
 : special? dirent-type@ [char] S = ; ( dir line -- f)
@@ -1180,6 +1174,11 @@ r/o w/o or constant r/w ( -- fam )
   peekd over dirent-rem@ r@ f.end !
   peekd over dirent-blk@ dup r@ f.blk ! r@ f.head !
   drop rdrop r> 0 ; 
+: exists-file ( c-addr u -- f )
+  ncopy namebuf peekd dir-find dsl >= ;
+: eof?-file findex f.flags @ flg.eof and 0<> ; ( fileid -- f )
+: error?-file ( fileid -- f )
+  findex f.flags @ flg.error and 0<> ;
 : create-file ( c-addr u fam -- fileid ior )
   fam? >r 2dup ncopy full? 1 [ ' (mkfile) ] literal catch
   ?dup if nip nip nip -1 swap rdrop exit then save
@@ -1407,15 +1406,15 @@ r/o w/o or constant r/w ( -- fam )
    ." MOUNTED" cr
    ." VERSION:     " version .hex cr
    ." BLK SZ:      " b/buf u. cr
-   ." READ ONLY?   " read-only @ yes? type cr
    ." START BLK:   " start u. cr
-   ." INSENSITIVE: " insensitive @ yes? type cr
    ." END BLK:     " end u. cr
    ." MAX DIRS:    " maxdir u. cr
    ." MAX:         " end start - dup . ." / " b/buf * u. cr
    ." FREE:        " blk.free btally dup . ." / " b/buf * u. cr 
    ." BAD BLKS:    " blk.bad-blk btally u. cr 
-   ." LARGEST CONTIGUOUS BLOCK: " largest u. cr ;
+   ." LARGEST CONTIGUOUS BLOCK: " largest u. cr 
+   ." READ ONLY:    " read-only @ yes? type cr
+   ." INSENSITIVE:  " insensitive @ yes? type cr ;
 
 : cksum
   token count r/o open-file throw
@@ -1839,51 +1838,46 @@ dup constant stderr
 drop
 
 defined eforth [if]
-edit login.fth
-+ \ A primitive user login system [that is super insecure].
-+ \ If no users are present then we login automatically.
-+ system +order
-+ {ffs} +order
-+ wordlist +order definitions
-+ wordlist constant users
-+ 
-+ ' ok constant (prompt) ( -- xt : store ok for later use )
-+ 
-+ variable proceed 0 proceed !
-+ : conceal $1B emit ." [8m" ; ( Could also override <emit> )
-+ : reveal $1B emit ." [28m" ;
-+ : secure users 1 set-order ; ( load password database )
-+ : restore only forth definitions +dos (prompt) <ok> ! ;
-+ : message ." user: " ; ( -- : prompt asking for user-name )
-+ : fail ." Invalid username or password" cr ; ( -- error msg )
-+ : success 1 proceed ! ." logged in." ; ( signal success )
-+ : pass token count crc ; ( "xxx" -- u : super-secure <_< )
-+ : ask ." pass: " conceal query reveal ;
-+ : empty depth for aft drop then next ; ( ??? -- )
-+ : prompt secure message [ ' ) ] literal <ok> ! ;
-+ : uget query eval ; ( "xxx" -- : get user name )
-+ : nousers users @ 0= ; ( -- : no users defined? )
-+ : retry nousers ?exit begin prompt [ ' uget ] literal catch 
-+   drop empty proceed @ until ;
-+ 
-+ +dos definitions
-+
-+ : mkuser ( "user" "password" -- : create new user entry )
-+ users +order definitions create pass , only forth definitions
-+   does> ask @ pass = if restore success exit then fail ;
-+ : login 0 proceed ! retry dos ; ( -- : enter login system )
-+ : lsuser get-order secure words set-order ; ( -- )
-+ 
-+ \ mkuser guest guest
-+ \ mkuser admin password1
-+ \ mkuser archer dangerzone
-+ \ mkuser cyril figgis
-+ \ mkuser lana stirling
-+ only forth definitions +dos +ffs +system
-s
-q
-exe login.fth
-rm login.fth
+\ A primitive user login system [that is super insecure].
+\ If no users are present then we login automatically.
+system +order
+{ffs} +order
+wordlist +order definitions
+wordlist constant users
+
+' ok constant (prompt) ( -- xt : store ok for later use )
+
+variable proceed 0 proceed !
+: conceal $1B emit ." [8m" ; ( Could also override <emit> )
+: reveal $1B emit ." [28m" ;
+: secure users 1 set-order ; ( load password database )
+: restore only forth definitions +dos (prompt) <ok> ! ;
+: message ." user: " ; ( -- : prompt asking for user-name )
+: fail ." Invalid username or password" cr ; ( -- error msg )
+: success 1 proceed ! ." Logged in." cr ; ( signal success )
+: pass token count crc ; ( "xxx" -- u : super-secure <_< )
+: ask ." pass: " conceal query reveal ;
+: empty depth for aft drop then next ; ( ??? -- )
+: prompt secure message [ ' ) ] literal <ok> ! ;
+: uget query eval ; ( "xxx" -- : get user name )
+: nousers users @ 0= ; ( -- : no users defined? )
+: retry nousers ?exit begin prompt [ ' uget ] literal catch 
+  drop empty proceed @ until ;
+
++dos definitions
+
+: mkuser ( "user" "password" -- : create new user entry )
+users +order definitions create pass , only forth definitions
+  does> ask @ pass = if restore success exit then fail ;
+: login 0 proceed ! retry dos ; ( -- : enter login system )
+: lsuser get-order secure words set-order ; ( -- )
+
+\ mkuser guest guest
+\ mkuser admin password1
+\ mkuser archer dangerzone
+\ mkuser cyril figgis
+\ mkuser lana stirling
+only forth definitions +dos +ffs +system
 [then]
 
 create linebuf c/blk allot
@@ -1903,8 +1897,7 @@ create linebuf c/blk allot
   ?exit 2drop s" unknown" ;
 
 defined eforth [if]
-\ : reboot dos quit ;
-: reboot dos login quit ;
+: reboot login quit ;
 ' reboot <quit> !
 [then]
 
