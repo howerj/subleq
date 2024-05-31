@@ -45,9 +45,21 @@
 \ ### FAT - File Allocation Table
 \
 \ The FAT, or File Allocation Table, is a data-structure at
-\ the heart of this file system. It is contained in a single
-\ Forth block in this version of the file system and consists
+\ the heart of this file system. It was contained in a single
+\ Forth block in this version of the file system and consisted
 \ of 512 16-bit entries (which limits this file system 512KiB).
+\ It now spans multiple blocks, upping the file system limit
+\ to 64MiB. The FAT blocks have to be stored in a contiguous
+\ fashion, the first of which is stored after the boot block.
+\
+\ After the last FAT block the first directory is stored.
+\
+\ The number of FAT blocks required for a file system is
+\ the number of blocks allocated to that file system divided
+\ by 512 and rounded up to the next block (e.g we need one
+\ FAT block to store 1, 512, or 6 FAT entries, and we need two
+\ to store 513 or 1024 FAT entries). There must be at least one
+\ FAT block.
 \
 \ Each 16-bit entry is either a special value or a node in a
 \ linked list of entries terminating in a special value.
@@ -73,11 +85,29 @@
 \ be used.
 \
 \ The FAT is simply a linked list, it can be traversed in one
-\ direction which can slow down seeking. Apart from copying the
-\ FAT into a different data-structure that is faster to use,
-\ a XOR linked list (see the following:
-\ <https://en.wikipedia.org/wiki/XOR_linked_list>)
-\ Could be used in lieu of a doubly linked list.
+\ direction only (at least easily) which can slow down seeking.
+\ It would be possible to speed this operation up by copying
+\ the FAT into a different in memory data structure and syncing
+\ that to disk when needed, this is not done as it adds
+\ complexity and increases RAM usage. We could have also used
+\ a XOR linked list (see the following Wikipedia article:
+\ <https://en.wikipedia.org/wiki/XOR_linked_list>) in order
+\ to speed up traversing the list in both directions, this
+\ would have added unneeded complexity.
+\
+\ In order to traverse a linked list in reverse order a pointer
+\ to the head of the list is needed. We can get to the previous
+\ pointer by linking each node until we get to the current
+\ node in the link, the link prior to this then becomes our
+\ new position. This is an expensive operation, but not too
+\ expensive and seeking like this should not be needed.
+\
+\ FAT-12, FAT-16 and FAT-32 are much more complex than this
+\ file system, one more complexity of them is that they store
+\ multiple copies of the entire FAT data-structure, often
+\ just two, allowing recovery on failure of the main FAT
+\ table. As there are only two copies there is no definitive
+\ way of telling which one is correct however.
 \
 \ ### Text Directory Format
 \
@@ -100,19 +130,21 @@
 \ gaps, this matters when entries are removed from the 
 \ directory.
 \
-\ The first entry in a directory contains a special 64-byte
+\ The first entry in a directory contains a special 32-byte
 \ field. It has the directory entry type of "\". It contains
 \ a copy of the directories name which is used when printing
 \ out the present working directory with `pwd`.
 \
-\ All other directory entries are 32-bytes in size, 23 bytes
-\ are currently used. Non used bytes must be set to the
-\ space ASCII character.
+\ All other directory entries are also 32-bytes in size, 
+\ 23 bytes are currently used. Non used bytes must be set to 
+\ the space ASCII character.
 \
 \ File and directory names are 16-bytes in length always, even 
 \ when the directory entry is a file name like "ABC.TXT", when 
 \ stored as a directory entry the file is padded with trailing 
-\ spaces up to the 16 byte limit.
+\ spaces up to the 16 byte limit. The file name is not 
+\ separated into file-name and file-extension with an implied
+\ "." like in FAT-12, FAT-16 or FAT-32.
 \
 \ The "BLK" fields are formatted as 16-bit unsigned hexadecimal 
 \ numbers with a "$" prefix. They are the initial entries in a
@@ -120,16 +152,19 @@
 \ block, or a sentinel value in the case that the file is a
 \ single block in size.
 \
-\ There is no concept of empty file, all file entries must have
-\ an associated block. This may change in the future.
+\ All files must have associated blocks assigned to them, even
+\ empty files. This may change in the future. That is a file
+\ with a size of zero bytes in size has one backing block, 
+\ much like a file with a 1024, 6, or 1000 bytes assigned to
+\ it.
 \
 \ Directories consist of a single block, which limits their
 \ size. This may change in the future.
 \
-\ Thirty directory entries can fit in a single directory, which
-\ is not shown above as each entry being 32 bytes two entries
-\ fill and entire line which would push the line length over
-\ 64 in this document.
+\ Thirty one directory entries can fit in a single directory, 
+\ which is not shown above as each entry being 32 bytes two 
+\ entries fill and entire line which would push the line length 
+\ over 64 in this document.
 \
 \ ### File Format
 \
@@ -201,7 +236,18 @@
 \ implement (such as hard or symbolic links), partly due to
 \ file system limitations and partly due to a lack of need.
 \
-\ TODO: Better path parsing?
+\ TODO: Better path parsing? Rework commands for better
+\ source/destination handling.
+\ TODO: More line-oriented utilities, rename block oriented
+\ utilities?
+\ TODO: DOS shell
+\ TODO: CRC on files / data-structures in file system?
+\ TODO: Simple regex/glob engine
+\ TODO: Check disk routine, undelete?
+\ TODO: Given a block find the file it belongs to and whether
+\ it is a head-block.
+\ TODO: Hex-editor
+\ TODO: Dump file system command
 \
 
 defined (order) 0= [if]
@@ -414,10 +460,10 @@ create dirstk maxdir cells allot dirstk maxdir cells erase
 variable key-buf \ For `key-file` and `emit-file`
 
 : namebuf: create here maxname dup allot blank does> maxname ;
-namebuf: namebuf
-namebuf: findbuf
-namebuf: compbuf
-namebuf: movebuf
+namebuf: namebuf \ Used to store names temporarily
+namebuf: findbuf \ Used to store file names for dir-find
+namebuf: compbuf \ Used to store file names for validation
+namebuf: movebuf \ Used to store file names for move/rename
 
 32 constant dirsz                \ Length of directory entry
 create dirent-store dirsz allot  \ Directory Stack
@@ -425,7 +471,8 @@ variable dirp 0 dirp !           \ Directory Stack Pointer
 variable read-only 0 read-only ! \ Make file system read only 
 $0100 constant version           \ File System version
 
-: fatcnt 0 b/buf 2/ um/mod swap 0<> negate + ;
+: fatcnt ( -- : FAT blocks need to store file system )
+  0 b/buf 2/ um/mod swap 0<> negate + ;
 
 \ It would be better if these constants were set a run time,
 \ but it is not necessary. It does mean the user of this
@@ -439,20 +486,19 @@ defined eforth [if]
 $F000 constant copy-store      \ Used to copy blocks
 [else]
 1 constant start               \ Starting block
-1024 constant end               \ End block
+1024 constant end              \ End block
 0 constant init                \ Initial program block
 create copy-store b/buf allot  \ Used to copy blocks
 [then]
 init 1+ constant fat           \ FAT Block
 end fatcnt constant fats       \ FAT Block Count
 fat fats + constant dirstart   \ Top level directory
-2 constant dsl                 \ Directory Start Line
+1 constant dsl                 \ Directory Start Line
 16 constant l/blk              \ Lines per block
 b/buf l/blk / constant c/blk   \ Columns per block
 b/buf dirsz / constant d/blk   \ Directories per block
 variable loaded 0 loaded !     \ Loaded initial program?
 variable eline 0 eline !       \ Empty link in directory
-variable exit-shell 0 exit-shell ! \ Used to exit FS shell
 variable grepl 0 grepl !       \ used to store grep length
 variable insensitive 0 insensitive ! \ Case insensitivity
 variable fatal 0 fatal ! \ Has a fatal error occurred?
@@ -552,7 +598,7 @@ defined eforth [if] : numberify number? ; [else]
    -1 fatal ! -1 EIBLK error
  then ; ( blk -- addr )
 : eline? eline @ ;
-: little-endian base c@ 0<> ; 
+: little-endian base c@ 0<> ; ( -- f )
 cell 2 = little-endian and [if]
 : 16! fatal? ro? ! modify ;
 : 16@ fatal? @ ;
@@ -563,9 +609,6 @@ cell 2 = little-endian and [if]
 
 : fat? dup [ b/buf 2/ fats * ] literal u<= ; ( blk -- blk f )
 : decompose [ b/buf 2/ ] literal /mod swap ; ( blk -- blk n )
-: fataddr 
-\   fat? 0= throw
-   fat addr? ; ( blk -- addr )
 : f@t ( blk -- u : read from FAT record )
   fat? 0= throw
   decompose 2* swap fat + addr? + 16@ ;
@@ -589,7 +632,7 @@ cell 2 = little-endian and [if]
     link
     dup blk.end =
   until drop ;
-: setrange ( val blk u )
+: setrange ( val blk u : set block range in FAT to value )
   rot >r
   begin
     ?dup
@@ -597,11 +640,11 @@ cell 2 = little-endian and [if]
     over r@ swap f!t
     +string
   repeat drop rdrop ;
-: btotal end start - ; ( -- n )
+: btotal end start - ; ( -- n : total blocks allocatable )
 : bcheck btotal 4 < -1 and throw ;
-: bblk addr? b/buf blank save ; ( blk -- )
-: fblk addr? b/buf erase save ; ( blk -- )
-: free? ( -- blk f )
+: bblk addr? b/buf blank save ; ( blk -- : blank a block )
+: fblk addr? b/buf erase save ; ( blk -- : erase a block )
+: free? ( -- blk f : is a block free? )
   dirstart 1+
   begin
     dup end <
@@ -609,12 +652,12 @@ cell 2 = little-endian and [if]
     dup f@t blk.free = if -1 exit then
     1+
   repeat 2drop 0 0 ;
-: balloc? ( -- blk -1 | -1 0 )
-  free? 0= if -1 0 exit then
+: balloc? ( -- blk -1 | -1 0 : allocate block w/ status code )
+  free? 0= if -1 0 exit then ( failed to allocate block )
   dup blk.end swap f!t save -1 ;
 : balloc ( -- blk : allocate single block )
   balloc? 0= EFULL error dup fblk ;
-: btally ( blk-type -- n )
+: btally ( blk-type -- n : count of blocks of type in FAT )
   >r 0 end begin
     dup start >=
   while 
@@ -662,6 +705,9 @@ cell 2 = little-endian and [if]
   repeat drop save ;
 : fmt.init ( -- )
   init addr? b/buf blank
+  \ A program that would be useful is one that would load
+  \ the file system word-set form a series of contiguous blocks
+  \ if the word-set was not present.
   s" .( HOWERJ SIMPLE FORTH FILE SYSTEM / DOS ) cr 1 loaded !" 
   init addr? swap cmove save ;
 : fmt.fat
@@ -733,6 +779,7 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 : link-load [ ' +load ] literal apply ; ( file -- )
 : link-list [ ' +list ] literal apply ; ( file -- )
 : link-blank [ ' bblk ] literal apply ; ( file -- )
+: link-erase [ ' fblk ] literal apply ; ( file -- )
 : link-xdump [ ' xdump ] literal apply ; ( file -- )
 : link-u [ ' u. ] literal apply ; ( file -- )
 : link-grep [ ' bgrep ] literal apply ; ( file -- )
@@ -767,6 +814,11 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
     dup r@ contiguous? if rdrop -1 exit then
     1+ ( This could be sped up by incrementing past failure )
   repeat rdrop drop 0 0 ;
+\ Although `largest` has been sped up, it is still quite bad
+\ and exhibits pathological behavior with a large number of
+\ blocks that are fragmented. This could be sped up with a
+\ binary search instead of a linear one, and improvements to
+\ `contiguous`.
 : largest ( -- n : largest block that we can allocate )
   blk.free btally 
   begin dup while dup contiguous nip ?exit 1- repeat ;
@@ -804,9 +856,9 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
    swap 1+ swap 1-
   repeat drop -1 ;
 : >la dup 0 d/blk 1+ within 0= -1 and throw dirsz * ;
-: index >la swap addr? + ;
+: index >la swap addr? + ; ( dir line -- addr )
 : dirent-type! index dup >r c! bl r> 1+ c! save ;
-: dirent-type@ index c@ ;
+: dirent-type@ index c@ ; ( dir line -- type-char )
 : dirent-name! >r >r 2dup nvalid? 0= EINAM error r> r> 
   index 2 + swap cmove save ;
 : dirent-name@ index 2 + maxname ; 
@@ -869,10 +921,10 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 : fmt.root ( -- : format root directory )
   nclear namebuf dirstart
   fmtdir blk.end dirstart f!t save ;
-: /root dirp @ for popd drop next ;
+: /root dirp @ for popd drop next ; ( -- navigate to root dir )
 : dir? dirent-type@ [char] D = ; ( dir line -- f )
-: special? dirent-type@ [char] S = ; ( dir line -- f)
-: file? dirent-type@ [char] F = ; ( dir line -- f)
+: special? dirent-type@ [char] S = ; ( dir line -- f )
+: file? dirent-type@ [char] F = ; ( dir line -- f )
 : ndir ( c-addr u -- u f : parse next file name in path a/b/c )
   0 -rot
   begin
@@ -900,7 +952,11 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
     2dup dirent-blk@ is-unempty? EDNEM error
   then
   rdrop
-  2dup special? 0= if 2dup dirent-blk@ bfree then
+  2dup special? 0= if 
+    2dup dirent-blk@
+    \ For secure erase do `dup link-erase` before `bfree`.
+    bfree 
+  then
   2dup dirent-erase
   >r addr? r@
   dirsz * + dup dirsz + swap b/buf r@ 1+ dirsz * 
@@ -917,28 +973,6 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
     dup
     blk.end =
   until <> throw ;
-: cmpblk
-  2dup ." BLK:" u. u. cr
-  addr? swap addr? swap
-  l/blk 1- for
-    2dup c/blk swap c/blk equate 0<> if
-      2dup
-      l/blk r@ - 1- u. ." >>> " c/blk type cr
-      l/blk r@ - 1- u. ." <<< " c/blk type cr
-    then
-    c/blk + swap c/blk + swap
-  next 2drop ;
-: (cmp) ( blks blks -- )
-  2dup 2dup bcount swap bcount min
-  1- for
-    2dup cmpblk
-    link swap link   
-  next 2drop
-  ( N.B. We could do better diff printing here... )
-  dup blk.end <> if ." EXTRA 2nd File: " cr dup link-list then
-  swap 
-  dup blk.end <> if ." EXTRA 1st File: " cr dup link-list then
-  2drop ;
 
 \ TODO: Delete block command
 \ TODO: Line oriented editing?
@@ -1047,46 +1081,49 @@ variable line 0 line !
     then
   again ;
 
-: yes? if s" yes" exit then s" no" ;
+: yes? if s" yes" exit then s" no" ; ( f -- c-addr u )
 
-\ File Handle Structure
+\ File Handle Structure:
 \
-\ FLAGS:    16/cell
-\ HEAD-BLK: 16/cell
-\ BLK-END:  16/cell
-\ BLK:      16/cell
-\ BLK-POS:  16/cell
-\ DIR-LINE: 16/cell
-\ DIR-BLK:  16/cell
+\        FLAGS:    16/cell
+\        HEAD-BLK: 16/cell
+\        BLK-END:  16/cell
+\        BLK:      16/cell
+\        BLK-POS:  16/cell
+\        DIR-LINE: 16/cell
+\        DIR-BLK:  16/cell
 \
 \ TODO: Optionally allow directories to be opened up
 \ TODO: Open memory as a file.
 \ TODO: Move so the functions can be used in the utilities
 \
 
-: ferase findex fhandle-size erase ;
 
-: flag swap if emit exit then drop ." -" ; ( flg ch -- )
-: .flag
-  dup flg.used   and [char] U flag
-  dup flg.ren    and [char] R flag
-  dup flg.wen    and [char] W flag
-  dup flg.stdin  and [char] I flag
-  dup flg.stdout and [char] O flag
-  dup flg.error  and [char] ! flag
-  dup flg.eof    and [char] E flag
-  drop ;
-: .fhandle ( findex -- )
-  cr
-  dup f.flags @ ." FLG: " dup u. ." -> " .flag cr
-  dup f.head  @ ." HED: " u. cr
-  dup f.end   @ ." END: " u. cr
-  dup f.blk   @ ." BLK: " u. cr
-  dup f.pos   @ ." POS: " u. cr
-  dup f.dline @ ." DLN: " u. cr
-  dup f.dblk  @ ." DBK: " u. cr
-  drop ;
-
+\ Some useful debug words for printing out file system
+\ information:
+\
+\        : flag ( flg ch -- )
+\          swap if emit exit then drop ." -" ; 
+\        : .flag
+\          dup flg.used   and [char] U flag
+\          dup flg.ren    and [char] R flag
+\          dup flg.wen    and [char] W flag
+\          dup flg.stdin  and [char] I flag
+\          dup flg.stdout and [char] O flag
+\          dup flg.error  and [char] ! flag
+\          dup flg.eof    and [char] E flag
+\          drop ;
+\        : .fhandle ( findex -- )
+\          cr
+\          dup f.flags @ ." FLG: " dup u. ." -> " .flag cr
+\          dup f.head  @ ." HED: " u. cr
+\          dup f.end   @ ." END: " u. cr
+\          dup f.blk   @ ." BLK: " u. cr
+\          dup f.pos   @ ." POS: " u. cr
+\          dup f.dline @ ." DLN: " u. cr
+\          dup f.dblk  @ ." DBK: " u. cr
+\          drop ;
+\        
 wordlist constant {required}
 
 : entry ( cs -- f )
@@ -1106,6 +1143,7 @@ wordlist constant {required}
    1+
   repeat
   drop -1 0 ;
+: ferase findex fhandle-size erase ;
 : take ( -- ptr f : take a free handle if one exists )
   unused? 0= if 0 exit then
   dup ferase
@@ -1127,7 +1165,7 @@ wordlist constant {required}
 
 : nlast? f.blk @ link blk.end = ;
 : limit? dup nlast? if f.end @ exit then drop b/buf ;
-: remaining dup >r f.pos @ r> limit? swap - 0 max ;
+: fremaining dup >r f.pos @ r> limit? swap - 0 max ;
 : nblock ( u findex -- f )
   >r r@ f.pos +!
   r@ f.pos @ r@ limit? >= if
@@ -1141,17 +1179,18 @@ wordlist constant {required}
   rdrop -1 ;
 : stretch f.pos @ b/buf swap - ;
 
-defined eforth [if]
-forth-wordlist +order definitions
-[then]
+defined eforth [if] forth-wordlist +order definitions [then]
 
-flg.ren constant r/o    ( -- fam )
-flg.wen constant w/o    ( -- fam )
-r/o w/o or constant r/w ( -- fam )
+flg.ren constant r/o    ( -- fam : read only )
+flg.wen constant w/o    ( -- fam : write only )
+r/o w/o or constant r/w ( -- fam : read/write )
 
 : bin fam? ; ( fam -- fam )
 : open-file ( c-addr u fam -- fileid ior ) 
   fam?
+  dup w/o and if 
+    read-only @ if 2drop drop -1 ERONY exit then 
+  then
   >r ncopy namebuf s" ." fcopy findbuf equate 0= if 
      take 0= if rdrop -1 EHAND exit then
      dup findex f.flags
@@ -1180,7 +1219,7 @@ r/o w/o or constant r/w ( -- fam )
 : error?-file ( fileid -- f )
   findex f.flags @ flg.error and 0<> ;
 : create-file ( c-addr u fam -- fileid ior )
-  fam? >r 2dup ncopy full? 1 [ ' (mkfile) ] literal catch
+  fam? >r 2dup ncopy full? 0 [ ' (mkfile) ] literal catch
   ?dup if nip nip nip -1 swap rdrop exit then save
   r> open-file ; 
 : flush-file ( fileid -- ior )
@@ -1216,7 +1255,8 @@ r/o w/o or constant r/w ( -- fam )
   token dup count mcopy
   required? ?exit movebuf included ;
 : rename-file ( c-addr1 u1 c-addr2 u2 -- ior ) 
-  locked!?
+  ro?
+  peekd locked!?
   mcopy ncopy
   namebuf peekd dir-find dup >r 0< if rdrop EFILE exit then
   movebuf peekd dir-find 0>= if rdrop EEXIS exit then
@@ -1256,7 +1296,7 @@ r/o w/o or constant r/w ( -- fam )
   begin
     ?dup
   while ( c-addr u )
-    r@ remaining over min ( c-addr u min )
+    r@ fremaining over min ( c-addr u min )
     r@ f.blk @ addr? r@ f.pos @ + ( c-addr u min baddr )
     swap ( c-addr u baddr min ) 3 pick swap
     dup >r cmove r>
@@ -1326,11 +1366,11 @@ r/o w/o or constant r/w ( -- fam )
   r@ fundex flush-file throw
   rdrop drop 0 ;
 
-: key-file ( file-id -- key )
+: key-file ( file-id -- key : retrieve a single byte )
   >r key-buf 1 r> read-file 0<> swap 1 <> or if -1 exit then
   key-buf c@ ;
 
-: emit-file ( ch file-id -- ior )
+: emit-file ( ch file-id -- ior : write a single byte )
   swap key-buf c! >r key-buf 1 r> write-file ;
 
 : write-line ( c-addr u fileid -- ior )
@@ -1399,9 +1439,22 @@ r/o w/o or constant r/w ( -- fam )
   begin r@ key-file dup 0>= while ccitt repeat
   drop rdrop ;
 
+: (cmp) ( file-id file-id -- file-id file-id )
+  0 >r
+  begin
+    2dup key-file swap key-file
+    tuck <> swap 0< swap if
+      drop
+      cr ." FILES DIFFER BYTE: " r> u. cr
+      exit
+    then
+    r> 1+ >r
+  until
+  rdrop ;
+
 {dos} +order definitions
 
-: df cr
+: df cr ( -- : list disk usage and file system info )
    loaded @ 0= if ." NO DISK" cr exit then
    ." MOUNTED" cr
    ." VERSION:     " version .hex cr
@@ -1416,20 +1469,19 @@ r/o w/o or constant r/w ( -- fam )
    ." READ ONLY:    " read-only @ yes? type cr
    ." INSENSITIVE:  " insensitive @ yes? type cr ;
 
-: cksum
+: cksum ( "file" -- calculate checksum over file )
   token count r/o open-file throw
   dup (cksum) u.
   close-file throw ;
-: fsync save-buffers ;
-: halt save 1 exit-shell ! only forth ;
-: ls peekd .dir ; 
-: dir peekd block? list ;
-: mount loaded @ ?exit 
+: fsync save-buffers ; ( -- : save file system data )
+: ls peekd .dir ; ( -- : list contents of Present Working Dir )
+: dir peekd block? list ; ( -- : crude version of `ls` )
+: mount loaded @ ?exit  ( -- : initialize file system )
    init block? load 0 dirp ! dirstart pushd ;
-: freeze 1 read-only ! ;
-: melt 0 read-only ! ;
+: freeze 1 read-only ! ; ( -- : make file system read only )
+: melt 0 read-only ! ; ( -- : allowing writing to file system )
 : fdisk melt bcheck fmt.init fmt.fat fmt.blks fmt.root mount ; 
-: rename ( "file" "file" -- )
+: rename ( "file" "file" -- : rename a file )
   ( `locked!?` does not need to be called )
   ro?
   narg
@@ -1437,7 +1489,7 @@ r/o w/o or constant r/w ( -- fam )
   narg ( dir-find uses `findbuf` )
   namebuf peekd dir-find 0>= EEXIS error
   findbuf peekd r> dirent-name! ;
-: mv ( "file" "file" -- )
+: mv ( "file" "file" -- : move a file to different dirs )
   ro?
   narg namebuf mcopy 
   movebuf peekd dir-find dup >r dup 0<= EFILE error
@@ -1467,7 +1519,7 @@ r/o w/o or constant r/w ( -- fam )
   >r addr? r@
   dirsz * + dup dirsz + swap b/buf r@ 1+ dirsz * 
   - cmove rdrop save ;
-: mkdir ( "dir" -- )
+: mkdir ( "dir" -- : make a directory )
   ro?
   dirp @ maxdir >= EDDPT error
   full?
@@ -1478,37 +1530,42 @@ r/o w/o or constant r/w ( -- fam )
   balloc dup >r found? dirent-blk!
   [char] D found? dirent-type!
   namebuf r> fmtdir ; 
-: copy ( "src" "dst" -- )
+: copy ( "src" "dst" -- : copy a file )
   ro?
   full?
   narg
   namebuf peekd dir-find dup >r 0< EFILE error
-  peekd r@ dirent-type@ [char] F <> ENFIL error
+  \ For stricter file copying:
+  \ 
+  \   peekd r@ file? 0= ENFIL error
+  \ 
+  peekd r@ dir? ENFIL error
   narg
   namebuf peekd dir-find 0>= EEXIS error
+  peekd r@ dirent-rem@ found? dirent-rem!
   peekd r> dirent-blk@ dup bcount ballocs dup >r (copy)
   r> found? dirent-blk!
   [char] F found?  dirent-type!
   namebuf found? dirent-name! ;
-: cmp 
-  narg namebuf peekd dir-find dup >r 0< EFILE error
-  narg namebuf peekd dir-find dup >r 0< EFILE error
-  r> peekd swap dirent-blk@
-  r> peekd swap dirent-blk@ (cmp) ;
+: cmp ( "file" "file" -- : compare two files )
+  token count r/o open-file throw
+  token count r/o open-file ?dup 
+    if swap close-file drop exit then
+  (cmp) close-file swap close-file throw throw ;
 : mkfile ro? full? narg 0 (mkfile) ; ( "file" -- )
 : fallocate ro? full? narg integer? (mkfile) ; ( "file" u -- )
-: fgrow ( "file" count -- )
+: fgrow ( "file" n -- : grow a file to n blocks )
   ro?
   narg integer? 
   namebuf peekd dir-find dup >r 0< ENFIL error
   ballocs dup link-blank peekd r> dirent-blk@ fat-append save ;
-: ftruncate ( "file" count -- )
+: ftruncate ( "file" n -- : truncate a file to n blocks )
   peekd locked!?
   ro?
   narg integer?
   namebuf peekd dir-find dup >r 0< ENFIL error
   peekd r> dirent-blk@ btruncate ;
-: mknod ( "file" node -- )
+: mknod ( "file" node -- : make a special file )
   ro?
   full?
   narg
@@ -1518,13 +1575,13 @@ r/o w/o or constant r/w ( -- fam )
   #rem found? dirent-rem!
   r> found? dirent-blk! 
   [char] S found? dirent-type! ;
-: grep ( search file -- )
+: grep ( search file -- : search a file for a string )
   token count dup grepl ! mcopy
   narg namebuf peekd dir-find dup 0< EFILE error
   peekd swap dirent-blk@ link-grep ; 
 : rm ro? narg 0 (rm) ; ( "file" -- )
 : rmdir ro? narg 1 (rm) ; ( "dir" -- )
-: cd ( "dir" -- )
+: cd ( "dir" -- : change the Present Working Directory )
   token count 2dup s" ." equate 0= if 2drop exit then
   2dup s" .." equate 0= if 2drop popd drop exit then
   2dup s" /" equate 0= if 2drop /root exit then
@@ -1552,7 +1609,7 @@ r/o w/o or constant r/w ( -- fam )
     then
     1+
   repeat drop ; 
-: deltree ( "dir" -- )
+: deltree ( "dir" -- : recursively delete a directory )
   ro?
   narg
   namebuf peekd dir-find dup >r 0< EFILE error
@@ -1600,6 +1657,9 @@ r/o w/o or constant r/w ( -- fam )
 ( : move mv ; ) \ Clashes with FORTHs `move` word.
 ( : type cat ; ) \ Clashes with FORTHs `type` word.
 
+
+\ TODO: Line oriented file?
+\ TODO: Distinguish between block files and byte files?
 mount loaded @ 0= [if]
 cr .( FFS NOT PRESENT, FORMATTING... ) cr
 fdisk
@@ -1649,7 +1709,6 @@ edit help.txt
 + fsync: save any block changes
 + ftruncate <FILE> <NUM>: truncate <FILE> to <NUM> blocks
 + grep <STRING> <FILE>: Search for <STRING> in <FILE>
-+ halt / quit / bye: safely halt system
 + help: display a short help
 + hexdump <FILE>: hexdump a file
 + login: password login (NOP if no users) (SUBLEQ eForth only)
@@ -1680,7 +1739,6 @@ edit help.txt
 + exe HELLO.FTH
 + rm HELLO.FTH
 + ls
-+ halt 
 + 
 n 
 + EDITOR COMMANDS
@@ -1902,4 +1960,22 @@ defined eforth [if]
 [then]
 
 \ marker [START]
+
+\ Usage:
+\
+\   file: example.txt
+\   | March on, join bravely, let us to it pell mell, if not
+\   | to heaven then hand in hand to hell!
+\   ;file
+\
+variable handle -1 handle !
+: recreate-file >r 2dup delete-file drop r> create-file ;
+: -handle -1 handle ! ;
+: file: -handle token count w/o recreate-file throw handle ! ;
+: remaining source nip >in @ - ; ( -- n )
+: leftovers source nip remaining - >r source r> /string ;
+: discard source nip >in ! ; ( -- )
+: | leftovers handle @ write-line throw discard ;
+: ;file handle @ close-file -handle throw ;
+
 
