@@ -7,35 +7,26 @@
 #include "c.h"
 
 #ifndef HASH_ORDER
-#define HASH_ORDER	(16)
+#define HASH_ORDER (16)
 #endif
 
 #ifndef MLEN
-#define MLEN		(16)
+#define MLEN       (16)
 #endif
 
-#define HASH_SIZE	(1 << HASH_ORDER)
+#define HASH_SIZE  (1 << HASH_ORDER)
 
 static u16 m[1<<16], n[1<<16], prog = 0, oprog = 0;
 static u16 table[HASH_SIZE] = { 0, };
 static u16 buf[MLEN + 1] = { 0, };
-static u16 hash = 0; //5381;
+static u16 hash = 0;
 static long in = 0;
 
-static u16 djb2(u16 ohash, unsigned char *s, size_t len) {
-	unsigned long hash = ohash;
-	for (size_t i = 0; i < len; i++)
-		hash = ((hash << 5) + hash) ^ s[i]; /* hash * 33 + c */
-	return hash;
-}
-
-static inline u16 u16djb2(u16 ohash, u16 x) {
-	unsigned char bh[2] = { (x >> 0) & 255, (x >> 8) & 255, };
-	return djb2(ohash, bh, sizeof (bh));
-}
-
-//#define HASH(h, x) (h = u16djb2(h, x))
-//#define HASH(h, x) (h = u16djb2(0, x))
+//#define HASH(h, x) (h = h - x)
+//#define HASH(h, x) (h = x)
+//#define HASH(h, x) (h = (h << 8) ^ x)
+//#define HASH(h, x) (h = (h << 8) ^ x)
+//#define HASH(h, x) (h = x - h)
 
 #ifndef HASH
 #define HASH(h, x) (h = (h << 4) ^ x)
@@ -59,10 +50,10 @@ int main(int argc, char **argv) {
 					break;
 				}
 				long c = m[in++];
-				if (c == table[hash]) {
+				if (c == table[hash % HASH_SIZE]) {
 					mask |= 1 << i;
 				} else {
-					table[hash] = c;
+					table[hash % HASH_SIZE] = c;
 					buf[j++] = c;
 				}
 				HASH(hash, c);
@@ -87,13 +78,13 @@ int main(int argc, char **argv) {
 			long mask = m[in++];
 			for (long i = 0; i < MLEN; i++) {
 				if ((mask & (1 << i)) != 0) {
-					c = table[hash];
+					c = table[hash % HASH_SIZE];
 				} else {
 					if (in >= prog) {
 						break;
 					}
 					c = m[in++];
-					table[hash] = c;
+					table[hash % HASH_SIZE] = c;
 				}
 				buf[j++] = c;
 				HASH(hash, c);
