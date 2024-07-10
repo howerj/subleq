@@ -214,42 +214,54 @@
 \ only some of which will, writing down these potentialities
 \ can be a sort of catharsis in lieu of doing the actual work
 \ to resolve them. As to what can be done we could; implement
-\ more commands, have optional case insensitivity, raise the
-\ limit on some of the file system limits, refactor many of
-\ the words, improve error handling and detection, calculate
-\ fragmentation and offer a way to defragment the file system,
-\ perform error checking on the file systems data-structures
-\ and orphaned nodes, offer a way to securely erase files,
-\ make a utility in C for manipulating the file system and
-\ importing and exporting files to it, parse full paths in
-\ commands (e.g. `a/b/c`), allow zero length files, add more
-\ file system meta-data, write unit tests, rewrite `list` so
-\ we have more control over how things look like, make a better
-\ more DOS like shell, differing blocks sizes, a primitive
-\ journal just temporary FAT directories and more. 
+\ more commands, refactor many of the words, improve error 
+\ handling and detection, calculate fragmentation and offer a 
+\ way to defragment the file system, perform error checking on 
+\ the file systems data-structures and orphaned nodes, offer a 
+\ way to securely erase files, perhaps add checksums on the
+\ file systems data structures and files, make a utility in C 
+\ for manipulating the file system and importing and exporting 
+\ files to it, allow zero length files, add more file system 
+\ meta-data, rewrite `list` so we have more control over how 
+\ things look like, make a better more DOS like shell, 
+\ differing blocks sizes, a primitive journal just temporary 
+\ FAT directories and more. 
 \
 \ The following provides a way to calculate fragmentation:
 \ <https://stackoverflow.com/questions/4586972>, which will be
 \ very slow on the SUBLEQ system.
 \
+\ Checksums, as mentioned, could be added to the file system
+\ to give some guarantee that the data has not been corrupted.
+\ If it were to be added adding it to the FAT, then to each
+\ directory, and then to each file. Adding checksums to the
+\ FAT would be easy, and little effort, adding to directories
+\ still fairly easy, and to files it would involve a higher
+\ effort, but more importantly the file systems performance
+\ would suffer when writing data.
+\
 \ Some file system features there is no intention to ever
 \ implement (such as hard or symbolic links), partly due to
 \ file system limitations and partly due to a lack of need.
 \
-\ TODO: Better path parsing? Rework commands for better
-\ source/destination handling.
-\ TODO: More line-oriented utilities, rename block oriented
-\ utilities?
-\ TODO: DOS shell
-\ TODO: CRC on files / data-structures in file system?
-\ TODO: Simple regex/glob engine
-\ TODO: Check disk routine, undelete?
-\ TODO: Given a block find the file it belongs to and whether
-\ it is a head-block.
-\ TODO: Hex-editor
-\ TODO: Dump file system command
+\ TODO: Document each section, capture GIF of usage
 \
 
+\ ## Basic Word Definitions
+\
+\ If you can seen one Forth, you can seen one Forth. Words
+\ which are deemed indispensable to one Forth programmer are
+\ cast by the wayside by another. This section, common to
+\ every non-trivial Forth program, defines basic words which
+\ may or may not be present depending on which Forth this
+\ program is running under.
+\
+
+
+\ `(order)`, `+order` and `-order` make using word-lists
+\ easy, they should be standard, to back this with objective 
+\ evidence I present the irrefutable - my opinion on the 
+\ matter.
 defined (order) 0= [if]
 : (order) ( w wid*n n -- wid*n w n )
   dup if
@@ -260,11 +272,16 @@ defined (order) 0= [if]
 : +order dup >r -order get-order r> swap 1+ set-order ;
 [then]
 
+defined wordlist 0= [if]
+: wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
+[then]
+
 defined eforth [if]
 system +order
-: wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
-\ : quine source type cr ; ' quine <ok> !
+: quine source type cr ; ' quine <ok> !
 [else]
+\ Assume `gforth`, and use the file `ffs.db` to back the
+\ file system.
 use ffs.fb
 [then]
 
@@ -295,11 +312,12 @@ defined 2swap 0= [if]
 defined dmax 0= [if]
 : dmax 2over 2over d< if 2swap then 2drop ; ( d1 d2 -- d )
 [then]
+
 defined dmin 0= [if]
 : dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
 [then]
 
-: dsignum ( d -- n )
+: dsignum ( d -- n : double cell signum function )
   2dup 0 0 d= if 2drop  0 exit then
        0 0 d< if       -1 exit then
                         1 ;
@@ -312,6 +330,8 @@ defined spaces 0= [if]
 : spaces begin ?dup 0> while bl emit 1- repeat ;
 [then]
 
+\ SUBLEQ eForth lacks `s"`, instead using counted strings
+\ where possible with `$"` and internally in `."`.
 defined eforth [if] system +order [then]
 defined s" 0= [if]
 : s" 
@@ -327,18 +347,39 @@ defined /string 0= [if]
   over min rot over + -rot - ;
 [then]
 
-: ?\ ?exit postpone \ ;
-\ : ?( ?exit postpone ( ;
+\ The word `?\` offers another mechanism for conditional
+\ compilation, an analogue using the parenthesis comment
+\ method can also be defined like so:
+\ 
+\        : ?( ?exit postpone ( ;
+\
+\ Perhaps a word called `?:` could be defined, which would
+\ be more complex, to mean "If following word is not defined
+\ then define it". 
+\
+: ?\ ?exit postpone \ ; ( f "line"? -- )
 
+\ If needed, `toggle` is:
+\
+\      : toggle tuck @ xor swap ! ; ( u a -- )
+\
 : set tuck @ or swap ! ; ( u a -- )
 : clear tuck @ swap invert and swap ! ; ( u a -- )
-\ : toggle tuck @ xor swap ! ; ( u a -- )
 
-: lower? 97 123 within ; ( ch -- f )
+\ `lower?` and `>upper` do not need defining, but are here
+\ for the sake of completeness.
+\
+\        : lower? 97 123 within ; ( ch -- f )
+\        : >upper dup lower? 32 and xor ; ( ch -- ch )
+\
 : upper? 65 91 within ; ( ch -- f )
 : >lower dup upper? 32 and xor ; ( ch -- ch )
-: >upper dup lower? 32 and xor ;
 
+\ Case insensitivity is off by default and is less tested, so 
+\ may cause problems. `icompare` implements a case insensitive
+\ comparison, it is ASCII aware only and will not work for
+\ UTF-8 (Well Unicode, not UTF-8).
+\
 : icompare ( a1 u1 a2 u2 -- n : string comparison )
   rot
   over >lower swap >lower swap - ?dup 
@@ -357,7 +398,7 @@ defined /string 0= [if]
 : prefix rot min tuck compare ; ( c1 u1 c2 u2 -- f )
 : iprefix rot min tuck icompare ; ( c1 u1 c2 u2 -- f )
 
-defined search 0= [if]
+defined search 0= [if] \ Not defined in SUBLEQ eForth
 : search ( c1 u1 c2 u2 -- c3 u3 f : find c2/u2 in c1/u1 )
   swap >r >r 2dup
   begin
@@ -370,6 +411,8 @@ defined search 0= [if]
   2drop rdrop rdrop 0 ;
 [then]
 
+\ A case insensitive version of `search`. It is optionally
+\ used along with `isearch`.
 : isearch ( c1 u1 c2 u2 -- c3 u3 f : find c2/u2 in c1/u1 )
   swap >r >r 2dup
   begin
@@ -381,6 +424,9 @@ defined search 0= [if]
   repeat
   2drop rdrop rdrop 0 ;
 
+\ `untype` does the opposite of `type`, instead of displaying
+\ string it gets bytes from the input stream and puts them
+\ in a string.
 : untype ( c-addr u -- remaining ior )
   dup >r
   begin
@@ -390,10 +436,45 @@ defined search 0= [if]
     +string
   repeat 2drop r> 0 ;
 
+: replace ( c1 c2 c-addr u -- : replace c2 with c1 in string )
+  begin
+    ?dup
+  while
+    over c@ 3 pick = if over 4 pick swap c! then
+    +string
+  repeat drop 2drop ;
+
+\ This section implements a Pseudo Random Number generator, it
+\ uses the xor-shift algorithm to do so.
+\ See:
+\ * <https://en.wikipedia.org/wiki/Xorshift>
+\ * <http://excamera.com/sphinx/article-xorshift.html>
+\ * <http://xoroshiro.di.unimi.it/>
+\ 
+\ The constants used have been collected from various places
+\ on the web and are specific to the size of a cell.
+\ 
+defined random 0= [if]
+cell 2 = ?\ 13 constant #a 9  constant #b 7  constant #c
+cell 4 = ?\ 13 constant #a 17 constant #b 5  constant #c
+cell 8 = ?\ 12 constant #a 25 constant #b 27 constant #c
+
+variable seed 7 seed ! ( must not be zero )
+
+: seed! ( x -- : set the value of the PRNG seed )
+  dup 0= if drop 7 ( zero not allowed ) then seed ! ;
+
+: random ( -- x : random number )
+  seed @
+  dup #a lshift xor
+  dup #b rshift xor
+  dup #c lshift xor
+  dup seed! ;
+
 defined b/buf 0= [if] 1024 constant b/buf [then]
 defined d>s 0= [if] : d>s drop ; [then]
 
-wordlist constant {ffs} 
+wordlist constant {ffs}
 {ffs} +order definitions
 wordlist constant {dos}
 
@@ -471,8 +552,23 @@ variable dirp 0 dirp !           \ Directory Stack Pointer
 variable read-only 0 read-only ! \ Make file system read only 
 $0100 constant version           \ File System version
 
+cell 2 = ?\ $8000 constant #msb
+cell 4 = ?\ $80000000 constant #msb
+cell 8 = ?\ $8000000000000000 constant #msb
+
+: d2* over #msb and >r 2* swap 2* swap r> if 1 or then ;
+: d2/ dup   1 and >r 2/ swap 2/ r> if #msb or then swap ;
+: dlshift begin ?dup while >r d2* r> 1- repeat ; ( d u -- d )
+: drshift begin ?dup while >r d2/ r> 1- repeat ; ( d u -- d )
+: dand rot and >r and r> ; ( d d -- d )
+: dor rot or >r or r> ; ( d d -- d )
+: dxor rot xor >r xor r> ; ( d d -- d )
+: bbuf/ ( d -- rem quo : div/mod by 1024 )
+  over 1023 and >r 10 drshift drop r> swap ;
+: hbuf/ ( d -- rem quo : div/mod by 512 )
+  over 511 and >r 9 drshift drop r> swap ; 
 : fatcnt ( -- : FAT blocks need to store file system )
-  0 b/buf 2/ um/mod swap 0<> negate + ;
+  0 hbuf/ ( b/buf 2/ um/mod ) swap 0<> negate + 1 max ;
 
 \ It would be better if these constants were set a run time,
 \ but it is not necessary. It does mean the user of this
@@ -499,10 +595,13 @@ b/buf l/blk / constant c/blk   \ Columns per block
 b/buf dirsz / constant d/blk   \ Directories per block
 variable loaded 0 loaded !     \ Loaded initial program?
 variable eline 0 eline !       \ Empty link in directory
-variable grepl 0 grepl !       \ used to store grep length
 variable insensitive 0 insensitive ! \ Case insensitivity
 variable fatal 0 fatal ! \ Has a fatal error occurred?
+variable handle -1 handle ! \ Used with `file:`
+create linebuf c/blk allot  \ Used as temporary line buffer
 
+\ The following variables are used for the file access routines
+\ which build upon the file system.
 8 constant fopen-max
 7 cells constant fhandle-size
 create fhandles fhandle-size fopen-max * dup cells allot 
@@ -510,14 +609,22 @@ create fhandles fhandle-size fopen-max * dup cells allot
 create reqbuf maxname 1+ allot \ File name as a counted string
 create newline 2 c, $D c, $A c, align
 
-  1 constant flg.used
-  2 constant flg.ren
-  4 constant flg.wen
-  8 constant flg.stdin
- 16 constant flg.stdout
- 32 constant flg.error
- 64 constant flg.eof
-128 constant flg.mem \ Reserved for memory mapped files
+\ These are set later, they store the file handles that back
+\ `stdin`, `stdout` and `stderr`, you can redirect them by
+\ opening up a new file and storing the handle in one of these.
+variable <stdin>   ( File handle for STDIN )
+variable <stdout>  ( File handle for STDOUT ) 
+variable <stderr>  ( File handle for STDERR )
+
+\ These flags are used for the file handle flag field.
+  1 constant flg.used   \ Is the file handle in use
+  2 constant flg.ren    \ Read Enable
+  4 constant flg.wen    \ Write Enable
+  8 constant flg.stdin  \ Read from Stdin
+ 16 constant flg.stdout \ Write to Stdout
+ 32 constant flg.error  \ Error flag
+ 64 constant flg.eof    \ End Of File
+128 constant flg.mem    \ Reserved for memory mapped files
 
 \ Offsets into the file handle structure.
 \
@@ -567,6 +674,11 @@ defined eforth [if] : numberify number? ; [else]
 : fvalid? dup 0 fopen-max 1+ within 0= throw ; 
 : findex fvalid? fhandles swap fhandle-size * + ;
 : fundex fhandles - fhandle-size / ;
+\ N.B. We could lock files by making their type upper or lower
+\ case, we would also need a command to force unlocking, 
+\ perhaps one could be made to force file closing. Turning the
+\ machine off and on also works however (or reopening the
+\ program).
 : locked? ( dir -- f )
   >r 0
   begin
@@ -576,6 +688,15 @@ defined eforth [if] : numberify number? ; [else]
     1+
   repeat
   drop rdrop 0 ;
+: ferase findex fhandle-size erase ; ( fhandle -- )
+: force-unlock ( -- : force unlocking file system )
+  1 ( ignore handle 0, as it contain stdin/stdout/stderr... )
+  begin
+    dup fopen-max <
+  while
+    dup ferase
+    1+
+  repeat drop ;
 : locked!? locked? ELOCK error ; ( dir -- )
 : equate insensitive @ if icompare exit then compare ;
 : examine insensitive @ if isearch exit then search ;
@@ -584,8 +705,8 @@ defined eforth [if] : numberify number? ; [else]
 : token bl word dup nul? EARGU error ; ( -- b )
 : grab ( <word> -- a : get word from input stream  )
   begin bl word dup nul? 0= ?exit drop query again ;
-: integer grab count numberify nip ; ( <num> -- n f : get int )
-: integer? integer 0= dpl @ 0>= or -$18 and throw ;
+: integer grab count numberify nip dpl @ 0< and ; 
+: integer? integer 0= -$18 and throw ;
 : modify read-only @ 0= if update then ;
 : save read-only @ 0= if update save-buffers then ;
 : fatal? fatal @ 0<> throw ;
@@ -617,9 +738,9 @@ cell 2 = little-endian and [if]
   decompose 2* swap fat + addr? + 16! modify ;
 : linkable 
   dup 1 end 1+ within 
-  \ TODO: if block.end then we are linkable in a way
+  \ N.B. If `block.end` then we are linkable in a way, we
+  \ could handle that.
   over f@t blk.lastv u< swap and ; ( blk -- blk f )
-\ : linkable dup dirstart 1+ end 1+ within ; ( blk -- blk f )
 : link ( blk -- blk : load next block from FAT )
   linkable 0= if drop blk.end exit then f@t ; 
 : previous ( head-blk prior-to-blk -- blk )
@@ -731,22 +852,15 @@ cell 2 = little-endian and [if]
   dirstart end dirstart - start - 1- for
     dup fblk 1+
   next drop ;
-: xdump ( blk -- )
-  base @ >r hex addr? cr
-  c/blk 1- for
-    l/blk 1- for
-      count 0 <# bl hold # # #> type
-    next cr
-  next r> base ! drop ;
 : apply ( file xt -- : apply execution token to file )
   >r begin dup r@ swap >r execute r> link dup blk.end = until 
   rdrop drop ;
 : +list block? list ; ( blk -- )
 : +load block? load ; ( blk -- )
-: bgrep ( N.B - mcopy must hold search term )
+: (grep) ( N.B - mcopy must hold search term )
   addr?
   l/blk 1- for
-    dup c/blk movebuf drop grepl @ examine nip nip if
+    dup c/blk movebuf -trailing examine nip nip if
       dup c/blk type cr
     then
     c/blk +
@@ -777,12 +891,7 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
   repeat r> nip ;
 
 : link-load [ ' +load ] literal apply ; ( file -- )
-: link-list [ ' +list ] literal apply ; ( file -- )
 : link-blank [ ' bblk ] literal apply ; ( file -- )
-: link-erase [ ' fblk ] literal apply ; ( file -- )
-: link-xdump [ ' xdump ] literal apply ; ( file -- )
-: link-u [ ' u. ] literal apply ; ( file -- )
-: link-grep [ ' bgrep ] literal apply ; ( file -- )
 : more? key [ 32 invert ] literal and [char] Q = ;
 : more> cr ." --- (q)uit? --- " ;
 : moar +list more> more? ;
@@ -832,13 +941,17 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 : peekd popd dup pushd ; ( -- dir )
 : nlen? dup maxname > -1 and throw ; ( n -- n )
 : nclear namebuf blank ; ( -- )
-: ncopy nclear nlen? namebuf drop swap cmove ; ( c-addr u )
+: ncopy over namebuf drop = if 2drop exit then
+  nclear nlen? namebuf drop swap cmove ; ( c-addr u )
 : fclear findbuf blank ; ( -- )
-: fcopy fclear nlen? findbuf drop swap cmove ; ( c-addr u )
+: fcopy over findbuf drop = if 2drop exit then
+  fclear nlen? findbuf drop swap cmove ; ( c-addr u )
 : cclear compbuf blank ; ( -- )
-: ccopy cclear nlen? compbuf drop swap cmove ; ( c-addr u )
+: ccopy over compbuf drop = if 2drop exit then
+  cclear nlen? compbuf drop swap cmove ; ( c-addr u )
 : mclear movebuf blank ; ( -- )
-: mcopy mclear nlen? movebuf drop swap cmove ; ( c-addr u )
+: mcopy over movebuf drop = if 2drop exit then
+  mclear nlen? movebuf drop swap cmove ; ( c-addr u )
 : .hex base @ >r hex 0 <# # # # # #> type r> base ! ;
 : hexp base @ >r hex 0 <# # # # # [char] $ hold #> r> base ! ;
 : cvalid ( ch -- f : is character valid for a dir name? )
@@ -876,14 +989,14 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 : copy> addr? copy-store swap b/buf cmove modify ;
 : >dir >la swap addr? + dirent-store dirsz cmove ; 
 : dir> >la swap addr? + dirent-store swap dirsz cmove modify ;
-: fmtdir ( c-addr u dir -- )
-  dup bblk
+: dirent ( c-addr u dir -- )
   >r fcopy
   [char] \ r@ 0 dirent-type!
   findbuf r@ 0 dirent-name!
   #rem r@ 0 dirent-rem!
   r@ r> 0 dirent-blk! 
   save ;
+: fmtdir dup bblk dirent ; ( c-addr u dir -- )
 : dir-find ( c-addr u blk -- line | -1 )
   >r fcopy
   \ We could extend this to not find much more if needed,
@@ -925,27 +1038,8 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 : dir? dirent-type@ [char] D = ; ( dir line -- f )
 : special? dirent-type@ [char] S = ; ( dir line -- f )
 : file? dirent-type@ [char] F = ; ( dir line -- f )
-: ndir ( c-addr u -- u f : parse next file name in path a/b/c )
-  0 -rot
-  begin
-    ?dup
-  while
-    over c@ [char] / = if 2drop -1 exit then
-    rot 1+ -rot
-    +string
-  repeat drop 0 ;
-\ TODO: Implement this, Handle "." and "..", add flag to
-\ indicate ".." used, or not current dir.
-\ : resolve ( c-addr u -- dir line )
-\   peekd -rot 0 -rot
-\   begin
-\    ?dup
-\   while
-\     2dup ndir >r over fcopy r> if
-\     else
-\     then
-\   repeat drop ; 
 : (remove) ( dir line f -- )
+  ro?
   2 pick locked!?
   >r 2dup dir? if
     r@ 0= ENFIL error
@@ -974,44 +1068,9 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
     blk.end =
   until <> throw ;
 
-\ TODO: Delete block command
-\ TODO: Line oriented editing?
-wordlist constant {edlin}
-{edlin} +order definitions
-variable vista 1 vista ! \ Used to be `scr`
-variable head 1 head !
-variable line 0 line !
-: s save ; ( -- : save edited block )
-: q s [ {edlin} ] literal -order ( dos ) ; ( -- : quit editor )
-: ? head @ . vista @ . line @ . ; ( -- : print blk and line )
-: l vista @ block? list ; ( -- : list current block )
-: x q head @ link-load
-    [ {edlin} ] literal +order ; ( -- : exe file )
-: ia 2 ?depth 
-  [ $6 ] literal lshift + vista @ addr? + tib
-  >in @ + swap source nip >in @ - cmove tib @ >in ! ;
-: a 0 swap ia ; : i a ; ( line --, "line" : insert line at )
-: w get-order [ {edlin} ] literal 1 ( -- : list cmds )
-     set-order words set-order ; 
-: n 0 line ! s vista @ link blk.end = if 
-    balloc dup bblk head @ fat-append 
-  then
-  vista @ link vista ! ( l ) ;
-: p ( -- : prev block )
-  0 line ! s head @ vista @ previous vista ! ( l ) ; 
-: y vista @ >copy ;
-: u vista @ copy> save ;
-: z vista @ addr? b/buf blank ; ( -- : erase current block )
-: d 1 ?depth >r vista @ addr? r> [ $6 ] literal lshift +
-   [ $40 ] literal blank ; ( line -- : delete line )
-: - line @ -1 line +! line @ 0< if 0 line ! p then ;
-: + line @ a 1 line +! line @ l/blk >= if 0 line ! n then ;
-{ffs} +order definitions
-: edlin ( BLOCK editor )
-  vista ! head ! 0 line ! ( only ) [ {edlin} ] literal +order ; 
-{edlin} -order
+\ ## Command Helper Words
 
-: .type ( blk line -- )
+: .type ( blk line -- : print directory entry type )
     2dup dir?     if ." DIR   " then
     2dup file?    if ." FILE  " then 
          special? if ." SPEC  " then ;
@@ -1043,7 +1102,7 @@ variable line 0 line !
   namebuf r@ dir-find dup 0< EFILE error r> swap ;
 : (file) ( "file" -- blk )
   peekd (entry)
-  2dup dirent-type@ [char] D = ENFIL error
+  2dup dir? ENFIL error
   dirent-blk@ ;
 : found? peekd eline? ; ( -- cwd line )
 : dfull? empty? dup eline ! -1 = EDFUL error ; ( blk -- )
@@ -1083,6 +1142,8 @@ variable line 0 line !
 
 : yes? if s" yes" exit then s" no" ; ( f -- c-addr u )
 
+\ ## File Access Methods
+\
 \ File Handle Structure:
 \
 \        FLAGS:    16/cell
@@ -1093,12 +1154,7 @@ variable line 0 line !
 \        DIR-LINE: 16/cell
 \        DIR-BLK:  16/cell
 \
-\ TODO: Optionally allow directories to be opened up
-\ TODO: Open memory as a file.
-\ TODO: Move so the functions can be used in the utilities
 \
-
-
 \ Some useful debug words for printing out file system
 \ information:
 \
@@ -1123,17 +1179,46 @@ variable line 0 line !
 \          dup f.dline @ ." DLN: " u. cr
 \          dup f.dblk  @ ." DBK: " u. cr
 \          drop ;
-\        
-wordlist constant {required}
+\
 
-: entry ( cs -- f )
+\ ### Include/Require
+\
+\ `entry` and `required?` are used by `included`, `include`,
+\ `require` and `required` in order to prevent loading the
+\ same file twice when using `require` or `required`. They do
+\ this by adding a word to a wordlist that has the same
+\ name as the file being executed, this wordlist can be checked
+\ by future calls to `required?`.
+\       
+wordlist constant {required}
+\ This prints out the files that have been `included` or
+\ `required` in the past.
+\
+\        : .require 
+\          get-order {required} 1 set-order words set-order ;
+\
+\ This really should turn a file name into a canonical file
+\ name and then remember that.
+\
+: entry ( cs -- f : create a new word if one does not exist )
   dup >r find nip ?dup if rdrop exit then
   <# r> count holds s" create  " holds 0 0 #> evaluate 0 ;
-: .require get-order {required} 1 set-order words set-order ;
-: required?
+: required? ( cs -- f : add to required list in {required} )
   >r get-order {required} +order definitions r> entry >r
   set-order definitions r> ;
 
+\ ## File Access Methods
+\
+\ This section contains helper words for the File Access 
+\ Methods and then the File Access Methods themselves, which
+\ are standard Forth words, albeit extension words and thus
+\ are sometimes not present.
+\
+\ Missing is a way of opening memory up as a file, this would
+\ require us to add a level of indirection on many of the File
+\ Access Methods and store Execution Tokens within the file
+\ handle structure.
+\
 : unused? ( -- ptr f : find a free handle if one exists )
   0
   begin
@@ -1143,7 +1228,14 @@ wordlist constant {required}
    1+
   repeat
   drop -1 0 ;
-: ferase findex fhandle-size erase ;
+: handles? ( -- u : count of free handles )
+  0 >r 0
+  begin
+   dup fopen-max <
+  while
+    dup findex f.flags @ 0= if r> 1+ >r then
+    1+
+  repeat drop r> ;
 : take ( -- ptr f : take a free handle if one exists )
   unused? 0= if 0 exit then
   dup ferase
@@ -1153,17 +1245,12 @@ wordlist constant {required}
   nlen?
   dup reqbuf c!
   reqbuf 1+ swap cmove ;
-
-: (stdio) flg.stdout flg.stdin or ;
+: (stdio) flg.stdout flg.stdin or ; ( -- u )
 : stdio flg.wen flg.ren or (stdio) or ;
 : fam? dup stdio invert and 0<> throw ; ( fam -- fam )
-
 : ferror findex f.flags @ flg.error and 0<> ; ( handle -- f )
-\ : fopened? findex f.flags @ flg.used and 0<> ; 
-\ : feof? findex f.flags @ flg.eof and 0<> ; ( handle -- f )
 : fail f.flags flg.error swap set ; ( findex -- )
-
-: nlast? f.blk @ link blk.end = ;
+: nlast? f.blk @ link blk.end = ; ( blk -- f )
 : limit? dup nlast? if f.end @ exit then drop b/buf ;
 : fremaining dup >r f.pos @ r> limit? swap - 0 max ;
 : nblock ( u findex -- f )
@@ -1202,7 +1289,8 @@ r/o w/o or constant r/w ( -- fam : read/write )
     rdrop drop -1 EFILE exit 
   then
   \ We might want to be able to open up directories, at least
-  \ in a read-only manner...
+  \ in a read-only manner, this can be done by removing this
+  \ line.
   peekd over dir? if rdrop drop 0 ENFIL exit then
   take 0= if rdrop 2drop -1 EHAND exit then
   dup r> swap >r >r
@@ -1213,13 +1301,13 @@ r/o w/o or constant r/w ( -- fam : read/write )
   peekd over dirent-rem@ r@ f.end !
   peekd over dirent-blk@ dup r@ f.blk ! r@ f.head !
   drop rdrop r> 0 ; 
-: exists-file ( c-addr u -- f )
+: file-exists? ( c-addr u -- f )
   ncopy namebuf peekd dir-find dsl >= ;
-: eof?-file findex f.flags @ flg.eof and 0<> ; ( fileid -- f )
-: error?-file ( fileid -- f )
+: file-eof? findex f.flags @ flg.eof and 0<> ; ( fileid -- f )
+: file-error? ( fileid -- f )
   findex f.flags @ flg.error and 0<> ;
 : create-file ( c-addr u fam -- fileid ior )
-  fam? >r 2dup ncopy full? 0 [ ' (mkfile) ] literal catch
+  ro? fam? >r 2dup ncopy full? 0 [ ' (mkfile) ] literal catch
   ?dup if nip nip nip -1 swap rdrop exit then save
   r> open-file ; 
 : flush-file ( fileid -- ior )
@@ -1248,10 +1336,10 @@ r/o w/o or constant r/w ( -- fam : read/write )
   ncopy namebuf peekd dir-find dup 0< EFILE error
   peekd swap dirent-blk@ link-load ; 
 : include token count included ; ( "file" -- )
-: required ( c-addr u -- )
+: required ( c-addr u -- : execute file, only once )
   pack reqbuf dup count mcopy required? ?exit reqbuf count
   included ;
-: require ( "name" -- )
+: require ( "name" -- : execute file, only once )
   token dup count mcopy
   required? ?exit movebuf included ;
 : rename-file ( c-addr1 u1 c-addr2 u2 -- ior ) 
@@ -1260,9 +1348,12 @@ r/o w/o or constant r/w ( -- fam : read/write )
   mcopy ncopy
   namebuf peekd dir-find dup >r 0< if rdrop EFILE exit then
   movebuf peekd dir-find 0>= if rdrop EEXIS exit then
+  peekd r@ dir? if
+    findbuf peekd r@ dirent-blk@ 0 dirent-name!
+  then
   findbuf peekd r> dirent-name! 0 ;
 : delete-file ( c-addr u -- ior )
-  ncopy 0 [ ' (rm) ] literal catch ?dup if nip then ; 
+  ncopy 0 [ ' (rm) ] literal catch dup if nip then ; 
 : file-position ( fileid -- ud ior ) 
   dup ferror if drop 0 0 EHAND exit then
   findex >r
@@ -1285,7 +1376,6 @@ r/o w/o or constant r/w ( -- fam : read/write )
 : file-status ( c-addr u -- x ior )
   r/o open-file ?dup if exit then
   close-file 0 swap ;
-
 : read-file ( c-addr u fileid -- u ior )
   dup ferror if 2drop drop 0 0 EHAND exit then
   over >r >r 2dup erase r>
@@ -1307,7 +1397,6 @@ r/o w/o or constant r/w ( -- fam : read/write )
     /string
   repeat
   rdrop drop r> 0 ;
-
 : read-line ( c-addr u fileid -- u flag ior ) 
   dup ferror if 2drop drop 0 0 EHAND exit then
   over >r >r
@@ -1325,17 +1414,16 @@ r/o w/o or constant r/w ( -- fam : read/write )
     \ 
     \ The code really should be:
     \ 
-    \   over c@ $A = or if  
+    \   over c@ $A = if  
     \     nip rdrop r> swap - -1 0 exit then
     \   over c@ $D <> if +string then
     \ 
-    over c@ dup $D = swap $A = or if 
+    over c@ ( dup $D = swap ) $A = ( or ) if 
       nip rdrop r> swap - -1 0 exit then
     +string
   repeat
   drop
   rdrop r> 0 0 ; 
-
 : write-file ( c-addr u fileid -- ior ) 
   dup ferror if 2drop drop EHAND exit then
   findex dup f.flags @ flg.wen and 
@@ -1365,18 +1453,14 @@ r/o w/o or constant r/w ( -- fam : read/write )
   repeat
   r@ fundex flush-file throw
   rdrop drop 0 ;
-
 : key-file ( file-id -- key : retrieve a single byte )
   >r key-buf 1 r> read-file 0<> swap 1 <> or if -1 exit then
   key-buf c@ ;
-
 : emit-file ( ch file-id -- ior : write a single byte )
   swap key-buf c! >r key-buf 1 r> write-file ;
-
 : write-line ( c-addr u fileid -- ior )
   dup >r write-file ?dup if rdrop exit then
   newline count r> write-file ;  
-
 \ A version that acted more like `fseek`, from C, in that it
 \ accepted `SEEK_SET`, `SEEK_CUR`, and `SEEK_END` could be
 \ build upon these words.
@@ -1386,12 +1470,11 @@ r/o w/o or constant r/w ( -- fam : read/write )
   r@ f.flags @ (stdio) and 0<> if rdrop 2drop ESEEK exit then
   r@ fundex file-size ?dup if rdrop 2drop 2drop exit then
   dmin
-  b/buf um/mod swap ( cnt rem )
+  bbuf/ swap ( cnt rem ) ( b/buf um/mod swap )
   r@ f.pos ! ( cnt )
   r@ f.head @ swap
   ?dup if 1- for link next then
   r> f.blk ! 0 ; 
-
 : resize-file ( ud fileid -- ior )
   dup ferror if 2drop drop EHAND exit then
   findex >r
@@ -1404,23 +1487,22 @@ r/o w/o or constant r/w ( -- fam : read/write )
     drop 2drop rdrop 0 exit
   then
   0< if \ Shrink
-    b/buf um/mod 1+ 
+    bbuf/ 1+ ( b/buf um/mod 1+ )
     ?dup if r@ f.blk @ btruncate then 
     r@ f.end !
-
     \ After `resize-file` `file-position` is unspecified, we
     \ could improve this but the current behavior is allowed
     \ by the standard.
     r@ f.head @ r@ f.blk !
     0 r@ f.pos !
-
     r> fundex flush-file
     exit
   then \ Grow
   r@ fundex file-length ?dup if \ Get length...again
     rdrop >r 2drop 2drop r> exit
   then
-  d- b/buf um/mod ?dup if
+  ( d- b/buf um/mod ?dup if )
+  d- bbuf/ ?dup if
     ballocs r@ f.head @ fat-append
   then
   r@ f.end +! r@ f.end @ b/buf > if
@@ -1430,8 +1512,39 @@ r/o w/o or constant r/w ( -- fam : read/write )
   then
   r@ fundex flush-file
   rdrop ;
+: recreate-file ( c-addr u fam -- handle ior )
+  >r 2dup file-exists?
+  if 2dup delete-file ?dup if rdrop >r 2drop r> exit then then
+  r> create-file ;
+: rewind-file >r 0 0 r> reposition-file ; ( file -- ior )
+: end-file ( file -- ior : move to the end of a file )
+  dup >r file-length ?dup if 2drop rdrop exit then
+  r> reposition-file ;
+: append-file ( c-addr u fam -- file ior :  )
+  open-file ?dup ?exit >r
+  r@ end-file ?dup if r> close-file drop exit then
+  r> 0 ;
+: line-end? ( u flag ior -- u f : read-line at EOF? )
+  ?dup if nip exit then
+  0= swap tuck 0= and ;
+
+\ ## Utility Helper Functions
+\
+\ We can now build utilities using these File Access Methods,
+\ along with more primitive ways of directly accessing the
+\ file system. We are free to mix and match here. There is
+\ no real structure to this section, there is a menagerie of
+\ helping words, often one per command that will be implemented
+\ later, for example `(cmp)` is used to implement the command
+\ `cmp`.
+\
 
 {ffs} +order definitions
+
+: remaining source nip >in @ - ; ( -- n )
+: leftovers source nip remaining - >r source r> /string ;
+: -handle -1 handle ! ; ( -- )
+: discard source nip >in ! ; ( -- )
 
 : (cksum) ( file-id -- cksum )
   >r
@@ -1452,26 +1565,292 @@ r/o w/o or constant r/w ( -- fam : read/write )
   until
   rdrop ;
 
+: (b2f) ( handle handle -- error handle handle )
+  begin
+    linebuf c/blk 3 pick read-file 0<> swap 0= or if
+      0 -rot exit
+    then
+    linebuf c/blk -trailing 2 pick write-line ?dup
+  until -rot ;
+
+: (f2b) ( handle handle -- error handle handle )
+  begin
+    linebuf c/blk blank
+    linebuf c/blk 3 pick read-line drop nip 0= if
+      0 -rot exit
+    then
+    bl $A linebuf c/blk replace
+    bl $D linebuf c/blk replace
+    linebuf c/blk 2 pick write-file ?dup 
+  until -rot ;
+
+: open-or-create-file ( c-addr u fam -- handle ior )
+  >r 2dup file-exists? r@ w/o and 0= or if 
+    r> open-file exit then 
+  r> create-file ;
+
+: with-files ( "file" "file" xt -- )
+  >r
+  token count r/w open-file throw 
+  token count r/w open-or-create-file ?dup 
+    if swap close-file drop exit then
+  r> execute close-file swap close-file throw throw throw ;
+
+: (hexhump) ( c-addr u f -- : hex dump a file, optional addr )
+  >r r/o open-file throw r> 
+  base @ >r hex
+  >r >r
+  0 begin
+    r@ key-file dup 0>=
+  while
+    swap dup $F and 0= if
+      cr r> r> tuck >r >r if dup 4 u.r ." : " then
+    then swap
+    \ N.B. Under SUBLEQ eForth `.` is much faster.
+    0 <# bl hold # #s #> type
+    1+
+  repeat 2drop
+  r> close-file rdrop r> base ! throw ;
+
+: blksum ( blk cksum -- cksum : calculate block checksum )
+  swap addr? b/buf 1- for
+    count swap >r ccitt r> 
+  next drop ;
+: blksums ( blk u -- cksum : calculate checksum over blocks )
+  $FFFF >r
+  begin
+    ?dup
+  while
+    over r> blksum >r
+    +string
+  repeat drop r> ;
+: dirsum ( $FFFF dirstart -- u : checksum over directories )
+  >r r@ swap blksum
+  dsl
+  begin
+    dup d/blk <
+  while
+    r@ over dirent-type@ bl <= if drop rdrop exit then
+    r@ over dir? if
+      r@ over dirent-blk@ >r swap r> recurse swap
+    then
+    1+
+  repeat drop rdrop ; 
+
+\ ## Block Editor
+\
+\ This implements a block editor that operates on discontinuous 
+\ blocks. SUBLEQ eForth contains a block editor that operates
+\ on continuous blocks if one is needed, as it allows the
+\ blocks to be directly addressed which is hidden from the
+\ user with this editor.
+\
+\ There is a help section later on in this file for this 
+\ editor. New blocks will be automatically allocated as needed.
+\
+\ A line oriented editor could be made as we have the file
+\ access words to do so now.
+\
+\ All the editor commands are contained within their own
+\ `{edlin}` vocabulary.
+\
+\ A command to delete the current working block would be 
+\ useful, instead of the `r` command which is a poor facsimile.
+\
+\ In order to lock the file we are editing we open up a file
+\ handle using `open-file` later when we call `edlin` and store
+\ it in `flock`. Otherwise the File Access Methods are not used
+\ for editing.
+\
+wordlist constant {edlin}
+{edlin} +order definitions
+variable vista 1 vista ! \ Used to be `scr`
+variable head 1 head !
+variable line 0 line !
+variable flock -1 flock !
+: s save ; ( -- : save edited block )
+: q s [ {edlin} ] literal -order ( -- : quit editor )
+  flock @ close-file -1 flock ! throw ( dos ) ; 
+: ? head @ . vista @ . line @ . ; ( -- : print blk and line )
+: l vista @ block? list ; ( -- : list current block )
+: x q head @ link-load
+    [ {edlin} ] literal +order ; ( -- : exe file )
+: ia 2 ?depth 
+  [ $6 ] literal lshift + vista @ addr? + tib
+  >in @ + swap source nip >in @ - cmove tib @ >in ! ;
+: a 0 swap ia ; : i a ; ( line --, "line" : insert line at )
+: w get-order [ {edlin} ] literal 1 ( -- : list cmds )
+     set-order words set-order ; 
+: n 0 line ! s vista @ link blk.end = if 
+    balloc dup bblk head @ fat-append 
+  then
+  vista @ link vista ! ( l ) ;
+: p ( -- : prev block )
+  0 line ! s head @ vista @ previous vista ! ( l ) ; 
+: y vista @ >copy ;
+: u vista @ copy> save ;
+: z vista @ addr? b/buf blank ; ( -- : erase current block )
+: d 1 ?depth >r vista @ addr? r> [ $6 ] literal lshift +
+   [ $40 ] literal blank ; ( line -- : delete line )
+: - line @ -1 line +! line @ 0< if l/blk 1- line ! p then ;
+: + line @ a 1 line +! line @ l/blk >= if 0 line ! n then ;
+: r head @ bcount 1- head @ btruncate head @ vista ! ;
+{ffs} +order definitions
+: edlin ( BLOCK editor )
+  flock !
+  vista ! head ! 0 line ! ( only ) [ {edlin} ] literal +order ; 
+{edlin} -order
+
+\ ## LZP Compression CODEC
+\
+\ This code uses LZP to make a compression CODEC, for more
+\ information see <https://github.com/howerj/lzp>, and
+\ <https://github.com/howerj/shrink>. The CODEC is very
+\ simple and does not have that great of a compression ratio.
+\
+
+wordlist constant {lzp} {lzp} +order definitions
+
+8 constant model-bits
+1 model-bits lshift constant model-size
+create model model-size allot align \ Sie ist ein Model...
+create buf 9 allot align \ Control Byte + Up to 8 literals
+variable bufp       \ Pointer into `buf`
+variable fin        \ End of Input?
+variable infile     \ File handle for input
+variable outfile    \ File handle for output
+variable icnt       \ Bytes in input text
+variable ocnt       \ Bytes in output text
+variable prediction \ Current prediction state / hash value
+variable run        \ Do we have a run of data?
+
+: +hash  ( h c -- h )
+  swap 4 lshift xor [ model-size 1- ] literal and ; 
+
+\ Needed for gforth `key-file` that comes with gforth and uses
+\ the systems file system, not the one provided by `ffs` which
+\ behaves differently.
+\
+\        : get ( file -- c|-1 )
+\          infile @ key-file dup 0< if fin ! exit then 
+\          infile @ file-eof? if drop -1 fin ! -1 exit then
+\          1 icnt +! ;
+\
+: get ( file -- c|-1 )
+  infile @ key-file dup 0< if -1 fin ! exit then 1 icnt +! ;
+: put outfile @ emit-file throw 1 ocnt +! ; ( c -- )
+: predict prediction @ swap +hash prediction ! ; ( c -- )
+: reset
+  0 prediction !
+  0 fin ! 
+  0 icnt ! 0 ocnt !
+  buf 9 erase
+  model model-size erase ;
+: model? prediction @ model + c@ ; ( -- c )
+: model! prediction @ model + c! ; ( c -- )
+: breset 1 bufp ! 0 buf c! 0 run ! ;
+: wbuf 
+  run @ if
+    buf bufp @ outfile @ write-file throw
+    bufp @ ocnt +!
+  then breset ;
+: lzp-encode ( -- ior )
+  reset
+  begin
+    breset
+    0 begin
+      dup 8 < fin @ 0= and
+    while
+      get >r r@ 0< if wbuf rdrop drop 0 exit then
+      -1 run !
+      r@ model? = if \ Match! Set bit in control byte
+        dup 1 swap lshift buf c@ or buf c!
+      else \ No match, update model and output literal byte
+        r@ model! 
+        r@ buf bufp @ + c! 
+        1 bufp +!
+      then 
+      r> predict \ Update hash either way
+      1+
+    repeat drop
+    wbuf
+  fin @ until 0 ;
+: lzp-decode ( -- ior )
+  reset
+  begin
+    get dup 0< if drop 0 exit then
+    0 begin
+      dup 8 <
+    while
+      2dup 1 swap lshift and if
+        model?
+      else
+        get dup 0< if drop 2drop 0 exit then
+        dup model!
+      then
+      dup put predict
+      1+
+    repeat 2drop
+  fin @ until 0 ;
+
+: lzp-statistics ( -- )
+  cr
+  ." in : " icnt @ . cr
+  ." out: " ocnt @ . cr ;
+
+: lzp-file outfile ! infile ! lzp-encode ;
+: unlzp-file outfile ! infile ! lzp-decode ;
+  
+: lzp-file-name ( "from" "to" -- ior )
+  w/o recreate-file ?dup if nip exit then outfile !
+  r/o open-file ?dup if nip outfile @ close-file drop exit then
+  infile !
+  [ ' lzp-encode ] literal catch
+  infile @ close-file 0 infile !
+  outfile @ close-file 0 outfile !
+  ?dup if nip nip exit then
+  ?dup if nip exit then ;
+
+: unlzp-file-name ( "from" "to" -- ior )
+  w/o recreate-file ?dup if nip exit then outfile !
+  r/o open-file ?dup if nip infile @ close-file drop exit then
+  infile !
+  [ ' lzp-decode ] literal catch
+  infile @ close-file 0 infile !
+  outfile @ close-file 0 outfile !
+  ?dup if nip nip exit then
+  ?dup if nip exit then ;
+
+\ ## DOS Commands
+\
+\ This section has a series commands that form the interface
+\ between the file system and the user. These are the words
+\ that form the core of this module.
+
 {dos} +order definitions
 
 : df cr ( -- : list disk usage and file system info )
-   loaded @ 0= if ." NO DISK" cr exit then
-   ." MOUNTED" cr
-   ." VERSION:     " version .hex cr
-   ." BLK SZ:      " b/buf u. cr
-   ." START BLK:   " start u. cr
-   ." END BLK:     " end u. cr
-   ." MAX DIRS:    " maxdir u. cr
-   ." MAX:         " end start - dup . ." / " b/buf * u. cr
-   ." FREE:        " blk.free btally dup . ." / " b/buf * u. cr 
-   ." BAD BLKS:    " blk.bad-blk btally u. cr 
-   ." LARGEST CONTIGUOUS BLOCK: " largest u. cr 
-   ." READ ONLY:    " read-only @ yes? type cr
-   ." INSENSITIVE:  " insensitive @ yes? type cr ;
-
+  loaded @ 0= if ." NO DISK" cr exit then
+  ." MOUNTED" cr
+  ." VERSION:     " version .hex cr
+  ." BLK SZ:      " b/buf u. cr
+  ." START BLK:   " start u. cr
+  ." END BLK:     " end u. cr
+  ." MAX DIRS:    " maxdir u. cr
+  ." MAX:         " end start - dup . ."  /" b/buf * u. cr
+  ." FREE:        " blk.free btally dup . ."  /" b/buf * u. cr 
+  ." BAD BLKS:    " blk.bad-blk btally u. cr 
+  ." FILES OPEN:  " fopen-max handles? - u. cr
+  ." MAX HANDLES: " fopen-max u. cr
+  ." LARGEST CONTIGUOUS BLOCK: " largest u. cr 
+  ." READ ONLY:    " read-only @ yes? type cr
+  ." INSENSITIVE:  " insensitive @ yes? type cr 
+  ." FAT CKSUM:   " fat fats blksums u. cr
+  ." DIR CKSUM:   " $FFFF dirstart dirsum u. cr
+  ." FS  CKSUM:   " fat end fat - blksums u. cr ;
 : cksum ( "file" -- calculate checksum over file )
   token count r/o open-file throw
-  dup (cksum) u.
+  dup (cksum) cr u. cr
   close-file throw ;
 : fsync save-buffers ; ( -- : save file system data )
 : ls peekd .dir ; ( -- : list contents of Present Working Dir )
@@ -1480,7 +1859,7 @@ r/o w/o or constant r/w ( -- fam : read/write )
    init block? load 0 dirp ! dirstart pushd ;
 : freeze 1 read-only ! ; ( -- : make file system read only )
 : melt 0 read-only ! ; ( -- : allowing writing to file system )
-: fdisk melt bcheck fmt.init fmt.fat fmt.blks fmt.root mount ; 
+: fdisk melt bcheck fmt.init fmt.fat fmt.blks fmt.root mount ;
 : rename ( "file" "file" -- : rename a file )
   ( `locked!?` does not need to be called )
   ro?
@@ -1488,6 +1867,9 @@ r/o w/o or constant r/w ( -- fam : read/write )
   namebuf peekd dir-find dup >r 0< EFILE error
   narg ( dir-find uses `findbuf` )
   namebuf peekd dir-find 0>= EEXIS error
+  peekd r@ dir? if
+    findbuf peekd r@ dirent-blk@ 0 dirent-name!
+  then
   findbuf peekd r> dirent-name! ;
 : mv ( "file" "file" -- : move a file to different dirs )
   ro?
@@ -1508,7 +1890,11 @@ r/o w/o or constant r/w ( -- fam : read/write )
     else \ rename
       rdrop
       drop movebuf peekd dir-find 
-      >r namebuf peekd r> dirent-name! exit
+      >r 
+      peekd r@ dir? if
+        namebuf peekd r@ dirent-blk@ 0 dirent-name!
+      then
+      namebuf peekd r> dirent-name! exit
     then
   then
   r@ dfull?
@@ -1519,6 +1905,10 @@ r/o w/o or constant r/w ( -- fam : read/write )
   >r addr? r@
   dirsz * + dup dirsz + swap b/buf r@ 1+ dirsz * 
   - cmove rdrop save ;
+\ N.B. We could set a per directory checksum, a checksum over
+\ the directory would be relatively cheap to calculate,
+\ assuming file creation and deletion is not too common
+\ relative to other file operations.
 : mkdir ( "dir" -- : make a directory )
   ro?
   dirp @ maxdir >= EDDPT error
@@ -1575,10 +1965,39 @@ r/o w/o or constant r/w ( -- fam : read/write )
   #rem found? dirent-rem!
   r> found? dirent-blk! 
   [char] S found? dirent-type! ;
-: grep ( search file -- : search a file for a string )
-  token count dup grepl ! mcopy
+: bgrep ( search file -- : search a blocks for a string )
+  cr
+  token count mcopy
   narg namebuf peekd dir-find dup 0< EFILE error
-  peekd swap dirent-blk@ link-grep ; 
+  peekd swap dirent-blk@ [ ' (grep) ] literal apply ; 
+: grep ( "search" "file" -- : search file for a string )
+  token count mcopy
+  narg namebuf r/o open-file throw >r
+  begin
+    copy-store b/buf r@ read-line line-end? 0=
+  while
+    >r
+    copy-store r@ movebuf -trailing examine nip nip if 
+      copy-store r@ type cr
+    then
+    rdrop
+  repeat
+  drop
+  r> close-file throw ;
+\ N.B. `script` is very slow in SUBLEQ eForth because of poor 
+\ performance of `read-line`. This should be improved. It is 
+\ especially a problem when executing files formatted as Forth 
+\ blocks, as `read-line` searches the entire buffer for an End 
+\ Of Line marker.
+: script ( "file" -- )
+  narg namebuf r/o open-file throw >r
+  begin
+    copy-store b/buf r@ read-line line-end? 0=
+  while
+    copy-store swap [ ' evaluate ] literal catch ?dup
+    if r> close-file throw throw then
+  repeat
+  drop r> close-file throw ;
 : rm ro? narg 0 (rm) ; ( "file" -- )
 : rmdir ro? narg 1 (rm) ; ( "dir" -- )
 : cd ( "dir" -- : change the Present Working Directory )
@@ -1604,7 +2023,7 @@ r/o w/o or constant r/w ( -- fam : read/write )
     dup d/blk <
   while
     peekd over dirent-type@ bl <= if drop exit then
-    peekd over dirent-type@ [char] D = if
+    peekd over dir? if
       peekd over dirent-blk@ pushd recurse popd drop
     then
     1+
@@ -1624,250 +2043,515 @@ r/o w/o or constant r/w ( -- fam : read/write )
   cr ." to view files."
   cr cr ." Otherwise visit <https://github.com/howerj/ffs>"
   cr cr ." Command List: " cr words cr cr ;
-: cat (file) link-list ; ( "file" -- )
-: more (file) link-more ; ( "file" -- )
+: cat ( "file" -- )
+  token count r/o open-file throw cr
+  >r
+  begin r@ key-file dup 0>= while emit repeat drop
+  r> close-file throw ;
+: more ( "file" -- : display a file with breaks )
+  token count r/o open-file throw
+  >r 0
+  begin r@ key-file dup 0>= 
+  while 
+    dup $A = if swap 1+ swap then emit 
+    dup $F > if more> more? if
+      ." QUIT" cr
+      r> close-file throw drop exit then 
+      drop 0
+    then 
+  repeat 2drop
+  r> close-file throw ." EOF" cr ;
+: bcat (file) [ ' +list ] literal apply ; ( "file" -- )
+: bmore (file) link-more ; ( "file" -- : display blocks )
 : exe (file) link-load  ; ( "file" -- )
-: hexdump (file) link-xdump ; ( "file" -- )
-: stat ( "file" -- )
+: hexdump ( "file" -- : nicely formatted hexdump of file )
+  token count -1 (hexhump) ;
+: stat ( "file" -- : detailed file stats )
   peekd (entry) 
   cr 2dup .type 
-  cr dirent-blk@ dup bcount ." BCNT: " u. 
-  cr ." BLKS: " link-u ;
-
-\ : defrag ; \ compact disk
-\ : chkdsk ;
-\ : wc ;
-
+  cr 2dup dirent-rem@ ." REMB: " u.
+  cr      dirent-blk@ dup bcount ." BCNT: " u. 
+  cr  dup ." HEAD: " u.
+  cr ." BLKS: " [ ' u. ] literal apply ;
+: b2f ( "file" "file" -- : convert block file to byte file )
+  [ ' (b2f) ] literal with-files ;
+: f2b ( "file" "file" -- : convert byte file to block file )
+  [ ' (f2b) ] literal with-files ;
 {edlin} +order
-: edit ro? narg (create) dup (round) edlin ; ( "file" -- )
+: edit ro? narg (create) dup (round) 
+  namebuf r/o open-file throw edlin ; ( "file" -- )
 {edlin} -order
+: export ( -- : export file system )
+  dsl
+  begin
+    dup d/blk <
+  while
+    peekd over dirent-type@ bl <= if 
+      ." cd .." cr drop exit 
+    then
+    peekd over special? if
+      peekd over ." mknod " dirent-blk@ u. cr
+    then
+    peekd over file? if
+      \ We could determine if the file is a binary file,
+      \ and if it is not, do a text dump instead.
+      peekd over ." hex: " dirent-name@ type
+      peekd over dirent-name@ 0 (hexhump) cr
+      ." ." cr
+    then
+    peekd over dir? if
+      peekd over ." mkdir " dirent-name@ type cr
+      peekd over ." cd " dirent-name@ type cr
+      peekd over dirent-blk@ pushd recurse popd drop
+    then
+    1+
+  repeat drop ; 
+\ We could also detect if the file is binary, and then
+\ extract the logic into another word so we can determine if
+\ files are block oriented (non binary files with no newlines),
+\ or not.
+: wc ( "file" -- display file byte/word/line count )
+  token count r/o open-file throw >r
+  0 0 bl
+  begin
+    r@ key-file dup 0>=
+  while ( lines words prev key )
+    dup $A  = if >r >r >r 1+ r> r> r> then
+    dup bl <= if over bl > if >r >r 1+ r> r> then then
+    nip
+  repeat 2drop
+  cr
+  ." BYTES: " r@ file-position drop du. cr
+  ." WORDS: " u. cr
+  ." LINES: " u. cr
+  r> close-file throw ;
+: yes ( "file" "string" count -- : print string repeatedly )
+  ro? narg token count mcopy integer?
+  namebuf w/o create-file throw >r
+  begin
+    ?dup
+  while
+    movebuf -trailing r@ write-line drop
+    1-
+  repeat
+  r> close-file throw ;
+: mkrandom ( "file" bytes -- : file a file with random bytes )
+  ro? narg integer? >r namebuf w/o create-file throw r> swap >r
+  begin
+    ?dup
+  while
+    random r@ emit-file drop
+    1-
+  repeat r> close-file throw ;
 
-\ Aliases
-: chdir cd ;
-: cls page ;
-: cp copy ;
-: del rm ;
-: ed edit ;
-: sh exe ;
-: touch mkfile ;
-: diff cmp ;
+\ ### Easy File Creation
+\
+\ This subsection of DOS commands introduces a syntax that
+\ allows the creation of new files, both textual and binary,
+\ so long as no editing is required. Instead of a simple
+\ command that performs an action several words are created 
+\ that work in conjunction.
+\
+\ `file:` and `append:` are defined first for textual files:
+\
+\ Usage:
+\
+\      file: example.txt
+\      | March on, join bravely, let us to it pell mell, if not
+\      | to heaven then hand in hand to hell!
+\      ;file
+\
+\ And to append to a file:
+\
+\      append: example.txt
+\      |
+\      | More Shakespeare!
+\      |
+\      ;append
+\
+: file: -handle token count w/o recreate-file throw handle ! ;
+: append: -handle token count w/o append-file throw handle ! ;
+: ;file handle @ close-file -handle throw ;
+: ;append ;file ;
+: | 
+  handle @ 0< if discard exit then
+  leftovers handle @ write-line ?dup if ;file then discard ;
+\
+\ `hex:` works slightly differently, it allows the creation of
+\ binary files byte by byte. Once `hex:` and a file name has
+\ been entered a series of hexadecimal numbers can be entered.
+\ The sequence can be terminated with a `.` (or any non
+\ numeric sequence).
+\
+\ Usage:
+\
+\        hex: file.bin
+\        0 1 2 3 AA FF
+\        01 20
+\        .
+\
+: hex: ( "file" -- )
+  token count w/o recreate-file throw
+  base @ >r hex
+  cr
+  >r
+  begin
+    integer dpl @ 0< and
+  while
+    r@ emit-file drop
+  repeat drop
+  r> close-file r> base ! throw ;
+
+\ ### File Compression
+\
+\ `lzp` and `unlzp` are commands that perform file compression.
+\ The compression routine has already been described, it is
+\ fairly poor in terms of compression performance but it is
+\ simple and can save about 20% of the files size, one some
+\ types of file it can save a lot more (especially files
+\ formatted as Forth blocks).
+\
+{lzp} +order
+: lzp ( "from" "to" -- )
+  peekd locked!? ro? 
+  narg namebuf mcopy narg movebuf namebuf lzp-file-name 
+  lzp-statistics ;
+: unlzp ( "from" "to" -- ) 
+  peekd locked!? ro? 
+  narg namebuf mcopy narg movebuf namebuf unlzp-file-name
+  lzp-statistics ;
+{lzp} -order
+
+\ ### Missing Commands
+\
+\ `chkdsk` and `defrag` are missing. These would be complex
+\ commands for interactively repairing broken disks and
+\ for defragmenting the disk respectively.
+\
+\ Defragmentation can be performed in a crude way be using
+\ `export` to export the entire file system and then importing
+\ that to a fresh file system. It is not ideal, but it is
+\ much simpler than implementing a defragmentation routine.
+\
+\ To defragment the file system free space is required,
+\ files would have to be moved to the free blocks and placed
+\ back in a more ordered sequence in the holes left over from
+\ moving files around, multiple passes might be required to
+\ fully defragment the system. It is a slow process, the
+\ Wikipedia page on the subject has more information, see
+\ <https://en.wikipedia.org/wiki/Defragmentation>.
+\
+\ For a `chkdsk` or Check Disk routine some recovery routines
+\ could be done semi-automatically. User intervention is 
+\ needed to decided on what to do with broken files. This
+\ file system is non journalling, and although checksums can
+\ be calculated over the various data structures in the file
+\ system they are not automatically applied but instead used
+\ for a manual check of system integrity.
+\
+\ There are some basic checks that can be done:
+\
+\ 1. For the FAT partition a check that all pointers are within
+\ bounds. Checks can be performed that boot and root directory
+\ are also present, and the root directory looks okay (for
+\ example no non-ASCII characters should be present in a
+\ directory entry, the directory header should be present, 
+\ etcetera).
+\ 2. If there are orphaned blocks, these can be collected
+\ together. There is unfortunately no way to determine which
+\ file an orphaned block belongs to, nor if the block was
+\ actually a directory entry. A file could be created for each
+\ orphaned chain.
+\ 3. For each directory entry in all the directories a check 
+\ that there is a corresponding FAT entry.
+\ 4. For all files and directories check that no files overlap 
+\ (use the same blocks).
+\ 5. Bad blocks could be tested for.
+\
+\
+\ There are many more checks that could be thought of and
+\ implemented, the complexity of this command has no upper
+\ bound. At some point it would become easier and more reliable
+\ to add journaling to the file system instead.
+\
+\ ### Aliases
+\
+\ Aliases for commands have been added, some have been
+\ avoided because they clash with Forth words. Common
+\ synonyms from Unix and DOS have been added to make 
+\ programmers familiar with either system more comfortable, and
+\ to lessen the impact of tripping over muscle memory on a new
+\ platform.
+\
+\ Adding an alias is as simple as adding a new word definition.
+\
+: chdir cd ; ( "dir" -- change Present Working Directory )
+: cls page ; ( -- : clear screen )
+: cp copy ; ( "file" "file" -- copy file )
+: del rm ; ( "file" -- delete file )
+: ed edit ; ( "file" -- edit file )
+: touch mkfile ; ( "file" -- : create a file )
+: diff cmp ; ( "file" "file" -- : compare two files )
+( : sh script ; ( "file" -- execute file ) \ Clashes in Gforth
 ( : bye halt ; ) \ Clashes with FORTHs `bye`word.
 ( : exit halt ; ) \ Clashes with FORTHs `exit` word.
 ( : quit halt ; ) \ Clashes with FORTHs `quit` word.
 ( : move mv ; ) \ Clashes with FORTHs `move` word.
 ( : type cat ; ) \ Clashes with FORTHs `type` word.
 
+\ ## Initializing Disk
 
-\ TODO: Line oriented file?
-\ TODO: Distinguish between block files and byte files?
 mount loaded @ 0= [if]
 cr .( FFS NOT PRESENT, FORMATTING... ) cr
 fdisk
-\ Nested brackets ifs do not work in SUBLEQ eFORTH...)
+\ Nested compile time [ if ] s do not work in SUBLEQ eFORTH...
+mkdir system
+cd system
 defined eforth 0= ?\ mknod [BOOT] 0
 defined eforth 0= ?\ mknod [FAT] 1
 defined eforth    ?\ mknod [BOOT] 65
 defined eforth    ?\ mknod [FAT] 66
 defined eforth    ?\ mknod [KERNEL] 1
-edit help.txt
-+ FORTH FILE SYSTEM HELP AND COMMANDS
-+
-+ Author: Richard James Howe
-+ Repo:   https://github.com/howerj/ffs
-+ Email:  howe.r.j.89@gmail.com
-+
-+ This is a simple DOS like file system for FORTH, it makes
-+ it easier to edit and manipulate data than using raw blocks.
-+
-+ For more information see:
-+
-+ <https://github.com/howerj/ffs>
-+ <https://github.com/howerj/subleq>
-+
-+ To simplify the implementation only the `move` command can
-+ move files and directories into other directories, `move`
-+ also handles targets "." and "..", like `cd` does.
-+
-+ To execute a file type `sh <FILE>` or `exe <FILE>`.
-+
-+ Commands:
-+
-+ cat <FILE>: display a file
-+ cd / chdir <DIR>: change working directory to <DIR>
-+ cksum <FILE>: Compute and print CRC (16-bit CCITT) of file
-+ cls: clear screen
-+ cmp / diff <FILE> <FILE>: compare two files
-+ cp / copy <FILE1> <FILE2>: copy <FILE1> to new <FILE2>
-+ deltree <FILE/DIR>: delete a file, or directory recurisvely
-+ df: display file system information
-+ ed / edit <FILE>: edit a <FILE> with the block editor
-+ exe / sh <FILE>: execute source <FILE>
-+ fallocate <FILE> <NUM>: make <FILE> with <NUM> blocks
-+ fdisk: **WARNING** formats disk deleting all data!
-+ fgrow <FILE> <NUM>: grow <FILE> by <NUM> blocks
-+ freeze: Freeze file system - Turn on read only mode
-+ fsync: save any block changes
-+ ftruncate <FILE> <NUM>: truncate <FILE> to <NUM> blocks
-+ grep <STRING> <FILE>: Search for <STRING> in <FILE>
-+ help: display a short help
-+ hexdump <FILE>: hexdump a file
-+ login: password login (NOP if no users) (SUBLEQ eForth only)
-+ ls / dir : list directory
-+ lsuser: List all users in login system (SUBLEQ eFORTH only)
-+ melt: Unfreeze file system - Turn off read only mode
-+ mkdir <DIR>: make a directory
-+ mknod <FILE> <NUM>: make a special <FILE> with <NUM>
-+ mkuser <USER> <PASSWORD>: create new user entry (SUBLEQ only)
-+ more <FILE>: display a file, pause for each block
-+ mount: attempt file system mounting
-+ pwd: print current working directory
-+ rename <DIR/FILE1> <DIR/FILE2>: rename a file or directory
-+ rm / del <FILE>: remove a <FILE> and not a <DIR>
-+ rmdir <DIR>: remove an empty directory
-+ sh / shell: invoke file system shell
-+ stat <FILE>: display detailed information on <FILE>
-+ touch / mkfile <FILE>: make a new file
-+ tree: recursively print directories from the current one
-+ 
-+ Example commands:
-+
-+ mkdir test
-+ cd test
-+ edit HELLO.FTH
-+ 0 i .( HELLO, WORLD ) cr
-+ s q
-+ exe HELLO.FTH
-+ rm HELLO.FTH
-+ ls
-+ 
-n 
-+ EDITOR COMMANDS
-+ This block editor is primitive but usable. It operates on
-+ 1024 byte Forth blocks, with 16 lines per block. Some 
-+ commands accept a line number or position.
-+ q : quit editor
-+ s : save work
-+ n : move to next block in file, allocating one if needed
-+ p : move to previous block in file
-+ + <LINE>: insert <LINE>, advance line count, 'n' if needed
-+ - : decrement line count, call 'p' if needed, no <LINE>
-+ x : execute current file from the start
-+ #line d : delete #line
-+ l : list current block we are editing
-+ w : list commands available to the editor
-+ #line a / i <LINE>: insert <LINE> onto #line of current block
-+ #line #row ia <LINE>: insert <LINE> into #line at #row
-+ ? : display current block
-+ z : blank current block
-+ y : yank block to storage buffer
-+ u : replace screen with storage buffer
-+
-+ Note that it is possible to delete a file whilst editing it,
-+ which is not advised but should not break anything.
-+
-+ When editing a file with `edit` if the file does not exist
-+ it is created.
-+
-+ A typical session might look like:
-+
-+ edit hello.fth
-+ 0 i \ HELLO WORLD PROGRAM, VERSION #666, RJH, 15/04/2024
-+ 1 i .( AHOY THERE WORLD, SALUTATIONS AND WARM GREETINGS ) cr
-+ s
-+ q
-+ exe hello.fth
-+
-+ This is a block editor, and not a freeform text editor, so
-+ it does follow a strict format of 16 lines of text per block.
-+
-+ "p" and "n" can be used to move forward and backward in the
-+ file, a new block is assigned if "n" is at the end of the
-+ file.
-q
-edit demo.fth
+cd ..
+edit demo.blk
 + .( HELLO, WORLD ) cr
 + 2 2 + . cr
 q
-edit errors.db
-+ -1  ABORT
-+ -2  ABORT"
-+ -3  stack overflow
-+ -4  stack underflow
-+ -5  return stack overflow
-+ -6  return stack underflow
-+ -7  do-loops nested too deeply
-+ -8  dictionary overflow
-+ -9  invalid memory address
-+ -10 division by zero
-+ -11 result out of range
-+ -12 argument type mismatch
-+ -13 undefined word
-+ -14 interpreting a compile-only word
-+ -15 invalid FORGET
-+ -16 attempt to use 0-len str. as a name
-+ -17 pictured numeric out. str. overflow
-+ -18 parsed string overflow
-+ -19 definition name too long
-+ -20 write to a read-only location
-+ -21 unsupported operation
-+ -22 control structure mismatch
-+ -23 address alignment exception
-+ -24 invalid numeric argument
-+ -25 return stack imbalance
-+ -26 loop parameters unavailable
-+ -27 invalid recursion
-+ -28 user interrupt
-+ -29 compiler nesting
-+ -30 obsolescent feature
-+ -31 >BODY used on non-CREATEd def.
-+ -32 invalid name arg. (e.g., TO xxx)
-+ -33 block read exception
-+ -34 block write exception
-+ -35 invalid block number
-+ -36 invalid file position
-+ -37 file I/O exception
-+ -38 non-existent file
-+ -39 unexpected end of file
-+ -40 wrong BASE in float point convert
-+ -41 loss of precision
-+ -42 floating-point divide by zero
-+ -43 floating-point result out of range
-+ -44 floating-point stack overflow
-+ -45 floating-point stack underflow
-+ -46 floating-point invalid argument
-+ -47 compilation word list deleted
-+ -48 invalid POSTPONE
-+ -49 search-order overflow
-+ -50 search-order underflow
-+ -51 compilation word list changed
-+ -52 control-flow stack overflow
-+ -53 exception stack overflow
-+ -54 floating-point underflow
-+ -55 floating-point unidentified fault
-+ -56 QUIT
-+ -57 exception in tx or rx a character
-+ -58 [ IF ], [ ELSE ], or [ THEN ] exception
-+ -59 ALLOCATE
-+ -60 FREE
-+ -61 RESIZE
-+ -62 CLOSE-FILE
-+ -63 CREATE-FILE
-+ -64 DELETE-FILE
-+ -65 FILE-POSITION
-+ -66 FILE-SIZE
-+ -67 FILE-STATUS
-+ -68 FLUSH-FILE
-+ -69 OPEN-FILE
-+ -70 READ-FILE
-+ -71 READ-LINE
-+ -72 RENAME-FILE
-+ -73 REPOSITION-FILE
-+ -74 RESIZE-FILE
-+ -75 WRITE-FILE
-+ -76 WRITE-LINE
-s q
-mkdir home
-mkdir bin
+file: help.txt
+| FORTH FILE SYSTEM HELP AND COMMANDS
+|
+| Author: Richard James Howe
+| Repo:   https://github.com/howerj/ffs
+| Email:  howe.r.j.89@gmail.com
+|
+| This is a simple DOS like file system for FORTH, it makes
+| it easier to edit and manipulate data than using raw blocks.
+|
+| For more information see:
+|
+| <https://github.com/howerj/ffs>
+| <https://github.com/howerj/subleq>
+|
+| To simplify the implementation only the `move` command can
+| move files and directories into other directories, `move`
+| also handles targets "." and "..", like `cd` does.
+|
+| To execute a file type `sh <FILE>` or `exe <FILE>`.
+|
+| Commands:
+|
+| b2f <FILE1> <FILE2>: convert block files to line/byte files
+| bcat <FILE>: display a series of blocks
+| bgrep <STRING> <FILE>: Search for <STRING> in <FILE> blocks
+| bmore <FILE>: display a file, pause for each block
+| cat <FILE>: display a file
+| cd / chdir <DIR>: change working directory to <DIR>
+| cksum <FILE>: Compute and print CRC (16-bit CCITT) of file
+| cls: clear screen
+| cmp / diff <FILE> <FILE>: compare two files
+| cp / copy <FILE1> <FILE2>: copy <FILE1> to new <FILE2>
+| deltree <FILE/DIR>: delete a file, or directory recurisvely
+| df: display file system information
+| ed / edit <FILE>: edit a <FILE> with the block editor
+| exe <FILE>: execute source <FILE> of blocks
+| export: export (or dump), from pwd, the file system
+| f2b <FILE1> <FILE2>: convert line/byte files to block files
+| fallocate <FILE> <NUM>: make <FILE> with <NUM> blocks
+| fdisk: **WARNING** formats disk deleting all data!
+| fgrow <FILE> <NUM>: grow <FILE> by <NUM> blocks
+| freeze: Freeze file system - Turn on read only mode
+| fsync: save any block changes
+| ftruncate <FILE> <NUM>: truncate <FILE> to <NUM> blocks
+| grep <STRING> <FILE>: Search for <STRING> in lines of <FILE>
+| help: display a short help
+| hexdump <FILE>: hexdump a file consisting of blocks
+| login: password login (NOP if no users) (SUBLEQ eForth only)
+| ls / dir : list directory
+| lsuser: List all users in login system (SUBLEQ eFORTH only)
+| lzp <FILE1> <FILE2>: LZP Compress <FILE1> into <FILE2>
+| melt: Unfreeze file system - Turn off read only mode
+| mkdir <DIR>: make a directory
+| mknod <FILE> <NUM>: make a special <FILE> with <NUM>
+| mkrandom <FILE> <BYTES>: file <FILE> with random <BYTES>
+| mkuser <USER> <PASSWORD>: create new user entry (SUBLEQ only)
+| more <FILE>: display a file, pause for every X lines
+| mount: attempt file system mounting
+| pwd: print current working directory
+| rename <DIR/FILE1> <DIR/FILE2>: rename a file or directory
+| rm / del <FILE>: remove a <FILE> and not a <DIR>
+| rmdir <DIR>: remove an empty directory
+| sh / script <FILE>: execute line based <FILE>
+| sh / shell: invoke file system shell
+| stat <FILE>: display detailed information on <FILE>
+| touch / mkfile <FILE>: make a new file
+| tree: recursively print directories from the current one
+| unlzp <FILE1> <FILE2>: LZP Decompress <FILE1> into <FILE2>
+| wc <FILE>: display byte, word and line count of a file
+| yes <FILE> <STR> <NUM>: fill <FILE> with <NUM> lines of <STR>
+| 
+| `grep` is limited to 16 byte search terms and 1024 byte 
+| lines, it also uses the same copy buffer that the editor
+| uses for the copy command.
+| 
+| Executing files requires that they are block formatted and
+| not line formatted. 
+| 
+| Example commands:
+|
+| mkdir test
+| cd test
+| edit HELLO.FTH
+| 0 i .( HELLO, WORLD ) cr
+| s q
+| exe HELLO.FTH
+| rm HELLO.FTH
+| ls
+| 
+| To make new files the words `file:` and `hex:` can be used
+| to create text files and binary files respectively.
+|
+| Example usage of `file:`:
+|
+|        file: example.txt
+|        | This is an example line, line #1
+|        | This is an example line, line #2
+|        ;file
+|
+| This will create a file called `example.txt` with the two
+| line, without the `|` prefix.
+|
+| To create a binary file using `hex:`:
+|
+|        hex: example.bin
+|        0 1 2 3 AA FF
+|        3 4 5 6
+|        .
+| 
+| EDITOR COMMANDS
+|
+| This block editor is primitive but usable. It operates on
+| 1024 byte Forth blocks, with 16 lines per block. Some 
+| commands accept a line number or position.
+| q : quit editor
+| s : save work
+| n : move to next block in file, allocating one if needed
+| p : move to previous block in file
+| + <LINE>: insert <LINE>, advance line count, 'n' if needed
+| - : decrement line count, call 'p' if needed, no <LINE>
+| x : execute current file from the start
+| #line d : delete #line
+| l : list current block we are editing
+| w : list commands available to the editor
+| #line a / i <LINE>: insert <LINE> onto #line of current block
+| #line #row ia <LINE>: insert <LINE> into #line at #row
+| ? : display current block
+| z : blank current block
+| y : yank block to storage buffer
+| u : replace screen with storage buffer
+| r : remove last block in chain, set working block to first
+|
+| Note that it is possible to delete a file whilst editing it,
+| which is not advised but should not break anything.
+|
+| When editing a file with `edit` if the file does not exist
+| it is created.
+|
+| A typical session might look like:
+|
+| edit hello.fth
+| 0 i \ HELLO WORLD PROGRAM, VERSION #666, RJH, 15/04/2024
+| 1 i .( AHOY THERE WORLD, SALUTATIONS AND WARM GREETINGS ) cr
+| s
+| q
+| exe hello.fth
+|
+| This is a block editor, and not a freeform text editor, so
+| it does follow a strict format of 16 lines of text per block.
+|
+| "p" and "n" can be used to move forward and backward in the
+| file, a new block is assigned if "n" is at the end of the
+| file.
+;file
+file: errors.db
+| -1  ABORT
+| -2  ABORT"
+| -3  stack overflow
+| -4  stack underflow
+| -5  return stack overflow
+| -6  return stack underflow
+| -7  do-loops nested too deeply
+| -8  dictionary overflow
+| -9  invalid memory address
+| -10 division by zero
+| -11 result out of range
+| -12 argument type mismatch
+| -13 undefined word
+| -14 interpreting a compile-only word
+| -15 invalid FORGET
+| -16 attempt to use 0-len str. as a name
+| -17 pictured numeric out. str. overflow
+| -18 parsed string overflow
+| -19 definition name too long
+| -20 write to a read-only location
+| -21 unsupported operation
+| -22 control structure mismatch
+| -23 address alignment exception
+| -24 invalid numeric argument
+| -25 return stack imbalance
+| -26 loop parameters unavailable
+| -27 invalid recursion
+| -28 user interrupt
+| -29 compiler nesting
+| -30 obsolescent feature
+| -31 >BODY used on non-CREATEd def.
+| -32 invalid name arg. (e.g., TO xxx)
+| -33 block read exception
+| -34 block write exception
+| -35 invalid block number
+| -36 invalid file position
+| -37 file I/O exception
+| -38 non-existent file
+| -39 unexpected end of file
+| -40 wrong BASE in float point convert
+| -41 loss of precision
+| -42 floating-point divide by zero
+| -43 floating-point result out of range
+| -44 floating-point stack overflow
+| -45 floating-point stack underflow
+| -46 floating-point invalid argument
+| -47 compilation word list deleted
+| -48 invalid POSTPONE
+| -49 search-order overflow
+| -50 search-order underflow
+| -51 compilation word list changed
+| -52 control-flow stack overflow
+| -53 exception stack overflow
+| -54 floating-point underflow
+| -55 floating-point unidentified fault
+| -56 QUIT
+| -57 exception in tx or rx a character
+| -58 [ IF ], [ ELSE ], or [ THEN ] exception
+| -59 ALLOCATE
+| -60 FREE
+| -61 RESIZE
+| -62 CLOSE-FILE
+| -63 CREATE-FILE
+| -64 DELETE-FILE
+| -65 FILE-POSITION
+| -66 FILE-SIZE
+| -67 FILE-STATUS
+| -68 FLUSH-FILE
+| -69 OPEN-FILE
+| -70 READ-FILE
+| -71 READ-LINE
+| -72 RENAME-FILE
+| -73 REPOSITION-FILE
+| -74 RESIZE-FILE
+| -75 WRITE-FILE
+| -76 WRITE-LINE
+;file
+\ lzp help.txt help.lzp
+\ unlzp help.lzp help.orig
 .( DONE ) cr
 [then]
 
@@ -1877,6 +2561,7 @@ forth-wordlist +order definitions
 : +system system +order ;
 : dos ( only ) +dos +ffs mount {ffs} -order ;
 
+\ TODO: Move this!
 defined eforth 0= [if]
 \ If we are running in eForth we want to add the definitions
 \ to the main Forth vocabulary, otherwise we want to add them
@@ -1889,27 +2574,37 @@ defined eforth 0= [if]
 {ffs} +order definitions
 [then]
 
+\ `stdin`, `stdout`, and `stderr` could be words that loaded
+\ a file-id from a variable, this would allow these streams to
+\ be redirected.
+\
 s" ." r/w open-file throw ( open special file '.' )
-dup constant stdin
-dup constant stdout
-dup constant stderr
+dup <stdin> !
+dup <stdout> !
+dup <stderr> !
 drop
+
+: stdin <stdin> @ ; ( -- file )
+: stdout <stdout> @ ; ( -- file )
+: stderr <stderr> @ ; ( -- file )
 
 defined eforth [if]
 \ A primitive user login system [that is super insecure].
-\ If no users are present then we login automatically.
+\ If no users are present then we login automatically. The
+\ action after logging in is the same (it is not customizable 
+\ with an execution token) which is to drop in to the Forth
+\ shell with the FFS commands in the `{dos}` vocabulary loaded.
+\
 system +order
 {ffs} +order
 wordlist +order definitions
 wordlist constant users
 
-' ok constant (prompt) ( -- xt : store ok for later use )
-
 variable proceed 0 proceed !
 : conceal $1B emit ." [8m" ; ( Could also override <emit> )
 : reveal $1B emit ." [28m" ;
 : secure users 1 set-order ; ( load password database )
-: restore only forth definitions +dos (prompt) <ok> ! ;
+: restore only forth definitions +dos [ ' ok ] literal <ok> ! ;
 : message ." user: " ; ( -- : prompt asking for user-name )
 : fail ." Invalid username or password" cr ; ( -- error msg )
 : success 1 proceed ! ." Logged in." cr ; ( signal success )
@@ -1930,28 +2625,32 @@ users +order definitions create pass , only forth definitions
 : login 0 proceed ! retry dos ; ( -- : enter login system )
 : lsuser get-order secure words set-order ; ( -- )
 
-\ mkuser guest guest
-\ mkuser admin password1
-\ mkuser archer dangerzone
-\ mkuser cyril figgis
-\ mkuser lana stirling
+\ To use the system you have to create some users like so:
+\
+\        mkuser guest guest
+\        mkuser admin password1
+\        mkuser archer dangerzone
+\        mkuser cyril figgis
+\        mkuser lana stirling
+\
+\ Next time `login` is called the user will be greeted with
+\ a login prompt.
 only forth definitions +dos +ffs +system
 [then]
 
-create linebuf c/blk allot
-
-: toerror ( code file -- c u f )
+: (toerror) ( code file -- c u f )
   >r
   begin
-    linebuf c/blk r@ read-file 0<> swap 0= or if
+    linebuf c/blk blank
+    linebuf c/blk r@ read-line drop nip 0= if
       rdrop drop 0 0 0 exit
     then
     dup linebuf 4 -trailing numberify 2drop
   = until drop rdrop linebuf c/blk 4 /string -trailing -1 ;
 
-: >error
+: toerror ( n -- c-addr u )
   s" errors.db" r/o open-file throw
-  dup >r toerror r> close-file throw 
+  dup >r (toerror) r> close-file throw 
   ?exit 2drop s" unknown" ;
 
 defined eforth [if]
@@ -1959,23 +2658,102 @@ defined eforth [if]
 ' reboot <quit> !
 [then]
 
-\ marker [START]
+0 [if]
 
-\ Usage:
-\
-\   file: example.txt
-\   | March on, join bravely, let us to it pell mell, if not
-\   | to heaven then hand in hand to hell!
-\   ;file
-\
-variable handle -1 handle !
-: recreate-file >r 2dup delete-file drop r> create-file ;
-: -handle -1 handle ! ;
-: file: -handle token count w/o recreate-file throw handle ! ;
-: remaining source nip >in @ - ; ( -- n )
-: leftovers source nip remaining - >r source r> /string ;
-: discard source nip >in ! ; ( -- )
-: | leftovers handle @ write-line throw discard ;
-: ;file handle @ close-file -handle throw ;
+\ : cd ( "dir" -- : change the Present Working Directory )
+\  token count 2dup s" ." equate 0= if 2drop exit then
+\  2dup s" .." equate 0= if 2drop popd drop exit then
+\  2dup s" /" equate 0= if 2drop /root exit then
+\  peekd dir-find dup >r 0< EFILE error
+\  peekd r@ dir? 0= ENDIR error
+\  peekd r> dirent-blk@ pushd ;
 
+variable rdirp    \ Resolve Directory Path Pointer
+variable relative \ Is relative path?
+variable parent   \ Path higher than CWD
+variable rbasename maxname 1+ allot align
+variable isdir    \ Is directory?
+variable rerror   \ Has an error occurred?
+variable rfound   \ Does the file/directory exist?
 
+create rdirstk maxdir cells allot rdirstk maxdir cells erase
+: rdirp? ( -- )
+  rdirp @ 0 maxdir within 0= if 0 rdirp ! 1 EDDPT error then ;
+: (rdir) rdirp? rdirstk rdirp @ cells + ;
+: rpushd (rdir) ! 1 rdirp +! ; ( dir -- )
+: rpopd rdirp @ if -1 rdirp +! then (rdir) @  ; ( -- dir )
+: rpeekd rpopd dup rpushd ; ( -- dir )
+: rdircpy dirstk rdirstk maxdir cells cmove dirp @ rdirp ! ;
+
+: ndir ( c-addr u -- u f : parse next file name in path a/b/c )
+  0 -rot
+  begin
+    ?dup
+  while
+    over c@ [char] / = if 2drop -1 exit then
+    rot 1+ -rot
+    +string
+  repeat drop 0 ;
+
+\ TODO: This nearly works...edge cases and what to return needs
+\ sorting out before this can be used elsewhere.
+\ TODO: "a/b/c/" should set `isdir`, check it  does
+: resolve ( c-addr u -- dir line n )
+  -1 relative ! 0 parent ! 0 isdir ! 0 rerror !
+  rbasename maxname 1+ erase
+  dup 0= throw
+  rdircpy
+  over c@ [char] / = if 
+    0 relative ! 0 rdirp ! dirstart rpushd 
+  then
+
+  begin
+    2dup ndir >r nlen? ( c-addr u l, R: f )
+
+    \ TODO: Set basename
+    \ r@ 0= if
+    \  2dup dup rbasename ! rbasename 1+ swap cmove
+    \ then
+
+    2 pick over 2>r 1+ /string 0 max 2r> 
+    ( c-addr u c-addr u, R: f )
+
+    2dup s" ." equate 0= if
+      \ Do nothing.
+    else
+      2dup s" .." equate 0= if
+        -1 parent !
+        rpopd drop
+      else
+        2dup rpeekd dir-find dup dup rfound ! 0< if
+          \ Not found, if this is not the last path component
+          \ then this is an error
+          drop
+          r@ if \ Find an empty file
+            rdrop 2drop 2drop rpeekd dup empty? 0 exit
+          else
+            rdrop 2drop 2drop -1 rerror ! -1 -1 0 exit
+          then
+        else
+          rpeekd over dirent-type@ [char] D = if
+            rpeekd swap dirent-blk@ rpushd
+          else
+            r@ if
+              rdrop rpeekd dup empty? 0 exit
+            else
+              rdrop
+              2drop 2drop
+              -1 rerror !
+              -1 -1 0 exit
+            then
+          then
+          \ cd if directory, unless last one.
+          \ if not directory is this the last path component?
+        then
+      then
+    then
+    2drop
+    r> 0=
+  until 2drop rpeekd rfound @ -1 ; \ TODO: Wrong directory!
+
+[then]
