@@ -2,11 +2,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
-
 typedef uint16_t u16;
 static const u16 n = -1;
-static u16 m[1<<16], max = 0, pc = 0;
+static u16 m[1<<16], pc = 0;
 
 int main(int argc, char **argv) {
 	if (setvbuf(stdout, NULL, _IONBF, 0) < 0)
@@ -16,7 +14,7 @@ int main(int argc, char **argv) {
 		if (!f)
 			return 2;
 		while (fscanf(f, "%ld,", &d) > 0)
-			m[max++] = d;
+			m[pc++] = d;
 		if (fclose(f) < 0)
 			return 3;
 	}
@@ -24,7 +22,6 @@ int main(int argc, char **argv) {
 		u16 a = m[pc++], b = m[pc++], c = m[pc++];
 		if (a == n) {
 			m[b] = getchar();
-			max = MAX(max, b);
 		} else if (b == n) {
 			if (putchar(m[a]) < 0)
 				return 4;
@@ -33,21 +30,20 @@ int main(int argc, char **argv) {
 			if (r == 0 || r & 32768)
 				pc = c;
 			m[b] = r;
-			max = MAX(max, b);
 		}
 	}
-	while (!m[max])
-		max--;
+	pc = n;
+	while (!m[pc])
+		pc--;
 	if (argc > 2) {
 		FILE *f = fopen(argv[argc - 1], "wb");
 		if (!f)
 			return 5;
-		for (unsigned i = 0; i < max; i++) {
+		for (unsigned i = 0; i < pc; i++)
 			if (fprintf(f, "%d\n", (int16_t)m[i]) < 0) {
 				(void)fclose(f);
 				return 6;
 			}
-		}
 		if (fclose(f) < 0)
 			return 7;
 	}

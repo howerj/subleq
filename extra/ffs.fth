@@ -244,7 +244,8 @@
 \ implement (such as hard or symbolic links), partly due to
 \ file system limitations and partly due to a lack of need.
 \
-\ TODO: Document each section, capture GIF of usage
+\ TODO: Document each section, capture GIF of usage, make
+\ notes about file path parsing and C program.
 \
 
 \ ## Basic Word Definitions
@@ -276,8 +277,23 @@ defined wordlist 0= [if]
 : wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
 [then]
 
+\ The word `?\` offers another mechanism for conditional
+\ compilation, an analogue using the parenthesis comment
+\ method can also be defined like so:
+\ 
+\        : ?( ?exit postpone ( ;
+\
+\ Perhaps a word called `?:` could be defined, which would
+\ be more complex, to mean "If following word is not defined
+\ then define it". 
+\
+: ?\ ?exit postpone \ ; ( f "line"? -- )
+
 defined eforth [if]
 system +order
+\ `quine` is useful for debugging under SUBLEQ eFORTH, it
+\ echos the line just evaluated, gforth prints out more useful
+\ error information on an error which SUBLEQ eFORTH lacks.
 : quine source type cr ; ' quine <ok> !
 [else]
 \ Assume `gforth`, and use the file `ffs.db` to back the
@@ -289,6 +305,12 @@ defined ?depth 0= [if]
 : ?depth depth 1- > -4 and throw ;
 [then]
 
+\ A lot of double cell arithmetic is used as on 16-bit 
+\ platforms a single cell is not large enough to store a 
+\ reasonable file size. SUBLEQ eFORTH is a 16-bit platform,
+\ whereas GForth is 32 or 64 bit depending on the compilation
+\ target.
+\
 defined du. 0= [if] : du. <# #s #> type ; [then]
 defined d- 0= [if] : d- dnegate d+ ; [then]
 defined d= 0= [if] : d= rot = -rot = and ; [then]
@@ -300,6 +322,28 @@ defined d< 0= [if]
 [then]
 defined d> 0= [if] : d>  2swap d< ; [then]
 defined dabs 0= [if] : dabs s>d if dnegate then ; [then]
+
+cell 2 = ?\ $8000 constant #msb
+cell 4 = ?\ $80000000 constant #msb
+cell 8 = ?\ $8000000000000000 constant #msb
+defined #msb 0= [if] abort" #msb not set" [then]
+
+\ We only need to define "d2/" and "drshift" here (because it
+\ is much more efficient than "um/mod" under SUBLEQ eFORTH),
+\ but for the sake of completeness here are the other double
+\ cell bitwise words which are often lacking.
+\
+\        : d2* over #msb and >r 2* swap 2* swap r> 
+\            if 1 or then ;
+\        : dlshift begin ?dup while >r d2* r> 1- repeat ;
+\        : dand rot and >r and r> ; ( d d -- d )
+\        : dor rot or >r or r> ; ( d d -- d )
+\        : dxor rot xor >r xor r> ; ( d d -- d )
+\
+defined d2/ 0= [if]
+: d2/ dup 1 and >r 2/ swap 2/ r> if #msb or then swap ;
+[then]
+: drshift begin ?dup while >r d2/ r> 1- repeat ; ( d u -- d )
 
 defined 2over 0= [if]
 : 2over >r >r 2dup r> swap >r swap r> r> -rot ;
@@ -316,6 +360,9 @@ defined dmax 0= [if]
 defined dmin 0= [if]
 : dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
 [then]
+
+defined b/buf 0= [if] 1024 constant b/buf [then]
+defined d>s 0= [if] : d>s drop ; [then]
 
 : dsignum ( d -- n : double cell signum function )
   2dup 0 0 d= if 2drop  0 exit then
@@ -346,18 +393,6 @@ defined /string 0= [if]
 : /string ( b u1 u2 -- b u : advance string u2 )
   over min rot over + -rot - ;
 [then]
-
-\ The word `?\` offers another mechanism for conditional
-\ compilation, an analogue using the parenthesis comment
-\ method can also be defined like so:
-\ 
-\        : ?( ?exit postpone ( ;
-\
-\ Perhaps a word called `?:` could be defined, which would
-\ be more complex, to mean "If following word is not defined
-\ then define it". 
-\
-: ?\ ?exit postpone \ ; ( f "line"? -- )
 
 \ If needed, `toggle` is:
 \
@@ -395,6 +430,9 @@ defined /string 0= [if]
     r> 1- >r
   repeat rdrop 2drop 0 ;
 
+\ `prefix` and `iprefix` attempts to find a match on a prefix
+\ of a string (using the smallest string length), they will be 
+\ used within `search` and `isearch`.
 : prefix rot min tuck compare ; ( c1 u1 c2 u2 -- f )
 : iprefix rot min tuck icompare ; ( c1 u1 c2 u2 -- f )
 
@@ -436,6 +474,14 @@ defined search 0= [if] \ Not defined in SUBLEQ eForth
     +string
   repeat 2drop r> 0 ;
 
+\ Many basic string manipulation routines are missing within
+\ Forth, and many proposals are lacking (e.g they allocate
+\ memory dynamically, they are too large, weirdly named, too
+\ particular to the idiosyncrasies of a single programmer, ...)
+\
+\ We need a few extra string manipulation routines, such
+\ as `replace`, and we not be defining many more string
+\ functions.
 : replace ( c1 c2 c-addr u -- : replace c2 with c1 in string )
   begin
     ?dup
@@ -446,6 +492,7 @@ defined search 0= [if] \ Not defined in SUBLEQ eForth
 
 \ This section implements a Pseudo Random Number generator, it
 \ uses the xor-shift algorithm to do so.
+\
 \ See:
 \ * <https://en.wikipedia.org/wiki/Xorshift>
 \ * <http://excamera.com/sphinx/article-xorshift.html>
@@ -458,6 +505,7 @@ defined random 0= [if]
 cell 2 = ?\ 13 constant #a 9  constant #b 7  constant #c
 cell 4 = ?\ 13 constant #a 17 constant #b 5  constant #c
 cell 8 = ?\ 12 constant #a 25 constant #b 27 constant #c
+defined #a 0= [if] abort" Invalid Cell Size" [then]
 
 variable seed 7 seed ! ( must not be zero )
 
@@ -471,13 +519,16 @@ variable seed 7 seed ! ( must not be zero )
   dup #c lshift xor
   dup seed! ;
 
-defined b/buf 0= [if] 1024 constant b/buf [then]
-defined d>s 0= [if] : d>s drop ; [then]
-
 wordlist constant {ffs}
 {ffs} +order definitions
 wordlist constant {dos}
 
+\ We could save space by defining these words in a different
+\ way, especially the list of strings containing error codes.
+\ Space is more of premium under the 16-bit SUBLEQ eForth 
+\ system where it might be worth eliding the error strings
+\ completely and directly using the constants instead of
+\ defining these constant words.
 127
 dup 1+ swap constant EUNKN ( unknown error )
 dup 1+ swap constant EIBLK ( bad block )
@@ -528,12 +579,19 @@ variable error-level 0 error-level !
 : elucidate dup error-level ! ?dup if e>s type ." ?" then ;
 : error swap if dup elucidate throw then drop ; ( f code -- )
 
-$FFF0 constant blk.lastv    \ Last Valid Block
+\ In the FAT table any block number above, and including, 
+\ the hexadecimal value `$FFF0` is treated as a special value.
+\
+\ This limits the number of blocks available to the system
+\ and hence the ultimate file system size.
+
+$FFF0 constant blk.lastv    \ Start of special block numbers
 $FFFB constant blk.end      \ End of FAT chain
 $FFFC constant blk.unmapped \ Unmapped / Not memory
 $FFFD constant blk.bad-blk  \ Block is bad
 $FFFE constant blk.special  \ Special blocks
 $FFFF constant blk.free     \ Block is free to use
+
 16 constant maxname         \ Maximum directory entry length
  8 constant maxdir          \ Maximum directory depth
 b/buf constant #rem         \ Default Remaining/Used bytes
@@ -552,17 +610,6 @@ variable dirp 0 dirp !           \ Directory Stack Pointer
 variable read-only 0 read-only ! \ Make file system read only 
 $0100 constant version           \ File System version
 
-cell 2 = ?\ $8000 constant #msb
-cell 4 = ?\ $80000000 constant #msb
-cell 8 = ?\ $8000000000000000 constant #msb
-
-: d2* over #msb and >r 2* swap 2* swap r> if 1 or then ;
-: d2/ dup   1 and >r 2/ swap 2/ r> if #msb or then swap ;
-: dlshift begin ?dup while >r d2* r> 1- repeat ; ( d u -- d )
-: drshift begin ?dup while >r d2/ r> 1- repeat ; ( d u -- d )
-: dand rot and >r and r> ; ( d d -- d )
-: dor rot or >r or r> ; ( d d -- d )
-: dxor rot xor >r xor r> ; ( d d -- d )
 : bbuf/ ( d -- rem quo : div/mod by 1024 )
   over 1023 and >r 10 drshift drop r> swap ;
 : hbuf/ ( d -- rem quo : div/mod by 512 )
@@ -570,20 +617,23 @@ cell 8 = ?\ $8000000000000000 constant #msb
 : fatcnt ( -- : FAT blocks need to store file system )
   0 hbuf/ ( b/buf 2/ um/mod ) swap 0<> negate + 1 max ;
 
+\ This section contains system constants that defines what
+\ sections of the file system go where.
+\
 \ It would be better if these constants were set a run time,
 \ but it is not necessary. It does mean the user of this
 \ program would have to tailor these constants, such as
 \ `start` and `end` to their own purposes.
 \
 defined eforth [if]
-1 constant start               \ Starting block
+1   constant start             \ Starting block
 126 constant end               \ End block
-65 constant init               \ Initial program block
+65  constant init              \ Initial program block
 $F000 constant copy-store      \ Used to copy blocks
 [else]
-1 constant start               \ Starting block
+1    constant start            \ Starting block
 1024 constant end              \ End block
-0 constant init                \ Initial program block
+0    constant init             \ Initial program block
 create copy-store b/buf allot  \ Used to copy blocks
 [then]
 init 1+ constant fat           \ FAT Block
@@ -612,9 +662,9 @@ create newline 2 c, $D c, $A c, align
 \ These are set later, they store the file handles that back
 \ `stdin`, `stdout` and `stderr`, you can redirect them by
 \ opening up a new file and storing the handle in one of these.
-variable <stdin>   ( File handle for STDIN )
-variable <stdout>  ( File handle for STDOUT ) 
-variable <stderr>  ( File handle for STDERR )
+variable <stdin>  ( File handle for STDIN )
+variable <stdout> ( File handle for STDOUT ) 
+variable <stderr> ( File handle for STDERR )
 
 \ These flags are used for the file handle flag field.
   1 constant flg.used   \ Is the file handle in use
@@ -706,9 +756,9 @@ defined eforth [if] : numberify number? ; [else]
 : grab ( <word> -- a : get word from input stream  )
   begin bl word dup nul? 0= ?exit drop query again ;
 : integer grab count numberify nip dpl @ 0< and ; 
-: integer? integer 0= -$18 and throw ;
-: modify read-only @ 0= if update then ;
-: save read-only @ 0= if update save-buffers then ;
+: integer? integer 0= -$18 and throw ; ( "int" -- )
+: modify read-only @ ?exit update ;
+: save read-only @ ?exit update save-buffers ;
 : fatal? fatal @ 0<> throw ;
 : block? ( blk -- blk )
   fatal?
@@ -736,7 +786,7 @@ cell 2 = little-endian and [if]
 : f!t ( u blk -- : write to FAT record )
   fat? 0= throw
   decompose 2* swap fat + addr? + 16! modify ;
-: linkable 
+: linkable ( blk -- blk f )
   dup 1 end 1+ within 
   \ N.B. If `block.end` then we are linkable in a way, we
   \ could handle that.
@@ -762,7 +812,7 @@ cell 2 = little-endian and [if]
     +string
   repeat drop rdrop ;
 : btotal end start - ; ( -- n : total blocks allocatable )
-: bcheck btotal 4 < -1 and throw ;
+: bcheck btotal 4 < -1 and throw ; ( -- )
 : bblk addr? b/buf blank save ; ( blk -- : blank a block )
 : fblk addr? b/buf erase save ; ( blk -- : erase a block )
 : free? ( -- blk f : is a block free? )
@@ -831,7 +881,7 @@ cell 2 = little-endian and [if]
   \ if the word-set was not present.
   s" .( HOWERJ SIMPLE FORTH FILE SYSTEM / DOS ) cr 1 loaded !" 
   init addr? swap cmove save ;
-: fmt.fat
+: fmt.fat ( -- )
   fat fats 1- for dup fblk 1+ next drop
   0 fats [ b/buf 2/ ] literal * 1- for
     blk.unmapped over f!t 1+
@@ -848,7 +898,7 @@ cell 2 = little-endian and [if]
   repeat
   drop
   save ;
-: fmt.blks
+: fmt.blks ( -- )
   dirstart end dirstart - start - 1- for
     dup fblk 1+
   next drop ;
@@ -867,7 +917,7 @@ cell 2 = little-endian and [if]
   next drop ;
 
 cell 2 = [if] \ limit arithmetic to a 16-bit value
-: limit immediate ;  [else] : limit $FFFF and ; [then]
+: limit immediate ; [else] : limit $FFFF and ; [then]
 
 \ http://stackoverflow.com/questions/10564491
 \ https://www.lammertbies.nl/comm/info/crc-calculation.html
@@ -957,7 +1007,7 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 : cvalid ( ch -- f : is character valid for a dir name? )
   dup 47 = if drop 0 exit then
   32 127 within ;
-: nvalid? ( c-addr u -- f )
+: nvalid? ( c-addr u -- f : is directory entry name valid? )
   ?dup 0= if drop 0 exit then
 \ over c@ 32 <= if 2drop 0 exit then \ Should check all leading
   2dup s" ." ccopy compbuf equate 0= if 2drop 0 exit then
@@ -1144,7 +1194,17 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 
 \ ## File Access Methods
 \
-\ File Handle Structure:
+\ The File Access Words / Methods (FAM) are standard, but
+\ optional, Forth words that provide a way of interacting with
+\ the file system. They are analogous to the C standard library
+\ words present in the `stdio.h`.
+\
+\ See <https://forth-standard.org/standard/file> for the
+\ Standard ANS Forth File Access words and
+\ <https://cplusplus.com/reference/cstdio> for the C file
+\ API.
+\
+\ Useful to bear in mind is the File Handle Structure:
 \
 \        FLAGS:    16/cell
 \        HEAD-BLK: 16/cell
@@ -1153,7 +1213,6 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 \        BLK-POS:  16/cell
 \        DIR-LINE: 16/cell
 \        DIR-BLK:  16/cell
-\
 \
 \ Some useful debug words for printing out file system
 \ information:
@@ -1180,7 +1239,6 @@ cell 2 = [if] \ limit arithmetic to a 16-bit value
 \          dup f.dblk  @ ." DBK: " u. cr
 \          drop ;
 \
-
 \ ### Include/Require
 \
 \ `entry` and `required?` are used by `included`, `include`,
@@ -1246,7 +1304,7 @@ wordlist constant {required}
   dup reqbuf c!
   reqbuf 1+ swap cmove ;
 : (stdio) flg.stdout flg.stdin or ; ( -- u )
-: stdio flg.wen flg.ren or (stdio) or ;
+: stdio flg.wen flg.ren or (stdio) or ; ( -- u )
 : fam? dup stdio invert and 0<> throw ; ( fam -- fam )
 : ferror findex f.flags @ flg.error and 0<> ; ( handle -- f )
 : fail f.flags flg.error swap set ; ( findex -- )
@@ -1536,7 +1594,8 @@ r/o w/o or constant r/w ( -- fam : read/write )
 \ no real structure to this section, there is a menagerie of
 \ helping words, often one per command that will be implemented
 \ later, for example `(cmp)` is used to implement the command
-\ `cmp`.
+\ `cmp`. Prior sections are also composed of helper words
+\ for the next section.
 \
 
 {ffs} +order definitions
@@ -1573,6 +1632,7 @@ r/o w/o or constant r/w ( -- fam : read/write )
     linebuf c/blk -trailing 2 pick write-line ?dup
   until -rot ;
 
+\ N.B. This will fail if the line length approaches 64 chars.
 : (f2b) ( handle handle -- error handle handle )
   begin
     linebuf c/blk blank
@@ -1708,10 +1768,13 @@ variable flock -1 flock !
 \ <https://github.com/howerj/shrink>. The CODEC is very
 \ simple and does not have that great of a compression ratio.
 \
+\ LZSS has also been considered but even that (simple) CODEC
+\ is much larger.
+\
 
 wordlist constant {lzp} {lzp} +order definitions
 
-8 constant model-bits
+8 constant model-bits \ log_2(model-size)
 1 model-bits lshift constant model-size
 create model model-size allot align \ Sie ist ein Model...
 create buf 9 allot align \ Control Byte + Up to 8 literals
@@ -1724,7 +1787,7 @@ variable ocnt       \ Bytes in output text
 variable prediction \ Current prediction state / hash value
 variable run        \ Do we have a run of data?
 
-: +hash  ( h c -- h )
+: +hash  ( h c -- h : our predictor model, a simple hash )
   swap 4 lshift xor [ model-size 1- ] literal and ; 
 
 \ Needed for gforth `key-file` that comes with gforth and uses
@@ -1740,7 +1803,7 @@ variable run        \ Do we have a run of data?
   infile @ key-file dup 0< if -1 fin ! exit then 1 icnt +! ;
 : put outfile @ emit-file throw 1 ocnt +! ; ( c -- )
 : predict prediction @ swap +hash prediction ! ; ( c -- )
-: reset
+: reset ( -- : reset LZP model and variables )
   0 prediction !
   0 fin ! 
   0 icnt ! 0 ocnt !
@@ -1754,7 +1817,7 @@ variable run        \ Do we have a run of data?
     buf bufp @ outfile @ write-file throw
     bufp @ ocnt +!
   then breset ;
-: lzp-encode ( -- ior )
+: lzp-encode ( -- ior : LZP compress, set file handles before )
   reset
   begin
     breset
@@ -1775,7 +1838,7 @@ variable run        \ Do we have a run of data?
     repeat drop
     wbuf
   fin @ until 0 ;
-: lzp-decode ( -- ior )
+: lzp-decode ( -- ior : LZP decompress )
   reset
   begin
     get dup 0< if drop 0 exit then
@@ -1825,7 +1888,14 @@ variable run        \ Do we have a run of data?
 \
 \ This section has a series commands that form the interface
 \ between the file system and the user. These are the words
-\ that form the core of this module.
+\ that form the core of this module and what everything has
+\ been building up to.
+\
+\ Although a shell word could be made that parses user input
+\ and passes the arguments to functions to keep things simple
+\ the parsing and execution of commands is done by the built
+\ in mechanisms available to Forth.
+\
 
 {dos} +order definitions
 
@@ -1989,7 +2059,12 @@ variable run        \ Do we have a run of data?
 \ especially a problem when executing files formatted as Forth 
 \ blocks, as `read-line` searches the entire buffer for an End 
 \ Of Line marker.
-: script ( "file" -- )
+\
+\ TODO: BUG: Executing a script containing file commands
+\ fails, such as "mkdir a", "mkdir b", "ls". It introduces
+\ garbage. Only in SUBLEQ eFORTH...
+\
+: script ( "file" -- : execute a line based Forth script )
   narg namebuf r/o open-file throw >r
   begin
     copy-store b/buf r@ read-line line-end? 0=
@@ -2016,7 +2091,7 @@ variable run        \ Do we have a run of data?
     over >r namelen r> swap type ." /"
     1+
   repeat drop ;
-: tree ( -- : tree view of file system, could be improved )
+: tree ( -- : tree view of file system )
   cr pwd ls
   dsl
   begin
@@ -2036,14 +2111,14 @@ variable run        \ Do we have a run of data?
   peekd r@ dir? 0= if rdrop 0 (rm) exit then
   peekd r@ dirent-blk@ (deltree)
   peekd r> 1 (remove) ;
-: help ( -- )
+: help ( -- : print a spartan help message )
   cr
   cr ." Use `more help.txt` in the root directory for help." 
   cr ." Type `cd /` to get to the root directory and `ls`
   cr ." to view files."
   cr cr ." Otherwise visit <https://github.com/howerj/ffs>"
   cr cr ." Command List: " cr words cr cr ;
-: cat ( "file" -- )
+: cat ( "file" -- : barf a file out )
   token count r/o open-file throw cr
   >r
   begin r@ key-file dup 0>= while emit repeat drop
@@ -2299,12 +2374,144 @@ variable run        \ Do we have a run of data?
 ( : move mv ; ) \ Clashes with FORTHs `move` word.
 ( : type cat ; ) \ Clashes with FORTHs `type` word.
 
+\ ## Helper words and start up routines
+
+forth-wordlist +order definitions
+: +ffs {ffs} +order ;
+: +dos {dos} +order ;
+: +system system +order ;
+: dos ( only ) +dos +ffs mount {ffs} -order ;
+
+defined eforth 0= [if]
+\ If we are running in eForth we want to add the definitions
+\ to the main Forth vocabulary, otherwise we want to add them
+\ to the `{ffs}` vocabulary so as not to redefine the gforths
+\ File Access Words.
+\
++ffs definitions
+[then]
+
+\ `stdin`, `stdout`, and `stderr` could be words that loaded
+\ a file-id from a variable, this would allow these streams to
+\ be redirected.
+\
+s" ." r/w open-file throw ( open special file '.' )
+dup <stdin> !
+dup <stdout> !
+dup <stderr> !
+drop
+
+: stdin <stdin> @ ; ( -- file )
+: stdout <stdout> @ ; ( -- file )
+: stderr <stderr> @ ; ( -- file )
+
+\ ### Primitive Login System
+
+defined eforth [if]
+\ A primitive user login system [that is super insecure].
+\ If no users are present then we login automatically. The
+\ action after logging in is the same (it is not customizable 
+\ with an execution token) which is to drop in to the Forth
+\ shell with the FFS commands in the `{dos}` vocabulary loaded.
+\
+system +order
+{ffs} +order
+wordlist +order definitions
+wordlist constant users
+
+variable proceed 0 proceed !
+: conceal $1B emit ." [8m" ; ( Could also override <emit> )
+: reveal $1B emit ." [28m" ;
+: secure users 1 set-order ; ( load password database )
+: restore only forth definitions +dos [ ' ok ] literal <ok> ! ;
+: message ." user: " ; ( -- : prompt asking for user-name )
+: fail ." Invalid username or password" cr ; ( -- error msg )
+: success 1 proceed ! ." Logged in." cr ; ( signal success )
+: pass token count crc ; ( "xxx" -- u : super-secure <_< )
+: ask ." pass: " conceal query reveal ;
+: empty depth for aft drop then next ; ( ??? -- )
+: prompt secure message [ ' ) ] literal <ok> ! ;
+: uget query eval ; ( "xxx" -- : get user name )
+: nousers users @ 0= ; ( -- : no users defined? )
+: retry nousers ?exit begin prompt [ ' uget ] literal catch 
+  drop empty proceed @ until ;
+
++dos definitions
+
+: mkuser ( "user" "password" -- : create new user entry )
+users +order definitions create pass , only forth definitions
+  does> ask @ pass = if restore success exit then fail ;
+: login 0 proceed ! retry dos ; ( -- : enter login system )
+: lsuser get-order secure words set-order ; ( -- )
+
+\ To use the system you have to create some users like so:
+\
+\        mkuser guest guest
+\        mkuser admin password1
+\        mkuser archer dangerzone
+\        mkuser cyril figgis
+\        mkuser lana stirling
+\
+\ Next time `login` is called the user will be greeted with
+\ a login prompt.
+only forth definitions +dos +ffs +system
+
+: reboot login quit ;
+' reboot <quit> !
+[then]
+
 \ ## Initializing Disk
+\
+\ This section formats a disk if the disk has not been 
+\ formatted and populates the disk with a default set of files 
+\ and directories, including a help file and some system
+\ files.
+\
+\ Special files that are created with `mknod` include:
+\
+\ * \[BOOT\]
+\ * \[FAT\]
+\ * \[KERNEL\]
+\
+\ "\[BOOT\]" contains a single Forth Block that is executed
+\ on boot. It should contain Forth source and not machine code.
+\ It is specially formatted.
+\
+\ "\[FAT\]" contains a linked list of blocks that hold the
+\ FAT partition. This allows direct access to the FAT partition
+\ to query or modify it. Modifying the FAT partition is a
+\ dangerous operation fraught with peril! As it is presented as
+\ a file it is possible to read the partition with the built
+\ in utilities such as `hexdump`. 
+\
+\ "\[KERNEL\]" is present only in SUBLEQ eFORTH, it contains
+\ a linked list of the first 64 blocks, which map on to the
+\ first 64KiB of memory within the SUBLEQ eFORTH interpreter.
+\ Modifying this file can cause system instability much like
+\ modifying "\[FAT\]" can.
+\
+\ These are all special files as their blocks should not be
+\ allocated to files or directories as they hold special data
+\ structures or their contents is outside that of normal file
+\ system partition.
+\
+\ The entries can be removed with no problems.
+\
+\ Other files created are:
+\
+\ * `demo.blk`
+\ * `help.txt`
+\ * `errors.db`
+\ * `words.db` (only on SUBLEQ eFORTH)
+\
+\
 
 mount loaded @ 0= [if]
 cr .( FFS NOT PRESENT, FORMATTING... ) cr
 fdisk
-\ Nested compile time [ if ] s do not work in SUBLEQ eFORTH...
+\ Nested compile time "\[if\]"s do not work in SUBLEQ eFORTH...
+\ TODO: BUG: The big image of SUBLEQ eFORTH places these files
+\ in the wrong place...
 mkdir system
 cd system
 defined eforth 0= ?\ mknod [BOOT] 0
@@ -2313,10 +2520,20 @@ defined eforth    ?\ mknod [BOOT] 65
 defined eforth    ?\ mknod [FAT] 66
 defined eforth    ?\ mknod [KERNEL] 1
 cd ..
+\ This is a simple demo program that does not define new words,
+\ a better, more complex or interesting program could be made,
+\ or perhaps a utility, but it is just used to demonstrate that
+\ the script execution functionality works.
 edit demo.blk
 + .( HELLO, WORLD ) cr
 + 2 2 + . cr
++
++ .( GOODBYE, CRUEL WORLD! ) cr
 q
+\ A file containing some general help, always useful for the
+\ confused. The file also contains a list of commands (which
+\ could perhaps go in its own file) and instructions for the
+\ block based text editor.
 file: help.txt
 | FORTH FILE SYSTEM HELP AND COMMANDS
 |
@@ -2472,6 +2689,10 @@ file: help.txt
 | file, a new block is assigned if "n" is at the end of the
 | file.
 ;file
+\ `errors.db` contains a list of standard Forth errors, one
+\ per line. It is possible to construct a set of words that
+\ look up the textual description of an error given the number
+\ quite easily.
 file: errors.db
 | -1  ABORT
 | -2  ABORT"
@@ -2550,210 +2771,354 @@ file: errors.db
 | -75 WRITE-FILE
 | -76 WRITE-LINE
 ;file
-\ lzp help.txt help.lzp
-\ unlzp help.lzp help.orig
-.( DONE ) cr
 [then]
 
-forth-wordlist +order definitions
-: +ffs {ffs} +order ;
-: +dos {dos} +order ;
-: +system system +order ;
-: dos ( only ) +dos +ffs mount {ffs} -order ;
-
-\ TODO: Move this!
-defined eforth 0= [if]
-\ If we are running in eForth we want to add the definitions
-\ to the main Forth vocabulary, otherwise we want to add them
-\ to the `{ffs}` vocabulary so as not to redefine the gforths
-\ File Access Words.
-\
-\ We also want the `move` from FFS to have higher priority than
-\ the standard vocabulary word when we are trying to use the
-\ file system, which is achieved if add `{ffs}` with `+order`.
-{ffs} +order definitions
-[then]
-
-\ `stdin`, `stdout`, and `stderr` could be words that loaded
-\ a file-id from a variable, this would allow these streams to
-\ be redirected.
-\
-s" ." r/w open-file throw ( open special file '.' )
-dup <stdin> !
-dup <stdout> !
-dup <stderr> !
-drop
-
-: stdin <stdin> @ ; ( -- file )
-: stdout <stdout> @ ; ( -- file )
-: stderr <stderr> @ ; ( -- file )
+\ Despite having limited space in the SUBLEQ eFORTH system
+\ we can add this glossary to provide online help with all
+\ of the words defined in the base image. If the user wants to
+\ reclaim the space they can do.
 
 defined eforth [if]
-\ A primitive user login system [that is super insecure].
-\ If no users are present then we login automatically. The
-\ action after logging in is the same (it is not customizable 
-\ with an execution token) which is to drop in to the Forth
-\ shell with the FFS commands in the `{dos}` vocabulary loaded.
-\
-system +order
-{ffs} +order
-wordlist +order definitions
-wordlist constant users
-
-variable proceed 0 proceed !
-: conceal $1B emit ." [8m" ; ( Could also override <emit> )
-: reveal $1B emit ." [28m" ;
-: secure users 1 set-order ; ( load password database )
-: restore only forth definitions +dos [ ' ok ] literal <ok> ! ;
-: message ." user: " ; ( -- : prompt asking for user-name )
-: fail ." Invalid username or password" cr ; ( -- error msg )
-: success 1 proceed ! ." Logged in." cr ; ( signal success )
-: pass token count crc ; ( "xxx" -- u : super-secure <_< )
-: ask ." pass: " conceal query reveal ;
-: empty depth for aft drop then next ; ( ??? -- )
-: prompt secure message [ ' ) ] literal <ok> ! ;
-: uget query eval ; ( "xxx" -- : get user name )
-: nousers users @ 0= ; ( -- : no users defined? )
-: retry nousers ?exit begin prompt [ ' uget ] literal catch 
-  drop empty proceed @ until ;
-
-+dos definitions
-
-: mkuser ( "user" "password" -- : create new user entry )
-users +order definitions create pass , only forth definitions
-  does> ask @ pass = if restore success exit then fail ;
-: login 0 proceed ! retry dos ; ( -- : enter login system )
-: lsuser get-order secure words set-order ; ( -- )
-
-\ To use the system you have to create some users like so:
-\
-\        mkuser guest guest
-\        mkuser admin password1
-\        mkuser archer dangerzone
-\        mkuser cyril figgis
-\        mkuser lana stirling
-\
-\ Next time `login` is called the user will be greeted with
-\ a login prompt.
-only forth definitions +dos +ffs +system
+file: words.db
+| ! ( u a -- ) Store u at at
+| # ( d -- d ) Processed single digit, Pictured Numeric Output
+| #-1 ( -- -1 ) push -1 on to the stack
+| #0 ( -- 0 ) push 0 on to the stack
+| #1 ( -- 1 ) push 1 on to the stack
+| #2 ( -- 2 ) push 2 on to the stack
+| #> ( d -- a u ) end Pictured Numeric Output
+| #s ( d -- 0 0 ) process number into Pictured Numeric Output
+| #vocs ( -- u ) maximum vocabularies that can be loaded
+| $" ( "string" --, Runtime -- b ) compile string into word
+| ' ( "name" -- xt ) get execution token of "name"
+| ( ( -- ) discard everything from input stream line until )
+| ($) ( -- a ) used with to implement $"
+| (.) ( n -- ) used to implement ".", much faster than u.
+| (abort) ( n -- ) compiled by abort", abort if n non-zero
+| (block) ( ca ca cu -- ) transfer to/from block storage
+| (boot) ( -- ) complex boot routine stored in <boot>
+| (comp) ( -- ) used to implement does>
+| (const) ( -- u ) used to implement constant
+| (does) ( -- ) used to implement does>
+| (emit) ( c -- ) emit a single character to output always
+| (error) ( u -- ) default error handler in quit loop
+| (find) ( a -- pwd pwd 1 | pwd pwd -1 | 0 a 0 )
+| (literal) ( u -- ) default behavior of literal
+| (marker) ( -- ) used to implement marker
+| (nfa) ( u -- ) toggle name field address in last defined word
+| (order) ( w voc*n n -- voc*n w n ) used in +order and -order
+| (push) ( -- u ) push next cell 
+| (s) ( "string" -- ) compile string into dictionary
+| (search) ( a voc -- pwd pwd 1 | pwd pwd -1 | 0 a 0 ) search
+| (up) ( -- u ) access user variable stored in next cell
+| (user) ( -- a ) used to implement user
+| (var) ( -- a ) used to implement variable
+| ) ( -- ) immediate, do nothing, terminate comment
+| * ( n n -- n ) multiple two numbers
+| + ( n n -- n ) add two numbers
+| +! ( n a -- ) add n to memory location
+| +order ( voc -- ) add voc to current search order
+| +string ( a u n -- ) increment string by n
+| , ( n -- ) write n into the next dictionary cell
+| - ( n1 n2 -- n ) subtract n2 from n1
+| -cell ( -- -2 ) push the negated cell size
+| -order ( voc -- ) remove voc from current search order
+| -rot ( n1 n2 n3 -- n3 n1 n2 ) reverse of rot
+| -trailing ( a u -- a u ) remove trailing whitespace
+| . ( n -- ) display signed number in current output radix
+| ." ( "string" -- ) compile string into word that prints itself
+| .$ ( -- ) used to implement ."
+| .( ( "display" -- ) parse and emit until matching )
+| .emit ( c -- ) print char, replacing non-graphic ones
+| .id ( pwd -- ) print word name field
+| .s ( ??? -- ??? ) display variable stack
+| / ( n1 n2 -- n ) divide n1 by n2 
+| /mod ( n1 n2 -- n1%n2 n1/n2 ) divide n1 by n2 
+| 0< ( n -- f ) is less than zero?
+| 0<= ( n -- f ) is less than or equal to zero?
+| 0<> ( n -- f ) is not equal to zero?
+| 0= ( n -- f ) is equal to zero?
+| 0> ( n -- f ) is greater than zero?
+| 0>= ( n -- f ) is greater or equal to zero?
+| 1+ ( n -- n ) increment n
+| 1- ( n -- n ) decrement n
+| 2! ( n n a -- ) store two values at address and next cell
+| 2* ( u -- u ) multiply by two, bitshift left by 1
+| 2/ ( u -- u ) divide by two, bitshift right by 1
+| 2>r ( n n --, R: -- n n ) move two values to return stack
+| 2@ ( a -- n n ) retrieve two values from address and next cell
+| 2drop ( n n -- ) discard two values
+| 2dup ( n1 n2 -- n1 n2 n1 n2 ) duplicate two stack items
+| 2r> ( -- n n, R: n n -- ) move two values from return stack
+| : ( "name" -- ) parse name and start word definition
+| :noname ( -- xt ) start anonymous word definition
+| ; ( -- ) immediate, end word definition
+| < ( n1 n2 -- f ) is n1 less than n2
+| <# ( -- ) start Pictured Numeric Output
+| <= ( n1 n2 -- f ) is n1 less than or equal to n2
+| <> ( n n -- f ) are two values not equal to each other?
+| <block> ( -- a ) execution vector for block
+| <boot> ( -- a ) execution vector for cold
+| <echo> ( -- a ) execution vector for echo
+| <emit> ( -- a ) execution vector for emit
+| <error> ( -- a ) execution vector for error handling
+| <expect> ( -- a ) execution vector for expect
+| <key> ( -- a ) execution vector for key
+| <literal> ( -- a ) execution vector for literal
+| <ok> ( -- a ) execution vector for okay prompt
+| <quit> ( -- a ) execution vector for final boot word
+| <tap> ( -- a ) execution vector for tap
+| = ( n n -- f ) are two numbers equal?
+| > ( n1 n2 -- f ) is n1 greater than n2?
+| >= ( n1 n2 -- f ) is n1 greater or equal to n2?
+| >blk ( k -- ca ) turn block into cell address
+| >body ( xt -- body ) move to a created words body
+| >in ( -- a ) input buffer position user variable
+| >number ( ud b u -- ud b u ) convert string to number
+| >r ( n --, R: -- n ) move value from variable to return stk.
+| ?depth ( n -- ) depth check, throw if too few stack items
+| ?dup ( n -- n n | 0 ) conditionally duplicate if non zero
+| ?exit ( n -- ) compile-only, conditionally exit word
+| ?found ( b f -- b ) throw if flag false with error message
+| ?len ( b -- b ) throw if counted string too long
+| ?nul ( b -- b ) throw if counted string is zero length
+| ?unique ( b -- b ) warn if word definition already exists
+| @ ( a -- n ) retrieve contents of memory address
+| @+ ( a -- a n ) get value at address, keep address
+| @execute ( ??? a -- ??? ) retrieve execution token and execute
+| [ ( -- ) immediate, turn command mode on
+| [!] ( u ca -- ) store value at cell address
+| [@] ( ca -- u ) retrieve value from cell address
+| [char] ( "char" --, Runtime: -- b ) compile character literal
+| "[else]" ( -- ) skip input until "[then]"
+| "[if]" ( n -- ) conditional input until "[else]/[then]"
+| "[then]" ( -- ) do nothing
+| \ ( "line" -- ) discard everything from \ to end of line
+| ] ( -- ) turn compile mode on, command mode off
+| abort ( -- ) call throw -1 unconditionally
+| abort" ( "string" --, Runtime: n -- ) print abort if non-zero
+| abs ( n -- u ) absolute value, beware $8000
+| accept ( b u -- b u ) accept a line of input
+| activate ( xt task-address -- ) activate a task
+| aft ( -- ) part of for...aft...then...next loop
+| again ( -- ) part of begin...again infinite loop
+| align ( -- ) align dictionary pointer up
+| aligned ( a -- a ) align address up
+| allot ( n -- ) allocate bytes in dictionary
+| and ( n n -- n ) bitwise and
+| at-xy ( x y -- ) set cursor position, 1 index based
+| b/buf ( -- 1024 ) number of bytes in a block
+| banner ( +n c -- ) output c n times
+| base ( -- a ) address of numeric input output radix 2-36
+| begin ( -- ) part of a begin...until, begin...again loop
+| bell ( -- ) emit ASCII bell character
+| bget ( k -- ) transfer block from mass storage to buffer
+| bl ( -- 32 ) push ASCII space character
+| blank ( a u -- ) set array of bytes to space
+| blk ( -- a ) currently loaded block
+| blk0 ( -- a ) block buffer zero block loaded value
+| block ( blk -- a ) load data off disk, store modified buffer
+| bput ( k -- ) transfer block buffer to mass storage
+| buf0 ( -- a ) address of block buffer zero
+| buffer ( blk -- a ) like block but it performs no load of data
+| bye ( -- ) halt system
+| c! ( c a -- ) write a single byte to memory location a
+| c, ( c -- ) write byte into dictionary
+| c/buf ( -- 512 ) cells in a block
+| c@ ( a -- c ) retrieve a single byte
+| c@+ ( a -- a c ) retrieve single byte, keep address
+| calibration ( -- a ) value used by ms for 1 ms wait
+| catch ( xt -- n ) execute xt, catching result of any throws
+| cell ( -- 2 ) size of a single cell in bytes
+| cell+ ( a -- a ) increment address by cell size
+| cell- ( a -- a ) decrement address by cell size
+| cells ( n -- n ) turn a cell count into a byte count
+| cfa ( pwd -- cfa ) move word pwd field to its code field
+| char ( "char" -- c ) turn a character of input into a byte
+| cksum ( a u -- u ) calculate additive checksum over range
+| clean ( -- ) opposite of update, mark last loaded block clean
+| cmove ( b1 b2 u -- ) copy u characters from b1 to b2
+| cold ( -- ) perform a cold boot
+| compare ( a1 u1 a2 u2 -- n ) compare two strings
+| compile ( -- ) compile next address in word into dictionary
+| compile, ( xt - ) compile execution token into word def.
+| compile-only ( -- ) make previously defined word compile-only
+| console ( -- ) setup input/output for terminal/console
+| constant ( n "name" -- ) create a constant with value n
+| context ( -- a ) array containing loaded vocs
+| count ( a -- a c ) retrieve byte and increment a by 1
+| cr ( -- ) emit a newline
+| create ( "name" -- ) create word which pushes field address
+| csi ( -- ) emit ANSI terminal escape sequence
+| current ( -- a ) current vocabulary definitions are added to
+| cycles ( -- a ) address of number of task switches performed
+| d+ ( d d -- d ) add two double cell values
+| decimal ( -- ) set input and output radix to decimal
+| defined ( "name" -- f ) is "name" a defined word?
+| definitions ( -- ) add future definitions to top vocabulary
+| depth ( ??? -- n ) get variable stack depth
+| digit ( u -- c ) extract a character from number
+| dirty0 ( -- a ) dirty flag for block buffer 0
+| dnegate ( d -- d ) negate double cell value
+| do$ ( -- a ) push location of compiled string, jump over it
+| does> ( -- ) part of `create...does>` routine
+| dpl ( -- a ) address of double cell number decimal position
+| drop ( n -- ) drop top of stack
+| dump ( a u -- ) dump array to output
+| dup ( n -- n n ) duplicate top of stack
+| echo ( c -- ) emit a single character, terminal output echo
+| editor ( -- ) load block editor word set, setup editor
+| eforth ( -- ver ) push eforth version number
+| else ( -- ) part of if...else...then statement
+| emit ( c -- ) display a single character 
+| empty-buffers ( -- ) call clean and invalidate
+| erase ( a u -- ) write zero to array
+| eval ( "line" -- ) evaluate line got with query
+| evaluate ( ??? a u -- ??? ) evaluate string
+| execute ( ??? xt -- ??? ) execute an execution token
+| exit ( -- ) compile-only, exit current word definition
+| expect ( a u -- ) calls accept, stores result in span
+| extract ( ud ud -- ud u ) extract digit from number
+| file ( -- ) ready I/O for file transfer instead of console
+| fill ( a u c -- ) fill array with byte n
+| find ( b -- pwd 1 | pwd -1 | a 0 ) find word in dictionary
+| flush ( -- ) discard and un-assign dirty block buffers
+| for ( --, Runtime: n --, R: -- n ) for...aft...then..next loop
+| forth ( -- ) set search order to root-voc and forth-wordlist
+| forth-wordlist ( -- voc ) push the default Forth vocabulary
+| get-current ( -- voc ) equivalent to "current @"
+| get-input ( -- n1...n5 ) get the input stream state
+| get-order ( -- voc0...vocn n ) get search order
+| h? ( -- a ) push the location of the dictionary pointer
+| hand ( -- ) set default xt for I/O for terminal
+| here ( -- u ) current dictionary position
+| hex ( -- ) set number input/output radix to hexadecimal
+| hide ( "name" -- ) toggle hidden bit in word definition
+| hld ( -- a ) user variable index into hold space
+| hold ( c -- ) add c to hold space in Pictured Numeric Output
+| if ( --, Runtime: n -- ) immediate, compile-only, if-statement
+| immediate ( -- ) make last defined word immediate
+| info ( -- ) print system information
+| ini ( -- ) initialize current task
+| interpret ( b -- ) interpret a counted word
+| invalidate ( -- ) invalidate blk0 storing -1 to it
+| invert ( u -- u ) bitwise invert
+| io! ( -- ) setup input/output routines
+| key ( -- c ) get character from input
+| key? ( -- c 0 | -1 ) get character from input or -1 on failure
+| ktap ( bot eot cur c -- bot eor cur ) handle terminal input
+| last ( -- a ) get last defined word
+| leq0 ( n -- 0 | 1 ) 1 if n is less than or equal to 0, else 0
+| line ( k l -- a u ) index into block by 64 byte lines
+| list ( blk -- ) list a block, set scr
+| literal ( n -- Runtime: -- n ) immediate, compile number
+| load ( ??? blk -- ??? ) execute code stored in a block
+| loaded? ( k -- k f ) check to see if block is loaded already
+| loadline ( ??? k l -- ??? ) evaluate a line )
+| look ( b u c xt -- b u ) skip until xt succeeds
+| lshift ( u n -- u ) left shift u by n
+| m/mod ( d n -- r q ) floored division with remainder/quotient
+| mark ( -- a ) mark a hole in dictionary
+| marker ( "name" -- ) make word that deletes words later after
+| match ( c1 c2 -- f ) used with look in parse
+| max ( n n -- n ) signed maximum of two numbers
+| min ( n n -- n ) signed minimum of two numbers
+| mod ( n1 n2 -- n1%n2 ) compute modulus of n1 divided by n2
+| ms ( n -- ) wait for approximately n milliseconds
+| multi ( -- ) enable multithreading mode, single turns it off
+| mux ( n1 n2 sel -- n ) bitwise multiplex operation
+| negate ( n -- n ) twos compliment negation
+| next ( -- ) part of for...next/for..aft...then...next loop
+| nfa ( pwd -- nfa ) move pwd to name field address
+| nip ( n1 n2 -- n2 ) discard second stack item
+| number? ( a u -- d -1 | a u 0 ) easier to use than >number
+| ok ( -- ) state aware okay prompt
+| only ( -- ) set vocabulary to only the root-voc
+| or ( n n -- n ) bitwise or
+| over ( n1 n2 -- n1 n2 n1 ) duplicate second item on stack
+| pace ( -- ) emit pacing character
+| pad ( -- a ) get thread local pad or scratch space
+| page ( -- ) clear screen (using ANSI terminal codes)
+| parse ( "string" c -- b u ) parse a c delimited string
+| pause ( -- ) invoke multithreading scheduler, yield
+| pick ( nu...n0 n -- nu...n0 nn ) pick item on stack
+| postpone ( "name" -- ) immediate, compile word into dict.
+| query ( -- ) get a line of text, filling the terminal buffer
+| quit ( -- ) interpreter loop
+| r> ( -- n, R: n -- ) move value from return stack to var stk.
+| r@ ( -- n, R: n -- n ) copy value from return stack
+| radix ( -- u ) retrieve input/output radix in base
+| rdrop ( --, R: n -- ) drop value from return stack
+| receive ( -- msg task-addr ) pause until message received
+| recurse ( -- ) immediate, compile-only, recurse current word
+| repeat ( -- ) part of begin...while...repeat loop
+| root-voc ( -- voc ) push root vocabulary
+| rot ( n1 n2 n3 -- n2 n3 n1 ) rotate three stack items
+| rp! ( n -- , R: ??? -- ??? ) set return stack pointer
+| rp@ ( -- n, R: ??? -- ??? ) get return stack pointer
+| rshift ( u n -- u ) perform rshift of u by n
+| s>d ( n -- d ) convert single cell number to double cell
+| save-buffers ( -- ) save all block buffers to disk
+| scr ( -- a ) last listed block as used with `list`
+| search-wordlist ( a voc -- pwd 1| pwd -1| a 0 ) search voc
+| see ( "name" -- ) decompile word
+| send ( msg task-addr -- ) blocking send message to task
+| set-current ( voc -- ) set current variable
+| set-input ( n1...n5 -- ) set input execution tokens
+| set-order ( n1...nx x -- ) set search order, -1 is special
+| shed ( n1 n2 n3 -- n2 n3 ) remove third-most stack item
+| sign ( -- ) add sign to hold space in Pictured Numeric Output
+| signal ( addr -- ) signal to thread calling wait
+| single ( -- ) force single threaded mode
+| source ( -- a u ) get terminal input source
+| source-id ( -- u ) get input type (0 = terminal, -1 = block)
+| sp ( -- a ) variable containing the stack address
+| sp! ( sp -- ) set stack pointer
+| sp@ ( -- sp ) get stack pointer
+| space ( -- ) emit a space character
+| span ( -- a ) user variable set when calling expect
+| state ( -- a ) push address of stack control location
+| swap ( n1 n2 -- n2 n1 ) swap two stack items
+| system ( -- voc ) push system vocabulary
+| tap ( bot eot cur c -- bot eor cur ) add char to line
+| task-init ( task-address -- ) initialize a task
+| task: ( "name" -- ) create a named task
+| then ( -- ) part of if...then or if...else...then
+| this ( -- a ) address of task thread memory
+| throw ( n -- ) throw n to be caught by catch, 0 is no throw
+| tib ( -- b ) get the Terminal Input Buffer address
+| toggle ( u a -- ) toggle bits at address [xor them with u]
+| token ( "name" -- ) equivalent to "bl word"
+| transfer ( a a u -- ) transfer bytes to/from mass storage
+| tuck ( n1 n2 -- n1 n2 n1 ) tuck a variable behind two
+| tup ( -- a ) get address of the Terminal Input Buffer
+| type ( a u -- ) emit string displaying it
+| u. ( u -- ) display unsigned number
+| u.r ( u n -- ) display unsigned number space filled up to n
+| u< ( u1 u2 -- f ) u1 unsigned less than u2
+| u<=  ( u1 u2 -- f ) u1 unsigned less than or equal to u2
+| u> ( u1 u2 -- f ) u1 unsigned greater than u2
+| u>= ( u1 u2 -- f ) u1 unsigned greater than or equal to u2
+| um* ( u u -- ud ) mixed multiply
+| um+ ( u u -- u carry ) mixed add with carry
+| um/mod ( ud u -- ur uq ) unsigned double cell div/mod
+| unmatch ( c1 c2 -- f ) used with look in parse
+| until ( --, Runtime: u -- ) part of begin...until loop
+| update ( -- ) mark last loaded block as dirty or modified
+| user ( "name" -- ) create a new thread local user variable
+| user? ( -- a ) address of the user variable pointer
+| valid? ( k -- k f ) is block valid?
+| variable ( "name" -- ) create a variable
+| wait ( addr -- ) pause until contents of address is non zero
+| while ( --, Runtime: u -- ) part of begin/while/repeat loop
+| within ( u lo hi -- f ) is u within lo and hi, lo <= u < hi
+| word ( "string" c -- ) parse string until c
+| words ( -- ) display loaded words
+| xio ( xt xt xt -- ) exchange input/output 
+| xor ( u u -- u ) bitwise exclusive or
+;file
 [then]
 
-: (toerror) ( code file -- c u f )
-  >r
-  begin
-    linebuf c/blk blank
-    linebuf c/blk r@ read-line drop nip 0= if
-      rdrop drop 0 0 0 exit
-    then
-    dup linebuf 4 -trailing numberify 2drop
-  = until drop rdrop linebuf c/blk 4 /string -trailing -1 ;
-
-: toerror ( n -- c-addr u )
-  s" errors.db" r/o open-file throw
-  dup >r (toerror) r> close-file throw 
-  ?exit 2drop s" unknown" ;
-
-defined eforth [if]
-: reboot login quit ;
-' reboot <quit> !
-[then]
-
-0 [if]
-
-\ : cd ( "dir" -- : change the Present Working Directory )
-\  token count 2dup s" ." equate 0= if 2drop exit then
-\  2dup s" .." equate 0= if 2drop popd drop exit then
-\  2dup s" /" equate 0= if 2drop /root exit then
-\  peekd dir-find dup >r 0< EFILE error
-\  peekd r@ dir? 0= ENDIR error
-\  peekd r> dirent-blk@ pushd ;
-
-variable rdirp    \ Resolve Directory Path Pointer
-variable relative \ Is relative path?
-variable parent   \ Path higher than CWD
-variable rbasename maxname 1+ allot align
-variable isdir    \ Is directory?
-variable rerror   \ Has an error occurred?
-variable rfound   \ Does the file/directory exist?
-
-create rdirstk maxdir cells allot rdirstk maxdir cells erase
-: rdirp? ( -- )
-  rdirp @ 0 maxdir within 0= if 0 rdirp ! 1 EDDPT error then ;
-: (rdir) rdirp? rdirstk rdirp @ cells + ;
-: rpushd (rdir) ! 1 rdirp +! ; ( dir -- )
-: rpopd rdirp @ if -1 rdirp +! then (rdir) @  ; ( -- dir )
-: rpeekd rpopd dup rpushd ; ( -- dir )
-: rdircpy dirstk rdirstk maxdir cells cmove dirp @ rdirp ! ;
-
-: ndir ( c-addr u -- u f : parse next file name in path a/b/c )
-  0 -rot
-  begin
-    ?dup
-  while
-    over c@ [char] / = if 2drop -1 exit then
-    rot 1+ -rot
-    +string
-  repeat drop 0 ;
-
-\ TODO: This nearly works...edge cases and what to return needs
-\ sorting out before this can be used elsewhere.
-\ TODO: "a/b/c/" should set `isdir`, check it  does
-: resolve ( c-addr u -- dir line n )
-  -1 relative ! 0 parent ! 0 isdir ! 0 rerror !
-  rbasename maxname 1+ erase
-  dup 0= throw
-  rdircpy
-  over c@ [char] / = if 
-    0 relative ! 0 rdirp ! dirstart rpushd 
-  then
-
-  begin
-    2dup ndir >r nlen? ( c-addr u l, R: f )
-
-    \ TODO: Set basename
-    \ r@ 0= if
-    \  2dup dup rbasename ! rbasename 1+ swap cmove
-    \ then
-
-    2 pick over 2>r 1+ /string 0 max 2r> 
-    ( c-addr u c-addr u, R: f )
-
-    2dup s" ." equate 0= if
-      \ Do nothing.
-    else
-      2dup s" .." equate 0= if
-        -1 parent !
-        rpopd drop
-      else
-        2dup rpeekd dir-find dup dup rfound ! 0< if
-          \ Not found, if this is not the last path component
-          \ then this is an error
-          drop
-          r@ if \ Find an empty file
-            rdrop 2drop 2drop rpeekd dup empty? 0 exit
-          else
-            rdrop 2drop 2drop -1 rerror ! -1 -1 0 exit
-          then
-        else
-          rpeekd over dirent-type@ [char] D = if
-            rpeekd swap dirent-blk@ rpushd
-          else
-            r@ if
-              rdrop rpeekd dup empty? 0 exit
-            else
-              rdrop
-              2drop 2drop
-              -1 rerror !
-              -1 -1 0 exit
-            then
-          then
-          \ cd if directory, unless last one.
-          \ if not directory is this the last path component?
-        then
-      then
-    then
-    2drop
-    r> 0=
-  until 2drop rpeekd rfound @ -1 ; \ TODO: Wrong directory!
-
-[then]
++ffs
++dos
+.( DONE ) cr \ And we are finished and ready to go!
