@@ -9978,9 +9978,11 @@ $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 \ negative, or exactly zero, the following is computed:
 \
 \        r3 > 0 -> |r1 - r2| < r3
-\        r3 = 0 -> r1 = r2 [should also deals with neg zero...]
+\        r3 = 0 -> r1 = r2 [should also deal with neg zero...]
 \        r3 < 0 -> |r1 - r2| < |r3| * (|r1| + |r2|)
 \
+\ It is a poor word because it does too much and it is 
+\ difficult to what argument value causes the desired behavior.
 \
 
 : f~ ( r1 r2 r3 -- flag )
