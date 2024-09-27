@@ -60,7 +60,18 @@ do something useful with this project!
 ## References
 
 * <https://en.wikipedia.org/wiki/Forth_(programming_language)>
-* <https://en.wikipedia.org/wiki/One-instruction_set_computer>
+* <https://github.com/howerj/bit-serial>
+* <https://github.com/howerj/embed>
+* <https://github.com/howerj/forth-cpu>
+* <https://github.com/howerj/7400>
+* <https://github.com/howerj/lfsr>
+* <https://github.com/howerj/lfsr-vhdl>
+* <https://rosettacode.org/wiki/Subleq>
+* <https://stackoverflow.com/questions/2982729>
+* <https://stackoverflow.com/questions/34120161>
+* <https://web.ece.ucsb.edu/~parhami/pubs_folder/parh88-ijeee-ultimate-risc.pdf>
+* <https://eigenratios.blogspot.com/2006/09/mark-ii-oisc-self-interpreter.html>
+* <https://en.wikipedia.org/wiki/Forth_(programming_language)>
 * <https://github.com/howerj/bit-serial>
 * <https://github.com/howerj/embed>
 * <https://github.com/howerj/forth-cpu>
@@ -68,5 +79,27 @@ do something useful with this project!
 * <https://stackoverflow.com/questions/2982729>
 * <https://stackoverflow.com/questions/34120161>
 * <https://web.ece.ucsb.edu/~parhami/pubs_folder/parh88-ijeee-ultimate-risc.pdf>
-* <https://eigenratios.blogspot.com/2006/09/mark-ii-oisc-self-interpreter.html>
+* <https://esolangs.org/wiki/Subleq>
+* <https://wikipedia.org/wiki/Threaded_code>
+* <https://github.com/samawati/j1eforth>
+* <https://www.bradrodriguez.com/papers/>
+* 8086 eForth 1.0 by Bill Muench and C. H. Ting, 1990
+* <https://www.bradrodriguez.com/papers/mtasking.html>,
+  For multitasking support
+* <https://forth-standard.org/standard/block>,
+  For the block word-set, which is partially implemented.
+* <https://github.com/howerj/subleq-js>
+* URISC, the original OISC, a SUBLEQ machine:
+ Mavaddat, F.; Parhami, B. (October 1988). "URISC: The
+ Ultimate Reduced Instruction Set Computer".
+* <https://en.wikipedia.org/wiki/Turing_tarpit>, which
+SUBLEQ could be argued to be one.
+* For other Single Instruction Set Computers:
+<https://en.wikipedia.org/wiki/One-instruction_set_computer>
+* For the Forth-83 Standard:
+<http://forth.sourceforge.net/standard/fst83/>
+<http://forth.sourceforge.net/standard/fst83/FORTH-83.PRN>
+* DPANS84 FORTH standard:
+<http://forth.sourceforge.net/std/dpans/>
+
 
