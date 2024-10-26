@@ -318,7 +318,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ operation (the other two main categories include bit
 \ manipulation instructions and architectures build
 \ around a MOVE instruction called Transport Triggered
-\ Architectures). The arithmetic architecture feel closet to a
+\ Architectures). The arithmetic architecture feel closest to a
 \ real machine whilst at the same time being far away from
 \ them. As you will find out, it would not take much to
 \ radically improve the efficiency of the system with extra
@@ -330,7 +330,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ and branch if negative), SUBLEQ with an accumulator, SBNZ
 \ (Subtract and Branch if not zero) and more. They
 \ are all difficult to use, some more than others. SUBLEQ
-\ appears to be the more popular of the OISCs. Those
+\ appears to be the more popular of the OISCs. These
 \ instructions are the universal ones (given infinite memory).
 \ There are other trivial and useless OISC systems
 \ out there, for example a machine consisting of just a single
@@ -8723,15 +8723,15 @@ opt.info [if]
 \ on or off.
 \
 \ The I/O words "key", "emit", "block", and also "ms" all call
-\ the word "pause", which should be bore in mind when
+\ the word "pause", which should be considered when
 \ programming. "key?" does not call "pause" however, but its
 \ blocking or non-blocking behavior should be considered.
 \
-\ So, what is the point of multithreading, there has been a lot
+\ So, what is the point of multithreading? There has been a lot
 \ of talk about it within this document, allusions to it, but
 \ no rationale. It might seem like a complication to
 \ the implementation, and it certainly is if you never plan
-\ on using it. It was actually easy to implement,
+\ on using multithreading. It was actually easy to implement,
 \ especially compared to implementing the basic operators from
 \ scratch with no debugging facilities. If you never use
 \ another thread or never plan on using one, you can skip all
@@ -8745,16 +8745,17 @@ opt.info [if]
 \ to log off the server before you can log into it, you both
 \ want to log into the same server at the same time.
 \
-\ Another example is a computer game, you often have multiple
-\ different input methods such as mouse, keyboard, the network,
-\ and multiple different output methods, sound, graphics, and
-\ again the network. You do not want the game to halt whilst
+\ Another example is in computer games, you often have multiple
+\ different input methods such as a mouse, keyboard, the 
+\ network, and multiple different output methods, sound, 
+\ graphics, and again the network. 
+\ 
+\ You do not want the game to halt whilst
 \ you play a sound, nor do you want the graphics subsystem to
-\ stop when it is waiting for a keyboard press, you want
+\ stop whilst it is waiting for a keyboard press, you want
 \ everything to appear as if it is being computed all at the
 \ same time, even on single CPU core systems (which are getting
-\ are getting rarer nowadays even in the embedded computer
-\ space).
+\ rarer nowadays even in the embedded computer space).
 \
 \ Threading and different threading models "solve" this, and
 \ do so in different ways. The cooperative threading model is
@@ -8762,7 +8763,8 @@ opt.info [if]
 \ right. It does have a disadvantage in that a single thread
 \ of execution can hold up and block the entire system from
 \ running, and each thread must manually have "pause" functions
-\ inserted in it for it to work.
+\ inserted in it for it to work, it has advantages but is not
+\ a panacea.
 \
 \ As we control the virtual machine, it would be possible to
 \ alleviate some of this by making it do the "pause"
@@ -9287,13 +9289,13 @@ opt.control [if]
 \
 \ This code is not an example of "good" Forth code as it keeps
 \ many items on the stack and uses "pick" to access those
-\ items, however it works, is compact, easy to integrate and
-\ portable. For those reasons even those it eschews good Forth
-\ practice it is good code.
+\ items, however it works, is compact, is easy to integrate and
+\ is portable. For those reasons even those it eschews good 
+\ Forth practice it is good code.
 \
 \ As there is a default arena that will be setup if none is
 \ specified you can use "allocate", "free" and "resize" without
-\ running any initialization code.
+\ running any initialization code directly.
 \
 \ There are a few things that could be improved with this
 \ implementation; putting the "freelist" variables within the
@@ -9319,7 +9321,6 @@ opt.control [if]
 \ environment.
 \
 opt.allocate [if]
-
 
 \ Here we define some helper words, most of which were not
 \ in the original system, "freelist", a variable, was however.
@@ -9521,7 +9522,7 @@ opt.float [if] ( Large section of optional code! )
 \ mantissa and another for the exponent and contains no special
 \ values like "NaN" (Not a number) or +/- "INF" (Infinity).
 \
-\ Overflow or Underflow is not caught. These properties could
+\ Overflow or Underflow is not caught, both of which could
 \ be added in if needed. Bases other than decimal are not
 \ handled and cause an exception. This could also be added,
 \ the biggest impediment to doing so is that the "ftable"
@@ -9932,11 +9933,11 @@ mhex
 : fs. e. ; ( r -- : display in scientific notation )
 
 ( Define some useful constants )
-$C911 $4002 2constant fpi \ Pi = 3.14159265 fconstant fpi )
-$C911 $4001 2constant fhpi \ 1/2pi = 1.57079632 fconstant fhpi
-$C911 $4003 2constant f2pi \ 2pi = 6.28318530 fconstant f2pi
-$ADF8 $4002 2constant fe \ e = 2.71828182 fconstant fe
-$B172 $4000 2constant fln2 \ ln[2] = 0.69314718 fconstant fln2
+$C911 $4002 2constant fpi   \ Pi = 3.14159265 fconstant fpi
+$C911 $4001 2constant fhpi  \ 1/2pi = 1.57079632 fconstant fhpi
+$C911 $4003 2constant f2pi  \ 2pi = 6.28318530 fconstant f2pi
+$ADF8 $4002 2constant fe    \ e = 2.71828182 fconstant fe
+$B172 $4000 2constant fln2  \ ln[2] = 0.69314718 fconstant fln2
 $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 
 : fdeg ( rad -- deg : FP radians to degrees )
@@ -12314,13 +12315,13 @@ it being run.
 \ ### Logical Operators in SUBLEQ
 \
 \ The logical operators, OR, XOR, and AND, have the same
-\ pattern to how they work, and the borrow from how "rshift"
-\ works. They both work by testing if the highest bit
-\ is set and doubling both inputs and the output in order to
-\ shift bits.
+\ pattern to how they work, and they borrow from how "rshift"
+\ works. They all work by testing if the highest bit
+\ is set and then doubling both inputs and the output in order 
+\ to shift bits.
 \
-\ If we have the following table of bits, if we add those
-\ bits together we can then use the comparison operators to
+\ If we have the following table of bits, we can add those
+\ bits together and then use the comparison operators to
 \ determine what the new bit should be in the output.
 \
 \       0 + 0 = 0
@@ -12331,8 +12332,7 @@ it being run.
 \ None of the operators output should be one when the result is
 \ zero, XOR should output one when the result is equal to one,
 \ OR when it is greater or equal to one, and AND should only be
-\ one when the output is two. Otherwise the output should be
-\ zero for the new bit.
+\ one when the output is two.
 \
 \ The following Stack Overflow question goes over this in more
 \ detail <https://stackoverflow.com/questions/34120161>.
@@ -12340,9 +12340,10 @@ it being run.
 \ Making these operators fast is especially important, in all
 \ other Forth systems there is the reasonable expectation that
 \ these operators are fast, and that they operate in a
-\ single clock cycle, not so for the system. Subtraction and
+\ single clock cycle, not so for this system. Subtraction and
 \ addition are fast as usual, so some words later on have be
-\ rewritten to use arithmetic instead.
+\ rewritten to use arithmetic instead. Bitwise operations are
+\ to be avoided in this Forth where possible.
 \
 \ It is possible to do all kinds of optimizations with what
 \ are usually fast bitwise operations, for example, SWAR
@@ -12353,10 +12354,9 @@ it being run.
 \ multiple N-bit operations (say 8-bit) on a machine capable of
 \ doing k\*N bit arithmetic (k = 2 for a 16-bit machine).
 \
-\ Unfortunately,
-\ these optimizations tend to be bit-wise heavy and more
-\ suitable for larger cell width systems anyway, but such
-\ optimizations are worth knowing about. We can do a very
+\ Unfortunately, these optimizations tend to be bit-wise heavy 
+\ and more suitable for larger cell width systems anyway, but 
+\ such optimizations are worth knowing about. We can do a very
 \ limited version of SWAR potentially in comparing Forth
 \ strings (comparing them cell by cell instead of byte by
 \ byte) if the strings are aligned (which they will be for
@@ -12365,11 +12365,12 @@ it being run.
 \ *SWAR* operations, whilst well worth knowing about, are
 \ not worth doing on this machine.
 \
-\ All of these operators could be replaced with a single
-\ bitwise operator known as "mux", already shown. This could be
+\ All of these operators have been replaced with a single
+\ bitwise operator known as "mux", already shown. This has been
 \ done to save on space without sacrificing speed too much.
-\ These operators take up quite a lot of space, and there is
-\ a lot that could be done to shrink the image.
+\ These operators take up quite a lot of space, so their
+\ removal and replacement with "mux" saves many hundreds of
+\ bytes.
 \
 \ Some of the registers may have been removed, so will need
 \ adding back in if these routines are to be used.
@@ -12391,7 +12392,7 @@ it being run.
     r0 DEC
   repeat
   r5 tos MOV ;a
-:a opr5or
+:a opXor
   bwidth r0 MOV
   r5 ZERO
   r2 {sp} iLOAD
@@ -12434,8 +12435,11 @@ it being run.
 \ eForth image for running on machines with a greater cell
 \ width than 16 bits, this "Self-Interpreter" does no 
 \ correction for bit-width. It can however be prepended to
-\ any valid SUBLEQ program and execute that. The program is
-\ given in a SUBLEQ assembly variant, and the resulting binary
+\ any valid SUBLEQ program and execute the program after it. 
+\ 
+\ The program is given in a SUBLEQ assembly variant, and the 
+\ resulting assembled binary in decimal format is given for
+\ those without access to the assembler.
 \
 \ ### Assembly "Self-Interpreter" ASM
 \ 
@@ -12696,8 +12700,7 @@ leqz:
 \        cat extra.fth - | ./subleq subleq.dec
 \
 \ It will need to be adapted if it is to be meta-compiled. It
-\ includes some missing standard Forth words, and the major
-\ things that are missing - do loops and case.
+\ includes some missing standard Forth words.
 \
 \
 <ok> @ ' ) <ok> !
