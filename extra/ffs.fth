@@ -247,7 +247,6 @@
 \ TODO: Document each section, capture GIF of usage, make
 \ notes about file path parsing and C program.
 \
-
 \ ## Basic Word Definitions
 \
 \ If you can seen one Forth, you can seen one Forth. Words
@@ -323,17 +322,19 @@ defined d< 0= [if]
 defined d> 0= [if] : d>  2swap d< ; [then]
 defined dabs 0= [if] : dabs s>d if dnegate then ; [then]
 
-cell 2 = ?\ $8000 constant #msb
-cell 4 = ?\ $80000000 constant #msb
-cell 8 = ?\ $8000000000000000 constant #msb
-defined #msb 0= [if] abort" #msb not set" [then]
+\ N.B. `#high` used to be called `#msb` but that word is
+\ already take in SUBLEQ eForth in the system vocabulary.
+cell 2 = ?\ $8000 constant #high
+cell 4 = ?\ $80000000 constant #high
+cell 8 = ?\ $8000000000000000 constant #high
+defined #high 0= [if] abort" #high not set" [then]
 
 \ We only need to define "d2/" and "drshift" here (because it
 \ is much more efficient than "um/mod" under SUBLEQ eFORTH),
 \ but for the sake of completeness here are the other double
 \ cell bitwise words which are often lacking.
 \
-\        : d2* over #msb and >r 2* swap 2* swap r> 
+\        : d2* over #high and >r 2* swap 2* swap r> 
 \            if 1 or then ;
 \        : dlshift begin ?dup while >r d2* r> 1- repeat ;
 \        : dand rot and >r and r> ; ( d d -- d )
@@ -341,7 +342,7 @@ defined #msb 0= [if] abort" #msb not set" [then]
 \        : dxor rot xor >r xor r> ; ( d d -- d )
 \
 defined d2/ 0= [if]
-: d2/ dup 1 and >r 2/ swap 2/ r> if #msb or then swap ;
+: d2/ dup 1 and >r 2/ swap 2/ r> if #high or then swap ;
 [then]
 : drshift begin ?dup while >r d2/ r> 1- repeat ; ( d u -- d )
 
@@ -2060,9 +2061,12 @@ variable run        \ Do we have a run of data?
 \ blocks, as `read-line` searches the entire buffer for an End 
 \ Of Line marker.
 \
-\ TODO: BUG: Executing a script containing file commands
-\ fails, such as "mkdir a", "mkdir b", "ls". It introduces
-\ garbage. Only in SUBLEQ eFORTH...
+\ Scripting is limited, not all commands can be executed
+\ as they would be in a prompt due to interactions with file
+\ locking. This behavior could be improved, and should be if
+\ we are interested in making a practical system, however this
+\ is just a demonstration system and avoiding accidental
+\ corruption is more important.
 \
 : script ( "file" -- : execute a line based Forth script )
   narg namebuf r/o open-file throw >r
@@ -2075,6 +2079,11 @@ variable run        \ Do we have a run of data?
   drop r> close-file throw ;
 : rm ro? narg 0 (rm) ; ( "file" -- )
 : rmdir ro? narg 1 (rm) ; ( "dir" -- )
+
+\ N.B. A variable in the SUBLEQ eForth floating point package
+\ that was placed in the system vocabulary was also called 
+\ `cd`, this is a constant hazard of heavy vocabulary use in
+\ Forth.
 : cd ( "dir" -- : change the Present Working Directory )
   token count 2dup s" ." equate 0= if 2drop exit then
   2dup s" .." equate 0= if 2drop popd drop exit then
@@ -2510,8 +2519,6 @@ mount loaded @ 0= [if]
 cr .( FFS NOT PRESENT, FORMATTING... ) cr
 fdisk
 \ Nested compile time "\[if\]"s do not work in SUBLEQ eFORTH...
-\ TODO: BUG: The big image of SUBLEQ eFORTH places these files
-\ in the wrong place...
 mkdir system
 cd system
 defined eforth 0= ?\ mknod [BOOT] 0
@@ -2519,6 +2526,7 @@ defined eforth 0= ?\ mknod [FAT] 1
 defined eforth    ?\ mknod [BOOT] 65
 defined eforth    ?\ mknod [FAT] 66
 defined eforth    ?\ mknod [KERNEL] 1
+ls
 cd ..
 \ This is a simple demo program that does not define new words,
 \ a better, more complex or interesting program could be made,

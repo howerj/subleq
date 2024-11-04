@@ -6649,7 +6649,15 @@ root[
 \ "?unique" is for a warning (the only one in this Forth
 \ implementation) telling us if a word has been defined already
 \ in the word-list or vocabulary (this guide uses the terms
-\ interchangeably). "?nul" prevents zero length definition
+\ interchangeably) into which definitions are to be placed.
+\
+\ A useful run-time optional extension would be to warn if the 
+\ newly defined word exists in any of the loaded vocabularies,
+\ new definitions unexpectedly masking or being masked by
+\ definitions with the same name in other vocabularies is a
+\ source of bugs and a hazard of heavy vocabulary use.
+\
+\ "?nul" prevents zero length definition
 \ words from being made. "?len" checks the length of a word to
 \ make sure it is not too long, the length of a Forth word is
 \ stored in the lower five bits of the first byte in the Name
@@ -9688,26 +9696,27 @@ $26DD constant cordic_1K ( CORDIC scaling factor )
 $6487 constant hpi
 
 variable tx variable ty variable tz
-variable cx variable cy variable cz
-variable cd variable ck
+variable _x variable _y variable _z
+variable _d variable _k
 
 ]system
 
 ( CORDIC: valid in range -pi/2 to pi/2, arguments in fixed )
 ( point format with 1 = 16384, angle is given in radians.  )
+( It would be nice to get rid of the global variables )
 
 : cordic ( angle -- sine cosine | x y -- atan sqrt )
-  cz ! cordic_1K cx ! #0 cy ! #0 ck !
+  _z ! cordic_1K _x ! #0 _y ! #0 _k !
   [ $10 ] literal begin ?dup while
-    cz @ 0< cd !
-    cx @ cy @ ck @ arshift cd @ xor cd @ - - tx !
-    cy @ cx @ ck @ arshift cd @ xor cd @ - + ty !
-    cz @ ck @ cells lookup + @ cd @ xor cd @ - - tz !
-    tx @ cx ! ty @ cy ! tz @ cz !
-    ck 1+!
+    _z @ 0< _d !
+    _x @ _y @ _k @ arshift _d @ xor _d @ - - tx !
+    _y @ _x @ _k @ arshift _d @ xor _d @ - + ty !
+    _z @ _k @ cells lookup + @ _d @ xor _d @ - - tz !
+    tx @ _x ! ty @ _y ! tz @ _z !
+    _k 1+!
     1-
   repeat
-  cy @ cx @ ;
+  _y @ _x @ ;
 
 : sin cordic drop ; ( rad/16384 -- sin : fixed-point sine )
 : cos cordic nip ;  ( rad/16384 -- cos : fixed-point cosine )
