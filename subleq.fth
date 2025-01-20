@@ -342,7 +342,12 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ as Esoteric Programming Languages and Turing Tar-pits,
 \ languages that are technically Turing complete,
 \ but are incredibly difficult to use and are only ever used
-\ as a puzzle to satisfy intellectual curiosity.
+\ as a puzzle to satisfy intellectual curiosity. This is helped
+\ by the fact that it is possible to make very small programs
+\ with them by entering decimal values into a text editor,
+\ as most OISCs take their program as a list of signed decimal
+\ values, giving them the feel of programming for an Esoteric
+\ language.
 \
 \ ## eForth
 \
@@ -10591,26 +10596,29 @@ it being run.
 \ page viewed by a human. For this purpose the format is
 \ adequate.
 \
-\ Using hexadecimal would have on space, as would using a
+\ Using hexadecimal would have saved on space, as would using a
 \ binary format, but it would make sharing more difficult and
 \ tie the program to this implementation.
 \
 \ ## SUBLEQ machine with automatic save feature
 \
-\ This version machine is has a very different flavor compared
-\ to the previous one, this one automatically saves the memory
-\ of the device upon exit. This means interactive Forth
-\ sessions can be saved and new images prepared. Care has to
-\ be taken not to corrupt the image, because the system will
-\ always save on exit!
+\ This version of the machine has one major difference
+\ compared to the previous one, this one automatically saves 
+\ the memory of the device upon exit. 
+
+\ This means interactive Forth sessions can be saved and new 
+\ images prepared. Care has to be taken not to corrupt the 
+\ image, because the system will always save on exit!
 \
 \ Care is taken to try not to save memory that does not need
 \ to be saved because it has not been initialized with the
 \ images given on the command line or that has not been
-\ written to, which is what the variable "max" is for. There
+\ written to, which is tracked with the variable "max". There
 \ are some changes in the Forth system that could be made to
 \ improve this which have not been undertaken (such as making
-\ system memory be contagious with the Forth image).
+\ system memory be contagious with the Forth image), as this
+\ would allow for more compact images, as it is, holes are
+\ saved as well.
 \
 \        #include <stdint.h>
 \        #include <stdio.h>
@@ -10684,7 +10692,7 @@ it being run.
 \ on the standard input channel, or on Windows a read from
 \ the terminal input. The character retrieval function now
 \ returns negative if there is no input, instead of on End
-\ Of File, which can no longer be detect.
+\ Of File, which can no longer be detected.
 \
 \ Consult the "{options}" variable for how this interacts with
 \ the eForth image, as the default image exits when negative
@@ -10694,7 +10702,7 @@ it being run.
 \ instantly).
 \
 \ One other change is that hitting ESC causes the interpreter
-\ to exit, CTRL-D will no longer work nor can End-Of-File be
+\ to exit, CTRL-D will no longer work as cannot End-Of-File be
 \ detected any more, as mentioned.
 \
 \        #include <stdint.h>
@@ -10909,7 +10917,8 @@ it being run.
 \
 \ It must be emphasized again, that this program is *brittle*,
 \ it works perfectly on the "eforth.dec" image that is
-\ generated but it will fail on arbitrary SUBLEQ programs.
+\ generated (at the time of writing) but it will fail on 
+\ arbitrary SUBLEQ programs.
 \
 \ It is meant to match on these instruction macros:
 \
@@ -11468,7 +11477,9 @@ it being run.
 \
 \
 \ A report is printed to standard error at the end of
-\ execution.
+\ execution containing the number of instructions executed
+\ (the data required for this report is one aspect of the
+\ program which slows it down).
 \
 \ ## SUBLEQ: A single or a three instruction machine?
 \ 
@@ -11574,12 +11585,12 @@ it being run.
 \ Note that input is byte oriented and blocking. The
 \ program consists of space (or optionally comma in this
 \ implementation) delimited signed decimal values stored in
-\ a text file. The program also exists on an output failure
-\ in `putchar`, most C programs ignore output errors of any
-\ kind in printing family of functions.
+\ a text file. The program also exits on an output failure
+\ in `putchar`, many C programs ignore output errors of any
+\ kind in the printing family of functions.
 \ 
-\ Some SUBLEQ versions have minor and incompatible handling
-\ off I/O (especially hardware implementations) such as
+\ Some SUBLEQ versions have minor incompatibles in the handling
+\ of I/O (especially hardware implementations) such as
 \ subtracting the result of `getchar` from `m[b]`.
 \ 
 \ Let us use this less opinionated version of the SUBLEQ
@@ -11633,7 +11644,7 @@ it being run.
 \ but not very useful. This is without mentioning the
 \ HALT condition. There are two ways of dealing with this;
 \ ignore the need for input and output and instead use an
-\ external method entering and getting data (e.g. Modifying
+\ external method for entering and getting data (e.g. Modifying
 \ the program and viewing the memory after execution) or
 \ memory mapping input and output.
 \ 
@@ -11793,8 +11804,6 @@ it being run.
 \         | FFB4 | -76  | WRITE-LINE                          |
 \
 \
-
-
 \ ## ASCII Art Diagram: Interpreter Control Flow
 \
 \ Interpreter control Flow as an ASCII art diagram:
@@ -12828,7 +12837,7 @@ variable seed here seed !
 : reverse for aft r@ -roll then next ; ( x0...xn n -- xn...x0 )
 : unpick 1+ sp@ + [!] ; ( n0..nx y nu -- n0..y..nx )
 : flip -rot swap ; ( a b c -- c b a ) 
-: signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )
+: signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 | 1 : signum )
 : >< dup 8 rshift swap 8 lshift or ; ( u -- u : swap bytes )
 : #digits >r dup 0= if 1+ exit then r> log 1+ ; ( u b -- u )
 : ** ( n u -- n : integer exponentiation )
@@ -13098,9 +13107,9 @@ mark
 \ "conceal" and "reveal" are interesting words, they use
 \ the fact that we are most likely using a terminal that
 \ understand ANSI escape codes. Unfortunately the codes are
-\ not widely supported. The "conceal" code turns of terminal
+\ not widely supported. The "conceal" code turns off terminal
 \ echoing and the "reveal" turns it back on. This can be used
-\ to hide the password as it is typed. It would be possible
+\ to hide a password as it is typed. It would be possible
 \ to override the "<echo>" vector, however the terminal
 \ emulator itself could be setup to echo characters, something
 \ this program cannot control.
@@ -14585,16 +14594,16 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ I deliberately eschew standards when it comes to Forth (apart
 \ from the FORTH-83 and FORTH-79 standards), to me Forth is
 \ best represented by eForth, or some of the long obsolete
-\ Forth implementations and is only suitable for systems that
+\ Forth implementations, and is only suitable for systems that
 \ are well out to pasture. It represents a simpler time, one
 \ that no longer exists. A time where the technology stack
 \ employed by a programmer could be understood entirely by
 \ them, and if there was any complexity involved it was the
 \ individual at fault and not some impenetrably Byzantine mess
 \ of leaky abstraction upon leaky abstraction that is
-\ responsible for running internet, our operating systems and
-\ the web, today (to be fair, that mess is awfully productive
-\ and profitable).
+\ responsible for running the internet, our operating systems 
+\ and the web, today (to be fair, that mess is awfully 
+\ productive and profitable).
 \
 \ So what should Forth be? To me it should be:
 \
@@ -14608,7 +14617,7 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ * Usable on a 16-bit system, where Forth's home is.
 \ * Forth code should not be afraid to use the capabilities
 \ of the system, and non-standard ways of implementing words
-\ the done thing.
+\ or using words is the done thing.
 \
 \ I believe a lot of modern Forth implementations do not live
 \ up to this, especially ones that adhere to the ANS Forth
@@ -14618,9 +14627,12 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \
 \ ## Licenses
 \
-\ The project as a whole comes with its own license, for the
-\ code and generated SUBLEQ images they are released under
-\ the public domain and/or the Unlicense. However the book
-\ uses a LaTeX template with its own license, available from:
+\ The project as a whole comes with its own proprietary 
+\ license, for the code and generated SUBLEQ images they are 
+\ released under the public domain and/or the Unlicense. 
+\ However the book uses a LaTeX template with its own license, 
+\ available from:
 \ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
-\
+\ Which applies in addition to the books own proprietary 
+\ license.
+
