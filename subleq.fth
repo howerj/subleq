@@ -537,7 +537,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ mean that the jump location should be the location of the
 \ next instruction.
 \
-\ A non-trivial instruction is "ADD":
+\ One instruction is "ADD":
 \
 \        ADD a, b
 \
@@ -1213,10 +1213,10 @@ defined eforth [if]
 \ location and code location. This means that it is easier to
 \ erase the names for words, which may no longer be needed,
 \ it is even possible to erase all of the word names and keep
-\ the code intact which is not possible in this implementation,
-\ although separate storage is less compact than a conjoined
-\ system. Both systems can be designed to use the same amount
-\ of memory, with caveats.
+\ the code intact which is not possible in this implementation.
+\ This disadvantage is that separate storage is less compact 
+\ than a conjoined system. Both systems can be designed to use 
+\ the same amount of memory, with caveats.
 \
 \ The word "thead" makes a header for a word in the target, it
 \ writes a pointer to the previously defined word making a link
@@ -2381,8 +2381,8 @@ label: self-loop
 \
 \ Where "{x}" is declared as "tvar $58 {x}"
 \
-\ As a primitive form of debugging, it was used frequently in
-\ the construction of this Self-Interpreter. Even the ability
+\ As a primitive form of debugging, this was used frequently in
+\ the construction of the Self-Interpreter. Even the ability
 \ to output a single character, sometimes conditional or at
 \ certain points, allows for some measure of debugging. 
 \
@@ -2440,9 +2440,6 @@ label: self-loop
 
 assembler.1 -order
 
-
-
-
 \ # Forth Virtual Machine Instructions
 \
 \ Our Forth Virtual Machine would be useless without any
@@ -2457,12 +2454,14 @@ assembler.1 -order
 \ however it can become usable or unusable depending on what
 \ we implement where. It is also more expensive in terms of
 \ memory to implement an instruction here than it is in a
-\ higher level Forth, a single jump here, or an increment
+\ higher level Forth, a single jump here, or an increment,
 \ takes up three cells. In higher level Forth it is just
-\ one cell. So there is a trade-off, we cannot put everything
-\ in assembler to make things faster, as the resulting image
-\ would be too big. It is also harder to code in assembly, than
-\ in Forth. The eForth model just has about thirty primitives,
+\ one cell. So there is a trade-off in that we cannot put 
+\ everything in assembler to make things faster as the 
+\ resulting image would be too big. 
+
+\ It is also harder to code in assembly than in Forth. The 
+\ eForth model just has about thirty primitives,
 \ which we will aim to emulate, other Forth implementations
 \ have hundreds, some pedagogical ones have fewer.
 \
@@ -2478,15 +2477,16 @@ assembler.1 -order
 \ correctly), writing them instead in Forth.
 \
 \ If we implement a multiplication routine in Forth it will
-\ have to go through the virtual machine, if we do it in
+\ have to go through the Forth virtual machine, if we do it in
 \ assembly it will not, it will still be slow as
 \ we are implementing it in terms of subtraction, however it
 \ be much fast than the Forth version. The number of
-\ instructions in the VM is sort of hidden from the view
+\ instructions used in assembly is hidden from the view
 \ of the programmer, for example the "MOV" macro word is
 \ comprised of four SUBLEQ instructions, an indirect load
-\ more, each VM cycle takes multiples of those macros, so you
-\ end up spending more time in the VM than you think you would.
+\ more, each SUBLEQ cycle takes multiples of those macros, 
+\ so you end up spending more time in the SUBLEQ machine 
+\ than you think you would.
 \
 \ Other routines like "pause", "exit", or "opEmit", have to be
 \ implemented as VM instructions as doing so otherwise would
@@ -3062,7 +3062,7 @@ assembler.1 -order
 \ faster than "um/mod".
 \
 \ Removing "opDivMod" does save on some space, as would
-\ removing "rshift", and implementing their functionality in
+\ removing "rshift" and implementing their functionality in
 \ pure Forth, but there is a significant slow down, it might
 \ be best to allow them to be compiled out with a meta-compile
 \ time flag.
@@ -3419,12 +3419,12 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 \
 \ The "for...next" construct keeps a loop counter on the
 \ return stack ("for" compiles "\>r" into the dictionary
-\ and a jump location after the "\>r"), "opNext" has already
-\ been encountered in the Virtual Machine instruction section,
-\ but it decrements and tests that loop counter and jumps
-\ back to instruction after "\>r" if the counter is positive,
-\ if zero or negative it removes the counter from the return
-\ stack and continues on after the "next" statement.
+\ and pushes a jump location after the "\>r"), "opNext" has 
+\ already been encountered in the Virtual Machine instruction 
+\ section, but it decrements and tests that loop counter and 
+\ jumps back to instruction after "\>r" if the counter is 
+\ positive, if zero or negative it removes the counter from the 
+\ return stack and continues on after the "next" statement.
 \
 \ These meta-compiled words do not take locations at cross
 \ compile time like the assembler versions do, instead taking
@@ -3948,6 +3948,7 @@ system[
   user <tap>     ( -- a : tap xt loc. )
   user <expect>  ( -- a : expect xt loc. )
   user <error>   ( -- a : <error> xt container. )
+  user <pattern> ( -- a : executed for each interpreted word )
 ]system
 
 :s <boot> [ {boot} ] literal ;s ( -- a : cold xt loc. )
@@ -4344,17 +4345,20 @@ system[
 : 0<> 0= 0= ;  ( n -- f : not equal to zero )
 : 0<= 0> 0= ;  ( n -- f : less than or equal to zero )
 
-\ Enabling this faster and smaller, but broken, compare, breaks
-\ many things, especially the unsigned comparison operators
-\ which build upon these operators. You can swap these out,
-\ recompile, and watch what breaks. The incorrect operators
-\ work, but not for the entire range of values.
+\ Enabling this faster and smaller but broken compare operator
+\ breaks many things, especially the unsigned comparison 
+\ operators which build upon these operators. You can swap 
+\ these out, recompile, and watch what breaks. The incorrect 
+\ operators work only partially, the entire range of values is
+\ not handled correctly.
 \
 \        : > - 0> ;   ( n1 n2 -- f : signed greater than )
 \        : < swap > ; ( n1 n2 -- f : signed less than )
 \
 \ This, slower, larger, version of the comparison function
-\ works as should for all values.
+\ works as should for all values. An assembly version would
+\ speed up the interpreter noticeably at the sacrifice of some 
+\ size.
 \
 : < ( n1 n2 -- f : less than, is n1 less than n2 )
    2dup leq0 swap leq0 if
@@ -4424,7 +4428,7 @@ system[
 \ specify how signed numbers are encoded, they both came from
 \ a time when the hardware had not settled down on some basic
 \ features we now take for granted and everything was more
-\ experimental. However, twos compliment is the norm, and
+\ experimental. However, twos compliment is now the norm, and
 \ "negate" does a twos compliment negation.
 \
 \ "s\>d" turns a signed number and turns it into a double cell
@@ -6293,6 +6297,11 @@ opt.divmod [if]
 \ would be best to lay out the description in listed form as
 \ well.
 \
+\ 0. If there exists a execution token in `\<pattern\>` then
+\    execute that. If non-zero is returned, exit, else continue
+\    on to the rest of the interpret word. This is done so
+\    that arbitrary pattern matching can be inserted by the
+\    user.
 \ 1. Interpret is called for a word, given as a counted string.
 \ 2. Interpret attempt to find the string in the dictionary,
 \    if it is found it must be a word, "find" returns a pointer
@@ -6343,6 +6352,9 @@ opt.divmod [if]
 \
 
 : interpret ( b -- : interpret a counted word )
+  <pattern> @ ?dup if 
+    execute ?exit
+  then
   find ?dup if
     state @
     if
@@ -7029,6 +7041,13 @@ root[
 :to next [ =next ] literal , compile, ; immediate compile-only
 
 \ # Create, DOES>, and other special Forth words
+\
+\ "Companions the creator seeks, not corpses, not herds and 
+\ believers. Fellow creators the creator seeks -- those who 
+\ write new values on new tablets. Companions the creator 
+\ seeks, and fellow harvesters; for everything about him is 
+\ ripe for the harvest." -- Friedrich Nietzsche, obviously 
+\ talking about Forth and not something else.
 \
 \ "create" and "does\>" are sometimes called the jewels of
 \ Forth, they allow the creation of words which can in turn
@@ -8605,6 +8624,7 @@ opt.info [if]
   [ t' (literal) ] literal <literal> !
   opt.float [if] [ $3 ]  literal [ {precision} ] up ! [then]
   [ to' bye ] literal <error> !
+  #0 <pattern> !
   #0 >in ! #-1 dpl !
   \ Set terminal input buffer loc.
   this [ =tib ] literal + #0 tup 2!
