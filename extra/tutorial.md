@@ -11,7 +11,8 @@ book that describes the Forth internals is available at
 
 **TODO: Talk about**:
 
-* Add questions, answers and exercises.
+* Add questions, answers and exercises. This tutorial 
+really needs more examples and problem sets.
 * Global hyper static environment; Forths usage of globals
 as well
 * How do you get good at juggling stack items (answer;
@@ -26,7 +27,6 @@ topologies of ignorance, also Alpha Centauri quotes.
 * Forth lore, C2 Wiki, comp.lang.forth.
 * Forth wasn't discovered like some grandiose mathematical
 or scientific theory.
-* Formatting: 64 column width
 * Speed and optimizations in Forth.
 * C Forths Vs Assembly Vs meta-compilation.
 * Introspection; see, dump, ...
@@ -39,6 +39,13 @@ of sound card going away).
 example applications, such as converting
 <https://github.com/izabera/bitwise-challenge-2048>,
 or something else. Perhaps we could make an assembler.
+Making an assembler for Forth and compiling actual exes
+would neat.
+* Missing is a really basic introduction to programming
+for non-programmers. Starting with binary numbers, what
+is computing and what is a computer, ...
+* Interesting Forth resources; Zepto Forth TCP/IP, 
+j1eforth, SUBLEQ eFORTH and my other Forths, ...
 
 ## Why learn Forth?
 
@@ -1099,6 +1106,13 @@ they are missing) or meta-compilation (instead of calling
 a swap instruction into a target executable). These uses
 are more advanced however.
 
+To store or load byte quantities we can use `c@` and `c!`,
+many 32-bit or 64-bit Forth implementations provide words
+for storing and loading 16, 32, and 64 quantities as well,
+often with prefixes like `q` for quad, or `w` for word (as
+in machine word), on those platforms `!` and `@` will be
+a synonym for one of those word pairs.
+
 ### Control Structures
 
 We have already encountered `if` statements, although they
@@ -1235,9 +1249,87 @@ An example using `begin...while...repeat`, which checks
 the loop exit condition first:
 
 	: t7 begin ?dup while 1- dup . repeat ;
+	9 t7
 
+The `do...loop` construct can be used for definite counted
+loops that operating within a range, unlike `for` loops
+which takes one argument they take two, and upper and a
+lower bound, because of the poor way the behavior of `do`
+was specified, a second loop initiator called `?do` was
+made. We can increment by a number other than 1 by using
+`+loop`, instead of `loop`, `+loop` pulls a value off of
+the data stack.
 
-**TODO: exiting early, do loop**
+	: t8 do i . loop ;
+	: t9 do i . 2 +loop ;
+	: t10 ?do i . loop ;
+	: t11 ?do i . 2 +loop ;
+
+	10 0 t8
+	10 0 t9
+	10 10 t8 ( Causes problems! )
+
+`i` has been introduced without mention, it gets the loop
+counter, to get the loop counters in containing loops you
+will need to use `j` and `k`. Unfortunately there is no
+standard way to extract the loop counter if you needed to
+get it from nested loops more than three deep, although
+you should rewrite your code if this occurs, it is an
+arbitrary limitation for Forth.
+
+It is possible to exit early from a loop, but you have to
+use the correct word, `leave` for `do...loop` constructs
+and their variants, and `rdrop exit` for `for...next`
+constructs. You should never call `exit` from within a
+`for..next` or `do...loop` directly. `begin...again`,
+`begin...until` and `being...while...repeat` loops can
+be exited from with `exit`. All of these complications,
+whilst seemingly minor, contribute to the difficulty of
+programming Forth, the fact that the programmer has to
+select the right word for something so trivial and has
+to do the work of the compiler for it means that the Forth
+implementation can be simple.
+
+So far we have not seen anything really special, there
+have been hints here and there, but despite Forth having
+severe limitations and drawbacks it does have some 
+features, and not just its small size and simplicity of
+implementation. It has methods of introspecting itself and
+meta-programming capabilities that are seen rarely (mainly
+in LISP, which does a better job of it than Forth). We
+will eventually go on to those topics, for the moment Forth
+just seems like a weird imperative programming language
+with an odd syntax and an RPN interface. It will still
+seem like that after, but with some redeeming features.
+
+### Case Statements
+
+**In SUBLEQ eFORTH this construct is optional and will
+need to be enabled**.
+
+`if` statements can get quite unwieldy when more than
+one or two branches are requires, switch statements can
+help alleviate that problem. The words used to a case
+statement are as follows:
+
+* `case`
+* `of`
+* `endof`
+* `endcase`
+
+`case` starts the switch statement, and is naturally ended
+with `endcase`. 
+
+Example:
+
+	: ex
+	  case
+	    1 of ." one" endof
+	    2 of ." two" endof
+	    ." default"
+	  endcase ;
+
+**TODO**
 
 ### Conditional macros
 
@@ -1272,63 +1364,819 @@ within and outside of word definitions as they are
 immediate words, which will be discussed in the chapter
 on command and compile modes.
 
+Depending on how `(` is implemented in might not work
+over multiple lines, and it might require that that `)`
+be a single character, for example:
+
+	( This should work )
+	( This might not work)
+	(
+		This might not work.
+	)
+
+There are two reasons for this, `(` may be implemented so
+it parses words from the input stream, thus it looks for
+`)` and not `foo)`, secondly the implementation of `(`
+may not reload the input line. Forth input is line based,
+a line of text is input and then processed, if `(` does
+not call the appropriate function for reloading the line
+if it has not encountered a `)` then some implementations
+treat the end of line as a `)`.
+
+`\\` should work within Forth blocks, which are encountered
+later, where what a line of text is is slightly different.
+
+## Allocating memory
+
+One weakness of Forth is its lack of data structures, it
+is possible to create words that perform arbitrary 
+operations data structures, but that does not mean it is
+good or easy to do so, and apart from the dictionary and 
+the data stacks Forth has no real data-structures to speak 
+of.
+
+As mentioned, `@`, `!` can be used to load and store values
+to and from memory. `variable` can be used to create a new
+variable. We can see how much memory is allocated with the
+word `here`, this returns the amount of memory used by the
+dictionary. The dictionary is a linear array that grows
+when we define new words or allocate memory manually.
+
+The functions we define, the words, are located in the
+dictionary. Traditionally the dictionary is a linked list
+of words, and the names of the words are stored separately
+from the definitions of the words. More modern Forth
+implementations use hash tables for speed and some of the
+simpler Forth implementations store the word names next
+to the word code (SUBLEQ eFORTH uses a linked list and
+stores word names and code together). The idea of storing
+the names of the words separately from their definitions is
+so that the word names can be erased and the space 
+reclaimed if the application does not require the 
+interactive Forth shell to be present.
+
+We can allocate space in the dictionary with the word
+`,`. This stores a single cell into the dictionary. We
+can see this with the following:
+
+	variable x  ( used to store a pointer )
+	here x !    ( store the current position in x )
+	here .      ( display the current position )
+	99 ,        ( write `99` into the dictionary )
+	here .      ( display new dictionary position )
+	x @ @ .     ( retrieve `99` )
+
+On a 16-bit Forth `,` will write a 16-bit value into the
+dictionary. We can write bytes into the dictionary with
+`c,`, much like writing bytes with `c!` and loading them
+with `c@`. After using `c,` the dictionary pointer may not
+be aligned, you can use `align` to align up the dictionary
+pointer on your platform.
+
+To allocate many bytes in the dictionary `allocate` can
+be used. `char` is used to get the value of a character
+(it actually parses a word and gets the value of the first
+byte of that word), `count` is used to retrieve the byte
+count in the string we are creating and returns the rest
+of that string, `type` displays that string.
+
+	here 6 allot align constant hi
+	5 hi c!
+	char H hi 1 + c!
+	char e hi 2 + c!
+	char l hi 3 + c!
+	char l hi 4 + c!
+	char o hi 5 + c!
+	hi count type cr
+
+It would have been simpler to type this as:
+
+	here
+	5 c,
+	char H c,
+	char e c,
+	char l c,
+	char l c,
+	char o c,
+	align
+	constant hi
+	hi count type cr
+
+We must be sure to align the dictionary pointer after
+using `c,`. 
+
+`cell` can be used to get the size of a single cell, it
+will be 2 on a 16-bit platform. `cells` can be used to
+calculate the number of bytes needed to store N cells.
+
+	1 cell .
+	here .
+	2 cells allot
+	here .
+
+`aligned` is like `align` except it accepts a pointer and
+does not operate on the dictionary pointer like `align`
+does:
+
+	here .
+	1 c,
+	here .
+	align
+	here .
+	0 aligned .
+	1 aligned .
+	7 aligned .
+	2 aligned .
+	4 aligned .
+	8 aligned .
+
+`allocate`, `free` and `resize` are used to manage memory
+allocated on the heap. SUBLEQ eFORTH has this as an 
+optional extra that must be enabled (and has only a small
+1KiB heap). The words are roughly analogous to `malloc`, 
+`free`, and `realloc` from C. 
+
+The stack effects for these words are:
+
+* `allocate` ( u -- a ior : allocate memory )
+* `free` ( a -- ior : free memory )
+* `resize` ( a u -- a ior : resize allocated pointer )
+
+`free` and `resize` must only be called on pointers 
+allocated by `allocate`. These functions return an `ior`,
+and Input/Output error, if it is non-zero an error has
+occurred (such as we have ran out of space). It is up to
+the user to balance allocations and freeing the returned
+memory.
+
+These words are not often used and in smaller Forth
+implementations might not even be present. If you find
+yourself needing them it is a sign that you are either
+doing things wrong, or trying to solve a problem which is
+not suited to Forth (which is more likely).
+
+### Execution Tokens, Hooks
+
+An execution token is the Forth terminology for a
+function pointer. It is possible to get the execution token
+from a word with the word `'`, this can then be executed
+with the word `execute`. For example:
+
+	2 2 ' + execute .
+
+Is equivalent to:
+
+	2 2 + .
+
+It is possible to store an execution token in a variable:
+
+	variable <op>
+	: op <op> @ execute ;
+	' + <op> !
+	2 2 op .
+
+`<op>` is known as a hook, a variable used to store an
+execution token so that functionality can be changed at a
+later date, by convention hooks are sometimes bracketed
+with `<` and `>` to differentiate them from ordinary
+variables, with the word that performs the action, `op` in
+this case, being the normal version without brackets. `op`
+could perform a NULL check if needed.
+
+Forth philosophy dictates that hooks are to be avoided,
+instead you are meant to change the code to do what needs
+to be done specifically. This is a poor way of doing things
+when it comes to Forth implementations that are meant to be
+used by other people, they often do not want to modify the
+behavior of the base system, and providing a hook is not
+always about deferring work but can add new functionality
+(such as the ability to take input from different sources
+as the need arises).
+
+Typical system callbacks include:
+
+* `<key>`: Called by `key`, this allows the user to control
+where input is taken from, for example you might want to
+take input from a file, but then restore the system to
+take input from the keyboard.
+* `<emit>`: Called by `emit`, this allows the user to
+control where output goes to.
+* `<cold>`: A word executed at or near when the Forth
+interpreter boots. Forth does not have a standard way of
+creating stand alone Forth executables, a weakness of the
+Forth ecosystem (along with poor library support and other
+problems), some Forth implementations at least allow an
+execution vector to be changed so the starting word to be
+executed is changed, booting into a user application 
+instead of the usual Forth command line.
+* `<literal>`: Useful for meta-compilation, this allows
+the user to determine what happens with numbers when the
+Forth interpreter encounters them, for example they could
+define a function that compiles the numbers into a target
+memory location during cross-compilation instead of 
+compiling them into the hosts word definitions.
+
+These are not standard and not likely to be defined, or
+if they are, they might have different names. 
+
+The above hooks are defined in the `system` vocabulary in
+SUBLEQ eFORTH, which can be loaded with `system +order`,
+they are kept in the system vocabulary as they are non
+standard words.
+
 ### Defining `min` and `max`
 
 This chapter contains multiple definitions of the same
 words, done in different styles and for different reasons,
 mainly for the purposes of micro optimizations which may
 not be relevant for what you are doing or for the platform
-you are on.
+you are on. However if you are programming in Forth then
+for the type of situations Forth is good at, these type
+of considerations and optimizations matter.
 
-**TODO** check these.
-
-	: min 2dup > if swap then drop ;
-	: max 2dup < if swap then drop ;
-
-	: min 2dup > if drop exit then nip ;
-	: max 2dup < if drop exit then nip ;
+This is the slightly less optimal of defining `min` and
+`max`.
 
 	: min 2dup > if drop else nip then ;
 	: max 2dup < if drop else nip then ;
 
+The code for `min` this might look like this:
+
+	X: `min` WORD HEADER
+	0: call: 2dup
+	1: call: >
+	2: jump if zero to 5
+	3: call: drop
+	4: jump to 6
+	5: call: nip
+	6: exit
+
+The following:
+
+	: min 2dup > if swap then drop ;
+	: max 2dup < if swap then drop ;
+
+Like this:
+
+	X: `min` WORD HEADER
+	0: call: 2dup
+	1: call: >
+	2: jump if zero to 4
+	3: call: swap
+	4: call: drop
+	5: exit
+
+Which is slightly smaller.
+
+The following is slightly small *on some platforms*, such
+as the Forth available at 
+<https://github.com/howerj/forth-cpu>. This Forth executes
+on a CPU designed for the language, called the H2, it can 
+execute some primitives in a single cycle. The cross 
+compiler can also merge exits into some primitive 
+constructs with a simple peep hole optimizer.
+
+	: min 2dup > if drop exit then nip ;
+	: max 2dup < if drop exit then nip ;
+
+What is:
+
+	X: `min` WORD HEADER
+	0: call: 2dup
+	1: call: >
+	2: jump if zero to 5
+	3: call: drop
+	4: exit
+	5: call: nip
+	6: exit
+
+On some platforms, becomes:
+
+	X: `min` WORD HEADER
+	0: call: 2dup
+	1: call: >
+	2: jump if zero to 4
+	3: drop instruction + exit
+	4: nip instruction + exit
+
+This is smaller and faster.
+
+SUBLEQ eFORTH has `mux` available as a relatively fast
+assembly routine, we have already seen its definition. It
+can be used like so:
+
 	: min 2dup > mux ;
 	: max 2dup < mux ;
+
+And given `mux` already exists it is the smallest of the
+definitions.
+
+If branching is particularly expensive it is possible to
+perform both `min` and `max` without branching another
+way, in fact it also does not use the comparison operators
+either. It might be best to inline the code on your 
+platform:
 
 	\ equivalent 32-bit C, needs arithmetic right shift
 	\ return b + ((a-b) & (a-b)>>31); /* min */
 	\ return a - ((a-b) & (a-b)>>31); /* max */
-	: high? $8000 and 0<> ;
+	1 cells 8 * constant #bits
+	1 #bits 1- lshift constant #high
+	: high? #high and 0<> ;
 	: min 2dup nip - dup high? and + ;
 	: max 2dup drop swap - dup high? and - ;
 	\ 16-bit `high?` without using `and`:
-	: high? $8000 + 0>= ;
+	: high? #high + 0>= ;
+
+Usually one would not have to concern oneself with such
+micro optimizations as the compiler would take care of 
+them, even having options to select code generation for
+the smallest or alternatively the fastest code. Forth
+implementations are usually quite primitive, so the
+programmer often has to play the part of the compiler.
 
 ## Command Mode and Compile Mode
 
-### Defining new words
+The Forth interpreter has two modes of operation, command
+mode and compile mode. In command mode all words are 
+executed and numbers are pushed to the data stack. In
+compile mode words are compiled unless they are immediate,
+immediate words are instead executed, and numbers are
+compiled into the word definition. When the Forth 
+interpreter searches for a word, if it is not found, an
+attempt is made to treat it is a number, only if that fails
+is an error raised.
 
+You have encountered immediate words before hand, words
+such as `(`, `if`, `for`, `loop`, and even `;`. Some
+immediate words have behavior for both command and compile
+mode, such as `(`, others will not work in command mode
+such as `if` (as `if` is not only marked as being 
+*immediate* it is also marked as being *compile-only*). 
 
-## Allocating memory
+Your Forth implementation may not do such error checking.
 
-TODO: 
+Note that `:` is not an immediate word, but `;` is. You
+should only make a word immediate if it needs to be. 
 
-* , here @ ! allocate free allot 
+Let us look at two lines of Forth code. If we are in 
+command mode then the following code:
+
+	2 2 + . cr
+
+Does the obvious. After we enter this line of text and hit
+enter, the Forth interpreter parses each word from left to
+right. It first encounters `2`, it checks if this is a
+defined word and it is not (at least not be default), so
+it then tries to convert it as a number in the current
+base, it succeeds, the interpreter then checks if we are
+in compile or command mode, as we are in command mode it
+then pushes the word to the data stack. It repeats this
+for the next `2`, and when it gets to `+` it does the same
+except this is a defined word, the interpreter then 
+executes this word, and does the same for `.` and `cr`.
+A full line of text is processed without error so an `ok` 
+is printed, as we are in command mode.
+
+For the second line, we start in command mode, and the
+first word we encounter is `:`, this word is executed as
+we are in command mode. `:` parses the next word in the
+input stream, creates a header for that word in the
+dictionary but does not link it in, and then switches the
+interpreter to compile mode. In compile mode if we
+encounter a `2` it is instead compiled into the dictionary
+so that when the word `example` is run it pushes `2` onto
+the data stack, the same is done for the second `2`, and
+for the word `+`, `.`, and `cr`. Those last three words
+are all not immediate words, so they are compiled in. The
+final word, `;`, is an immediate word. When the interpreter
+encounters an immediate word it is instead executed
+regardless of what mode the interpreter is in. This word
+links the word `example` into the dictionary so it can
+be seen by the rest of the system (the linking only happens
+at this step both to stop the word being linked in if there
+is an error defining the word, and also so that any
+previous definitions of `example` if they exist could be
+called from the new one). `;` also compiles an `exit`
+into the word being defined and lastly it switches the
+interpreter back into command mode.
+
+	: example 2 2 + . cr ;
+
+If `;` was not immediate it would not be able to break
+out of the compile mode. It needs to be executed instead of
+compiled into the code.
+
+Of note, if we instead typed in:
+
+	: example
+	  2 2
+	  +
+	  .
+	  cr
+	;
+
+The usual `ok` prompt disappears, and returns when `;`
+is entered. This is normal behavior, when in compile mode
+the `ok` prompt is turned off, some Forth implementations
+instead change the prompt to print `compiled` instead.
+
+In our `example` word the compiled code will looks 
+something akin to this:
+
+	X: `example` word header
+	0: Push 2
+	1: Push 2
+	2: Call `+`
+	3: Call `.`
+	4: Call `cr`
+	5: Exit
+
+We could make this slightly more efficient by calculating
+the result of `2 + 2` and instead printing this out, it
+would become:
+
+	: example 4 . cr ;
+
+And the code would look like this:
+
+	X: `example` word header
+	0: Push 4
+	1: Call `+`
+	2: Call `.`
+	3: Call `cr`
+	4: Exit
+
+It is smaller and will run faster.
+
+This trivial, contrived, example shows a fundamental
+facet of Forth - you are expected to perform the role of
+the compiler. Even the simplest compilers for a language
+like C will partially evaluate expressions at compile time
+and compile those results instead. The simplicity of Forth
+is extreme.
+
+For an expression like `2 + 2`, we would write `4` down
+ourselves, but there are more complex expressions that
+we might want to evaluate and compile in, ones in which
+we do not want to calculate the results by hand but we
+do want the result to be compiled in as it can be 
+determined ahead of time. We will continue to use our
+trivial example, but there are real world examples of
+wanted to calculate tables programmatically at compile time
+(such as CORDIC, CRC tables, and even sine and cosine 
+tables).
+
+We could do the following:
+
+	2 2 + constant four
+	: example four . cr ;
+
+However the constant `four` takes up space in the
+dictionary, space we might not want to use up, especially
+if this constant only requires being defined once.
+
+We know `,` can write numbers into the dictionary, but that
+is not the same as compiling a literal, and besides, `,`
+when called within `example` will compile a call to `,` and
+not write the value we want into the dictionary.
+
+Instead we need a way of switching back into command mode
+whilst in the middle of a word definition. We know `;` that
+is an immediate word that will switch back into command
+mode, however it will also terminate a word definition, so
+we cannot call it. Instead there are two words defined
+expressly for this purpose, called `[` and `]`, `[` is
+an immediate word whose only purpose is to switch the
+interpreter back into command mode. `]` switches the 
+interpreter back into compile mode, it is not an immediate
+word as it does not need to be.
+
+However, the following code **will not** work:
+
+	2 2 +
+	: example [ , ] . cr ;
+
+For one reason already mentioned, `,` writes a value into
+the dictionary, however when the Forth system executes that
+`2` will not be a valid instruction. Instead we must 
+compile a literal instead of writing one. `literal` can
+do this, but there is another problem. The data stack is
+used by the Forth compiler. `:` may push an arbitrary 
+number of values to the data stack and `;` may check or
+use these values. This means our `4` could be anywhere on
+the data stack. Instead we need to do the following:
+
+	: example [ 2 2 + ] literal . cr ;
+
+Note that `literal` is outside of the `[` and `]` brackets,
+this is because `literal` is an immediate word that
+examines the interpreter state, if we are compile mode
+`literal` compiles a value into the dictionary, in command
+mode it leaves it there. If we run this version of 
+`example` we get what we want.
+
+`:` and `;` both use the data stack for their own purposes,
+the data stack does not go away just because we in compile
+mode, and we can still run Forth words in compile mode,
+any Forth word, so long as it is immediate. This allows
+us to create immediate words that act as control 
+structures, `if`, `else`, `then`, `begin`, `until`, `for`,
+and the like are all immediate words, they also all push,
+consume or manipulate words on the data stack at compile
+time.
+
+`if` when called compiles a `branch if zero` instruction
+into the dictionary, it does not have the target location
+to jump yet, so it compile a "hole" after the jump (or
+as part of it), the location of this "hole" is then pushed
+onto the data stack. When `else` or `then` is called this
+"hole" is written to with the correct location to jump
+to. All of the control structures do something similar.
+
+You may wonder what stops us from calling and `if` without
+a `then`, and this is done with a notion called "compiler
+security" in Forth. `if` not only pushes a location to
+write to, but it also pushes a value which is checked for
+by the loop or branch construct terminating word, `:`
+and `;` will do something similar, if the right value is
+not found then an error is raised. This allows us to
+do some very simple syntax checking. Your Forth 
+implementation may or may not implement compiler security
+features.
+
+It is possible to compile an immediate word into the
+dictionary, this is often useful when we want to define
+our own conditional statements. The word `postpone` can
+be used, it is an immediate word that acts on words and
+compiles them into the dictionary, as it is an immediate
+word and is executed before the next word, whether the
+next word is immediate or not does not matter, it will
+take that word and compile it into the dictionary. The
+word `compile` can be used on non-immediate words. The
+word `immediate` is used after a word definition to make
+the word just defined immediate. Using all this, try to
+understand what is happening with the following:
+
+	: -if compile 0< postpone if ; immediate 
+	compile-only
+	: test -if cr ." NEGATIVE" then ;
+	0 test
+	1 test
+	-1 test
+
+`compile-only` may not be present in your Forth, if it is
+then it will make sure that `-if` can only be used within
+a word definition.
+
+The state of the compiler is stored in the variable
+called `state`, it can be written to manipulate the
+compiler state or read from. A non zero value indicates
+we are in compile mode, and a zero indicates we are in
+compile mode.
+
+### Parsing Words: Defining new words
+
+**TODO**
 
 ## Pictured Numeric Output
 
-TODO:
+**TODO:**
 
 * Numeric input vs output
+* `base` and `dump`
 
 ## Recursion
 
+**TODO**
+
 ## Double Word Set
 
-## CREATE and DOES>
+Double cell numbers, called doubles in Forth, have already
+been mentioned. Each double cell number occupies two slots
+on the data stack, hence the name. They are not related to
+floating point numbers.
+
+**Note that in SUBLEQ eFORTH many of these words are
+not defined.** Instead they appear in an appendix of the
+book and can be entered in if needed.
+
+To enter a double cell number we enter it by point a 
+decimal point in the number. To check if the number just
+entered was a single or double cell number the variable
+`dpl` can be checked (it is set to -1 after to converting
+a single cell number and it set to zero or more to indicate
+the position of the decimal point if a double cell number
+was entered):
+
+	2 dpl @ .s 2drop
+	2.1 dpl @ .s drop 2drop
+	20.1 dpl @ .s drop 2drop
+
+We can convert to and from double and single cell integers
+with the following words:
+
+* `s>d` ( n -- d : convert signed cell to double cell )
+* `d>s` ( d -- n : convert double cell to single cell )
+
+`d>s` may cause information to be lost as a single cell
+can only represent a subset of numbers possible in a
+double cell integer.
+
+`u>d` and `u>ud` are not usually needed, if you need to
+convert an unsigned number to a signed or unsigned double
+cell integer you can just push a `0` after the number, as
+the high portion of the double cell integer is stored on
+the topmost stack location.
+
+The words for manipulating them are as follows:
+
+* `d+` ( d d -- d : double cell add )
+* `d-` ( d d -- d : double cell subtract )
+* `dnegate` ( d -- d )
+* `dlshift`, `drshift` ( d u -- d )
+* `d2*`, `d2/` ( d -- d )
+* `dabs` ( d -- ud )
+* `d>`, `d<`, `d<=`, `d>=`, `d=`, `d<>` ( d d -- f )
+* `ud>`, `ud<`, `ud<=`, `ud>=` ( ud ud -- f )
+* `d0<`, `d0>`, `d0>=`, `d0<=`, `d0=`, `d0<>`. ( d -- f )
+* `dmin`, `dmax`
+
+It is common to not define all of these words but only
+a subset needed to get the base interpreter working. This
+is done for space reasons. The words `2drop`, `2nip`, 
+`2swap` and the like are used with these double cell
+numbers to move them around the data stack.
+
+If your system defines `d=` it may not define `ud=` as they
+are equivalent words (at least where twos compliment
+arithmetic is used).
+
+* `d.` ( d -- : display a double cell number )
+* `ud.` ( ud -- : display a unsigned double cell number )
+* `d.r` ( ud +n -- : show double with +n leading spaces )
+* `ud.r` ( d +n -- : show unsigned double with +n spaces )
+
+`2.` is not the same as any of the above words if it is
+defined, instead it will display two single cell words
+one after the other.
+
+These words operate on mixed quantities an either consume
+or produce double cell numbers:
+
+* `um+` ( u u -- ud )
+* `um*` ( u u -- ud )
+* `um/mod` ( ud u -- ur uq )
+* `m/mod` ( d n -- r q )
+* `m*` ( n n -- d )
+* `*/` ( n n n -- q )
+* `*/mod` ( n n n -- r q )
+
+**TODO**
+
+* Talk about fixed point
+
+## `create` and `does>`
+
+`create` and `does>` have been called the jewels of Forth,
+is it perhaps because you have to sift through a large 
+amount waste to get to them. Perhaps a better analogy would
+be that they are like undigested corn.
+
+Anyway...
+
+`create` and `does>` can be used to make words that create
+news, a quote from Nietzsche would be appropriate right
+about now. Here it is:
+
+"Companions the creator seeks. Not corpses, not herds and
+believers. Fellow creators the creator seeks, those who
+write new values on new tablets."
+
+With `create` and `does>` you too can become the 
+Uebermensch, or at least create a class of new words called
+"defining words". We have seen them before with the words
+`:`, `variable` and `constant`. Defining words can be
+immediate, but they do not have to be, many are not.
+
+We can define `variable` and `constant` if they are
+lacking on your system like so:
+
+	: constant create , does> @ ;
+	: variable create 0 , does> ;
+
+`create` makes a new word and links it into the dictionary,
+by default a word made by `create` just returns a pointer
+to the dictionary after the definition of said word. 
+`does>` changes the behavior a created word, the code after
+`does>` runs in the created word and not in the current
+definition, it is still passed the address of the data 
+after the created word. The code in between `create` and
+`does>` runs after the word is created but is not part
+of the newly defined word.
+
+Words created with `does>` do have some strange behaviors
+such as:
+
+	: hello does> ." Hello" does> ." Good bye" ;
+	hello
+	hello
+	hello
+	hello
+
+This is not portable (`does>` should only be run on a
+created word), so you might need to do this:
+
+	: test create does> ." Hello" does> ." Good bye" ;
+	test hello
+	hello
+	hello
+	hello
+	hello
+
+The internals of how these work are not relevant (and are
+instead explained in book "SUBLEQ eFORTH: Forth 
+Metacompilation for a SUBLEQ Machine".
 
 ### Forth data structures
 
+It is clear with the new constructs that new data 
+structure words can be made, but it is unclear just how
+that should be done. `variable` creates new variables, a
+simple data structure, much like `constant`. We can use
+these words to create arrays, structures and enumerations,
+which will be a little more awkward to use than their C
+counterparts but still do work.
+
+Using `create` directly and then `allot` we an allocate
+and name sections of memory:
+
+	create arr1 20 cells allot
+	arr1 20 cells blank ( will array with spaces )
+	arr1 20 cells dump ( dump cells )
+
+Notice that we have to keep track of the size of the
+array. Instead we could create our own array word that
+returns the array size, as well as zeroing the array.
+
+	: array create dup , here over allot swap erase
+	  does> dup @ swap cell+ swap ;
+	20 cells array arr2
+	arr2 .s 2drop
+	arr2 dump
+	arr2 blank
+	arr2 dump
+
+Perhaps instead we want to create a lookup table from
+some data:
+
+	: lookup create dup , 1- for , next
+	  does> dup >r @ mod cells r> + cell+ @ ;
+	10 8 6 4 2 5 lookup dubs
+	0 dubs .
+	1 dubs .
+	2 dubs .
+	3 dubs .
+	4 dubs .
+	5 dubs .
+
+Note that the data is entered backwards. There are a number
+of conditions that could be tested for, potential errors,
+for example when creating the lookup table negative numbers
+are not checked for. When the lookup function is running
+`mod` is used to limit the index, this will fail if the
+table is of zero length. `mod` might also not be the 
+desired functionality, we might want to instead check that
+the index is within bounds and if it is not we could 
+instead throw an error. It is entirely up to you and your
+requirements.
+
+If we wanted to create a lookup table in which we could
+modify the entries we could just remove the final `@`
+before `;`. If we wanted a table of function pointers
+that get executed we could instead call `execute` after
+the `@` but before `;`.
+
+The function we have created is not generic, although it
+will work if we want to store execution tokens or pointers
+(as they must fit in a single cell) it will not work if we 
+want to store double cell numbers, floating point numbers, 
+or if we want to store characters, we would need to make a 
+function specific to those types.
+
+**TODO**
+
 ## USER words and cooperative multithreading
+
+**TODO:**
+
+* Mention `key?`
+
+## Locals
+
+**TODO:**
+
+Do not bother.
 
 ## Block Word Set
 
@@ -1336,11 +2184,13 @@ TODO:
 
 ## Vocabulary Words
 
-TODO:
+**TODO:**
 
 * extended words, +order, -order, (order)
 * Forth storage of dictionary, storing headers with word
 definitions or separately.
+
+## Meta Compilation: Forth Cross Compilation in Forth
 
 ## SUBLEQ eFORTH defined words
 

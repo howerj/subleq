@@ -721,6 +721,7 @@ only forth definitions hex
 0 constant opt.optimize   ( Enable extra optimization )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
 1 constant opt.self       ( Enable self-interpreter )
+0 constant opt.buggy-comp ( Enable broken comparison operator )
 
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
@@ -2435,7 +2436,7 @@ label: self-loop
 \ Reset "Z" and "A" register locations.
   0 tzreg !
   1 tareg !
-[then]
+[then] ( opt.self )
 
 
 assembler.1 -order
@@ -4360,21 +4361,31 @@ system[
 \ speed up the interpreter noticeably at the sacrifice of some 
 \ size.
 \
+
+opt.buggy-comp [if] ( just for testing purposes )
+: < - ?dup if leq0 0<> exit then #0 ;
+: > swap < ; ( n1 n2 -- f : signed greater than )
+( This following is more broken than the code above, which is )
+( also broken. )
+( : > - 0> ; )
+( : < swap > ; )
+[else] ( working `<`: )
 : < ( n1 n2 -- f : less than, is n1 less than n2 )
-   2dup leq0 swap leq0 if
-     if
-       2dup 1+ leq0 swap 1+ leq0
-       if drop else if 2drop #0 exit then then
-     else 2drop #-1 exit then \ a0 && !b0
-   else
-     if 2drop #0 exit then \ !a0 && b0
-   then
-   2dup - leq0 if
-     swap 1+ swap - leq0 if #-1 exit then
-     #0 exit
-   then
-   2drop #0 ;
+  2dup leq0 swap leq0 if
+    if
+      2dup 1+ leq0 swap 1+ leq0
+      if drop else if 2drop #0 exit then then
+    else 2drop #-1 exit then \ a0 && !b0
+  else
+    if 2drop #0 exit then \ !a0 && b0
+  then
+  2dup - leq0 if
+    swap 1+ swap - leq0 if #-1 exit then
+    #0 exit
+  then
+  2drop #0 ;
 : > swap < ;   ( n1 n2 -- f : signed greater than )
+[then]
 
 : 0< #0 < ;   ( n -- f : less than zero )
 : 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
@@ -9211,7 +9222,7 @@ opt.control [if]
 :s (j) [ $4 ] literal rpick ;s compile-only
 :s (k) [ $7 ] literal rpick ;s compile-only
 :s (do) r> dup >r swap rot >r >r r+ >r ;s compile-only
-:s (?do)
+:s (?do) \ BUG: equal numbers cause return failure
    2dup <> if
      r> dup >r swap rot >r >r r+ >r exit
    then 2drop ;s compile-only
@@ -9533,7 +9544,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 : free freelist (free) ; ( ptr -- ior )
 : resize freelist (resize) ; ( ptr u -- ptr ior )
 
-[then]
+[then] ( opt.allocate )
 
 opt.float [if] ( Large section of optional code! )
 
@@ -10247,7 +10258,7 @@ opt.glossary [if]
 
 : glossary get-order for aft .voc @ (w) then next ; ( -- )
 
-[then]
+[then] ( opt.glossary )
 
 
 \ # Last word defined
@@ -12825,21 +12836,21 @@ variable seed here seed !
 \ needed.
 : d>s drop ; ( d -- n : convert dubs to single )
 : dabs s>d if dnegate then ; ( d -- ud )
-: d- dnegate d+ ; ( d d -- d )
-: d< rot 2dup >                    ( d -- f )
+: d- dnegate d+ ;  ( d d -- d )
+: d< rot 2dup >    ( d -- f )
    if = nip nip if 0 exit then -1 exit then
    2drop u< ;
-: d>= d< invert ;            ( d -- f )
-: d>  2swap d< ;             ( d -- f )
-: d<= d> invert ;            ( d -- f )
-: d0< nip 0< ; ( d -- f )
-: d0>= d0< 0= ; ( d -- f )
-: d0= or 0= ;                ( d -- f )
-: d0<> d0= 0= ;              ( d -- f )
+: d>= d< invert ;  ( d -- f )
+: d>  2swap d< ;   ( d -- f )
+: d<= d> invert ;  ( d -- f )
+: d0< nip 0< ;     ( d -- f )
+: d0>= d0< 0= ;    ( d -- f )
+: d0= or 0= ;      ( d -- f )
+: d0<> d0= 0= ;    ( d -- f )
 : du<  rot swap u< if 2drop #-1 exit then u< ; ( ud ud -- f )
-: du> 2swap du< ; ( ud -- t )
+: du> 2swap du< ;  ( ud -- t )
 : d=  rot = -rot = and ; ( d d -- f )
-: d<> d= 0= ;                ( d d -- f )
+: d<> d= 0= ;      ( d d -- f )
 : dmax 2over 2over d< if 2swap then 2drop ; ( d1 d2 -- d )
 : dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
 : d.r >r tuck dabs <# #s rot sign #> r> over - bl banner type ;
