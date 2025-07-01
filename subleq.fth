@@ -789,7 +789,7 @@ defined [unless] 0= [if]
 \
 
 defined eforth [if]
-  : wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
+  : wordlist here 0 , ; ( -- wid : alloc wid )
 [then]
 
 \ We then define the following wordlists, "meta.1" is used for
@@ -4559,8 +4559,6 @@ opt.buggy-comp [if] ( just for testing purposes )
 \ on successful reception of a character in either
 \ implementation.
 \
-\ "key?" does not call "pause" either.
-\
 \ Note that "key?" does not call a VM primitive to perform
 \ an input operation, it instead performs a load from a
 \ special address that triggers an input (*sort of* like
@@ -4597,6 +4595,10 @@ opt.buggy-comp [if] ( just for testing purposes )
 \ allowing you to directly take input from another input
 \ source, say a string, or a new peripheral you have added
 \ to the SUBLEQ machine.
+\
+\ "key" does not call "pause", this is so that the user can
+\ set whatever policy they want when it comes to how often
+\ "pause" is called by changing the callback passed to "key".
 \
 
 : key begin <key> @execute until ; ( -- c )

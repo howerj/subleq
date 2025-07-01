@@ -1948,7 +1948,45 @@ compile mode.
 
 ## Recursion
 
-**TODO**
+Recursion has to be handled with a special word called
+`recurse` in Forth. You cannot call a function within
+the function definition as the definition has not yet been
+linked into the dictionary (at least not in standard Forth
+implementations). If you attempt to do this then the
+function will either not be found, leading to an error
+being raise or if there is a previous definition with the
+same name then that version will be called instead.
+
+	: x x ; ( fails if `x` is not defined )
+	
+	: y cr ." executing first y" ; 
+	: y cr ." new y" y ;
+	y
+
+You may get a warning that `y` has been redefined, one of
+the few warnings that Forth may issue.
+
+Instead, to perform recursion, call `recurse`:
+
+	: z ?dup if 1- dup . recurse then ;
+	10 z
+	1 z
+	0 z
+
+If you call `z` with a high value it may cause problems,
+each call to `recurse` uses space on the return stack,
+which only has a finite amount of space, the amount of
+which is defined by the platform, it can be quite limited.
+
+On some platforms the following will replace the recursion
+with a jump to be beginning of the world:
+
+	: z ?dup if 1- dup . recurse exit then ;
+
+(This is not the case in SUBLEQ eFORTH). This optimization
+turns the recursion into a tail call, which means that no
+extra space is used on the return stack as the call is
+replaced with a jump.
 
 ## Double Word Set
 
@@ -2000,7 +2038,7 @@ The words for manipulating them are as follows:
 * `d>`, `d<`, `d<=`, `d>=`, `d=`, `d<>` ( d d -- f )
 * `ud>`, `ud<`, `ud<=`, `ud>=` ( ud ud -- f )
 * `d0<`, `d0>`, `d0>=`, `d0<=`, `d0=`, `d0<>`. ( d -- f )
-* `dmin`, `dmax`
+* `dmin`, `dmax`, ( d d -- d )
 
 It is common to not define all of these words but only
 a subset needed to get the base interpreter working. This
@@ -2168,9 +2206,141 @@ function specific to those types.
 
 ## USER words and cooperative multithreading
 
-**TODO:**
+Forth, whilst a programming language, often took the place
+of a primitive operating system. This was the case for many
+microcomputers in the 1980s, albeit BASIC was far more
+common. This meant that it was the responsibility of the
+Forth implementation to abstract over the resources the
+machine provided, much like a more traditional operating
+system. Forth provides simple ways to do this, the BLOCK
+word set, shown in a different chapter, abstracts over
+mass storage, `key` and `emit` hide user input and output
+routines, and the USER routines and mechanisms allow
+cooperative multithreading.
+
+Cooperative multithreading has advantages and 
+disadvantages, it is simple to implement and easier to
+get right, but any single thread can block progress of the
+entire system, potentially locking it up. It is possible
+to use different threading schemes together, but that will
+not be covered here. No timer is needed, nor interrupts,
+in a Cooperative multithreading model.
+
+Modern multitasking systems, such as those used by Unix
+kernels, are preemptive. A timer interrupt is setup to
+fire after a set period after a thread is run, once the
+timer fires the kernel, which the interrupt jumps to, 
+decides on what task should be run, often with a very
+complex algorithm to determine fairness, responsiveness,
+and throughput. Multiple threads can run within the same
+program, and often on modern CPUs threads can be moved
+between cores, and threads within the same program may
+run on different cores. This presents several problems
+that must be solved, any instruction may be interrupted and
+race conditions and corruption can abound if not carefully
+prevented and managed.
+
+Unfortunately the words described in this system are
+non-standard, many of the newer Forth implementations do
+not define the words described in this section, nor their
+equivalents. This is due to the fact that many of the newer
+Forth implementations are hosted, and written in C, or
+they target a Virtual Machine designed to run in a hosted
+environment, the main purposes of these newer interpreters
+is as a playground, not to write new Forth programs in but
+to learn how to make a Forth. This is not a criticism, but
+an observation and an opinion. You only need multithreading
+when interacting with real word systems, thus making these
+words more common in embedded Forth systems designed to
+run on micro controllers, or historical Forth 
+implementations.
+
+There are three key mechanisms, USER variables, `pause` and
+the ability to create and manage tasks. There are some 
+words used to communicate between threads, passing messages
+back and Forth between threads, but they are not key to
+understanding multitasking.
+
+The multitasking system in SUBLEQ eFORTH is based off of 
+the one described in this paper:
+
+<https://www.bradrodriguez.com/papers/mtasking.html>,
+"Forth Multitasking in a Nutshell", by Brad Rodriguez,
+September 1992.
+
+What is multitasking? It is the ability to partition the
+a CPU so multiple programs can run on it, seemingly at
+the same time, even when there is only one CPU core. If
+we have only one CPU core, naturally only one program can
+run on that core, however we can pause that program, run
+another, then restore it at a later time. This can happen
+hundreds of times per second, giving the illusion that
+both programs are running at the same time.
+
+We may also want to manage tasks, activating them, or
+pausing them whilst they wait for input, output or other
+facilities to become available, a thread containing the
+Forth interpreter does not need to run if there is no
+input to process as an example.
+
+Each program executing is known as a thread, a thread of
+execution, In SUBLEQ eFORTH there is at least one thread 
+defined, the starting thread which begins executing the
+interpreter loop. In SUBLEQ eFORTH each task is 1KiB in
+size and contains both variable and return stack, a parse
+buffer, saved registers for the virtual machine, and 
+various USER variables. 
+
+USER variables are thread local storage, each USER variable
+is an index into this stack space. All variables declared
+by `variable` are global, and exist in a global shared
+space, `user` is used to declare a thread local variable.
+As space is limited in each task it is wise to declare
+`user` variables only as needed, or not at all.
+
+We have encountered various USER variables before, although
+they were not introduced as such, `base`, `hld`, `dpl` and
+`state` are user variables, as well many of the variables
+used as hooks. They are defined as USER variables so that 
+different threads can change those variables without
+affecting the other threads (for example, you might want
+to print something out in one thread in hexadecimal, but
+keep the interpreter thread in decimal).
+
+The core word of the multitasking system is called `pause`,
+this word saves the virtual machine state to the currently
+executing thread, then loads the registers for the next 
+thread in the linked list of threads to execute, after
+doing so it resumes the execution of the next thread.
+`pause` pauses the current thread and loads the next one,
+if there is only one thread it does nothing, and if
+multitasking is disabled, it does nothing.
+
+`pause` is called by various words within the SUBLEQ
+eFORTH interpreter, such as `key`, `ms`, `emit`, and
+`block`, all of which are either input/output operations
+or potentially long running operations.
+
+Despite these calls the programmer who wishes to use
+multiple threads must arrange themselves to call `pause`
+in their own threads if these operations are not called
+frequently enough. A balancing act must be reached between
+calling `pause` too little and too much, there is no
+fancy scheduler, all scheduling is done manually. Calling
+`pause` is not free, it is an expensive operation and the
+more it is called the more responsive the system can be
+(each thread will be serviced more frequently) but the 
+less work will get done (more time will be spent running
+the code in `pause`).
+
+
+**TODO**
 
 * Mention `key?`
+* Examples
+* H2 interrupts
+
+### Interrupts in H2 Forth
 
 ## Locals
 
@@ -2184,11 +2354,172 @@ Do not bother.
 
 ## Vocabulary Words
 
+The vocabulary word set is often ignored in Forth 
+implementations, and too many Forth implementations pollute
+the default search order with too many words. SUBLEQ
+eFORTH makes an attempt to keep the non-standard words
+in separate vocabularies, only leaving a few words that
+are non-standard in the default vocabulary.
+
+The vocabulary word set offers a way to make modules,
+and also aids greatly when making cross compilers written
+in Forth.
+
+These words are commonly defined, although non-standard:
+
+* `+order`: Add a vocabulary to the top of the search
+order if it is not in the search order.
+* `-order`: Remove a vocabulary from the top of the search
+order if it is in the search order.
+* `(order)`: A factor of `-order`.
+
+If they are not then you can use the following:
+
+	: (order) ( w wid*n n -- wid*n w n )
+	  dup if
+	    1- swap >r recurse over r@ xor
+	    if 1+ r> -rot exit then rdrop
+	  then ;
+	: -order get-order ( wid -- )
+	  (order) nip set-order ; 
+	: +order dup >r -order  ( wid -- )
+	  get-order r> swap 1+ set-order ;
+
+The standard words for manipulating vocabularies, `also`
+and `previous`, are simplistic and poor for their purpose.
+They are so poor that despite being standard words, and
+the non-order words are non-standard, `also` and `previous`
+are not defined in SUBLEQ eFORTH, whilst `+order` and
+`-order` are defined.
+
+* `wordlist`: This word is used in conjunction with
+`constant` to create a named wordlist. It reserves enough
+space in the dictionary for the word list and returns a
+pointer to it.
+* `get-order`: Get the search order and put it on the
+data stack, the topmost items contains the number of
+vocabularies on the stack, and the rest of the items are
+vocabulary pointers.
+* `set-order`: Given a number of the vocabularies on the
+data stack and the vocabularies themselves this will set
+the search order. There are some special cases, 
+`-1 set-order` will loads the minimal root search order,
+and `0 set-order` will mean no vocabularies are loaded,
+all searches will fail (although entering numbers will
+still work).
+* `words`: This displays the list of words that are
+currently loaded, it will do this in an implementation
+defined manner.
+* `only`: Equivalent to `-1 set-order`.
+* `forth-wordlist`: The vocabulary that contains all
+of the normally defined Forth words.
+* `root-voc`: The minimal root vocabulary, a small
+vocabulary containing words needed to get the system
+back into a normal state. `root-voc` is SUBLEQ eFORTH
+specific, your Forth may not have one, or it may be
+equivalent to `forth-wordlist` (i.e. On your Forth the
+minimal set of Forth words is the same as all of the
+defined Forth words, as `minimal set` is not defined in the
+ANS Forth standard).
+* `forth`: This sets the vocabularies so that 
+`forth-wordlist` and `root-voc` are loaded. It is
+equivalent to `forth-wordlist root-voc 2 set-order` in
+SUBLEQ eFORTH.
+* `#vocs`: A non-standard word, this is a constant that
+represents the maximum number of vocabularies that can
+be loaded.
+* `definitions`: This changes the vocabulary into which
+new words are added to, the topmost vocabulary in the
+vocabulary stack is anointed as the one to review new
+word definitions.
+
+This list of words will not give you a sense of how to
+use vocabularies, instead you will need to experiment with
+them. 
+
+It is helpful to think of the system like this:
+
+1) You have words in Forth which are functions.
+2) A linked list of words form a vocabulary.
+3) A group of vocabularies form a dictionary, also known
+as the "search order".
+4) The order in which vocabularies are loaded matters. If
+you have multiple definitions in different search orders
+then the vocabulary which is loaded first will be found
+first.
+
+This allows us to create a powerful module system with
+limited primitives but it can be confusing, if the word
+`x` is defined in multiple vocabularies it can be difficult
+to tell which `x` will be used as it is possible to
+dynamically change the search order (in fact there have
+been Forth implementations that do away with the immediate
+and compiling word distinction and instead put words
+in different vocabularies depending on whether they are
+immediate or not, `:` would thus load the compiling 
+vocabulary and `;` would unloaded it, this is not common
+nor standard behavior).
+
+We can also redefine `x` multiple times within the same
+vocabulary, we should be warned about defining multiple
+words of the same name within the same vocabulary (although
+your Forth may not do this), but not when defining a
+word with the same name as a word in a different 
+vocabulary.
+
+Now onto some examples, let us imagine we want to define
+a set of words with the same names as the built in ones
+but that print out debug messages, we can use this word
+set when loading code to debug it:
+
+	wordlist constant debug
+	debug +order
+	definitions
+	: + 2dup . . ."  + -> " + dup . cr ;
+	: - 2dup . . ."  - -> " - dup . cr ;
+	: * 2dup . . ."  * -> " * dup . cr ;
+	: / 2dup . . ."  / -> " / dup . cr ;
+	only forth definitions
+
+(If `wordlist` is not defined in your version of SUBLEQ
+eFORTH you can define it like so `: wordlist here 0 , ;`,
+this is not a portable definition).
+
+Because of the way defining new words in Forth works, when
+using `+` within the new definition of `+` the old 
+definition of `+` is used. To perform recursion instead
+you need to use `recurse`, see the chapter on recursion
+for more information about this.
+
+You can then use these new definitions to debug your code:
+
+	debug +order
+	marker unload
+	: x 2 + ;
+	3 x
+	4 x
+	unload
+
+Once it is working, you can recompile your code by 
+using `debug -order`. `marker` is a word that can be used
+to create a word which when called will erase all word
+definitions defined after and including itself. You should
+not add words to other vocabularies between defining the
+marker and using it, all definitions should belong to the
+same vocabulary.
+
 **TODO:**
 
-* extended words, +order, -order, (order)
 * Forth storage of dictionary, storing headers with word
 definitions or separately.
+
+	: also get-order over swap 1+ set-order ; ( -- )
+	: previous get-order nip 1- set-order ; ( -- )
+	: anonymous ( -- : make anon voc and enable it )
+	  get-order 1+ here dup 1 cells allot 0 swap ! 
+	  swap set-order ;
+	: wordlist ( -- wid : alloc wid )
+	  here cell allot 0 over ! ;
 
 ## Meta Compilation: Forth Cross Compilation in Forth
 
@@ -2241,7 +2572,348 @@ With extra words defined:
 	rshift swap drop dup bye - + eforth words only
 	forth system forth-wordlist set-order
 
+## SUBLEQ eFORTH Quick Glossary
 
+This small database of words consists of one word per line,
+the first space delimited word being the word being
+described, then a stack effect comment in between "(" and
+")", then a very short description of the word. This
+database consists of words found in SUBLEQ eFORTH, 
+including in the `system` vocabulary.
 
-
-
+	! ( u a -- ) Store u at at
+	# ( d -- d ) Processed single digit, Pictured Numeric Output
+	#-1 ( -- -1 ) push -1 on to the stack
+	#0 ( -- 0 ) push 0 on to the stack
+	#1 ( -- 1 ) push 1 on to the stack
+	#2 ( -- 2 ) push 2 on to the stack
+	#> ( d -- a u ) end Pictured Numeric Output
+	#s ( d -- 0 0 ) process number into Pictured Numeric Output
+	#vocs ( -- u ) maximum vocabularies that can be loaded
+	$" ( "string" --, Runtime -- b ) compile string into word
+	' ( "name" -- xt ) get execution token of "name"
+	( ( -- ) discard everything from input stream line until )
+	($) ( -- a ) used with to implement $"
+	(.) ( n -- ) used to implement ".", much faster than u.
+	(abort) ( n -- ) compiled by abort", abort if n non-zero
+	(block) ( ca ca cu -- ) transfer to/from block storage
+	(boot) ( -- ) complex boot routine stored in <boot>
+	(comp) ( -- ) used to implement does>
+	(const) ( -- u ) used to implement constant
+	(does) ( -- ) used to implement does>
+	(emit) ( c -- ) emit a single character to output always
+	(error) ( u -- ) default error handler in quit loop
+	(find) ( a -- pwd pwd 1 | pwd pwd -1 | 0 a 0 )
+	(literal) ( u -- ) default behavior of literal
+	(marker) ( -- ) used to implement marker
+	(nfa) ( u -- ) toggle name field address in last defined word
+	(order) ( w voc*n n -- voc*n w n ) used in +order and -order
+	(push) ( -- u ) push next cell 
+	(s) ( "string" -- ) compile string into dictionary
+	(search) ( a voc -- pwd pwd 1 | pwd pwd -1 | 0 a 0 ) search
+	(up) ( -- u ) access user variable stored in next cell
+	(user) ( -- a ) used to implement user
+	(var) ( -- a ) used to implement variable
+	) ( -- ) immediate, do nothing, terminate comment
+	* ( n n -- n ) multiple two numbers
+	+ ( n n -- n ) add two numbers
+	+! ( n a -- ) add n to memory location
+	+order ( voc -- ) add voc to current search order
+	+string ( a u n -- ) increment string by n
+	, ( n -- ) write n into the next dictionary cell
+	- ( n1 n2 -- n ) subtract n2 from n1
+	-cell ( -- -2 ) push the negated cell size
+	-order ( voc -- ) remove voc from current search order
+	-rot ( n1 n2 n3 -- n3 n1 n2 ) reverse of rot
+	-trailing ( a u -- a u ) remove trailing whitespace
+	. ( n -- ) display signed number in current output radix
+	." ( "string" -- ) compile string into word that prints itself
+	.$ ( -- ) used to implement ."
+	.( ( "display" -- ) parse and emit until matching )
+	.emit ( c -- ) print char, replacing non-graphic ones
+	.id ( pwd -- ) print word name field
+	.s ( ??? -- ??? ) display variable stack
+	/ ( n1 n2 -- n ) divide n1 by n2 
+	/mod ( n1 n2 -- n1%n2 n1/n2 ) divide n1 by n2 
+	0< ( n -- f ) is less than zero?
+	0<= ( n -- f ) is less than or equal to zero?
+	0<> ( n -- f ) is not equal to zero?
+	0= ( n -- f ) is equal to zero?
+	0> ( n -- f ) is greater than zero?
+	0>= ( n -- f ) is greater or equal to zero?
+	1+ ( n -- n ) increment n
+	1- ( n -- n ) decrement n
+	2! ( n n a -- ) store two values at address and next cell
+	2* ( u -- u ) multiply by two, bitshift left by 1
+	2/ ( u -- u ) divide by two, bitshift right by 1
+	2>r ( n n --, R: -- n n ) move two values to return stack
+	2@ ( a -- n n ) retrieve two values from address and next cell
+	2drop ( n n -- ) discard two values
+	2dup ( n1 n2 -- n1 n2 n1 n2 ) duplicate two stack items
+	2r> ( -- n n, R: n n -- ) move two values from return stack
+	: ( "name" -- ) parse name and start word definition
+	:noname ( -- xt ) start anonymous word definition
+	; ( -- ) immediate, end word definition
+	< ( n1 n2 -- f ) is n1 less than n2
+	<# ( -- ) start Pictured Numeric Output
+	<= ( n1 n2 -- f ) is n1 less than or equal to n2
+	<> ( n n -- f ) are two values not equal to each other?
+	<block> ( -- a ) execution vector for block
+	<boot> ( -- a ) execution vector for cold
+	<echo> ( -- a ) execution vector for echo
+	<emit> ( -- a ) execution vector for emit
+	<error> ( -- a ) execution vector for error handling
+	<expect> ( -- a ) execution vector for expect
+	<key> ( -- a ) execution vector for key
+	<literal> ( -- a ) execution vector for literal
+	<ok> ( -- a ) execution vector for okay prompt
+	<quit> ( -- a ) execution vector for final boot word
+	<tap> ( -- a ) execution vector for tap
+	= ( n n -- f ) are two numbers equal?
+	> ( n1 n2 -- f ) is n1 greater than n2?
+	>= ( n1 n2 -- f ) is n1 greater or equal to n2?
+	>blk ( k -- ca ) turn block into cell address
+	>body ( xt -- body ) move to a created words body
+	>in ( -- a ) input buffer position user variable
+	>number ( ud b u -- ud b u ) convert string to number
+	>r ( n --, R: -- n ) move value from variable to return stk.
+	?depth ( n -- ) depth check, throw if too few stack items
+	?dup ( n -- n n | 0 ) conditionally duplicate if non zero
+	?exit ( n -- ) compile-only, conditionally exit word
+	?found ( b f -- b ) throw if flag false with error message
+	?len ( b -- b ) throw if counted string too long
+	?nul ( b -- b ) throw if counted string is zero length
+	?unique ( b -- b ) warn if word definition already exists
+	@ ( a -- n ) retrieve contents of memory address
+	@+ ( a -- a n ) get value at address, keep address
+	@execute ( ??? a -- ??? ) retrieve execution token and execute
+	[ ( -- ) immediate, turn command mode on
+	[!] ( u ca -- ) store value at cell address
+	[@] ( ca -- u ) retrieve value from cell address
+	[char] ( "char" --, Runtime: -- b ) compile character literal
+	[else] ( -- ) skip input until "[then]"
+	[if] ( n -- ) conditional input until "[else]/[then]"
+	[then] ( -- ) do nothing
+	\ ( "line" -- ) discard everything from \ to end of line
+	] ( -- ) turn compile mode on, command mode off
+	abort ( -- ) call throw -1 unconditionally
+	abort" ( "string" --, Runtime: n -- ) print abort if non-zero
+	abs ( n -- u ) absolute value, beware $8000
+	accept ( b u -- b u ) accept a line of input
+	activate ( xt task-address -- ) activate a task
+	aft ( -- ) part of for...aft...then...next loop
+	again ( -- ) part of begin...again infinite loop
+	align ( -- ) align dictionary pointer up
+	aligned ( a -- a ) align address up
+	allot ( n -- ) allocate bytes in dictionary
+	and ( n n -- n ) bitwise and
+	at-xy ( x y -- ) set cursor position, 1 index based
+	b/buf ( -- 1024 ) number of bytes in a block
+	banner ( +n c -- ) output c n times
+	base ( -- a ) address of numeric input output radix 2-36
+	begin ( -- ) part of a begin...until, begin...again loop
+	bell ( -- ) emit ASCII bell character
+	bget ( k -- ) transfer block from mass storage to buffer
+	bl ( -- 32 ) push ASCII space character
+	blank ( a u -- ) set array of bytes to space
+	blk ( -- a ) currently loaded block
+	blk0 ( -- a ) block buffer zero block loaded value
+	block ( blk -- a ) load data off disk, store modified buffer
+	bput ( k -- ) transfer block buffer to mass storage
+	buf0 ( -- a ) address of block buffer zero
+	buffer ( blk -- a ) like block but it performs no load of data
+	bye ( -- ) halt system
+	c! ( c a -- ) write a single byte to memory location a
+	c, ( c -- ) write byte into dictionary
+	c/buf ( -- 512 ) cells in a block
+	c@ ( a -- c ) retrieve a single byte
+	c@+ ( a -- a c ) retrieve single byte, keep address
+	calibration ( -- a ) value used by ms for 1 ms wait
+	catch ( xt -- n ) execute xt, catching result of any throws
+	cell ( -- 2 ) size of a single cell in bytes
+	cell+ ( a -- a ) increment address by cell size
+	cell- ( a -- a ) decrement address by cell size
+	cells ( n -- n ) turn a cell count into a byte count
+	cfa ( pwd -- cfa ) move word pwd field to its code field
+	char ( "char" -- c ) turn a character of input into a byte
+	cksum ( a u -- u ) calculate additive checksum over range
+	clean ( -- ) opposite of update, mark last loaded block clean
+	cmove ( b1 b2 u -- ) copy u characters from b1 to b2
+	cold ( -- ) perform a cold boot
+	compare ( a1 u1 a2 u2 -- n ) compare two strings
+	compile ( -- ) compile next address in word into dictionary
+	compile, ( xt - ) compile execution token into word def.
+	compile-only ( -- ) make previously defined word compile-only
+	console ( -- ) setup input/output for terminal/console
+	constant ( n "name" -- ) create a constant with value n
+	context ( -- a ) array containing loaded vocs
+	count ( a -- a c ) retrieve byte and increment a by 1
+	cr ( -- ) emit a newline
+	create ( "name" -- ) create word which pushes field address
+	csi ( -- ) emit ANSI terminal escape sequence
+	current ( -- a ) current vocabulary definitions are added to
+	cycles ( -- a ) address of number of task switches performed
+	d+ ( d d -- d ) add two double cell values
+	decimal ( -- ) set input and output radix to decimal
+	defined ( "name" -- f ) is "name" a defined word?
+	definitions ( -- ) add future definitions to top vocabulary
+	depth ( ??? -- n ) get variable stack depth
+	digit ( u -- c ) extract a character from number
+	dirty0 ( -- a ) dirty flag for block buffer 0
+	dnegate ( d -- d ) negate double cell value
+	do$ ( -- a ) push location of compiled string, jump over it
+	does> ( -- ) part of `create...does>` routine
+	dpl ( -- a ) address of double cell number decimal position
+	drop ( n -- ) drop top of stack
+	dump ( a u -- ) dump array to output
+	dup ( n -- n n ) duplicate top of stack
+	echo ( c -- ) emit a single character, terminal output echo
+	editor ( -- ) load block editor word set, setup editor
+	eforth ( -- ver ) push eforth version number
+	else ( -- ) part of if...else...then statement
+	emit ( c -- ) display a single character 
+	empty-buffers ( -- ) call clean and invalidate
+	erase ( a u -- ) write zero to array
+	eval ( "line" -- ) evaluate line got with query
+	evaluate ( ??? a u -- ??? ) evaluate string
+	execute ( ??? xt -- ??? ) execute an execution token
+	exit ( -- ) compile-only, exit current word definition
+	expect ( a u -- ) calls accept, stores result in span
+	extract ( ud ud -- ud u ) extract digit from number
+	file ( -- ) ready I/O for file transfer instead of console
+	fill ( a u c -- ) fill array with byte n
+	find ( b -- pwd 1 | pwd -1 | a 0 ) find word in dictionary
+	flush ( -- ) discard and un-assign dirty block buffers
+	for ( --, Runtime: n --, R: -- n ) for...aft...then..next loop
+	forth ( -- ) set search order to root-voc and forth-wordlist
+	forth-wordlist ( -- voc ) push the default Forth vocabulary
+	get-current ( -- voc ) equivalent to "current @"
+	get-input ( -- n1...n5 ) get the input stream state
+	get-order ( -- voc0...vocn n ) get search order
+	h? ( -- a ) push the location of the dictionary pointer
+	hand ( -- ) set default xt for I/O for terminal
+	here ( -- u ) current dictionary position
+	hex ( -- ) set number input/output radix to hexadecimal
+	hide ( "name" -- ) toggle hidden bit in word definition
+	hld ( -- a ) user variable index into hold space
+	hold ( c -- ) add c to hold space in Pictured Numeric Output
+	if ( --, Runtime: n -- ) immediate, compile-only, if-statement
+	immediate ( -- ) make last defined word immediate
+	info ( -- ) print system information
+	ini ( -- ) initialize current task
+	interpret ( b -- ) interpret a counted word
+	invalidate ( -- ) invalidate blk0 storing -1 to it
+	invert ( u -- u ) bitwise invert
+	io! ( -- ) setup input/output routines
+	key ( -- c ) get character from input
+	key? ( -- c 0 | -1 ) get character from input or -1 on failure
+	ktap ( bot eot cur c -- bot eor cur ) handle terminal input
+	last ( -- a ) get last defined word
+	leq0 ( n -- 0 | 1 ) 1 if n is less than or equal to 0, else 0
+	line ( k l -- a u ) index into block by 64 byte lines
+	list ( blk -- ) list a block, set scr
+	literal ( n -- Runtime: -- n ) immediate, compile number
+	load ( ??? blk -- ??? ) execute code stored in a block
+	loaded? ( k -- k f ) check to see if block is loaded already
+	loadline ( ??? k l -- ??? ) evaluate a line )
+	look ( b u c xt -- b u ) skip until xt succeeds
+	lshift ( u n -- u ) left shift u by n
+	m/mod ( d n -- r q ) floored division with remainder/quotient
+	mark ( -- a ) mark a hole in dictionary
+	marker ( "name" -- ) make word that deletes words later after
+	match ( c1 c2 -- f ) used with look in parse
+	max ( n n -- n ) signed maximum of two numbers
+	min ( n n -- n ) signed minimum of two numbers
+	mod ( n1 n2 -- n1%n2 ) compute modulus of n1 divided by n2
+	ms ( n -- ) wait for approximately n milliseconds
+	multi ( -- ) enable multithreading mode, single turns it off
+	mux ( n1 n2 sel -- n ) bitwise multiplex operation
+	negate ( n -- n ) twos compliment negation
+	next ( -- ) part of for...next/for..aft...then...next loop
+	nfa ( pwd -- nfa ) move pwd to name field address
+	nip ( n1 n2 -- n2 ) discard second stack item
+	number? ( a u -- d -1 | a u 0 ) easier to use than >number
+	ok ( -- ) state aware okay prompt
+	only ( -- ) set vocabulary to only the root-voc
+	or ( n n -- n ) bitwise or
+	over ( n1 n2 -- n1 n2 n1 ) duplicate second item on stack
+	pace ( -- ) emit pacing character
+	pad ( -- a ) get thread local pad or scratch space
+	page ( -- ) clear screen (using ANSI terminal codes)
+	parse ( "string" c -- b u ) parse a c delimited string
+	pause ( -- ) invoke multithreading scheduler, yield
+	pick ( nu...n0 n -- nu...n0 nn ) pick item on stack
+	postpone ( "name" -- ) immediate, compile word into dict.
+	query ( -- ) get a line of text, filling the terminal buffer
+	quit ( -- ) interpreter loop
+	r> ( -- n, R: n -- ) move value from return stack to var stk.
+	r@ ( -- n, R: n -- n ) copy value from return stack
+	radix ( -- u ) retrieve input/output radix in base
+	rdrop ( --, R: n -- ) drop value from return stack
+	receive ( -- msg task-addr ) pause until message received
+	recurse ( -- ) immediate, compile-only, recurse current word
+	repeat ( -- ) part of begin...while...repeat loop
+	root-voc ( -- voc ) push root vocabulary
+	rot ( n1 n2 n3 -- n2 n3 n1 ) rotate three stack items
+	rp! ( n -- , R: ??? -- ??? ) set return stack pointer
+	rp@ ( -- n, R: ??? -- ??? ) get return stack pointer
+	rshift ( u n -- u ) perform rshift of u by n
+	s>d ( n -- d ) convert single cell number to double cell
+	save-buffers ( -- ) save all block buffers to disk
+	scr ( -- a ) last listed block as used with `list`
+	search-wordlist ( a voc -- pwd 1| pwd -1| a 0 ) search voc
+	see ( "name" -- ) decompile word
+	send ( msg task-addr -- ) blocking send message to task
+	set-current ( voc -- ) set current variable
+	set-input ( n1...n5 -- ) set input execution tokens
+	set-order ( n1...nx x -- ) set search order, -1 is special
+	shed ( n1 n2 n3 -- n2 n3 ) remove third-most stack item
+	sign ( -- ) add sign to hold space in Pictured Numeric Output
+	signal ( addr -- ) signal to thread calling wait
+	single ( -- ) force single threaded mode
+	source ( -- a u ) get terminal input source
+	source-id ( -- u ) get input type (0 = terminal, -1 = block)
+	sp ( -- a ) variable containing the stack address
+	sp! ( sp -- ) set stack pointer
+	sp@ ( -- sp ) get stack pointer
+	space ( -- ) emit a space character
+	span ( -- a ) user variable set when calling expect
+	state ( -- a ) push address of stack control location
+	swap ( n1 n2 -- n2 n1 ) swap two stack items
+	system ( -- voc ) push system vocabulary
+	tap ( bot eot cur c -- bot eor cur ) add char to line
+	task-init ( task-address -- ) initialize a task
+	task: ( "name" -- ) create a named task
+	then ( -- ) part of if...then or if...else...then
+	this ( -- a ) address of task thread memory
+	throw ( n -- ) throw n to be caught by catch, 0 is no throw
+	tib ( -- b ) get the Terminal Input Buffer address
+	toggle ( u a -- ) toggle bits at address [xor them with u]
+	token ( "name" -- ) equivalent to "bl word"
+	transfer ( a a u -- ) transfer bytes to/from mass storage
+	tuck ( n1 n2 -- n1 n2 n1 ) tuck a variable behind two
+	tup ( -- a ) get address of the Terminal Input Buffer
+	type ( a u -- ) emit string displaying it
+	u. ( u -- ) display unsigned number
+	u.r ( u n -- ) display unsigned number space filled up to n
+	u< ( u1 u2 -- f ) u1 unsigned less than u2
+	u<=  ( u1 u2 -- f ) u1 unsigned less than or equal to u2
+	u> ( u1 u2 -- f ) u1 unsigned greater than u2
+	u>= ( u1 u2 -- f ) u1 unsigned greater than or equal to u2
+	um* ( u u -- ud ) mixed multiply
+	um+ ( u u -- u carry ) mixed add with carry
+	um/mod ( ud u -- ur uq ) unsigned double cell div/mod
+	unmatch ( c1 c2 -- f ) used with look in parse
+	until ( --, Runtime: u -- ) part of begin...until loop
+	update ( -- ) mark last loaded block as dirty or modified
+	user ( "name" -- ) create a new thread local user variable
+	user? ( -- a ) address of the user variable pointer
+	valid? ( k -- k f ) is block valid?
+	variable ( "name" -- ) create a variable
+	wait ( addr -- ) pause until contents of address is non zero
+	while ( --, Runtime: u -- ) part of begin/while/repeat loop
+	within ( u lo hi -- f ) is u within lo and hi, lo <= u < hi
+	word ( "string" c -- ) parse string until c
+	words ( -- ) display loaded words
+	xio ( xt xt xt -- ) exchange input/output 
+	xor ( u u -- u ) bitwise exclusive or
