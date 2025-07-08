@@ -1939,12 +1939,17 @@ compile mode.
 
 **TODO**
 
+* Different from immediate words
+
 ## Pictured Numeric Output
 
 **TODO:**
 
 * Numeric input vs output
-* `base` and `dump`
+* `base` and `dump`, implementation defined output from
+`dump` (and `see`).
+* `<#`, `#`, `#s`, `#>`
+* Examples
 
 ## Recursion
 
@@ -2339,8 +2344,45 @@ the code in `pause`).
 * Mention `key?`
 * Examples
 * H2 interrupts
+* Problems with a preemptive multitasking system, examples.
 
 ### Interrupts in H2 Forth
+
+The Forth running on the H2 CPU, a reimplementation of the
+J1 CPU, both of which are designed to run on FPGAs, are
+both designed to run Forth very efficiently, they can
+execute many Forth words in a single clock cycle, and 
+sometimes multiple Forth words (for example it is possible
+to combine `exit` with many Forth words like `dup`, meaning
+`dup exit` would run in a single cycle).
+
+The H2 is available here:
+
+* <https://github.com/howerj/forth-cpu>.
+
+The H2 extends the J1 along with rearranging certain
+instruction fields and adding new instructions, one of the 
+extensions is to add interrupts. When handling interrupts
+you must be incredibly careful as they cause the same
+problems you have when running a preemptive multitasker.
+
+The Forth running on the H2 is different to the one
+running under SUBLEQ eFORTH, H2 Forth does not have a 
+virtual machine under which it executes, and it Forth
+is compiled to instructions that run on the H2 (calls
+to other words, instructions for words like `+` and `dup`,
+jumps and conditional jumps). SUBLEQ eFORTH is instead
+compiled to a virtual machine that can run Forth instead,
+the stacks are part of the virtual machine specification,
+on the H2 they are physical hardware stacks limited in
+depth by the implementation. This has consequences to how
+multithreading systems can be implemented.
+
+H2 has no cooperative multithreading capability, it would
+be slightly more complex to implement than under a VM,
+but it would be possible.
+
+**TODO:**
 
 ## Locals
 
@@ -2350,7 +2392,17 @@ Do not bother.
 
 ## Block Word Set
 
+**TODO:**
+
+* Virtual Memory Like / Paging
+* Forth File System
+
 ### Forth Block Editor
+
+**TODO:**
+
+* Editor vocab
+* Example block editor
 
 ## Vocabulary Words
 
