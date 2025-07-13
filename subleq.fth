@@ -708,6 +708,26 @@ only forth definitions hex
 \ The "opt.sys" constant will be described more later, it
 \ contains flags that control features in the system.
 \
+\ Enabling these options may mean that the generate SUBLEQ
+\ eForth image will not be able to generate subsequent SUBLEQ
+\ eForth images as too much space has been consumed by the
+\ enabled words.
+\
+\ To put this in more concrete terms, with the build system
+\ for the project at <https://github.com/howerj/subleq>,
+\ enabling some or all of these options, the following should
+\ work:
+\
+\	make 1.dec
+\	make gforth
+\
+\ But this might not:
+\
+\	make 2.dec
+\	make test
+\
+\ Because too much more is used by the new options.
+\
 1 constant opt.multi      ( Add in large "pause" primitive )
 1 constant opt.editor     ( Add in Text Editor )
 1 constant opt.info       ( Add info printing function )
@@ -2805,10 +2825,11 @@ assembler.1 -order
 
 \ The comparison operators are tricky to get right, we build
 \ upon "leq0" and "op0=", which are relatively easy to get
-\ correct, in the Forth code to fully implement "\<" and later
-\ "u\<". Note that the assembly versions of "if" hide a version
-\ of "0=" in them that does not quite work for all values, so
-\ we have to correct for that in our definition of "op0=".
+\ correct. In the Forth code we fully implement "\<" and later
+\ "u\<" using "leq0" and "op0=". Note that the assembly 
+\ versions of "if" hide a version of "0=" in them that does not 
+\ quite work for all values, so we have to correct for that in 
+\ our definition of "op0=". 
 \
 \ In Forth booleans are represented by "0" and "-1" (or all
 \ bits-set) instead of "0" and "1" in languages like C. In
@@ -8916,11 +8937,11 @@ opt.multi [if]
 [then]
 
 \ "wait" and "signal" belong as a pair, they do not require
-\ a tasks to work, and work on arbitrary memory locations,
+\ tasks to work, and work on arbitrary memory locations,
 \ but are used to perform synchronization between tasks. One
 \ task can "wait" on a variable to become non-zero, repeatedly
-\ calling "pause" until it is (because another task or even
-\ a hardware register has set to be non-zero).
+\ calling "pause" until it set to non-zero (because another 
+\ task or even a hardware register has set to be non-zero).
 \
 \ "signal" is used to set that memory location to a non-zero
 \ value, these two are wrapped up in functions because the
@@ -9553,6 +9574,13 @@ opt.float [if] ( Large section of optional code! )
 \ # Floating Point Package (and more)
 \
 \ This is a Forth Floating point package *for 16-bit systems*.
+\
+\ As too many words are added when this package is enabled
+\ the meta-compilation test will fail as we run out of room.
+\ That is SUBLEQ eFORTH (and gforth) will be able to generate a 
+\ new image with Floating Point support, but that new image
+\ will not be able to generate new images as there will not be
+\ enough room.
 \
 \ It has been extended and modified from the original adding
 \ many of the standard Forth floating point words as well as
@@ -11012,13 +11040,17 @@ it being run.
 \ On some systems this speeds execution up, on others it seems
 \ to slow it down. There is a lot in this program that could
 \ itself be optimized, it was written to demonstrate the
-\ concept and not for efficiency and speeds sake in of itself.
+\ concept and not for efficiency and speeds sake in and of 
+\ itself.
 \
 \ A much faster system could be made if instead of trying to
 \ speed up the SUBLEQ part of the system the Forth VM and
 \ associated instructions were emulated instead. This would
 \ require knowing the address of "opDup" and the like, as well
-\ as the entry point stored in "{boot}".
+\ as the entry point stored in "{boot}", this would essentially
+\ be replacing the Forth VM written in SUBLEQ with a Forth
+\ VM written in a more efficient manner. It would also only
+\ work for this Forth system and not for other SUBLEQ programs.
 \
 \        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
 \         * programs (it might break them) and tries to
@@ -11674,7 +11706,8 @@ it being run.
 \ A criticism of SUBLEQ is that it is really three
 \ instructions (SUBLEQ, INPUT, OUTPUT) masquerading as
 \ one instruction, which is technically true and valid,
-\ but not very useful. This is without mentioning the
+\ but not a very useful criticism, SUBLEQ is in spirit a single
+\ instruction machine. This is without mentioning the
 \ HALT condition. There are two ways of dealing with this;
 \ ignore the need for input and output and instead use an
 \ external method for entering and getting data (e.g. Modifying
@@ -11737,7 +11770,7 @@ it being run.
 \ This is now truly a single instruction machine, but it
 \ is not simpler, smaller, faster, nor easier to program
 \ or understand. It is however truly a single instruction
-\ machine and a viable alternative.
+\ machine and a viable alternative for the terminally pedantic.
 \ 
 \ Another avenue for criticism is the halt condition,
 \ which is not part of the instruction format and so is

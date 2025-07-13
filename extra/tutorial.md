@@ -13,12 +13,15 @@ book that describes the Forth internals is available at
 
 * Add questions, answers and exercises. This tutorial 
 really needs more examples and problem sets.
+* Different SUBLEQ eFORTH implementations
 * Global hyper static environment; Forths usage of globals
 as well
 * How do you get good at juggling stack items (answer;
 practice, factoring, and you do not as it is difficult to
 do which is why no one else does it).
 * Good Forth practice; factoring
+* Forth restrictions; pad space size, #vocs, line parsing
+space, word length, memory space, stack sizes.
 * Forth sucks at data structures, lisp has lists, Forth
 has...?
 * The highest tier of any pyramidal structure of knowledge,
@@ -1943,6 +1946,65 @@ compile mode.
 
 ## Pictured Numeric Output
 
+The Pictured Numeric Output words are used to format
+numbers into strings, which then may be displayed or output
+via other means. They allow for quite fine grained control
+over how the output will look like, more so than using
+`printf` in C, and can be used to construct short strings
+with numbers and characters.
+
+The `base` variable controls the numeric input and output
+radix, and in SUBLEQ eFORTH can be in the inclusive range
+of 2 and 36, the case in most Forth implementations. This
+is because there are 36 characters in the set 0-9 and A-Z.
+
+Using the higher bases, such as base 32 or base 36, might
+be useful as an alternative to using Base-64 encoding for
+small devices and a relatively dense encoding scheme for
+ASCII is needed, this is quite a contrived use case however
+and the most useful bases are binary, octal, decimal and
+hexadecimal.
+
+Some helper words which may not be available:
+
+	decimal
+	: binary 2 base ! ;
+	: octal 8 base ! ;
+
+`decimal` and `hex` should already be defined, if not then
+it should be simple enough for you to do so. It might be
+worth defining words for printing out numbers in a specific
+base for debugging purposes, such as:
+
+
+	: d# base @ >r decimal  . r> base ! ;
+	: h# base @ >r hex     u. r> base ! ;
+	: b# base @ >r binary  u. r> base ! ;
+	: o# base @ >r octal   u. r> base ! ;
+
+Note that the above assumes that if you are operating in a
+base other than decimal then you want to print the 
+number as an unsigned number.
+
+This allows some control over the output but you might need
+to output numbers with greater control over presentation to
+meet the requires of some external requirement. For example
+leading spaces or zeros to vertically align output, using
+commas as the decimal separator instead of a dot, prefixing
+the number with a string (a common one is to prefix 
+hexadecimal characters with the string "0x", often used
+when the values are to be consumed by another programming
+environment). 
+
+It is technically possible to use the functions for 
+printing values, "." and "u.", but they come with a space
+postfixed to output which may not be appropriate, and the
+length of outputted value is not given so it would have to
+be calculated separately. The third problem in using those
+two is that they print to output directly, you cannot form
+a string with them, which further limits the ability to use
+those functions as generic numeric output routines.
+
 **TODO:**
 
 * Numeric input vs output
@@ -1950,6 +2012,7 @@ compile mode.
 `dump` (and `see`).
 * `<#`, `#`, `#s`, `#>`
 * Examples
+* User variables, reentrant, ...
 
 ## Recursion
 
@@ -2067,11 +2130,15 @@ one after the other.
 These words operate on mixed quantities an either consume
 or produce double cell numbers:
 
-* `um+` ( u u -- ud )
-* `um*` ( u u -- ud )
-* `um/mod` ( ud u -- ur uq )
-* `m/mod` ( d n -- r q )
-* `m*` ( n n -- d )
+* `um+` ( u u -- ud ), unsigned mixed addition, add two
+single cell numbers and produce an unsigned double cell 
+number, the first item on the stack indicates if there was
+an overflow.
+* `um*` ( u u -- ud ), unsigned mixed multiplication.
+* `um/mod` ( ud u -- ur uq ), unsigned mixed modulo and
+divide.
+* `m/mod` ( d n -- r q ), signed mixed modulo and divide.
+* `m*` ( n n -- d ), signed mixed multiply.
 * `*/` ( n n n -- q )
 * `*/mod` ( n n n -- r q )
 
@@ -2338,9 +2405,34 @@ more it is called the more responsive the system can be
 less work will get done (more time will be spent running
 the code in `pause`).
 
+The following words will be used for multithreading, they
+are in the `system` vocabulary in SUBLEQ eFORTH and must
+be loaded prior to use with `system +order`:
+
+* `task:` ( "name" --, Run Time: -- addr ) This creates
+a named task, it will not be initialized however.
+* `activate` ( xt task -- ) This activates a task and
+sets the task to run the given execution token.
+* `user` ( "name" --, Run Time: -- addr )
+* `wait` ( addr -- ) Wait on address until it is non-zero.
+* `signal`  ( addr -- ) Signal to a `wait`.
+* `single` ( -- ) Disable multithreading, all subsequent
+calls to `pause` will do nothing.
+* `multi` ( -- ) Enable multithreading, calls to `pause`
+may pause the currently executing task.
+* `pause` ( -- ) Pause the current task and then execute
+the next task in the task list if multithreading is
+enabled. If disabled, this does nothing.
+* `send` ( u task-addr -- ) Send the data `u` to a
+task.
+* `receive` ( -- task-addr u ) Block, repeatedly calling
+`pause` until data is received.
+
 
 **TODO**
 
+* `task:`/`activate`, `user`, `signal`/`wait`, 
+`single`/`multi`, `pause`, `send`/`receive`.
 * Mention `key?`
 * Examples
 * H2 interrupts
@@ -2380,7 +2472,26 @@ multithreading systems can be implemented.
 
 H2 has no cooperative multithreading capability, it would
 be slightly more complex to implement than under a VM,
-but it would be possible.
+but it would be possible. It does have the concept of
+routines that are ran when an interrupt is fired, this
+could be used as the basis of a preemptive task manager,
+or as a watchdog to ensure that a cooperative task does
+not take too long (more common in safety critical systems).
+
+All the H2 core has to do is call a function when an
+interrupt fires. This has consequences however, the
+programmer of the system has to ensure that the stack
+depth never gets too high, for both the return and data
+stacks, the code in the interrupt handler cannot use any
+functions that may not be reentrant (such as pictured
+numeric output) and that when setting data structures it
+should be done atomically. Interrupts themselves can be
+interrupted if interrupts are not disabled, and they can
+happen at any point in the program.
+
+It is unfortunate that this section cannot be more generic
+but instead we must refer to specific implementations of
+Forth as the words and behavior are non-standard.
 
 **TODO:**
 
