@@ -1331,6 +1331,10 @@ Example:
 	    2 of ." two" endof
 	    ." default"
 	  endcase ;
+	1 ex
+	2 ex
+	3 ex
+	4 ex
 
 **TODO**
 
@@ -2097,16 +2101,28 @@ the topmost stack location.
 
 The words for manipulating them are as follows:
 
-* `d+` ( d d -- d : double cell add )
-* `d-` ( d d -- d : double cell subtract )
-* `dnegate` ( d -- d )
-* `dlshift`, `drshift` ( d u -- d )
-* `d2*`, `d2/` ( d -- d )
-* `dabs` ( d -- ud )
-* `d>`, `d<`, `d<=`, `d>=`, `d=`, `d<>` ( d d -- f )
-* `ud>`, `ud<`, `ud<=`, `ud>=` ( ud ud -- f )
-* `d0<`, `d0>`, `d0>=`, `d0<=`, `d0=`, `d0<>`. ( d -- f )
-* `dmin`, `dmax`, ( d d -- d )
+* `d+` ( d d -- d : double cell add ), double cell add
+* `d-` ( d d -- d : double cell subtract ), double cell
+subtract.
+* `dnegate` ( d -- d ), negate a double cell value.
+* `dlshift`, `drshift` ( d u -- d ), left and right shift
+with double cell values.
+* `d2*`, `d2/` ( d -- d ), multiply and divide by two,
+for double cell values.
+* `dabs` ( d -- ud ), double cell absolute, has the usual
+problems with taking the absolute value of the most 
+negative number (which `abs` also has), a common problem
+with `abs` implementations on platforms with twos 
+compliment arithmetic.
+* `d>`, `d<`, `d<=`, `d>=`, `d=`, `d<>` ( d d -- f ),
+signed double cell comparison operators.
+* `ud>`, `ud<`, `ud<=`, `ud>=` ( ud ud -- f ), unsigned
+double cell comparison operators.
+* `d0<`, `d0>`, `d0>=`, `d0<=`, `d0=`, `d0<>`. ( d -- f ),
+signed comparison against zero double cell comparison
+operators.
+* `dmin`, `dmax`, ( d d -- d ), double cell minimum and
+maximum functions.
 
 It is common to not define all of these words but only
 a subset needed to get the base interpreter working. This
@@ -2138,9 +2154,14 @@ an overflow.
 * `um/mod` ( ud u -- ur uq ), unsigned mixed modulo and
 divide.
 * `m/mod` ( d n -- r q ), signed mixed modulo and divide.
-* `m*` ( n n -- d ), signed mixed multiply.
-* `*/` ( n n n -- q )
-* `*/mod` ( n n n -- r q )
+* `m*` ( n n -- d ), signed mixed multiply. Given two
+signed cells produce a signed double by multiplying the
+two signed cells.
+* `*/` ( n n n -- q ), combined multiply divide with double
+cell internal representation for intermediaries.
+* `*/mod` ( n n n -- r q ), combined multiply divide with 
+double cell internal representation for intermediaries,
+returning remainder and quotient.
 
 **TODO**
 

@@ -29,7 +29,7 @@ First successful idea; zero compression. "subleq.dec" contains many repeated
 zeros, negative values could represent runs of zeros, the absolute amount plus
 one indicating the number of zeroes to output, a negative value of -1
 could represent the next value is a literal, and anything else is to be treated
-as a literal. This achieves a tiny saving, but no doubt an decoder written in
+as a literal. This achieves a tiny saving, but no doubt a decoder written in
 SUBLEQ would eat this saving up.
 
 *This works*.
@@ -54,3 +54,15 @@ escaping mechanism to pack two bytes into a cell and allow for literal values
 with that escaping mechanism.
 
 *This works*
+
+4) Using the "recompiler"
+
+As an experiment a "recompiler" was made, which takes SUBLEQ assembly and
+attempts to combine common SUBLEQ instructions into super instructions. The
+idea being that this should be quicker to execute, it also means it would
+be possible to store these macro instructions, saving space. This solution
+has potential problems, the biggest one being that the size of the decompressor
+will most likely dwarf any savings, the second being that it is not a generic
+compressor and will not save room when compressing the Forth code, if anything
+this technique would have to be combined with another, further increasing
+the complexity of the compressor (and decompressor).
