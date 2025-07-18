@@ -2524,6 +2524,22 @@ Do not bother.
 
 ## Block Word Set
 
+The Block Word Set is a series of words used to access
+mass-storage in a primitive fashion. Due to the simplicity
+of the word set a file system is not required, although
+most hosted Forth implementations build the words upon
+the File Access Words and only implement the Block Word Set
+for backwards compatibility reasons.
+
+The main words are:
+
+* `block` ( k -- a )
+* `buffer` ( k -- a )
+* `update` ( -- )
+* `flush` ( -- )
+* `save-buffers` ( -- )
+* `empty-buffers` ( -- )
+
 **TODO:**
 
 * Virtual Memory Like / Paging
