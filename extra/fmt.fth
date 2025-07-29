@@ -38,15 +38,6 @@ defined s" 0= [if]
   then ; immediate
 [then]
 
-\ variable seed here seed !
-\ : random ( -- u : 16-bit xorshift )
-\  seed @ dup 0= if 0= then ( seed must not be zero )
-\  dup 13 lshift xor
-\  dup  9 rshift xor
-\  dup  7 lshift xor
-\  dup seed ! ;
-
-
 wordlist constant printing ( TODO: make this anonymous? )
 printing +order definitions
 
@@ -204,5 +195,4 @@ s" A~mB~dC~fD~n " format . cr
 
 test
 only forth definitions decimal
-
 
