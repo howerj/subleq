@@ -1,6 +1,4 @@
-
 \ TODO:
-\ * ANSI Colors, other codes
 \ * Scanning equivalent / scanf version
 \ * Document Format specifiers
 \ * AT-XY
@@ -9,6 +7,11 @@
 \ * Could return printed char count or error code
 \ * TUI, Banners, Boxes
 \ * Print in arbitrary base
+\ * Scan equivalent:
+\   - Regex
+\   - Parse out ASCII
+\   - Scanf behavior
+\
 
 
 defined (order) 0= [if]
@@ -35,51 +38,66 @@ defined s" 0= [if]
   then ; immediate
 [then]
 
-wordlist constant printing
+\ variable seed here seed !
+\ : random ( -- u : 16-bit xorshift )
+\  seed @ dup 0= if 0= then ( seed must not be zero )
+\  dup 13 lshift xor
+\  dup  9 rshift xor
+\  dup  7 lshift xor
+\  dup seed ! ;
+
+
+wordlist constant printing ( TODO: make this anonymous? )
 printing +order definitions
 
 user <format>
 user printed
 user colorize
+
+\ user @scan
+\ user #scan
+
 ' emit <format> !
 0 printed !
 -1 colorize !
 
-: .format 
-   colorize @ 0= if drop exit then
+: .format ( c -- )
+(  colorize @ 0= if drop exit then )
    <format> @ execute 1 printed +! ;
 : .formats 1- for count .format next drop ;
 : ?depth depth >= -4 and throw ;
 : invalid -21 throw ;
+\ : format> <format> @ printed @ colorize @ ;
+\ : >format colorize ! printed ! <format> ! ;
 
-: u.f 0 <# #s #> .formats ;
+: banner ( +n c -- : output 'c' 'n' times )
+  >r begin dup 0> while r@ .format 1- repeat drop rdrop ;
+: u.f 0 <# #s #> .formats ; ( u -- )
 : .f dup >r abs 0 <# #s r> sign #> .formats ; ( n -- )
+: d.rf ( d +n -- )
+  >r tuck dabs <# #s rot sign #> r> over - bl banner .formats ;
+: ud.rf >r <# #s #> r> over - bl banner .formats ; ( ud +n -- )
+: d.f 0 d.r ;   ( d -- )
+: ud.f 0 ud.r ; ( ud -- )
 
-\ : banner ( +n c -- : output 'c' 'n' times )
-\  >r begin dup 0> while r@ emit 1- repeat drop rdrop ;
-\ : d.r >r tuck dabs <# #s rot sign #> r> over - bl banner type ;
-\ : ud.r >r <# #s #> r> over - bl banner type ; ( ud +n -- )
-\ : d. 0 d.r space ;           ( d -- )
-\ : ud. 0 ud.r space ;         ( ud -- )
+: .decimal base @ >r decimal u.f r> base ! ; ( n -- )
+: .hex base @ >r hex u.f r> base ! ; ( u -- )
+: .octal base @ >r 8 base ! u.f r> base ! ; ( u -- )
+: .binary base @ >r 2 base ! u.f r> base ! ; ( u -- )
 
-: .decimal base @ >r decimal u.f r> base ! ;
-: .hex base @ >r hex u.f r> base ! ;
-: .octal base @ >r 8 base ! u.f r> base ! ;
-: .binary base @ >r 2 base ! u.f r> base ! ;
+: csi $1B .format $5B .format ; ( -- )
+: .at-xy ( n n -- )
+  csi .decimal [char] ; .format .decimal [char] H .format ;
+: .page csi [char] 2 .format [char] J .format 1 1 .at-xy ;
 
-: csi $1B .format $5B .format ;
-: .page 
-  csi [char] 2 .format [char] J .format
-  csi [char] 1 .format [char] ; .format
-      [char] 1 .format [char] H .format ; 
 : .color csi .decimal [char] m .format ;
 
-: percent ( ??? c -- ??? )
+: percent ( ??? c -- ??? : handle `%` escape chars )
   case
     [char] d of 1 ?depth .f endof
-\    [char] D of 2 ?depth d. endof \ Cell
+    [char] D of 2 ?depth d.f endof \ Cell
     [char] u of 1 ?depth u.f endof
-\    [char] U of 2 ?depth du. endof \ Double Cell
+    [char] U of 2 ?depth ud.f endof \ Double Cell
     [char] x of 1 ?depth .hex endof
     [char] o of 1 ?depth .octal endof
     [char] b of 1 ?depth .binary endof
@@ -88,9 +106,11 @@ user colorize
     [char] S of 1 ?depth count .formats endof \ Counted string
     [char] % of [char] % .format endof
     [char] @ of 1 ?depth execute endof
+    [char] n of 1 ?depth printed @ swap ! endof
+    [char] # of 2 ?depth banner endof
     invalid
   endcase ;
-: tilde ( ??? c -- ??? )
+: tilde ( ??? c -- ??? : handle `~` escape chars )
   case
     [char] k of 30 .color endof
     [char] r of 31 .color endof
@@ -112,14 +132,22 @@ user colorize
     [char] W of 47 .color endof
     [char] X of 1 ?depth 8 mod abs 40 + .color endof
 
-    [char] d of 1 .color endof
-    [char] f of 2 .color endof
+    [char] d of 1 .color endof ( bold )
+    [char] f of 2 .color endof ( faint )
     [char] p of .page endof
-    [char] n of 0  .color endof
+    [char] @ of 2 ?depth .at-xy endof
+    [char] n of 0  .color endof ( reset )
     [char] ~ of [char] ~ .format endof
     invalid
   endcase ;
-: escape ( ??? c -- ??? )
+
+: advance ( a u -- a u c )
+  dup 0= -18 and throw
+  over c@ >r
+  +string
+  r> ;
+
+: escape ( ??? a u c -- ??? : handle `\` escape chars )
     case
        [char] a of $7 .format endof
        [char] b of $8 .format endof
@@ -136,12 +164,6 @@ user colorize
       invalid
     endcase ;
 
-: advance ( a u -- a u c )
-  dup 0= -18 and throw
-  over c@ >r
-  +string
-  r> ;
-
 only forth definitions
 printing +order
 
@@ -155,18 +177,22 @@ printing +order
     dup case
       [char] % of drop advance -rot 2>r percent 2r> endof
       [char] ~ of drop advance -rot 2>r tilde   2r> endof
-      [char] \ of drop advance -rot 2>r escape  2r> endof
+      [char] \ of drop advance escape endof
       .format
     endcase
   repeat
   2drop printed @ ;
 
-101 123 s" abc%udef%c%%" format . cr
-s" Dbc" format . cr
-s" abc~rdef~nghi" format . cr
-s" A~mB~dC~fD~n" format . cr
+: scan (  ) ;
 
-: test
+cr
+101 123 s" abc%udef%c%% " format . cr
+s" Dbc " format . cr
+s" abc~rdef~nghi " format . cr
+s" A~mB~dC~fD~n " format . cr
+20 char = s" %# " format . cr 
+
+: test ( -- )
   cr
   7 for
     r@ 7 for 

@@ -2068,6 +2068,21 @@ variable run        \ Do we have a run of data?
 \ is just a demonstration system and avoiding accidental
 \ corruption is more important.
 \
+\ One example of this is you can make files and directories 
+\ within the same directory that the script resides when the
+\ script is executing but you cannot remove them. You can
+\ change directory to another directory that is not locked
+\ and remove files from that directory however.
+\
+\ Argument handling, that is arguments passed to the script,
+\ are not handled. It could be implemented by parsing the
+\ arguments and putting the results in global variables, one
+\ variable for each argument. A complication would occur when
+\ passing those arguments to a parsing word like `mkdir`,
+\ which could be solved in multiple ways (the parsing words
+\ could look for certain variable names, or we could make our
+\ own line parser that does variable expansion).
+\
 : script ( "file" -- : execute a line based Forth script )
   narg namebuf r/o open-file throw >r
   begin
