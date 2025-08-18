@@ -1994,7 +1994,7 @@ opt.optimize [if] ( optimizations on )
 \        : square dup * ;
 \        : pythagoras square swap square + isqrt ;
 \
-\ In the above example, and in this interpreter, "dup", "*",
+\ In the above example, and in this interpreter, "dup", "\*",
 \ and "swap" are primitives, "square", "pythagoras" and "isqrt"
 \ are functions. What would the code potentially look like?
 \ The Forth compiler, an interactive and lightweight compiler,
@@ -5312,7 +5312,7 @@ system[ user tup =cell tallot ]system
     [ {handler} ] up @ rp! ( exc# ) \ restore prev ret. stack
     r> [ {handler} ] up !  ( exc# ) \ restore prev handler
     r> swap >r         ( saved-sp ) \ exc# on return stack
-    sp! r>        ( exc# )     \ restore stack
+    sp! r>             ( exc# )     \ restore stack
   then ;
 
 \ Now we have "catch" and "throw", we can use them. The next

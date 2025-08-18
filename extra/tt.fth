@@ -9,6 +9,10 @@
 \
 \    Thank you.
 \
+\ TODO: Add color support, get working under SUBLEQ eFORTH
+\ and gforth, refactor
+\
+\
 
 \ only forth also definitions
 \ s" forget-tt" sfind [if] forget-tt [then] marker forget-tt
@@ -151,8 +155,8 @@ def-pit pit
 
 : draw-frame  \ --- ; draw the border of the pit
   deep 0 do
-      i -1   position [char] | dup stone
-      i wide position [char] | dup stone
+   i -1   position [char] | dup stone
+   i wide position [char] | dup stone
   loop  draw-bottom ;
 
 : bottom-msg  \ addr cnt --- ; output a message in the bottom of the pit
@@ -185,25 +189,25 @@ def-pit pit
   30 16 at-xy ." Score:"
   30 17 at-xy ." Pieces:"
   30 18 at-xy ." Levels:"
-   0 22 at-xy ."  ==== This program was written 1994 in pure dpANS Forth by Dirk Uwe Zoller ===="
+   0 22 at-xy ."  ==== Original by Dirk Uwe Zoller, 1994 ===="
    0 23 at-xy ."  == Copy it, port it, play it, enjoy it! ==" ;
 
 : update-score  \ --- ; display current score
-    38 16 at-xy score @ 3 .r
-    38 17 at-xy pieces @ 3 .r
-    38 18 at-xy levels @ 3 .r ;
+  38 16 at-xy score @ 3 .r
+  38 17 at-xy pieces @ 3 .r
+  38 18 at-xy levels @ 3 .r ;
 
 : refresh  \ --- ; redraw everything on screen
-    page draw-frame draw-pit show-help update-score ;
+  page draw-frame draw-pit show-help update-score ;
 
 
 \ Define shapes of bricks:
 
 : def-brick  create  4 0 do
-          ' execute  0 do  dup i chars + c@ c,  loop drop
-          refill drop
-      loop
-    does>  rot 4 * rot + 2* + ;
+  ' execute  0 do  dup i chars + c@ c,  loop drop
+    refill drop
+  loop
+  does>  rot 4 * rot + 2* + ;
 
 def-brick brick1  s"         "
       s" ######  "
@@ -257,7 +261,6 @@ create bricks  ' brick1 ,  ' brick2 ,  ' brick3 ,  ' brick4 ,
 
 create brick-val 1 c, 2 c, 3 c, 3 c, 4 c, 5 c, 5 c,
 
-
 : is-brick  \ brick --- ; activate a shape of brick
     >body [ ' brick ] literal >body 32 cmove ;
 
@@ -277,15 +280,15 @@ create brick-val 1 c, 2 c, 3 c, 3 c, 4 c, 5 c, 5 c,
     [ ' scratch ] literal is-brick ;
 
 : draw-brick  \ row col ---
-    4 0 do 4 0 do
-        j i brick 2c@  empty d<>
-        if  over j + over i +  position
-      j i brick 2c@  stone
-        then
-    loop loop  2drop ;
+  4 0 do 4 0 do
+    j i brick 2c@  empty d<>
+    if  over j + over i +  position
+    j i brick 2c@ stone
+    then
+  loop loop 2drop ;
 
-: show-brick  wiping off draw-brick ;
-: hide-brick  wiping on  draw-brick ;
+: show-brick wiping off draw-brick ;
+: hide-brick wiping on  draw-brick ;
 
 : put-brick  \ row col --- ; put the brick into the pit
   4 0 do 4 0 do
@@ -354,8 +357,8 @@ create brick-val 1 c, 2 c, 3 c, 3 c, 4 c, 5 c, 5 c,
   deep deep
   begin
     swap
-    begin  1- dup 0< if  2drop exit  then  dup line-full
-    while  1 levels +!  10 score +!  repeat
+    begin 1- dup 0< if  2drop exit  then  dup line-full
+    while 1 levels +!  10 score +!  repeat
     swap 1-
     2dup <> if  2dup move-line  then
   again ;
@@ -373,7 +376,7 @@ create brick-val 1 c, 2 c, 3 c, 3 c, 4 c, 5 c, 5 c,
       draw-bottom  endof
     refresh-key  of  refresh  endof
     quit-key  of  false exit  endof
-  endcase  true ;
+  endcase true ;
 
 : initialize  \ --- ; prepare for playing
   ( randomize ) empty-pit refresh
@@ -381,9 +384,9 @@ create brick-val 1 c, 2 c, 3 c, 3 c, 4 c, 5 c, 5 c,
 
 : adjust-delay  \ --- ; make it faster with increasing score
   levels @
-  dup  50 < if  100 over -  else
-  dup 100 < if   62 over 4 / -  else
-  dup 500 < if   31 over 16 / -  else  0  then then then
+  dup  50 < if 100 over -  else
+  dup 100 < if  62 over 4 / -  else
+  dup 500 < if  31 over 16 / -  else  0  then then then
   delay !  drop ;
 
 : play-game  \ --- ; play one tetris game
@@ -391,14 +394,14 @@ create brick-val 1 c, 2 c, 3 c, 3 c, 4 c, 5 c, 5 c,
     new-brick
     -1 3 insert-brick
   while
-    begin  4 0
-    do  35 13 at-xy
+    begin 4 0
+    do 35 13 at-xy
       delay @ ms key?
-      if  interaction 0=
-    if  unloop exit  then
+      if interaction 0=
+        if unloop exit then
       then
     loop
-    1 0 move-brick  0=
+    1 0 move-brick 0=
     until
     remove-lines
     update-score
