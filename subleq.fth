@@ -10,11 +10,72 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ rights reserved for comments, the book, diagrams
 \ and pictures.
 \
-\ # THIS NEEDS EDITING
+\ # TODO -- THIS NEEDS EDITING -- TODO
 \
 \ This version should not be released to the public. It needs
 \ proof reading. For a proofread version use the previous
-\ edition of the book.
+\ edition of the book. In the git repo for this book (in the
+\ branch `book`, not `master`, available at 
+\ <https://github.com/howerj/subleq>, the tag 
+\ `book-version-1.0.0` at commit
+\ `be6319641dbeaa70c8a2c3d13df89fb54bf6abc0` contains the
+\ version released for the book.
+\
+\ ## TODO
+\
+\ * As mentioned, edit and proofread this document.
+\ * FFS: Forth File system <https://github.com/howerj/ffs>,
+\ this project needs mentioning and integrating into the
+\ appendix, this is partially done. It requires a slightly
+\ modified SUBLEQ machine that saves memory after the machine
+\ has run. It could be discussed more, or the `ffs.fth`
+\ elaborated on.
+\ * Networking <https://github.com/howerj/subleq-network>,
+\ this adds networking (UDP, and not yet TCP) to a SUBLEQ
+\ machine, although most of the networking is written in pure
+\ Forth. It requires a SUBLEQ machine with a networking
+\ peripheral that can send packets and poll for them (yet
+\ another one).
+\ * Using two instruction `MOV` that negates (`-MOV`) and
+\ then undoing it with a second `-MOV` when storing to a
+\ temporary variable.
+\ * Making a Link Register to provide for simple SUBLEQ
+\ function calls. This, and `-MOV` would require updating the
+\ "recompiler". We could use this to save space.
+\ We should be able to get away with the following instruction
+\ to perform a jump:
+\
+\        SUBLEQ OP 1: Location of Return Address
+\        SUBLEQ OP 2: Link Register Address
+\        SUBLEQ OP 3: Jump to Function
+\        DATA: Return address
+\
+\ The function we are going to call would then need to move
+\ the link register contents to a temporary value and then
+\ clear the link register for the next call. At the end of
+\ the function we would jump to the location in the temporary
+\ variable. We could also only jump to locations in the
+\ first half of memory. We might be able to save the return
+\ address by having the first SUBLEQ op point to itself, this
+\ would then mean when returning we would need to patch up
+\ the address so it points to after the SUBLEQ instruction,
+\ this common patch up code could be jumped to, retsub would:
+\
+\        retsub:
+\          link 'link MOV
+\          link ZERO
+\          three 'link ADD (needed for single instr call only) 
+\          'link iJMP
+\
+\ And the shorter alternative (that would still only work
+\ for addressees that are positive):
+\
+\        SUBLEQ OP 1: Location of itself
+\        SUBLEQ OP 2: Link Register Address
+\        SUBLEQ OP 3: Jump to function
+\
+\ The link register would need to start off as being zero and
+\ be cleared by `retsub` as mentioned.
 \
 \ # Dedication and Foreword
 \
@@ -718,13 +779,13 @@ only forth definitions hex
 \ enabling some or all of these options, the following should
 \ work:
 \
-\	make 1.dec
-\	make gforth
+\        make 1.dec
+\        make gforth
 \
 \ But this might not:
 \
-\	make 2.dec
-\	make test
+\        make 2.dec
+\        make test
 \
 \ Because too much more is used by the new options.
 \
@@ -2409,7 +2470,7 @@ label: self-loop
 \
 \ The next if-statements are not strictly accurate, 
 \ these "+if" test just check to see if "{a}" and "{b}" are 
-\ non-zero and negative, and not for "$FFFF" (or -1 on a 16-bit 
+\ non-zero and negative, and not for "$FFFF" (or -1 on a 16-bit
 \ SUBLEQ machine). This is a possible improvement that could
 \ be made at the cost of code-size and an even greater slow
 \ down.
@@ -2827,7 +2888,7 @@ assembler.1 -order
 \ upon "leq0" and "op0=", which are relatively easy to get
 \ correct. In the Forth code we fully implement "\<" and later
 \ "u\<" using "leq0" and "op0=". Note that the assembly 
-\ versions of "if" hide a version of "0=" in them that does not 
+\ versions of "if" hide a version of "0=" in them that does not
 \ quite work for all values, so we have to correct for that in 
 \ our definition of "op0=". 
 \
@@ -2883,13 +2944,14 @@ assembler.1 -order
 \ the SUBLEQ machine could have any extra instructions a
 \ bitwise multiplexor and left and right shifts would be them.
 \ You could gain back a lot in terms of efficiency just from
-\ those three extra additions (although another contender would
+\ those three extra additions (another contender would
 \ be load and store instructions).
 \
 \ "shift" works by looping for each bit in a 16-bit value less
 \ one bit, and it tests whether the topmost bit is set (a
-\ cheap operation on twos compliment SUBLEQ machines, as the
-\ top bit is set when the value is negative).
+\ relatively cheap operation on twos compliment SUBLEQ 
+\ machines, as the top bit is set when the value is negative,
+\ we also need to make sure it is not zero as well).
 \
 \ If the topmost bit is set, then one is added to an
 \ accumulator register ("x" in this case), "x" will be our
@@ -2913,16 +2975,16 @@ assembler.1 -order
 \ "tos" is non-zero then 1 is added to "x", then "tos" is
 \ doubled, until completion.
 \
-\ The algorithms for "AND", "OR", and "XOR" are similar.
-\ As are left and right shifts by "N" places, although they are
-\ now included in the appendix, "opMux" however uses the same
-\ tricks.
+\ The algorithms for "AND", "OR", and "XOR" are similar, and
+\ for "opMux". The original algorithms for "AND", "OR", and
+\ "XOR" are in the appendix.
 \
-\ If we negate the shift count we can perform a *left shift*. 
-\ We can use this fact to save space.
+\ As mentioned, if we negate the shift count we can perform a 
+\ *left shift*.  We can use this fact to save space, reusing 
+\ the code for right shifts.
 \
 
-:a shift ( u n -- u : right shift 'u' by 'n' places )
+:a shift ( u n -- u : shift 'u' by 'n' places )
   bwidth r0 MOV       \ load machine bit width
   tos r0 SUB          \ adjust tos by machine width
   tos {sp} iLOAD --sp \ pop value to shift
@@ -2944,7 +3006,7 @@ assembler.1 -order
 \
 \ Previous iterations of this project implement the bitwise
 \ operators in full, in SUBLEQ assembly, and those
-\ implementations along with the description are still
+\ implementations along with their description are still
 \ available in the appendix.
 \
 \ However implementing "and", "or" and "xor" takes up a lot
@@ -2954,7 +3016,7 @@ assembler.1 -order
 \
 \ The Forth code that implements those operators using "mux"
 \ is shown later on, this section will describe how "mux" is
-\ implement, and what it does. Unlike the normal boolean
+\ implemented, and what it does. Unlike the normal boolean
 \ operators multiplex takes three arguments, which we will
 \ call "a", "b" and "sel" ("sel" being short for select).
 \
@@ -3000,8 +3062,9 @@ assembler.1 -order
 \ Some examples of the word:
 \
 \        hex
-\        5 A F mux ( returns 5 )
-\        5 A 0 mux ( returns A )
+\        system +order        
+\        5 A F mux u. ( prints 5 )
+\        5 A 0 mux u. ( prints A )
 \
 \ You can see that the operator is quite simple, and it is
 \ descriptive, it multiplexes between two values.
@@ -3445,7 +3508,7 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 \ already been encountered in the Virtual Machine instruction 
 \ section, but it decrements and tests that loop counter and 
 \ jumps back to instruction after "\>r" if the counter is 
-\ positive, if zero or negative it removes the counter from the 
+\ positive, if zero or negative it removes the counter from the
 \ return stack and continues on after the "next" statement.
 \
 \ These meta-compiled words do not take locations at cross
@@ -3692,7 +3755,7 @@ there 2/ primitive t! ( set 'primitive', needed for VM )
 \ must be reserved for the words that push those constants.
 \
 \ One interesting way of synthesizing constants without using
-\ numbers, which we do not need to do, is to use the properties 
+\ numbers, which we do not need to do, is to use the properties
 \ of various operators to make them, for example:
 \
 \        : #0 dup - ; ( could also use 'xor', or '<>' )
@@ -4099,7 +4162,7 @@ system[
 \ "rp!".
 \
 \ The definitions of all of these words are finicky as part of 
-\ the normal operations of a function cause the values they are 
+\ the normal operations of a function cause the values they are
 \ reading or writing to change.
 \
 \ "rp!" for example must pop off its return value and restore
@@ -6117,6 +6180,11 @@ opt.divmod [if]
 \ the string along and extract a byte. We use subtraction to
 \ test whether the two are equal or not, and return that test
 \ value much like the C "strcmp" function.
+\
+\ We could perform some other optimizations, such as using
+\ "@" or even "\[@\]" internally and only calling "c@" (which
+\ "count" uses internally, which is much slower than "@" and
+\ "\[@\]" on this platform.
 \
 
 : compare ( a1 u1 a2 u2 -- n : string comparison )
@@ -9057,7 +9125,7 @@ opt.multi [if]
 \ editor vocabulary to the search order so the commands are 
 \ visible, the commands are; "q", "?", "l", "x", "ia", "a", 
 \ "w", "s", "n", "p", "r", "z", and finally "d". Some of 
-\ the words are not strictly necessary in this editor, but they 
+\ the words are not strictly necessary in this editor, but they
 \ are not large and are useful.
 \
 \ Here is a short description of each of the commands:
@@ -9577,7 +9645,7 @@ opt.float [if] ( Large section of optional code! )
 \
 \ As too many words are added when this package is enabled
 \ the meta-compilation test will fail as we run out of room.
-\ That is SUBLEQ eFORTH (and gforth) will be able to generate a 
+\ That is SUBLEQ eFORTH (and gforth) will be able to generate a
 \ new image with Floating Point support, but that new image
 \ will not be able to generate new images as there will not be
 \ enough room.
@@ -9998,7 +10066,7 @@ mdecimal
   if [ 10 ] literal s>f f* r> 1- >r then
   <# r@ abs #0 #s r> sign 2drop
   [char] e hold f# #> r> over - spaces type ;
- : e ( f "123" -- usage "1.23 e 10", input scientific notation )
+: e ( f "123" -- usage "1.23 e 10", input scientific notation )
   f nget >r r@ abs [ 13301 ] literal [ 4004 ] literal */mod
   >r s>f [ 4004 ] literal s>f f/ exp r> +
   r> 0< if f/ else f* then ;
@@ -11555,33 +11623,33 @@ it being run.
 \ 
 \ SUBLEQ is usually defined by the following pseudo-code:
 \ 
-\ 	while pc >= 0:
-\ 		a = m[pc]
-\ 		b = m[pc + 1]
-\ 		c = m[pc + 2]
-\ 		pc = pc + 3
+\         while pc >= 0:
+\                 a = m[pc]
+\                 b = m[pc + 1]
+\                 c = m[pc + 2]
+\                 pc = pc + 3
 \ 
-\ 		if a == -1:
-\ 			m[b] = input_byte()
-\ 		else if b == -1:
-\ 			output_byte(m[a])
-\ 		else
-\ 			r = m[b] - m[a]
-\ 			if (r <= 0)
-\ 				pc = c
-\ 			m[b] = r
+\                 if a == -1:
+\                         m[b] = input_byte()
+\                 else if b == -1:
+\                         output_byte(m[a])
+\                 else
+\                         r = m[b] - m[a]
+\                         if (r <= 0)
+\                                 pc = c
+\                         m[b] = r
 \ 
 \ The core, with no I/O can be defined as:
 \ 
-\ 	forever:
-\ 		a = m[pc]
-\ 		b = m[pc + 1]
-\ 		c = m[pc + 2]
-\ 		pc = pc + 3
-\ 		r = m[b] - m[a]
-\ 		if (r <= 0)
-\ 			pc = c
-\ 		m[b] = r
+\         forever:
+\                 a = m[pc]
+\                 b = m[pc + 1]
+\                 c = m[pc + 2]
+\                 pc = pc + 3
+\                 r = m[b] - m[a]
+\                 if (r <= 0)
+\                         pc = c
+\                 m[b] = r
 \ 
 \ SUBLEQ is Turing Complete, can be implemented in
 \ hardware (see https://github.com/howerj/subleq-vhdl), and is
@@ -11591,43 +11659,43 @@ it being run.
 \ implemented. The following interpreter will be used as a
 \ starting point.
 \ 
-\ 	#include <stdint.h>
-\ 	#include <stdio.h>
+\         #include <stdint.h>
+\         #include <stdio.h>
 \ 
-\ 	typedef uint16_t u16;
-\ 	static const u16 n = -1;
-\ 	static u16 m[1<<16], prog = 0, pc = 0;
+\         typedef uint16_t u16;
+\         static const u16 n = -1;
+\         static u16 m[1<<16], prog = 0, pc = 0;
 \ 
-\ 	int main(int argc, char **argv) {
-\ 		for (long i = 1, d = 0; i < argc; i++) {
-\ 			FILE *f = fopen(argv[i], "rb");
-\ 			if (!f)
-\ 				return 1;
-\ 			while (fscanf(f, "%ld,", &d) > 0)
-\ 				m[prog++] = d;
-\ 			if (fclose(f) < 0)
-\ 				return 2;
-\ 		}
-\ 		for (pc = 0; pc < 32768;) {
-\ 			u16 a = m[pc++];
-\			u16 b = m[pc++];
-\			u16 c = m[pc++];
-\ 			if (a == n) {
-\ 				m[b] = getchar();
-\ 			} else if (b == n) {
-\ 				if (putchar(m[a]) < 0)
-\ 					return 3;
-\ 				if (fflush(stdout) < 0)
-\ 					return 4;
-\ 			} else {
-\ 				u16 r = m[b] - m[a];
-\ 				if (r == 0 || r & 32768)
-\ 					pc = c;
-\ 				m[b] = r;
-\ 			}
-\ 		}
-\ 		return 0;
-\ 	}
+\         int main(int argc, char **argv) {
+\                 for (long i = 1, d = 0; i < argc; i++) {
+\                         FILE *f = fopen(argv[i], "rb");
+\                         if (!f)
+\                                 return 1;
+\                         while (fscanf(f, "%ld,", &d) > 0)
+\                                 m[prog++] = d;
+\                         if (fclose(f) < 0)
+\                                 return 2;
+\                 }
+\                 for (pc = 0; pc < 32768;) {
+\                         u16 a = m[pc++];
+\                        u16 b = m[pc++];
+\                        u16 c = m[pc++];
+\                         if (a == n) {
+\                                 m[b] = getchar();
+\                         } else if (b == n) {
+\                                 if (putchar(m[a]) < 0)
+\                                         return 3;
+\                                 if (fflush(stdout) < 0)
+\                                         return 4;
+\                         } else {
+\                                 u16 r = m[b] - m[a];
+\                                 if (r == 0 || r & 32768)
+\                                         pc = c;
+\                                 m[b] = r;
+\                         }
+\                 }
+\                 return 0;
+\         }
 \ 
 \ This interpreter, written in C, is larger than it has to be
 \ (even though it is quite small), this is because it has
@@ -11663,38 +11731,38 @@ it being run.
 \ be anything from 16 bits plus, but mostly commonly 32-bits,
 \ depending on the platform):
 \ 
-\ 	#include <stdint.h>
-\ 	#include <stdio.h>
+\         #include <stdint.h>
+\         #include <stdio.h>
 \ 
-\ 	int main(int argc, char **argv) {
-\ 		int m[65536] = { 0, }, prog = 0;
-\ 		for (int i = 1, d = 0; i < argc; i++) {
-\ 			FILE *f = fopen(argv[i], "rb");
-\ 			if (!f)
-\ 				return 1;
-\ 			while (fscanf(f, "%d,", &d) > 0)
-\ 				m[prog++] = d;
-\ 			if (fclose(f) < 0)
-\ 				return 2;
-\ 		}
-\ 		for (int pc = 0; pc >= 0;) {
-\ 			int a = m[pc++];
-\			int b = m[pc++]; 
-\			int c = m[pc++];
-\ 			if (a == -1) {
-\ 				m[b] = getchar();
-\ 			} else if (b == -1) {
-\ 				if (putchar(m[a]) < 0)
-\ 					return 3;
-\ 			} else {
-\ 				int r = m[b] - m[a];
-\ 				if (r <= 0)
-\ 					pc = c;
-\ 				m[b] = r;
-\ 			}
-\ 		}
-\ 		return 0;
-\ 	}
+\         int main(int argc, char **argv) {
+\                 int m[65536] = { 0, }, prog = 0;
+\                 for (int i = 1, d = 0; i < argc; i++) {
+\                         FILE *f = fopen(argv[i], "rb");
+\                         if (!f)
+\                                 return 1;
+\                         while (fscanf(f, "%d,", &d) > 0)
+\                                 m[prog++] = d;
+\                         if (fclose(f) < 0)
+\                                 return 2;
+\                 }
+\                 for (int pc = 0; pc >= 0;) {
+\                         int a = m[pc++];
+\                        int b = m[pc++]; 
+\                        int c = m[pc++];
+\                         if (a == -1) {
+\                                 m[b] = getchar();
+\                         } else if (b == -1) {
+\                                 if (putchar(m[a]) < 0)
+\                                         return 3;
+\                         } else {
+\                                 int r = m[b] - m[a];
+\                                 if (r <= 0)
+\                                         pc = c;
+\                                 m[b] = r;
+\                         }
+\                 }
+\                 return 0;
+\         }
 \ 
 \ 
 \ The abstract SUBLEQ instruction, one with infinite cells
@@ -11730,42 +11798,42 @@ it being run.
 \ 
 \ We can do this like so:
 \ 
-\ 	#include <stdint.h>
-\ 	#include <stdio.h>
+\         #include <stdint.h>
+\         #include <stdio.h>
 \ 
-\ 	int load(int *m, int addr) {
-\ 		return addr == -1 ? getchar() : m[addr];
-\ 	}
+\         int load(int *m, int addr) {
+\                 return addr == -1 ? getchar() : m[addr];
+\         }
 \ 
-\ 	void store(int *m, int addr, int val) {
-\ 		if (addr == -1)
-\ 			putchar(val);
-\ 		else
-\ 			m[addr] = val;
-\ 	}
+\         void store(int *m, int addr, int val) {
+\                 if (addr == -1)
+\                         putchar(val);
+\                 else
+\                         m[addr] = val;
+\         }
 \ 
-\ 	int main(int argc, char **argv) {
-\ 		int m[65536] = { 0, }, prog = 0;
-\ 		for (int i = 1, d = 0; i < argc; i++) {
-\ 			FILE *f = fopen(argv[i], "rb");
-\ 			if (!f)
-\ 				return 1;
-\ 			while (fscanf(f, "%d,", &d) > 0)
-\ 				m[prog++] = d;
-\ 			if (fclose(f) < 0)
-\ 				return 2;
-\ 		}
-\ 		for (int pc = 0; pc >= 0;) {
-\ 			int a = load(m, pc++);
-\ 			int b = load(m, pc++);
-\ 			int c = load(m, pc++);
-\ 			int r = load(m, a) - load(m, b);
-\ 			if (r <= 0)
-\ 				pc = c;
-\ 			store(m, b, r);
-\ 		}
-\ 		return 0;
-\ 	}
+\         int main(int argc, char **argv) {
+\                 int m[65536] = { 0, }, prog = 0;
+\                 for (int i = 1, d = 0; i < argc; i++) {
+\                         FILE *f = fopen(argv[i], "rb");
+\                         if (!f)
+\                                 return 1;
+\                         while (fscanf(f, "%d,", &d) > 0)
+\                                 m[prog++] = d;
+\                         if (fclose(f) < 0)
+\                                 return 2;
+\                 }
+\                 for (int pc = 0; pc >= 0;) {
+\                         int a = load(m, pc++);
+\                         int b = load(m, pc++);
+\                         int c = load(m, pc++);
+\                         int r = load(m, a) - load(m, b);
+\                         if (r <= 0)
+\                                 pc = c;
+\                         store(m, b, r);
+\                 }
+\                 return 0;
+\         }
 \ 
 \ This is now truly a single instruction machine, but it
 \ is not simpler, smaller, faster, nor easier to program
@@ -12540,21 +12608,21 @@ it being run.
 #
 # A single SUBLEQ instruction is written as:
 #
-# 	SUBLEQ a, b, c
+#         SUBLEQ a, b, c
 #
 # Which is as there is only one instruction possible, 
 # SUBLEQ, is often just written as:
 #
-# 	a b c
+#         a b c
 #
 # These three operands are stored in three continuous 
 # memory locations. Each operand is an address, They 
 # perform the following pseudo-code:
 #
-# 	[b] = [b] - [a]
-# 	if [b] <= 0:
-# 		goto c;
-# 	
+#         [b] = [b] - [a]
+#         if [b] <= 0:
+#                 goto c;
+#         
 # There are three special cases, if 'c' is negative 
 # then execution halts (or sometimes if it is refers 
 # to somewhere outside of addressable memory). The 
@@ -14701,4 +14769,5 @@ CREATE PL 3 , HERE  ,001 , ,   ,010 , ,
 \ <https://github.com/Wandmalfarbe/pandoc-latex-template/>.
 \ Which applies in addition to the books own proprietary 
 \ license.
+
 

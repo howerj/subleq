@@ -2,7 +2,7 @@
 # target for more information.
 default all: help
 
-.PHONY: all clean test run gforth width help speed count
+.PHONY: all clean test run gforth width help speed count length
 
 CFLAGS=-std=c99 -fwrapv -Wall -Wextra -pedantic -O3 -march=native
 #CFLAGS+=-fsanitize=undefined 
@@ -35,6 +35,7 @@ help:
 	@echo "	width    : peform VM cell width tests"
 	@echo "	self     : run ${IMAGE} under 'self-interpreter'"
 	@echo "	eforth.c : make SUBLEQ VM with built-in Forth"
+	@echo "	length   : perform line length check on ${FORTH}"
 	@echo "	subleq.{pdf,epub.htm} : make documentation"
 	@echo
 	@echo "Consult subleq.fth for more information along"
@@ -77,7 +78,7 @@ gforth.dec: ${FORTH}
 gforth: subleq gforth.dec
 	./subleq gforth.dec
 
-subleq.md: subleq.fth subleq 1.dec extra/convert.fth extra/self/self.dec extra/self/self.asq
+subleq.md: makefile subleq.fth subleq 1.dec extra/convert.fth extra/self/self.dec extra/self/self.asq extra/ffs.fth
 	rm -f $@
 	echo "---" >> $@
 	echo "title: \"SUBLEQ eForth Meta-Compilation\"" >> $@
@@ -106,6 +107,11 @@ subleq.md: subleq.fth subleq 1.dec extra/convert.fth extra/self/self.dec extra/s
 	echo "## Self Interpreter (data)" >> $@
 	cat extra/self/self.dec | tr '\n' ' ' | fmt -w 48 | sed 's/^/\t/' >> $@
 	echo >> $@
+	echo "## Forth File System (full source)" >> $@
+	echo >> $@
+	cat extra/convert.fth extra/ffs.fth | ./subleq 1.dec >> $@
+	echo >> $@
+	
 
 subleq.htm: subleq.md
 	markdown $< > $@
@@ -159,6 +165,9 @@ debug: debug.o
 
 debug-opt-run: ${IMAGE} debug
 	./debug -o optimize=true -o stats=true ${IMAGE}
+
+length:
+	@awk 'length >= 64 { print NR }' ${FORTH}
 
 clean:
 	git clean -dffx
