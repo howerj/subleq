@@ -76,6 +76,10 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ The link register would need to start off as being zero and
 \ be cleared by `retsub` as mentioned.
+\ * Using the new LINK feature, it might be possible to perform
+\ real calls/returns using the Forth return stack in assembly,
+\ the heavy overhead of assembly prevented it previously, but
+\ that might be alleviated (partially) using LINK.
 \
 \ # Dedication and Foreword
 \
@@ -1600,6 +1604,9 @@ defined eforth [if] system -order [then]
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
+:m -MOV ( a a -- ) \ TODO: Description
+  2/ >r r@ dup t, t, NADDR
+  2/ t, r> t, NADDR ;m
 :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
 :m iADD ( a a -- : indirect add )
    2/ t, A, NADDR
@@ -1638,7 +1645,6 @@ defined eforth [if] system -order [then]
   there 2/ 7 + dup dup t, t, NADDR
   A,   t, NADDR
   V, 0 t, NADDR
-
   A, A, NADDR
   V, V, NADDR
   ;m
@@ -1858,6 +1864,7 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   =stksz half tvar stacksz \ must contain $80
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
+  3 tvar three     \ must contain  3
 $10 tvar bwidth    \ must contain 16
 $40 tvar mwidth    \ maximum machine width
   0 tvar r0        \ working pointer 1 (register r0)
@@ -1865,6 +1872,8 @@ $40 tvar mwidth    \ maximum machine width
   0 tvar r2        \ register 2
   0 tvar r3        \ register 3
   0 tvar r4        \ register 4
+  0 tvar rlink     \ link register
+  0 tvar 'link     \ temporary link register 
 opt.self [if]
   0 tvar {virtual} \ are we virtualized?
   0 tvar {self}    \ location of the self interpreter
@@ -1998,6 +2007,9 @@ opt.optimize [if] ( optimizations on )
 [else]
   :m a-optim drop ;m ( a -- : optimization off )
 [then]
+
+\ TODO: Describe and test
+:m LINK there 2/ t, rlink 2/ t, 2/ t, ;m ( a -- )
 
 \ # The Core Forth Virtual Machine
 \
@@ -2254,6 +2266,7 @@ label: die
 :a bye ( -- : first VM word, "bye", or halt the Forth system )
    HALT (a); ( ...like tears in rain. Time to die. )
 assembler.1 +order
+
 
 \ ## Start Routine
 \
@@ -2624,6 +2637,8 @@ assembler.1 -order
 \ understand how they work. The stack effect comments describe
 \ them in their entirety.
 \
+\ TODO: Rewrite this
+\
 \ The assembly instruction macro "iLOAD" and "iSTORE" (along
 \ with a stack adjustment) are used quite a bit here, as these
 \ VM instructions are primarily used to manipulate the variable
@@ -2636,11 +2651,32 @@ assembler.1 -order
 \ link register. This would allow code reuse without a full
 \ blown call-stack.
 \
-:a opSwap tos r0 MOV tos {sp} iLOAD r0 {sp} iSTORE ;a
-:a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
-:a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
+
+\ TODO: Describe!
+
+label: fnDup
+  ++sp
+  tos {sp} iSTORE
+  ( FALL THROUGH )
+label: retsub
+   rlink 'link -MOV
+   rlink ZERO
+   three 'link ADD
+   'link iJMP
+
+\ TODO: post decrement, or call to fnDrop? We should be able
+\ to call normal ops, like "opDup"  if we clear the rlink
+\ register and do not call LINK from within them (which we
+\ would not have to with "opDup" if we called it directly).
+label: fnTos
+   tos {sp} iLOAD
+   retsub JMP
+
+:a opSwap tos r0 MOV fnTos LINK r0 {sp} iSTORE ;a
+:a opDup fnDup LINK ;a ( n -- n n )
+:a opFromR fnDup LINK tos {rp} iLOAD --rp ;a
 :a opToR ++rp tos {rp} iSTORE (fall-through); ( !!! )
-:a opDrop tos {sp} iLOAD --sp ;a ( n -- )
+:a opDrop fnTos LINK --sp ;a ( n -- )
 
 \ The following two functions are use to build "@" and "!",
 \ however they deal with cell addresses and not with byte
@@ -2836,7 +2872,7 @@ assembler.1 -order
 :a opIpInc ip INC ;a ( -- : increment instruction pointer )
 :a opJumpZ ( u -- : Conditional jump on zero )
   tos r0 MOV
-  tos {sp} iLOAD --sp
+  fnTos LINK --sp
   r0 if t' opIpInc JMP then r0 DEC r0 +if t' opIpInc JMP then
   (fall-through); ( !!! )
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
@@ -2987,7 +3023,7 @@ assembler.1 -order
 :a shift ( u n -- u : shift 'u' by 'n' places )
   bwidth r0 MOV       \ load machine bit width
   tos r0 SUB          \ adjust tos by machine width
-  tos {sp} iLOAD --sp \ pop value to shift
+  fnTos LINK --sp     \ pop value to shift
   r1 ZERO             \ zero result register
   label: shift.loop
     r1 r1 ADD \ double r1, equivalent to left shift by one
@@ -3093,6 +3129,8 @@ assembler.1 -order
 \ and it will fail on machines with arbitrary precision
 \ arithmetic).
 \
+
+\ TODO: Rewrite using `-MOV` where appropriate.
 :a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
   \ tos contains multiplexor value
   bwidth r0 MOV \ load loop counter initial value [16]
@@ -3312,7 +3350,7 @@ opt.multi [if]
 \
 \        :a opAsm
 \          tos r0 MOV
-\          tos {sp} iLOAD --sp
+\          fnTos LINK --sp
 \          r0 iJMP (a);
 \
 \ The way the VM instruction works is to pull an address off
@@ -11119,6 +11157,9 @@ it being run.
 \ be replacing the Forth VM written in SUBLEQ with a Forth
 \ VM written in a more efficient manner. It would also only
 \ work for this Forth system and not for other SUBLEQ programs.
+\
+\ TODO: Test with `-MOV` and `LINK`, add instructions for them,
+\ (it seems to work).
 \
 \        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
 \         * programs (it might break them) and tries to
