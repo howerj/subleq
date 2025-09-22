@@ -23,6 +23,8 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ ## TODO
 \
+\ * How would we implement ALLOCA (allocate on the stack so
+\ it is automatically deallocated on return).
 \ * As mentioned, edit and proofread this document.
 \ * FFS: Forth File system <https://github.com/howerj/ffs>,
 \ this project needs mentioning and integrating into the
@@ -39,6 +41,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ * Using two instruction `MOV` that negates (`-MOV`) and
 \ then undoing it with a second `-MOV` when storing to a
 \ temporary variable.
+\ * Compute and make an index for a book.
 \ * Making a Link Register to provide for simple SUBLEQ
 \ function calls. This, and `-MOV` would require updating the
 \ "recompiler". We could use this to save space.
@@ -62,10 +65,10 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ this common patch up code could be jumped to, retsub would:
 \
 \        retsub:
-\          link 'link MOV
+\          link tlink MOV
 \          link ZERO
-\          three 'link ADD (needed for single instr call only) 
-\          'link iJMP
+\          three tlink ADD (needed for single instr call only)
+\          tlink iJMP
 \
 \ And the shorter alternative (that would still only work
 \ for addressees that are positive):
@@ -529,8 +532,8 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \        int main(int x, char **v) {
 \                FILE *f=fopen(v[1], "r");
 \                short p=0, m[1<<16], *i=m;
-\                while (fscanf(f, "%hd,", i++) > 0) ;
-\                for (; p>=0;) {
+\                while (fscanf(f, "%hd,", i++) > 0);
+\                for (;p>=0;) {
 \                        int a=m[p++],b=m[p++],c=m[p++];
 \                        a<0 ? m[b]=getchar() :
 \                        b<0 ? putchar(m[a]) :
@@ -1550,6 +1553,12 @@ defined eforth [if] system -order [then]
 \ state by subtracting "Z" from itself, so it now contains
 \ zero as it should. Four instructions.
 \
+\ "-MOV" copies the location of a cell to another one, but
+\ negates the copied value, it is one instruction (three cells)
+\ shorter than "MOV". It has limited uses, for example moving
+\ a variable to a temporary register and then back (thus
+\ negating the negation, restoring the original value).
+\
 \ "iLOAD" does an indirect load, "a b iLOAD" would use "b"
 \ as an address to do an indirect load through and store the
 \ result in "a". It does this by using the "MOV" instruction
@@ -1604,7 +1613,7 @@ defined eforth [if] system -order [then]
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
-:m -MOV ( a a -- ) \ TODO: Description
+:m -MOV ( a a -- )
   2/ >r r@ dup t, t, NADDR
   2/ t, r> t, NADDR ;m
 :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
@@ -1873,7 +1882,7 @@ $40 tvar mwidth    \ maximum machine width
   0 tvar r3        \ register 3
   0 tvar r4        \ register 4
   0 tvar rlink     \ link register
-  0 tvar 'link     \ temporary link register 
+  0 tvar tlink     \ temporary link register 
 opt.self [if]
   0 tvar {virtual} \ are we virtualized?
   0 tvar {self}    \ location of the self interpreter
@@ -1972,6 +1981,52 @@ $10 tvar {width}   \ set by size detection routines
 \ allowing them to use the memory area used to store both
 \ stacks more efficiently.
 \
+\
+\ "LINK" is used to perform a very limited function call
+\ within SUBLEQ assembly. It does not use a stack (and is thus
+\ limited to a call depth of one). It requires the `rlink`
+\ register to be defined, which it is earlier. The call is
+\ a *single* SUBLEQ instruction and only works when calling
+\ addresses that are positive or zero (you cannot jump to
+\ any addresses that have their high bit set). "LINK" must be
+\ paired with "retsub" (defined later), a set of instructions
+\ that must either be used or jumped to after a subroutine is
+\ linked to, the call is much faster than the return. The
+\ primary purpose of this link mechanism is to save on space,
+\ as code can be reused with macros.
+\
+\ The call performed by link as mentioned is a single 
+\ instruction, it has the form:
+\
+\       subleq Self, Link, Subroutine
+\
+\ Where `Self` is the address of itself, `Link` is the address
+\ of the `rlink` register (which must be zero to start off with
+\ and must be zeroed by `retsub`), and then `Subroutine`, which
+\ contains the address of the subroutine to jump to.
+\
+\ This instruction subtracts the address of the first operand
+\ (as the first operand contains a pointer to itself) from the
+\ link register (which if the address is in the lower half of
+\ memory will be less than or equal to zero, and thus always
+\ cause the jump to succeed). The `Subroutine` address is self
+\ explanatory.
+\
+\ There are other methods for implementing subroutines in 
+\ SUBLEQ but they all use more space, and some have fewer
+\ restrictions (such as allowing calls to anywhere in memory).
+\
+\ Note that the return address is not saved in the link 
+\ register but the location of the first operand of the SUBLEQ
+\ call instruction, this means "retsub" will have to patch up
+\ the link register by adding three to it, save it to a 
+\ temporary location, zero the link register for the next call
+\ and then perform and indirect jump through the temporary
+\ link register.
+\
+\ Consult "retsub" and the first usage of "LINK" later on for
+\ more information.
+\
 \ "a-optim" is used to perform a minor optimization in our
 \ SUBLEQ assembly routines, if we have an arbitrary assembly
 \ instruction that always jumps to the next instruction after
@@ -1993,7 +2048,7 @@ $10 tvar {width}   \ set by size detection routines
 \ The first instruction *may* branch to "c", the second one
 \ always will. It is a minor optimization that is easy to
 \ implement, so it might as well be done.
-\
+
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
 :m ONE! dup ZERO INC ; ( a -- : set address to '1' )
@@ -2002,14 +2057,12 @@ $10 tvar {width}   \ set by size detection routines
 :m --sp {sp} INC ;m ( -- : shrink variable stack )
 :m --rp {rp} DEC ;m ( -- : shrink return stack )
 :m ++rp {rp} INC ;m ( -- : grow return stack )
+:m LINK there 2/ t, rlink 2/ t, 2/ t, ;m ( a -- )
 opt.optimize [if] ( optimizations on )
   :m a-optim 2/ >r there =cell - r> swap t! ;m ( a -- )
 [else]
   :m a-optim drop ;m ( a -- : optimization off )
 [then]
-
-\ TODO: Describe and test
-:m LINK there 2/ t, rlink 2/ t, 2/ t, ;m ( a -- )
 
 \ # The Core Forth Virtual Machine
 \
@@ -2248,7 +2301,7 @@ opt.sm-vm-err [if]
 err-str 2/ tvar err-str-addr
 
 \ This prints the error message if we are not on the
-\ right machine width, 16-bit SUBLEQ machines allowed only.
+\ right machine width, only 16-bit SUBLEQ machines are allowed. 
 \ The test and jump to here is in the "start" routine.
 \
 
@@ -2461,7 +2514,10 @@ self 2/ {self} t!
 \
 \ It turns out this is not needed, so it is not done.
 \
-\ The Self-interpreter VM loop begins here.
+\ The Self-interpreter VM loop begins here. (We will not be
+\ using subroutines, using "LINK", here as we would need a
+\ separate copy of the registers used for linking for this
+\ self-interpreter).
 \ 
 
 label: self-loop
@@ -2637,6 +2693,10 @@ assembler.1 -order
 \ understand how they work. The stack effect comments describe
 \ them in their entirety.
 \
+\ There are some common sequences of instructions that are used
+\ in these sections of code that we can take out and then call,
+\ using the "LINK" macro.
+\
 \ TODO: Rewrite this
 \
 \ The assembly instruction macro "iLOAD" and "iSTORE" (along
@@ -2652,31 +2712,26 @@ assembler.1 -order
 \ blown call-stack.
 \
 
-\ TODO: Describe!
-
-label: fnDup
+label: fnDup ( assembly function to store `tos` onto stack )
   ++sp
   tos {sp} iSTORE
   ( FALL THROUGH )
-label: retsub
-   rlink 'link -MOV
-   rlink ZERO
-   three 'link ADD
-   'link iJMP
+label: retsub      ( return from LINK'ed subroutine )
+  rlink tlink -MOV ( `-MOV` used as call negates rlink )
+  rlink ZERO       ( zero rlink for next call with LINK )
+  three tlink ADD  ( patch up `tlink` to point after call )
+  tlink iJMP       ( jump to location after LINK call )
 
-\ TODO: post decrement, or call to fnDrop? We should be able
-\ to call normal ops, like "opDup"  if we clear the rlink
-\ register and do not call LINK from within them (which we
-\ would not have to with "opDup" if we called it directly).
-label: fnTos
+label: fnDrop ( load next on stack into `tos` register )
    tos {sp} iLOAD
+   --sp
    retsub JMP
 
-:a opSwap tos r0 MOV fnTos LINK r0 {sp} iSTORE ;a
+:a opSwap tos r0 MOV fnDrop LINK ++sp r0 {sp} iSTORE ;a
 :a opDup fnDup LINK ;a ( n -- n n )
 :a opFromR fnDup LINK tos {rp} iLOAD --rp ;a
 :a opToR ++rp tos {rp} iSTORE (fall-through); ( !!! )
-:a opDrop fnTos LINK --sp ;a ( n -- )
+:a opDrop fnDrop LINK ;a ( n -- )
 
 \ The following two functions are use to build "@" and "!",
 \ however they deal with cell addresses and not with byte
@@ -2872,7 +2927,7 @@ label: fnTos
 :a opIpInc ip INC ;a ( -- : increment instruction pointer )
 :a opJumpZ ( u -- : Conditional jump on zero )
   tos r0 MOV
-  fnTos LINK --sp
+  fnDrop LINK
   r0 if t' opIpInc JMP then r0 DEC r0 +if t' opIpInc JMP then
   (fall-through); ( !!! )
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
@@ -2916,7 +2971,8 @@ label: fnTos
 \ "opJump" is reused by "opNext" to save space.
 \
 
-:a opNext r0 {rp} iLOAD ( R: n -- | n-1 )
+:a opNext ( R: n -- | n-1 )
+   r0 {rp} iLOAD 
    r0 +if r0 DEC r0 {rp} iSTORE t' opJump JMP then
    --rp t' opIpInc JMP (a);
 
@@ -3023,7 +3079,7 @@ label: fnTos
 :a shift ( u n -- u : shift 'u' by 'n' places )
   bwidth r0 MOV       \ load machine bit width
   tos r0 SUB          \ adjust tos by machine width
-  fnTos LINK --sp     \ pop value to shift
+  fnDrop LINK         \ pop value to shift
   r1 ZERO             \ zero result register
   label: shift.loop
     r1 r1 ADD \ double r1, equivalent to left shift by one
@@ -3350,7 +3406,7 @@ opt.multi [if]
 \
 \        :a opAsm
 \          tos r0 MOV
-\          fnTos LINK --sp
+\          fnDrop LINK
 \          r0 iJMP (a);
 \
 \ The way the VM instruction works is to pull an address off
