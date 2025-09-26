@@ -23,8 +23,6 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ ## TODO
 \
-\ * How would we implement ALLOCA (allocate on the stack so
-\ it is automatically deallocated on return).
 \ * As mentioned, edit and proofread this document.
 \ * FFS: Forth File system <https://github.com/howerj/ffs>,
 \ this project needs mentioning and integrating into the
@@ -613,8 +611,8 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \                subleq Z, b
 \                subleq Z, Z
 \
-\ "ADD" stores a temporary result in "Z", but it should
-\ start off as zero as always, it effectively negates what is
+\ "ADD" stores a temporary result in "Z", "Z" should
+\ start off as zero as always, it negates what is
 \ loaded from "a", storing it in "Z", then subtracts and stores
 \ the result in "b". However "Z" contains an unknown, possible
 \ non-zero value, so the third SUBLEQ subtracts "Z" from itself
@@ -2695,27 +2693,43 @@ assembler.1 -order
 \
 \ There are some common sequences of instructions that are used
 \ in these sections of code that we can take out and then call,
-\ using the "LINK" macro.
+\ using the "LINK" macro, this is to save on space. "iLOAD" and
+\ "iSTORE" are particularly expensive, but this technique could
+\ even be applied to "MOV" instructions as it requires three
+\ instructions whilst the "LINK" macro is a single instruction.
 \
-\ TODO: Rewrite this
+\ "fnDup" and "fnDrop" are two examples of snippets of code
+\ that can be reused elsewhere, if there are just two calls
+\ to a function that contains an `iSTORE` or an `iLOAD` then
+\ it is worth implementing that as a function to save on space.
+\ 
+\ It helps if those functions are themselves meaningful, but
+\ if the shared sub sequences of instructions is long enough
+\ it may be worth turning them into functions. "fnDup" and
+\ "fnDrop" implement the Forth functions "dup" and "drop"
+\ respectively, so to any Forth programmer they should have
+\ meaning. "opDup" calls "fnDup", and then performs an exit,
+\ whilst "opFromR" calls "fnDup", does some other work, and
+\ then calls exit. "opDup" cannot fall-through to "fnDup"
+\ as it must perform an exit after.
 \
-\ The assembly instruction macro "iLOAD" and "iSTORE" (along
-\ with a stack adjustment) are used quite a bit here, as these
-\ VM instructions are primarily used to manipulate the variable
-\ and return stacks. It may be possible to save some space at
-\ the expense of extra complexity and execution time by
-\ implementing a primitive call/return mechanism using "iJMP"
-\ and a link register. Common runs of code like 
-\ "++sp tos {sp} iSTORE" could be jumped to directly, prior
-\ to that jump the place to return to would be set in a
-\ link register. This would allow code reuse without a full
-\ blown call-stack.
+\ "opToR" falls through to "opDrop" however, saving on a single
+\ jump back to the Forth VM.
+\
+\ "fnDup" falls through to "retsub" whilst "fnDrop" must jump
+\ to it. These tricks make understanding the assembly code
+\ much more difficult, but save on space which is sorely 
+\ needed to do more useful work. If we want to rearrange or
+\ delete functions or code snippets we cannot treat them in
+\ isolation but we must instead consider their relative 
+\ positions which makes maintenance harder.
+\
 \
 
 label: fnDup ( assembly function to store `tos` onto stack )
-  ++sp
-  tos {sp} iSTORE
-  ( FALL THROUGH )
+  ++sp             ( pre-increment stack pointer )
+  tos {sp} iSTORE  ( store `tos` to the stack )
+  ( FALL THROUGH ) ( Fall through to `retsub` )
 label: retsub      ( return from LINK'ed subroutine )
   rlink tlink -MOV ( `-MOV` used as call negates rlink )
   rlink ZERO       ( zero rlink for next call with LINK )
@@ -2723,8 +2737,8 @@ label: retsub      ( return from LINK'ed subroutine )
   tlink iJMP       ( jump to location after LINK call )
 
 label: fnDrop ( load next on stack into `tos` register )
-   tos {sp} iLOAD
-   --sp
+   tos {sp} iLOAD  ( load `tos` off of stack )
+   --sp            ( post-decrement stack pointer )
    retsub JMP
 
 :a opSwap tos r0 MOV fnDrop LINK ++sp r0 {sp} iSTORE ;a
@@ -3075,6 +3089,33 @@ label: fnDrop ( load next on stack into `tos` register )
 \ *left shift*.  We can use this fact to save space, reusing 
 \ the code for right shifts.
 \
+\ The SUBLEQ assembly function "fnTopmost" is a common factor
+\ to both "shift" and "opMux". It is a poor factor in that
+\ it contains two unrelated functions, one that determines
+\ whether the register "r2" is negative (making sure it is
+\ not zero), incrementing the register "r1" if it is, and
+\ also doing the unrelated function of doubling the register
+\ "tos".
+\
+\ They are both used in the same way, the call copies the value
+\ they want to determine if the topmost bit is set into "r2"
+\ (a copy is done because we will want to retain that value
+\ for future use elsewhere), "shift" copies "tos" into "r2",
+\ the output is placed into "r1". "r1" is also added to itself,
+\ performing a single left shift prior to adding in the new
+\ bit.
+\
+\
+assembler.1 +order
+label: fnTopmost ( uses: top r1 r2 )
+  r1 r1 ADD
+  r2 +if else
+    r2 INC r2 +if else r1 INC then 
+  then
+  tos tos ADD
+  retsub JMP
+
+assembler.1 -order
 
 :a shift ( u n -- u : shift 'u' by 'n' places )
   bwidth r0 MOV       \ load machine bit width
@@ -3082,11 +3123,8 @@ label: fnDrop ( load next on stack into `tos` register )
   fnDrop LINK         \ pop value to shift
   r1 ZERO             \ zero result register
   label: shift.loop
-    r1 r1 ADD \ double r1, equivalent to left shift by one
-    \ work out what bit to shift into r1
-    tos +if else
-      tos r2 MOV r2 INC r2 +if else r1 INC then then
-    tos tos ADD \ double tos, equivalent to left shift by one
+    tos r2 MOV
+    fnTopmost LINK
     r0 DEC \ decrement loop counter
   r0 +if shift.loop JMP then 
   r1 tos MOV ;a \ move result back into tos
@@ -3186,7 +3224,9 @@ label: fnDrop ( load next on stack into `tos` register )
 \ arithmetic).
 \
 
-\ TODO: Rewrite using `-MOV` where appropriate.
+\ TODO: Rewrite using `-MOV` where appropriate. And LINK
+\ It might be possible to make the loop counter count up from
+\ negative "bwidth" and save space that way.
 :a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
   \ tos contains multiplexor value
   bwidth r0 MOV \ load loop counter initial value [16]
@@ -3195,10 +3235,8 @@ label: fnDrop ( load next on stack into `tos` register )
   r4 {sp} iLOAD --sp \ pop second input
   
   label: opMux.loop
-    r1 r1 ADD \ shift results register
-
-    \ determine topmost bit of 'tos', place result in 'r2'
-    \ this is used to select whether to use r3 or r4
+    \ determine topmost bit of "tos", place result in "r2"
+    \ this is used to select whether to use "r3" or "r4"
     tos +if label: opMux.r3 r3 r2 MOV else
       tos r2 MOV
       r2 INC r2 +if
@@ -3206,14 +3244,14 @@ label: fnDrop ( load next on stack into `tos` register )
         r4 r2 MOV then then
 
     \ determine whether we should add 0/1 into result
-    r2 +if else r2 INC r2 +if else r1 INC then then
+    \ and double "tos", also shift "r1"
+    fnTopmost LINK
 
-    tos tos ADD \ shift tos
-    r3 r3 ADD \ shift r3
-    r4 r4 ADD \ shift r4
+    r3 r3 ADD \ shift "r3"
+    r4 r4 ADD \ shift "r4"
     r0 DEC \ decrement loop counter
     r0 +if opMux.loop JMP then
-  r1 tos MOV ;a \ move r1 to tos, returning our result
+  r1 tos MOV ;a \ move "r1" to "tos", returning our result
 
 \ "opDivMod" is purely here for efficiency reasons, it really
 \ improves the speed at which numbers can be printed, which
@@ -4565,6 +4603,11 @@ opt.buggy-comp [if] ( just for testing purposes )
 : > swap < ;   ( n1 n2 -- f : signed greater than )
 [then]
 
+\ "0\<" now uses "\<", an alternative version that avoid the
+\ use of "\<" (which is quite complicated) is:
+\
+\        : 0< dup 0= if drop #0 exit then leq0 0<> ;
+\
 : 0< #0 < ;   ( n -- f : less than zero )
 : 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
 : >= < 0= ;   ( n1 n2 -- f : greater than or equal to )
@@ -9729,6 +9772,40 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 : free freelist (free) ; ( ptr -- ior )
 : resize freelist (resize) ; ( ptr u -- ptr ior )
 
+\ An interesting exercise would be to implement "alloca", which
+\ is a non-standard function in C that is commonly implemented
+\ on many platforms that allocates an arbitrary amount on the
+\ C run times stack. An analogous one for Forth would do so on
+\ the return stack, it is not as simple as just allocating the
+\ memory, the memory must also be freed automatically when the
+\ function exits. There are some Forth platforms where it would
+\ not be possible to implement this function, such as those
+\ Forths with hardware stacks. It would not be possible to
+\ implement this word in Forth in a standard way (the word
+\ would need access to low level Forth internals not guaranteed
+\ to exist by the most popular Forth standards).
+\
+\ One way to implement the word would be to allocate the space
+\ on the return stack by manipulating the return stack pointer,
+\ and then pushing the amount of bytes allocated to the return
+\ stack, and the pushing an execution token to a word which
+\ will restore the return stack when the function exits, so the
+\ correct return address will be found. Unfortunately this 
+\ would place some restrictions on the usage of "alloca",
+\ loop constructs like "for...next" and the "do...loop" family
+\ that use the return stack would have to be used with care,
+\ you could call "alloca" at the start of the function, even
+\ multiple times, and use the allocated memory in a counted 
+\ loop, but you could not call "alloca" within a counted loop
+\ as that would interfere with the loop counters.
+\
+\ You could check whether you have enough space left on the
+\ stack to perform an allocation and return a failure code
+\ if you cannot, a feature usually lacking from C versions of
+\ "alloca", which render the function less useful than it
+\ would ordinarily be.
+\
+
 [then] ( opt.allocate )
 
 opt.float [if] ( Large section of optional code! )
@@ -11214,8 +11291,8 @@ it being run.
 \ VM written in a more efficient manner. It would also only
 \ work for this Forth system and not for other SUBLEQ programs.
 \
-\ TODO: Test with `-MOV` and `LINK`, add instructions for them,
-\ (it seems to work).
+\ Instructions for "-MOV", "LINK" and "retsub" are missing, but
+\ are not needed.
 \
 \        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
 \         * programs (it might break them) and tries to
