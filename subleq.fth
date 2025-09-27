@@ -23,6 +23,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ ## TODO
 \
+\ * Make a cheap "rotate" with shift? Add back in "r1" to "tos"
 \ * As mentioned, edit and proofread this document.
 \ * FFS: Forth File system <https://github.com/howerj/ffs>,
 \ this project needs mentioning and integrating into the
@@ -1614,7 +1615,7 @@ defined eforth [if] system -order [then]
 :m -MOV ( a a -- )
   2/ >r r@ dup t, t, NADDR
   2/ t, r> t, NADDR ;m
-:m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
+:m iJMP there 2/ B + 2* MOV ;m ( a -- )
 :m iADD ( a a -- : indirect add )
    2/ t, A, NADDR
    2/ t, V, NADDR
@@ -1871,8 +1872,9 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   =stksz half tvar stacksz \ must contain $80
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
-  3 tvar three     \ must contain  3
+ -3 tvar -three    \ must contain -3
 $10 tvar bwidth    \ must contain 16
+-0010 tvar -bwidth \ must contain -16
 $40 tvar mwidth    \ maximum machine width
   0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
@@ -2733,7 +2735,7 @@ label: fnDup ( assembly function to store `tos` onto stack )
 label: retsub      ( return from LINK'ed subroutine )
   rlink tlink -MOV ( `-MOV` used as call negates rlink )
   rlink ZERO       ( zero rlink for next call with LINK )
-  three tlink ADD  ( patch up `tlink` to point after call )
+  -three tlink SUB ( increment `tlink` by three )
   tlink iJMP       ( jump to location after LINK call )
 
 label: fnDrop ( load next on stack into `tos` register )
@@ -3118,7 +3120,7 @@ label: fnTopmost ( uses: top r1 r2 )
 assembler.1 -order
 
 :a shift ( u n -- u : shift 'u' by 'n' places )
-  bwidth r0 MOV       \ load machine bit width
+  -bwidth r0 -MOV       \ load machine bit width
   tos r0 SUB          \ adjust tos by machine width
   fnDrop LINK         \ pop value to shift
   r1 ZERO             \ zero result register
@@ -3229,7 +3231,7 @@ assembler.1 -order
 \ negative "bwidth" and save space that way.
 :a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
   \ tos contains multiplexor value
-  bwidth r0 MOV \ load loop counter initial value [16]
+  -bwidth r0 -MOV \ load loop counter initial value [16]
   r1 ZERO       \ zero results register
   r3 {sp} iLOAD --sp \ pop first input
   r4 {sp} iLOAD --sp \ pop second input
