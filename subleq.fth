@@ -41,43 +41,6 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ then undoing it with a second `-MOV` when storing to a
 \ temporary variable.
 \ * Compute and make an index for a book.
-\ * Making a Link Register to provide for simple SUBLEQ
-\ function calls. This, and `-MOV` would require updating the
-\ "recompiler". We could use this to save space.
-\ We should be able to get away with the following instruction
-\ to perform a jump:
-\
-\        SUBLEQ OP 1: Location of Return Address
-\        SUBLEQ OP 2: Link Register Address
-\        SUBLEQ OP 3: Jump to Function
-\        DATA: Return address
-\
-\ The function we are going to call would then need to move
-\ the link register contents to a temporary value and then
-\ clear the link register for the next call. At the end of
-\ the function we would jump to the location in the temporary
-\ variable. We could also only jump to locations in the
-\ first half of memory. We might be able to save the return
-\ address by having the first SUBLEQ op point to itself, this
-\ would then mean when returning we would need to patch up
-\ the address so it points to after the SUBLEQ instruction,
-\ this common patch up code could be jumped to, retsub would:
-\
-\        retsub:
-\          link tlink MOV
-\          link ZERO
-\          three tlink ADD (needed for single instr call only)
-\          tlink iJMP
-\
-\ And the shorter alternative (that would still only work
-\ for addressees that are positive):
-\
-\        SUBLEQ OP 1: Location of itself
-\        SUBLEQ OP 2: Link Register Address
-\        SUBLEQ OP 3: Jump to function
-\
-\ The link register would need to start off as being zero and
-\ be cleared by `retsub` as mentioned.
 \ * Using the new LINK feature, it might be possible to perform
 \ real calls/returns using the Forth return stack in assembly,
 \ the heavy overhead of assembly prevented it previously, but
@@ -11240,7 +11203,7 @@ it being run.
 \           2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r>
 \           Z  t, NADDR
 \           Z Z NADDR ;m
-\        :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
+\        :m iJMP there 2/ B + 2* MOV ;m ( a -- )
 \        :m iADD ( a a -- : indirect add )
 \           2/ t, A, NADDR
 \           2/ t, V, NADDR
@@ -11296,6 +11259,8 @@ it being run.
 \ Instructions for "-MOV", "LINK" and "retsub" are missing, but
 \ are not needed.
 \
+\ TODO: Sort out new iJMP instruction
+\
 \        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
 \         * programs (it might break them) and tries to
 \         * recompile the program into a more efficient
@@ -11307,7 +11272,7 @@ it being run.
 \         * E-Mail:  howe.r.j.89@gmail.com
 \         * Repo:    https://github.com/howerj/subleq
 \         * License: The Unlicense (this file only)  */
-\
+\        
 \        #include <stdint.h>
 \        #include <stdio.h>
 \        #include <stdarg.h>
@@ -11323,10 +11288,10 @@ it being run.
 \          IADD, ISUB,
 \          IJMP, ILOAD, ISTORE, INC, DEC,
 \          INV, DUBS, LSHIFT,
-\
+\        
 \          MAX
 \        };
-\
+\        
 \        static const char *names[] = {
 \          "SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
 \          "MOV    ", "ZERO   ", "PUT    ", "GET    ",
@@ -11334,23 +11299,23 @@ it being run.
 \          "ILOAD  ", "ISTORE ", "INC    ", "DEC    ",
 \          "INV    ", "DOUBLE ", "LSHIFT ",
 \        };
-\
+\        
 \        static const uint64_t increment[] = {
 \          [SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/,
 \          [MOV] = 12, [ADD] = 9, [DUBS] = 9,
 \          [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
-\          [ZERO] = 3, [IJMP] = 15/*Disassembly only*/,
+\          [ZERO] = 3, [IJMP] = 12/*Disassembly only*/,
 \          [ILOAD] = 24, [IADD] = 21, [ISUB] = 15,
 \          [ISTORE] = 36, [PUT] = 3, [GET] = 3,
 \          [HALT] = 3/*Disassembly only*/,
 \          [INC] = 3, [DEC] = 3, [INV] = 21,
 \        };
-\
+\        
 \        typedef struct {
 \          int instruction;
 \          uint16_t m, s, d;
 \        } instruction_t;
-\
+\        
 \        typedef struct {
 \          int matches[MAX];
 \          int set[9];
@@ -11359,7 +11324,7 @@ it being run.
 \          clock_t start, end;
 \          int64_t cnt[MAX];
 \        } optimizer_t;
-\
+\        
 \        static int match(optimizer_t *o, uint16_t *n,
 \          int sz, uint16_t pc, const char *s, ...) {
 \          va_list ap;
@@ -11376,10 +11341,10 @@ it being run.
 \            case '8': case '9': {
 \              int p = s[j] - '0';
 \              if (o->set[p]) {
-\                if (n[i] != o->v[p]) goto end;
+\        	if (n[i] != o->v[p]) goto end;
 \              } else {
-\                o->set[p] = 1;
-\                o->v[p] = n[i];
+\        	o->set[p] = 1;
+\        	o->v[p] = n[i];
 \              }
 \              i++;
 \              break;
@@ -11392,13 +11357,13 @@ it being run.
 \            case '%': {
 \              int q = va_arg(ap, int);
 \              if (n[i] != q)
-\                goto end;
+\        	goto end;
 \              i++;
 \            } break;
 \            case '!': {
-\                uint16_t *p = va_arg(ap, uint16_t*);
-\                *p = n[i];
-\                i++;
+\        	uint16_t *p = va_arg(ap, uint16_t*);
+\        	*p = n[i];
+\        	i++;
 \            } break;
 \            case '?': i++; break;
 \            case ' ': case '\t':
@@ -11413,13 +11378,13 @@ it being run.
 \          va_end(ap);
 \          return r;
 \        }
-\
+\        
 \        static long get(optimizer_t *o, char var) {
 \         if (var < '0' || var > '9' || o->set[var - '0'] == 0)
 \            return -1;
 \          return o->v[var - '0'];
 \        }
-\
+\        
 \        /* This section pattern matches the code finding
 \         * sequences of SUBLEQ instructions against known
 \         * instruction macros.  It is essentially a
@@ -11428,7 +11393,7 @@ it being run.
 \         * speed up. */
 \        static int optimizer(optimizer_t *o,
 \            instruction_t *m, uint16_t pc) {
-\
+\        
 \          for (uint16_t i = 0; i < pc; i++) {
 \            switch (m[i].m) {
 \            case 0: o->z_reg[i] = 1; break;
@@ -11436,16 +11401,16 @@ it being run.
 \            case 0xFFFF: o->neg1_reg[i] = 1; break;
 \            }
 \          }
-\
+\        
 \          for (uint16_t i = 0; i < pc; i++) {
 \            uint16_t q0 = 0, q1 = 0;
 \            uint16_t n[DEPTH] = { 0, };
-\
+\        
 \            for (size_t j = 0; j < DEPTH; j++)
 \              n[j] = m[L(i + j)].m;
-\
+\        
 \            /* Largest instructions *must* go first */
-\
+\        
 \            if (match(o, n, DEPTH, i, "0Z> 11> 22> Z3> Z4> \
 \              ZZ> 56> 77> Z7> 6Z> ZZ> 66>") == 1) {
 \              m[L(i)].instruction = ISTORE;
@@ -11454,7 +11419,7 @@ it being run.
 \              o->matches[ISTORE]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11> \
 \               ?Z> Z1> ZZ>", &q0) == 1 &&
 \               get(o, '0') == (i + 15)) {
@@ -11464,22 +11429,22 @@ it being run.
 \              o->matches[ILOAD]++;
 \              continue;
 \            }
-\
+\        
 \            int shift = 0, l = 0, dest = 0;
 \            for (l = 0; l < DEPTH; l += 9) {
 \              if (match(o, n+l, DEPTH-l, i+l, "!Z>\
-\                  Z!> ZZ>", &q0, &q1) == 1
-\                  && q0 == q1) {
-\                if (l == 0) {
-\                  dest = q0;
-\                } else {
-\                  if (dest != q0) {
-\                    break;
-\                  }
-\                }
-\                shift++;
+\        	  Z!> ZZ>", &q0, &q1) == 1
+\        	  && q0 == q1) {
+\        	if (l == 0) {
+\        	  dest = q0;
+\        	} else {
+\        	  if (dest != q0) {
+\        	    break;
+\        	  }
+\        	}
+\        	shift++;
 \              } else {
-\                break;
+\        	break;
 \              }
 \            }
 \            if (shift >= 2) {
@@ -11489,7 +11454,7 @@ it being run.
 \              o->matches[LSHIFT]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "01> 23> 44> 14> 3Z> \
 \              11> 33>") == 1) {
 \              m[L(i)].instruction = IADD;
@@ -11498,61 +11463,61 @@ it being run.
 \              o->matches[IADD]++;
 \              continue;
 \            }
-\
-\
+\        
+\        
 \            if (match(o, n, DEPTH, i, "00> 10> 11> 2Z>\
-\                Z1> ZZ> !1>", &q0) == 1
-\                && o->one_reg[q0]) {
+\        	Z1> ZZ> !1>", &q0) == 1
+\        	&& o->one_reg[q0]) {
 \              m[L(i)].instruction = INV;
 \              m[L(i)].d = L(get(o, '1'));
 \              o->matches[INV]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "01> 33> 14> 5Z> 11>")
-\                == 1) {
+\        	== 1) {
 \              m[L(i)].instruction = ISUB;
 \              m[L(i)].d = L(get(o, '0'));
 \              m[L(i)].s = L(get(o, '5'));
 \              o->matches[ISUB]++;
 \              continue;
 \            }
-\
-\
-\            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>",
+\        
+\        
+\            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
 \            &q0) == 1
-\                && get(o, '0') == (i + (3*4) + 2)) {
+\        	&& get(o, '0') == (i + (3*4) + 2)) {
 \              m[L(i)].instruction = IJMP;
 \              m[L(i)].d = L(q0);
 \              o->matches[IJMP]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
 \            &q0) == 1) {
 \              uint64_t dst = L(get(o, '0'));
 \              uint64_t src = L(q0);
 \              if (dst != src) { /* check for zero also? */
-\                m[L(i)].instruction = MOV;
-\                m[L(i)].d = dst;
-\                m[L(i)].s = src;
-\                o->matches[MOV]++;
-\                continue;
+\        	m[L(i)].instruction = MOV;
+\        	m[L(i)].d = dst;
+\        	m[L(i)].s = src;
+\        	o->matches[MOV]++;
+\        	continue;
 \              }
 \            }
-\
+\        
 \            /* We should match multiple ones in a row and
 \             * turn them into a left shift */
 \            if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
 \            &q0, &q1) == 1
-\                && q0 == q1) {
+\        	&& q0 == q1) {
 \              m[L(i)].instruction = DUBS;
 \              m[L(i)].d = L(q1);
 \              m[L(i)].s = L(q0);
 \              o->matches[DUBS]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
 \            &q0, &q1) == 1) {
 \              m[L(i)].instruction = ADD;
@@ -11561,21 +11526,21 @@ it being run.
 \              o->matches[ADD]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "00>") == 1) {
 \              m[L(i)].instruction = ZERO;
 \              m[L(i)].d = L(get(o, '0'));
 \              o->matches[ZERO]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "ZZ!", &q0) == 1
 \            && q0 == 0xFFFFu) {
 \              m[L(i)].instruction = HALT;
 \              o->matches[HALT]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "00!", &q0) == 1) {
 \              m[L(i)].instruction = JMP;
 \              m[L(i)].d = q0;
@@ -11583,21 +11548,21 @@ it being run.
 \              o->matches[JMP]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "N!>", &q0) == 1) {
 \              m[L(i)].instruction = GET;
 \              m[L(i)].d = L(q0);
 \              o->matches[GET]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!N>", &q0) == 1) {
 \              m[L(i)].instruction = PUT;
 \              m[L(i)].s = L(q0);
 \              o->matches[PUT]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1 && o->neg1_reg[L(q0)]) {
 \              m[L(i)].instruction = INC;
@@ -11605,7 +11570,7 @@ it being run.
 \              o->matches[INC]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1 && o->one_reg[L(q0)]) {
 \              m[L(i)].instruction = DEC;
@@ -11613,7 +11578,7 @@ it being run.
 \              o->matches[DEC]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1) {
 \              m[L(i)].instruction = SUB;
@@ -11622,12 +11587,12 @@ it being run.
 \              o->matches[SUB]++;
 \              continue;
 \            }
-\
+\        
 \            o->matches[SUBLEQ]++;
 \          }
 \          return 0;
 \        }
-\
+\        
 \        static int report(optimizer_t *o) {
 \          double elapsed_s = (double)(o->end - o->start);
 \          elapsed_s /= CLOCKS_PER_SEC;
@@ -11639,7 +11604,7 @@ it being run.
 \          }
 \          static const char *rep_div =
 \          "+--------+--------+--------------+----------+\n";
-\
+\        
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          if (fprintf(e, "| Instr. | Subs.  | Instr. Cnt   |\
@@ -11650,26 +11615,26 @@ it being run.
 \          for (int i = 0; i < MAX; i++)
 \            if (fprintf(e, "| %s| % 6d | % 12"PRId64" |\
 \         % 7.1f%% |\n",
-\                names[i], o->matches[i], o->cnt[i],
-\                100.0*((float)o->cnt[i])/(float)total) < 0)
+\        	names[i], o->matches[i], o->cnt[i],
+\        	100.0*((float)o->cnt[i])/(float)total) < 0)
 \              return 1;
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          if (fprintf(e, "| Totals | % 6d | % 12"PRId64" |\
-\                  |\n",
-\                     (int)subs, total) < 0)
+\        	  |\n",
+\        	     (int)subs, total) < 0)
 \            return -1;
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          if (fprintf(e, "|         EXECUTION TIME %.3f \
 \        SECONDS      |\n",
-\                      elapsed_s) < 0)
+\        	      elapsed_s) < 0)
 \            return -1;
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          return 0;
 \        }
-\
+\        
 \        int main(int s, char **v) {
 \          static instruction_t m[SZ];
 \          static optimizer_t o = { .matches = { 0, }, };
@@ -11684,7 +11649,7 @@ it being run.
 \            if (fclose(f) < 0)
 \              return 2;
 \          }
-\
+\        
 \          if (optimize)
 \            if (optimizer(&o, m, pc) < 0)
 \              return 1;
@@ -11695,10 +11660,10 @@ it being run.
 \            const uint16_t s = m[pc].s, d = m[pc].d;
 \            if (dbg) {
 \              if (fprintf(stderr, "{%ld:%d}",
-\                   (long)pc, m[pc].instruction) < 0)
-\                return 1;
-\                /* Could return __LINE__ for simple debugging,
-\                 * but return val is limited to 255 usually */
+\        	   (long)pc, m[pc].instruction) < 0)
+\        	return 1;
+\        	/* Could return __LINE__ for simple debugging,
+\        	 * but return val is limited to 255 usually */
 \            }
 \            if (stats) {
 \              o.cnt[instruction/*% MAX*/]++;
@@ -11706,20 +11671,20 @@ it being run.
 \            switch (instruction) {
 \            case SUBLEQ: { /* OG Instruction */
 \              uint16_t a = m[pc++].m,
-\                       b = m[L(pc++)].m,
-\                       c = m[L(pc++)].m;
+\        	       b = m[L(pc++)].m,
+\        	       c = m[L(pc++)].m;
 \              if (a == 65535) {
-\                m[L(b)].m = getchar();
+\        	m[L(b)].m = getchar();
 \              } else if (b == 65535) {
-\                if (putchar(m[L(a)].m) < 0)
-\                  return 3;
-\                if (fflush(stdout) < 0)
-\                  return 4;
+\        	if (putchar(m[L(a)].m) < 0)
+\        	  return 3;
+\        	if (fflush(stdout) < 0)
+\        	  return 4;
 \              } else {
-\                uint16_t r = m[L(b)].m - m[L(a)].m;
-\                if (r & 32768 || r == 0)
-\                  pc = c;
-\                m[L(b)].m = r;
+\        	uint16_t r = m[L(b)].m - m[L(a)].m;
+\        	if (r & 32768 || r == 0)
+\        	  pc = c;
+\        	m[L(b)].m = r;
 \              }
 \              }
 \              break;
@@ -11744,12 +11709,12 @@ it being run.
 \            case ILOAD: {
 \              const uint16_t l = L(m[s].m);
 \              if (l == 0xFFFFu) {
-\                const int ch = getchar();
-\                m[d].m = -ch;
-\                pc += inc;
+\        	const int ch = getchar();
+\        	m[d].m = -ch;
+\        	pc += inc;
 \              } else {
-\                m[d].m = m[L(m[s].m)].m;
-\                pc += inc;
+\        	m[d].m = m[L(m[s].m)].m;
+\        	pc += inc;
 \              }
 \              break;
 \            }
@@ -11757,9 +11722,9 @@ it being run.
 \              break;
 \            case PUT:
 \              if (putchar(m[L(m[pc].s)].m) < 0)
-\                return 3;
+\        	return 3;
 \              if (fflush(stdout) < 0)
-\                return 4;
+\        	return 4;
 \              pc += 3;
 \              break;
 \            case IADD:
@@ -11783,7 +11748,7 @@ it being run.
 \              return 1;
 \          return 0;
 \        }
-\
+\        
 \
 \ A report is printed to standard error at the end of
 \ execution containing the number of instructions executed

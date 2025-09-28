@@ -21,8 +21,8 @@ eforth.c
 eforth.fth
 fast
 if
+int
 nbit
 opt
 save
 subleq
-int
