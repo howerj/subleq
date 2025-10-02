@@ -23,6 +23,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ ## TODO
 \
+\ * Make a cheap "rotate" with shift? Add back in "r1" to "tos"
 \ * As mentioned, edit and proofread this document.
 \ * FFS: Forth File system <https://github.com/howerj/ffs>,
 \ this project needs mentioning and integrating into the
@@ -39,43 +40,11 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ * Using two instruction `MOV` that negates (`-MOV`) and
 \ then undoing it with a second `-MOV` when storing to a
 \ temporary variable.
-\ * Making a Link Register to provide for simple SUBLEQ
-\ function calls. This, and `-MOV` would require updating the
-\ "recompiler". We could use this to save space.
-\ We should be able to get away with the following instruction
-\ to perform a jump:
-\
-\        SUBLEQ OP 1: Location of Return Address
-\        SUBLEQ OP 2: Link Register Address
-\        SUBLEQ OP 3: Jump to Function
-\        DATA: Return address
-\
-\ The function we are going to call would then need to move
-\ the link register contents to a temporary value and then
-\ clear the link register for the next call. At the end of
-\ the function we would jump to the location in the temporary
-\ variable. We could also only jump to locations in the
-\ first half of memory. We might be able to save the return
-\ address by having the first SUBLEQ op point to itself, this
-\ would then mean when returning we would need to patch up
-\ the address so it points to after the SUBLEQ instruction,
-\ this common patch up code could be jumped to, retsub would:
-\
-\        retsub:
-\          link 'link MOV
-\          link ZERO
-\          three 'link ADD (needed for single instr call only) 
-\          'link iJMP
-\
-\ And the shorter alternative (that would still only work
-\ for addressees that are positive):
-\
-\        SUBLEQ OP 1: Location of itself
-\        SUBLEQ OP 2: Link Register Address
-\        SUBLEQ OP 3: Jump to function
-\
-\ The link register would need to start off as being zero and
-\ be cleared by `retsub` as mentioned.
+\ * Compute and make an index for a book.
+\ * Using the new LINK feature, it might be possible to perform
+\ real calls/returns using the Forth return stack in assembly,
+\ the heavy overhead of assembly prevented it previously, but
+\ that might be alleviated (partially) using LINK.
 \
 \ # Dedication and Foreword
 \
@@ -525,8 +494,8 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \        int main(int x, char **v) {
 \                FILE *f=fopen(v[1], "r");
 \                short p=0, m[1<<16], *i=m;
-\                while (fscanf(f, "%hd,", i++) > 0) ;
-\                for (; p>=0;) {
+\                while (fscanf(f, "%hd,", i++) > 0);
+\                for (;p>=0;) {
 \                        int a=m[p++],b=m[p++],c=m[p++];
 \                        a<0 ? m[b]=getchar() :
 \                        b<0 ? putchar(m[a]) :
@@ -606,8 +575,8 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \                subleq Z, b
 \                subleq Z, Z
 \
-\ "ADD" stores a temporary result in "Z", but it should
-\ start off as zero as always, it effectively negates what is
+\ "ADD" stores a temporary result in "Z", "Z" should
+\ start off as zero as always, it negates what is
 \ loaded from "a", storing it in "Z", then subtracts and stores
 \ the result in "b". However "Z" contains an unknown, possible
 \ non-zero value, so the third SUBLEQ subtracts "Z" from itself
@@ -1546,6 +1515,12 @@ defined eforth [if] system -order [then]
 \ state by subtracting "Z" from itself, so it now contains
 \ zero as it should. Four instructions.
 \
+\ "-MOV" copies the location of a cell to another one, but
+\ negates the copied value, it is one instruction (three cells)
+\ shorter than "MOV". It has limited uses, for example moving
+\ a variable to a temporary register and then back (thus
+\ negating the negation, restoring the original value).
+\
 \ "iLOAD" does an indirect load, "a b iLOAD" would use "b"
 \ as an address to do an indirect load through and store the
 \ result in "a". It does this by using the "MOV" instruction
@@ -1600,7 +1575,10 @@ defined eforth [if] system -order [then]
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
-:m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
+:m -MOV ( a a -- )
+  2/ >r r@ dup t, t, NADDR
+  2/ t, r> t, NADDR ;m
+:m iJMP there 2/ B + 2* MOV ;m ( a -- )
 :m iADD ( a a -- : indirect add )
    2/ t, A, NADDR
    2/ t, V, NADDR
@@ -1638,7 +1616,6 @@ defined eforth [if] system -order [then]
   there 2/ 7 + dup dup t, t, NADDR
   A,   t, NADDR
   V, 0 t, NADDR
-
   A, A, NADDR
   V, V, NADDR
   ;m
@@ -1858,13 +1835,17 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   =stksz half tvar stacksz \ must contain $80
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
+ -3 tvar -three    \ must contain -3
 $10 tvar bwidth    \ must contain 16
+-0010 tvar -bwidth \ must contain -16
 $40 tvar mwidth    \ maximum machine width
   0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
   0 tvar r3        \ register 3
   0 tvar r4        \ register 4
+  0 tvar rlink     \ link register
+  0 tvar tlink     \ temporary link register 
 opt.self [if]
   0 tvar {virtual} \ are we virtualized?
   0 tvar {self}    \ location of the self interpreter
@@ -1963,6 +1944,52 @@ $10 tvar {width}   \ set by size detection routines
 \ allowing them to use the memory area used to store both
 \ stacks more efficiently.
 \
+\
+\ "LINK" is used to perform a very limited function call
+\ within SUBLEQ assembly. It does not use a stack (and is thus
+\ limited to a call depth of one). It requires the `rlink`
+\ register to be defined, which it is earlier. The call is
+\ a *single* SUBLEQ instruction and only works when calling
+\ addresses that are positive or zero (you cannot jump to
+\ any addresses that have their high bit set). "LINK" must be
+\ paired with "retsub" (defined later), a set of instructions
+\ that must either be used or jumped to after a subroutine is
+\ linked to, the call is much faster than the return. The
+\ primary purpose of this link mechanism is to save on space,
+\ as code can be reused with macros.
+\
+\ The call performed by link as mentioned is a single 
+\ instruction, it has the form:
+\
+\       subleq Self, Link, Subroutine
+\
+\ Where `Self` is the address of itself, `Link` is the address
+\ of the `rlink` register (which must be zero to start off with
+\ and must be zeroed by `retsub`), and then `Subroutine`, which
+\ contains the address of the subroutine to jump to.
+\
+\ This instruction subtracts the address of the first operand
+\ (as the first operand contains a pointer to itself) from the
+\ link register (which if the address is in the lower half of
+\ memory will be less than or equal to zero, and thus always
+\ cause the jump to succeed). The `Subroutine` address is self
+\ explanatory.
+\
+\ There are other methods for implementing subroutines in 
+\ SUBLEQ but they all use more space, and some have fewer
+\ restrictions (such as allowing calls to anywhere in memory).
+\
+\ Note that the return address is not saved in the link 
+\ register but the location of the first operand of the SUBLEQ
+\ call instruction, this means "retsub" will have to patch up
+\ the link register by adding three to it, save it to a 
+\ temporary location, zero the link register for the next call
+\ and then perform and indirect jump through the temporary
+\ link register.
+\
+\ Consult "retsub" and the first usage of "LINK" later on for
+\ more information.
+\
 \ "a-optim" is used to perform a minor optimization in our
 \ SUBLEQ assembly routines, if we have an arbitrary assembly
 \ instruction that always jumps to the next instruction after
@@ -1984,7 +2011,7 @@ $10 tvar {width}   \ set by size detection routines
 \ The first instruction *may* branch to "c", the second one
 \ always will. It is a minor optimization that is easy to
 \ implement, so it might as well be done.
-\
+
 :m INC 2/ neg1 2/ t, t, NADDR ;m ( b -- )
 :m DEC 2/ one  2/ t, t, NADDR ;m ( b -- )
 :m ONE! dup ZERO INC ; ( a -- : set address to '1' )
@@ -1993,6 +2020,7 @@ $10 tvar {width}   \ set by size detection routines
 :m --sp {sp} INC ;m ( -- : shrink variable stack )
 :m --rp {rp} DEC ;m ( -- : shrink return stack )
 :m ++rp {rp} INC ;m ( -- : grow return stack )
+:m LINK there 2/ t, rlink 2/ t, 2/ t, ;m ( a -- )
 opt.optimize [if] ( optimizations on )
   :m a-optim 2/ >r there =cell - r> swap t! ;m ( a -- )
 [else]
@@ -2236,7 +2264,7 @@ opt.sm-vm-err [if]
 err-str 2/ tvar err-str-addr
 
 \ This prints the error message if we are not on the
-\ right machine width, 16-bit SUBLEQ machines allowed only.
+\ right machine width, only 16-bit SUBLEQ machines are allowed. 
 \ The test and jump to here is in the "start" routine.
 \
 
@@ -2254,6 +2282,7 @@ label: die
 :a bye ( -- : first VM word, "bye", or halt the Forth system )
    HALT (a); ( ...like tears in rain. Time to die. )
 assembler.1 +order
+
 
 \ ## Start Routine
 \
@@ -2448,7 +2477,10 @@ self 2/ {self} t!
 \
 \ It turns out this is not needed, so it is not done.
 \
-\ The Self-interpreter VM loop begins here.
+\ The Self-interpreter VM loop begins here. (We will not be
+\ using subroutines, using "LINK", here as we would need a
+\ separate copy of the registers used for linking for this
+\ self-interpreter).
 \ 
 
 label: self-loop
@@ -2624,23 +2656,61 @@ assembler.1 -order
 \ understand how they work. The stack effect comments describe
 \ them in their entirety.
 \
-\ The assembly instruction macro "iLOAD" and "iSTORE" (along
-\ with a stack adjustment) are used quite a bit here, as these
-\ VM instructions are primarily used to manipulate the variable
-\ and return stacks. It may be possible to save some space at
-\ the expense of extra complexity and execution time by
-\ implementing a primitive call/return mechanism using "iJMP"
-\ and a link register. Common runs of code like 
-\ "++sp tos {sp} iSTORE" could be jumped to directly, prior
-\ to that jump the place to return to would be set in a
-\ link register. This would allow code reuse without a full
-\ blown call-stack.
+\ There are some common sequences of instructions that are used
+\ in these sections of code that we can take out and then call,
+\ using the "LINK" macro, this is to save on space. "iLOAD" and
+\ "iSTORE" are particularly expensive, but this technique could
+\ even be applied to "MOV" instructions as it requires three
+\ instructions whilst the "LINK" macro is a single instruction.
 \
-:a opSwap tos r0 MOV tos {sp} iLOAD r0 {sp} iSTORE ;a
-:a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
-:a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
+\ "fnDup" and "fnDrop" are two examples of snippets of code
+\ that can be reused elsewhere, if there are just two calls
+\ to a function that contains an `iSTORE` or an `iLOAD` then
+\ it is worth implementing that as a function to save on space.
+\ 
+\ It helps if those functions are themselves meaningful, but
+\ if the shared sub sequences of instructions is long enough
+\ it may be worth turning them into functions. "fnDup" and
+\ "fnDrop" implement the Forth functions "dup" and "drop"
+\ respectively, so to any Forth programmer they should have
+\ meaning. "opDup" calls "fnDup", and then performs an exit,
+\ whilst "opFromR" calls "fnDup", does some other work, and
+\ then calls exit. "opDup" cannot fall-through to "fnDup"
+\ as it must perform an exit after.
+\
+\ "opToR" falls through to "opDrop" however, saving on a single
+\ jump back to the Forth VM.
+\
+\ "fnDup" falls through to "retsub" whilst "fnDrop" must jump
+\ to it. These tricks make understanding the assembly code
+\ much more difficult, but save on space which is sorely 
+\ needed to do more useful work. If we want to rearrange or
+\ delete functions or code snippets we cannot treat them in
+\ isolation but we must instead consider their relative 
+\ positions which makes maintenance harder.
+\
+\
+
+label: fnDup ( assembly function to store `tos` onto stack )
+  ++sp             ( pre-increment stack pointer )
+  tos {sp} iSTORE  ( store `tos` to the stack )
+  ( FALL THROUGH ) ( Fall through to `retsub` )
+label: retsub      ( return from LINK'ed subroutine )
+  rlink tlink -MOV ( `-MOV` used as call negates rlink )
+  rlink ZERO       ( zero rlink for next call with LINK )
+  -three tlink SUB ( increment `tlink` by three )
+  tlink iJMP       ( jump to location after LINK call )
+
+label: fnDrop ( load next on stack into `tos` register )
+   tos {sp} iLOAD  ( load `tos` off of stack )
+   --sp            ( post-decrement stack pointer )
+   retsub JMP
+
+:a opSwap tos r0 MOV fnDrop LINK ++sp r0 {sp} iSTORE ;a
+:a opDup fnDup LINK ;a ( n -- n n )
+:a opFromR fnDup LINK tos {rp} iLOAD --rp ;a
 :a opToR ++rp tos {rp} iSTORE (fall-through); ( !!! )
-:a opDrop tos {sp} iLOAD --sp ;a ( n -- )
+:a opDrop fnDrop LINK ;a ( n -- )
 
 \ The following two functions are use to build "@" and "!",
 \ however they deal with cell addresses and not with byte
@@ -2836,7 +2906,7 @@ assembler.1 -order
 :a opIpInc ip INC ;a ( -- : increment instruction pointer )
 :a opJumpZ ( u -- : Conditional jump on zero )
   tos r0 MOV
-  tos {sp} iLOAD --sp
+  fnDrop LINK
   r0 if t' opIpInc JMP then r0 DEC r0 +if t' opIpInc JMP then
   (fall-through); ( !!! )
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
@@ -2880,7 +2950,8 @@ assembler.1 -order
 \ "opJump" is reused by "opNext" to save space.
 \
 
-:a opNext r0 {rp} iLOAD ( R: n -- | n-1 )
+:a opNext ( R: n -- | n-1 )
+   r0 {rp} iLOAD 
    r0 +if r0 DEC r0 {rp} iSTORE t' opJump JMP then
    --rp t' opIpInc JMP (a);
 
@@ -2983,18 +3054,42 @@ assembler.1 -order
 \ *left shift*.  We can use this fact to save space, reusing 
 \ the code for right shifts.
 \
+\ The SUBLEQ assembly function "fnTopmost" is a common factor
+\ to both "shift" and "opMux". It is a poor factor in that
+\ it contains two unrelated functions, one that determines
+\ whether the register "r2" is negative (making sure it is
+\ not zero), incrementing the register "r1" if it is, and
+\ also doing the unrelated function of doubling the register
+\ "tos".
+\
+\ They are both used in the same way, the call copies the value
+\ they want to determine if the topmost bit is set into "r2"
+\ (a copy is done because we will want to retain that value
+\ for future use elsewhere), "shift" copies "tos" into "r2",
+\ the output is placed into "r1". "r1" is also added to itself,
+\ performing a single left shift prior to adding in the new
+\ bit.
+\
+\
+assembler.1 +order
+label: fnTopmost ( uses: top r1 r2 )
+  r1 r1 ADD
+  r2 +if else
+    r2 INC r2 +if else r1 INC then 
+  then
+  tos tos ADD
+  retsub JMP
+
+assembler.1 -order
 
 :a shift ( u n -- u : shift 'u' by 'n' places )
-  bwidth r0 MOV       \ load machine bit width
+  -bwidth r0 -MOV       \ load machine bit width
   tos r0 SUB          \ adjust tos by machine width
-  tos {sp} iLOAD --sp \ pop value to shift
+  fnDrop LINK         \ pop value to shift
   r1 ZERO             \ zero result register
   label: shift.loop
-    r1 r1 ADD \ double r1, equivalent to left shift by one
-    \ work out what bit to shift into r1
-    tos +if else
-      tos r2 MOV r2 INC r2 +if else r1 INC then then
-    tos tos ADD \ double tos, equivalent to left shift by one
+    tos r2 MOV
+    fnTopmost LINK
     r0 DEC \ decrement loop counter
   r0 +if shift.loop JMP then 
   r1 tos MOV ;a \ move result back into tos
@@ -3093,18 +3188,20 @@ assembler.1 -order
 \ and it will fail on machines with arbitrary precision
 \ arithmetic).
 \
+
+\ TODO: Rewrite using `-MOV` where appropriate. And LINK
+\ It might be possible to make the loop counter count up from
+\ negative "bwidth" and save space that way.
 :a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
   \ tos contains multiplexor value
-  bwidth r0 MOV \ load loop counter initial value [16]
+  -bwidth r0 -MOV \ load loop counter initial value [16]
   r1 ZERO       \ zero results register
   r3 {sp} iLOAD --sp \ pop first input
   r4 {sp} iLOAD --sp \ pop second input
   
   label: opMux.loop
-    r1 r1 ADD \ shift results register
-
-    \ determine topmost bit of 'tos', place result in 'r2'
-    \ this is used to select whether to use r3 or r4
+    \ determine topmost bit of "tos", place result in "r2"
+    \ this is used to select whether to use "r3" or "r4"
     tos +if label: opMux.r3 r3 r2 MOV else
       tos r2 MOV
       r2 INC r2 +if
@@ -3112,14 +3209,14 @@ assembler.1 -order
         r4 r2 MOV then then
 
     \ determine whether we should add 0/1 into result
-    r2 +if else r2 INC r2 +if else r1 INC then then
+    \ and double "tos", also shift "r1"
+    fnTopmost LINK
 
-    tos tos ADD \ shift tos
-    r3 r3 ADD \ shift r3
-    r4 r4 ADD \ shift r4
+    r3 r3 ADD \ shift "r3"
+    r4 r4 ADD \ shift "r4"
     r0 DEC \ decrement loop counter
     r0 +if opMux.loop JMP then
-  r1 tos MOV ;a \ move r1 to tos, returning our result
+  r1 tos MOV ;a \ move "r1" to "tos", returning our result
 
 \ "opDivMod" is purely here for efficiency reasons, it really
 \ improves the speed at which numbers can be printed, which
@@ -3312,7 +3409,7 @@ opt.multi [if]
 \
 \        :a opAsm
 \          tos r0 MOV
-\          tos {sp} iLOAD --sp
+\          fnDrop LINK
 \          r0 iJMP (a);
 \
 \ The way the VM instruction works is to pull an address off
@@ -4471,6 +4568,11 @@ opt.buggy-comp [if] ( just for testing purposes )
 : > swap < ;   ( n1 n2 -- f : signed greater than )
 [then]
 
+\ "0\<" now uses "\<", an alternative version that avoid the
+\ use of "\<" (which is quite complicated) is:
+\
+\        : 0< dup 0= if drop #0 exit then leq0 0<> ;
+\
 : 0< #0 < ;   ( n -- f : less than zero )
 : 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
 : >= < 0= ;   ( n1 n2 -- f : greater than or equal to )
@@ -9635,6 +9737,40 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 : free freelist (free) ; ( ptr -- ior )
 : resize freelist (resize) ; ( ptr u -- ptr ior )
 
+\ An interesting exercise would be to implement "alloca", which
+\ is a non-standard function in C that is commonly implemented
+\ on many platforms that allocates an arbitrary amount on the
+\ C run times stack. An analogous one for Forth would do so on
+\ the return stack, it is not as simple as just allocating the
+\ memory, the memory must also be freed automatically when the
+\ function exits. There are some Forth platforms where it would
+\ not be possible to implement this function, such as those
+\ Forths with hardware stacks. It would not be possible to
+\ implement this word in Forth in a standard way (the word
+\ would need access to low level Forth internals not guaranteed
+\ to exist by the most popular Forth standards).
+\
+\ One way to implement the word would be to allocate the space
+\ on the return stack by manipulating the return stack pointer,
+\ and then pushing the amount of bytes allocated to the return
+\ stack, and the pushing an execution token to a word which
+\ will restore the return stack when the function exits, so the
+\ correct return address will be found. Unfortunately this 
+\ would place some restrictions on the usage of "alloca",
+\ loop constructs like "for...next" and the "do...loop" family
+\ that use the return stack would have to be used with care,
+\ you could call "alloca" at the start of the function, even
+\ multiple times, and use the allocated memory in a counted 
+\ loop, but you could not call "alloca" within a counted loop
+\ as that would interfere with the loop counters.
+\
+\ You could check whether you have enough space left on the
+\ stack to perform an allocation and return a failure code
+\ if you cannot, a feature usually lacking from C versions of
+\ "alloca", which render the function less useful than it
+\ would ordinarily be.
+\
+
 [then] ( opt.allocate )
 
 opt.float [if] ( Large section of optional code! )
@@ -11067,7 +11203,7 @@ it being run.
 \           2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r>
 \           Z  t, NADDR
 \           Z Z NADDR ;m
-\        :m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
+\        :m iJMP there 2/ B + 2* MOV ;m ( a -- )
 \        :m iADD ( a a -- : indirect add )
 \           2/ t, A, NADDR
 \           2/ t, V, NADDR
@@ -11120,6 +11256,11 @@ it being run.
 \ VM written in a more efficient manner. It would also only
 \ work for this Forth system and not for other SUBLEQ programs.
 \
+\ Instructions for "-MOV", "LINK" and "retsub" are missing, but
+\ are not needed.
+\
+\ TODO: Sort out new iJMP instruction
+\
 \        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
 \         * programs (it might break them) and tries to
 \         * recompile the program into a more efficient
@@ -11131,7 +11272,7 @@ it being run.
 \         * E-Mail:  howe.r.j.89@gmail.com
 \         * Repo:    https://github.com/howerj/subleq
 \         * License: The Unlicense (this file only)  */
-\
+\        
 \        #include <stdint.h>
 \        #include <stdio.h>
 \        #include <stdarg.h>
@@ -11147,10 +11288,10 @@ it being run.
 \          IADD, ISUB,
 \          IJMP, ILOAD, ISTORE, INC, DEC,
 \          INV, DUBS, LSHIFT,
-\
+\        
 \          MAX
 \        };
-\
+\        
 \        static const char *names[] = {
 \          "SUBLEQ ", "JMP    ", "ADD    ", "SUB    ",
 \          "MOV    ", "ZERO   ", "PUT    ", "GET    ",
@@ -11158,23 +11299,23 @@ it being run.
 \          "ILOAD  ", "ISTORE ", "INC    ", "DEC    ",
 \          "INV    ", "DOUBLE ", "LSHIFT ",
 \        };
-\
+\        
 \        static const uint64_t increment[] = {
 \          [SUBLEQ] = 3, [JMP] = 3/*Disassembly only*/,
 \          [MOV] = 12, [ADD] = 9, [DUBS] = 9,
 \          [LSHIFT] = 9 /* multiplied by src*/, [SUB] = 3,
-\          [ZERO] = 3, [IJMP] = 15/*Disassembly only*/,
+\          [ZERO] = 3, [IJMP] = 12/*Disassembly only*/,
 \          [ILOAD] = 24, [IADD] = 21, [ISUB] = 15,
 \          [ISTORE] = 36, [PUT] = 3, [GET] = 3,
 \          [HALT] = 3/*Disassembly only*/,
 \          [INC] = 3, [DEC] = 3, [INV] = 21,
 \        };
-\
+\        
 \        typedef struct {
 \          int instruction;
 \          uint16_t m, s, d;
 \        } instruction_t;
-\
+\        
 \        typedef struct {
 \          int matches[MAX];
 \          int set[9];
@@ -11183,7 +11324,7 @@ it being run.
 \          clock_t start, end;
 \          int64_t cnt[MAX];
 \        } optimizer_t;
-\
+\        
 \        static int match(optimizer_t *o, uint16_t *n,
 \          int sz, uint16_t pc, const char *s, ...) {
 \          va_list ap;
@@ -11200,10 +11341,10 @@ it being run.
 \            case '8': case '9': {
 \              int p = s[j] - '0';
 \              if (o->set[p]) {
-\                if (n[i] != o->v[p]) goto end;
+\        	if (n[i] != o->v[p]) goto end;
 \              } else {
-\                o->set[p] = 1;
-\                o->v[p] = n[i];
+\        	o->set[p] = 1;
+\        	o->v[p] = n[i];
 \              }
 \              i++;
 \              break;
@@ -11216,13 +11357,13 @@ it being run.
 \            case '%': {
 \              int q = va_arg(ap, int);
 \              if (n[i] != q)
-\                goto end;
+\        	goto end;
 \              i++;
 \            } break;
 \            case '!': {
-\                uint16_t *p = va_arg(ap, uint16_t*);
-\                *p = n[i];
-\                i++;
+\        	uint16_t *p = va_arg(ap, uint16_t*);
+\        	*p = n[i];
+\        	i++;
 \            } break;
 \            case '?': i++; break;
 \            case ' ': case '\t':
@@ -11237,13 +11378,13 @@ it being run.
 \          va_end(ap);
 \          return r;
 \        }
-\
+\        
 \        static long get(optimizer_t *o, char var) {
 \         if (var < '0' || var > '9' || o->set[var - '0'] == 0)
 \            return -1;
 \          return o->v[var - '0'];
 \        }
-\
+\        
 \        /* This section pattern matches the code finding
 \         * sequences of SUBLEQ instructions against known
 \         * instruction macros.  It is essentially a
@@ -11252,7 +11393,7 @@ it being run.
 \         * speed up. */
 \        static int optimizer(optimizer_t *o,
 \            instruction_t *m, uint16_t pc) {
-\
+\        
 \          for (uint16_t i = 0; i < pc; i++) {
 \            switch (m[i].m) {
 \            case 0: o->z_reg[i] = 1; break;
@@ -11260,16 +11401,16 @@ it being run.
 \            case 0xFFFF: o->neg1_reg[i] = 1; break;
 \            }
 \          }
-\
+\        
 \          for (uint16_t i = 0; i < pc; i++) {
 \            uint16_t q0 = 0, q1 = 0;
 \            uint16_t n[DEPTH] = { 0, };
-\
+\        
 \            for (size_t j = 0; j < DEPTH; j++)
 \              n[j] = m[L(i + j)].m;
-\
+\        
 \            /* Largest instructions *must* go first */
-\
+\        
 \            if (match(o, n, DEPTH, i, "0Z> 11> 22> Z3> Z4> \
 \              ZZ> 56> 77> Z7> 6Z> ZZ> 66>") == 1) {
 \              m[L(i)].instruction = ISTORE;
@@ -11278,7 +11419,7 @@ it being run.
 \              o->matches[ISTORE]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> 11> \
 \               ?Z> Z1> ZZ>", &q0) == 1 &&
 \               get(o, '0') == (i + 15)) {
@@ -11288,22 +11429,22 @@ it being run.
 \              o->matches[ILOAD]++;
 \              continue;
 \            }
-\
+\        
 \            int shift = 0, l = 0, dest = 0;
 \            for (l = 0; l < DEPTH; l += 9) {
 \              if (match(o, n+l, DEPTH-l, i+l, "!Z>\
-\                  Z!> ZZ>", &q0, &q1) == 1
-\                  && q0 == q1) {
-\                if (l == 0) {
-\                  dest = q0;
-\                } else {
-\                  if (dest != q0) {
-\                    break;
-\                  }
-\                }
-\                shift++;
+\        	  Z!> ZZ>", &q0, &q1) == 1
+\        	  && q0 == q1) {
+\        	if (l == 0) {
+\        	  dest = q0;
+\        	} else {
+\        	  if (dest != q0) {
+\        	    break;
+\        	  }
+\        	}
+\        	shift++;
 \              } else {
-\                break;
+\        	break;
 \              }
 \            }
 \            if (shift >= 2) {
@@ -11313,7 +11454,7 @@ it being run.
 \              o->matches[LSHIFT]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "01> 23> 44> 14> 3Z> \
 \              11> 33>") == 1) {
 \              m[L(i)].instruction = IADD;
@@ -11322,61 +11463,61 @@ it being run.
 \              o->matches[IADD]++;
 \              continue;
 \            }
-\
-\
+\        
+\        
 \            if (match(o, n, DEPTH, i, "00> 10> 11> 2Z>\
-\                Z1> ZZ> !1>", &q0) == 1
-\                && o->one_reg[q0]) {
+\        	Z1> ZZ> !1>", &q0) == 1
+\        	&& o->one_reg[q0]) {
 \              m[L(i)].instruction = INV;
 \              m[L(i)].d = L(get(o, '1'));
 \              o->matches[INV]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "01> 33> 14> 5Z> 11>")
-\                == 1) {
+\        	== 1) {
 \              m[L(i)].instruction = ISUB;
 \              m[L(i)].d = L(get(o, '0'));
 \              m[L(i)].s = L(get(o, '5'));
 \              o->matches[ISUB]++;
 \              continue;
 \            }
-\
-\
-\            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ> ZZ>",
+\        
+\        
+\            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
 \            &q0) == 1
-\                && get(o, '0') == (i + (3*4) + 2)) {
+\        	&& get(o, '0') == (i + (3*4) + 2)) {
 \              m[L(i)].instruction = IJMP;
 \              m[L(i)].d = L(q0);
 \              o->matches[IJMP]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
 \            &q0) == 1) {
 \              uint64_t dst = L(get(o, '0'));
 \              uint64_t src = L(q0);
 \              if (dst != src) { /* check for zero also? */
-\                m[L(i)].instruction = MOV;
-\                m[L(i)].d = dst;
-\                m[L(i)].s = src;
-\                o->matches[MOV]++;
-\                continue;
+\        	m[L(i)].instruction = MOV;
+\        	m[L(i)].d = dst;
+\        	m[L(i)].s = src;
+\        	o->matches[MOV]++;
+\        	continue;
 \              }
 \            }
-\
+\        
 \            /* We should match multiple ones in a row and
 \             * turn them into a left shift */
 \            if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
 \            &q0, &q1) == 1
-\                && q0 == q1) {
+\        	&& q0 == q1) {
 \              m[L(i)].instruction = DUBS;
 \              m[L(i)].d = L(q1);
 \              m[L(i)].s = L(q0);
 \              o->matches[DUBS]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!Z> Z!> ZZ>",
 \            &q0, &q1) == 1) {
 \              m[L(i)].instruction = ADD;
@@ -11385,21 +11526,21 @@ it being run.
 \              o->matches[ADD]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "00>") == 1) {
 \              m[L(i)].instruction = ZERO;
 \              m[L(i)].d = L(get(o, '0'));
 \              o->matches[ZERO]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "ZZ!", &q0) == 1
 \            && q0 == 0xFFFFu) {
 \              m[L(i)].instruction = HALT;
 \              o->matches[HALT]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "00!", &q0) == 1) {
 \              m[L(i)].instruction = JMP;
 \              m[L(i)].d = q0;
@@ -11407,21 +11548,21 @@ it being run.
 \              o->matches[JMP]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "N!>", &q0) == 1) {
 \              m[L(i)].instruction = GET;
 \              m[L(i)].d = L(q0);
 \              o->matches[GET]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!N>", &q0) == 1) {
 \              m[L(i)].instruction = PUT;
 \              m[L(i)].s = L(q0);
 \              o->matches[PUT]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1 && o->neg1_reg[L(q0)]) {
 \              m[L(i)].instruction = INC;
@@ -11429,7 +11570,7 @@ it being run.
 \              o->matches[INC]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1 && o->one_reg[L(q0)]) {
 \              m[L(i)].instruction = DEC;
@@ -11437,7 +11578,7 @@ it being run.
 \              o->matches[DEC]++;
 \              continue;
 \            }
-\
+\        
 \            if (match(o, n, DEPTH, i, "!!>", &q0, &q1) == 1
 \              && q0 != q1) {
 \              m[L(i)].instruction = SUB;
@@ -11446,12 +11587,12 @@ it being run.
 \              o->matches[SUB]++;
 \              continue;
 \            }
-\
+\        
 \            o->matches[SUBLEQ]++;
 \          }
 \          return 0;
 \        }
-\
+\        
 \        static int report(optimizer_t *o) {
 \          double elapsed_s = (double)(o->end - o->start);
 \          elapsed_s /= CLOCKS_PER_SEC;
@@ -11463,7 +11604,7 @@ it being run.
 \          }
 \          static const char *rep_div =
 \          "+--------+--------+--------------+----------+\n";
-\
+\        
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          if (fprintf(e, "| Instr. | Subs.  | Instr. Cnt   |\
@@ -11474,26 +11615,26 @@ it being run.
 \          for (int i = 0; i < MAX; i++)
 \            if (fprintf(e, "| %s| % 6d | % 12"PRId64" |\
 \         % 7.1f%% |\n",
-\                names[i], o->matches[i], o->cnt[i],
-\                100.0*((float)o->cnt[i])/(float)total) < 0)
+\        	names[i], o->matches[i], o->cnt[i],
+\        	100.0*((float)o->cnt[i])/(float)total) < 0)
 \              return 1;
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          if (fprintf(e, "| Totals | % 6d | % 12"PRId64" |\
-\                  |\n",
-\                     (int)subs, total) < 0)
+\        	  |\n",
+\        	     (int)subs, total) < 0)
 \            return -1;
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          if (fprintf(e, "|         EXECUTION TIME %.3f \
 \        SECONDS      |\n",
-\                      elapsed_s) < 0)
+\        	      elapsed_s) < 0)
 \            return -1;
 \          if (fputs(rep_div, e) < 0)
 \            return -1;
 \          return 0;
 \        }
-\
+\        
 \        int main(int s, char **v) {
 \          static instruction_t m[SZ];
 \          static optimizer_t o = { .matches = { 0, }, };
@@ -11508,7 +11649,7 @@ it being run.
 \            if (fclose(f) < 0)
 \              return 2;
 \          }
-\
+\        
 \          if (optimize)
 \            if (optimizer(&o, m, pc) < 0)
 \              return 1;
@@ -11519,10 +11660,10 @@ it being run.
 \            const uint16_t s = m[pc].s, d = m[pc].d;
 \            if (dbg) {
 \              if (fprintf(stderr, "{%ld:%d}",
-\                   (long)pc, m[pc].instruction) < 0)
-\                return 1;
-\                /* Could return __LINE__ for simple debugging,
-\                 * but return val is limited to 255 usually */
+\        	   (long)pc, m[pc].instruction) < 0)
+\        	return 1;
+\        	/* Could return __LINE__ for simple debugging,
+\        	 * but return val is limited to 255 usually */
 \            }
 \            if (stats) {
 \              o.cnt[instruction/*% MAX*/]++;
@@ -11530,20 +11671,20 @@ it being run.
 \            switch (instruction) {
 \            case SUBLEQ: { /* OG Instruction */
 \              uint16_t a = m[pc++].m,
-\                       b = m[L(pc++)].m,
-\                       c = m[L(pc++)].m;
+\        	       b = m[L(pc++)].m,
+\        	       c = m[L(pc++)].m;
 \              if (a == 65535) {
-\                m[L(b)].m = getchar();
+\        	m[L(b)].m = getchar();
 \              } else if (b == 65535) {
-\                if (putchar(m[L(a)].m) < 0)
-\                  return 3;
-\                if (fflush(stdout) < 0)
-\                  return 4;
+\        	if (putchar(m[L(a)].m) < 0)
+\        	  return 3;
+\        	if (fflush(stdout) < 0)
+\        	  return 4;
 \              } else {
-\                uint16_t r = m[L(b)].m - m[L(a)].m;
-\                if (r & 32768 || r == 0)
-\                  pc = c;
-\                m[L(b)].m = r;
+\        	uint16_t r = m[L(b)].m - m[L(a)].m;
+\        	if (r & 32768 || r == 0)
+\        	  pc = c;
+\        	m[L(b)].m = r;
 \              }
 \              }
 \              break;
@@ -11568,12 +11709,12 @@ it being run.
 \            case ILOAD: {
 \              const uint16_t l = L(m[s].m);
 \              if (l == 0xFFFFu) {
-\                const int ch = getchar();
-\                m[d].m = -ch;
-\                pc += inc;
+\        	const int ch = getchar();
+\        	m[d].m = -ch;
+\        	pc += inc;
 \              } else {
-\                m[d].m = m[L(m[s].m)].m;
-\                pc += inc;
+\        	m[d].m = m[L(m[s].m)].m;
+\        	pc += inc;
 \              }
 \              break;
 \            }
@@ -11581,9 +11722,9 @@ it being run.
 \              break;
 \            case PUT:
 \              if (putchar(m[L(m[pc].s)].m) < 0)
-\                return 3;
+\        	return 3;
 \              if (fflush(stdout) < 0)
-\                return 4;
+\        	return 4;
 \              pc += 3;
 \              break;
 \            case IADD:
@@ -11607,7 +11748,7 @@ it being run.
 \              return 1;
 \          return 0;
 \        }
-\
+\        
 \
 \ A report is printed to standard error at the end of
 \ execution containing the number of instructions executed

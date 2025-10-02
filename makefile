@@ -36,6 +36,7 @@ help:
 	@echo "	self     : run ${IMAGE} under 'self-interpreter'"
 	@echo "	eforth.c : make SUBLEQ VM with built-in Forth"
 	@echo "	length   : perform line length check on ${FORTH}"
+	@echo "	index.md : make an index for subleq.md"
 	@echo "	subleq.{pdf,epub.htm} : make documentation"
 	@echo
 	@echo "Consult subleq.fth for more information along"
@@ -171,6 +172,9 @@ length:
 
 clean:
 	git clean -dffx
+
+index.md: subleq.md extra/index makefile
+	./extra/index < $< | sort -k1 > $@
 
 TIME=1000
 SHELL=/bin/bash
