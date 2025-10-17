@@ -37,6 +37,7 @@ help:
 	@echo "	eforth.c : make SUBLEQ VM with built-in Forth"
 	@echo "	length   : perform line length check on ${FORTH}"
 	@echo "	index.md : make an index for subleq.md"
+	@echo " subleq.bin : dump ${IMAGE} to a binary (of running image)"
 	@echo "	subleq.{pdf,epub.htm} : make documentation"
 	@echo
 	@echo "Consult subleq.fth for more information along"
@@ -155,6 +156,9 @@ dump.dec:
 self.dec:
 	make -C extra/self self.dec
 	cp extra/self/self.dec .
+
+subleq.bin: subleq subleq.dec
+	echo "0 here type bye" | ./subleq subleq.dec > $@
 
 self: self.dec ${IMAGE} subleq
 	./subleq self.dec ${IMAGE}
