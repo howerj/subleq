@@ -96,6 +96,7 @@ only forth definitions hex
 0 constant opt.optimize   ( Enable extra optimization )
 1 constant opt.divmod     ( Use "opDivMod" primitive )
 1 constant opt.self       ( Enable self-interpreter )
+0 constant opt.buggy-comp ( Enable broken comparison operator )
 : sys.echo-off 1 or ; ( bit #1 = turn echoing chars off )
 : sys.cksum    2 or ; ( bit #2 = turn checksumming on )
 : sys.info     4 or ; ( bit #3 = print info msg on startup )
@@ -115,7 +116,7 @@ defined [unless] 0= [if]
 : [unless] 0= postpone [if] ; immediate
 [then]
 defined eforth [if]
-  : wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
+  : wordlist here 0 , ; ( -- wid : alloc wid )
 [then]
 wordlist constant meta.1        ( meta-compiler word set )
 wordlist constant target.1      ( target eForth word set )
@@ -254,7 +255,10 @@ defined eforth [if] system -order [then]
 :m GET 2/ -1 t, t, NADDR ;m ( a -- : get a byte )
 :m MOV 2/ >r r@ dup t, t, NADDR 2/ t, Z  NADDR r> Z  t, NADDR
    Z Z NADDR ;m
-:m iJMP there 2/ E + 2* MOV Z Z NADDR ;m ( a -- )
+:m -MOV ( a a -- )
+  2/ >r r@ dup t, t, NADDR
+  2/ t, r> t, NADDR ;m
+:m iJMP there 2/ B + 2* MOV ;m ( a -- )
 :m iADD ( a a -- : indirect add )
    2/ t, A, NADDR
    2/ t, V, NADDR
@@ -289,7 +293,7 @@ assembler.1 +order definitions
 : begin talign there ; ( -- a )
 : again JMP ; ( a -- )
 : mark there 0 t, ; ( -- a : create hole in dictionary )
-: if talign ( a -- a : NB. "if" does not work for $8000 )
+: if talign ( a -- a : N.B. "if" does not work for $8000 )
    2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t, Z Z NADDR Z t,
    mark ;
 : until 2/ dup t, Z there 2/ 4 + dup t, Z Z 6 + t,
@@ -312,13 +316,17 @@ opt.sys tvar {options} \ bit #1=echo off, #2 = checksum on,
   =stksz half tvar stacksz \ must contain $80
  -1 tvar neg1      \ must contain -1
   1 tvar one       \ must contain  1
+ -3 tvar -three    \ must contain -3
 $10 tvar bwidth    \ must contain 16
+-0010 tvar -bwidth \ must contain -16
 $40 tvar mwidth    \ maximum machine width
   0 tvar r0        \ working pointer 1 (register r0)
   0 tvar r1        \ register 1
   0 tvar r2        \ register 2
   0 tvar r3        \ register 3
   0 tvar r4        \ register 4
+  0 tvar rlink     \ link register
+  0 tvar tlink     \ temporary link register 
 opt.self [if]
   0 tvar {virtual} \ are we virtualized?
   0 tvar {self}    \ location of the self interpreter
@@ -365,6 +373,7 @@ $10 tvar {width}   \ set by size detection routines
 :m --sp {sp} INC ;m ( -- : shrink variable stack )
 :m --rp {rp} DEC ;m ( -- : shrink return stack )
 :m ++rp {rp} INC ;m ( -- : grow return stack )
+:m LINK there 2/ t, rlink 2/ t, 2/ t, ;m ( a -- )
 opt.optimize [if] ( optimizations on )
   :m a-optim 2/ >r there =cell - r> swap t! ;m ( a -- )
 [else]
@@ -482,13 +491,26 @@ label: self-loop
   self-loop JMP ( And do it again... )
   0 tzreg !
   1 tareg !
-[then]
+[then] ( opt.self )
 assembler.1 -order
-:a opSwap tos r0 MOV tos {sp} iLOAD r0 {sp} iSTORE ;a
-:a opDup ++sp tos {sp} iSTORE ;a ( n -- n n )
-:a opFromR ++sp tos {sp} iSTORE tos {rp} iLOAD --rp ;a
+label: fnDup ( assembly function to store `tos` onto stack )
+  ++sp             ( pre-increment stack pointer )
+  tos {sp} iSTORE  ( store `tos` to the stack )
+  ( FALL THROUGH ) ( Fall through to `retsub` )
+label: retsub      ( return from LINK'ed subroutine )
+  rlink tlink -MOV ( `-MOV` used as call negates rlink )
+  rlink ZERO       ( zero rlink for next call with LINK )
+  -three tlink SUB ( increment `tlink` by three )
+  tlink iJMP       ( jump to location after LINK call )
+label: fnDrop ( load next on stack into `tos` register )
+   tos {sp} iLOAD  ( load `tos` off of stack )
+   --sp            ( post-decrement stack pointer )
+   retsub JMP
+:a opSwap tos r0 MOV fnDrop LINK ++sp r0 {sp} iSTORE ;a
+:a opDup fnDup LINK ;a ( n -- n n )
+:a opFromR fnDup LINK tos {rp} iLOAD --rp ;a
 :a opToR ++rp tos {rp} iSTORE (fall-through); ( !!! )
-:a opDrop tos {sp} iLOAD --sp ;a ( n -- )
+:a opDrop fnDrop LINK ;a ( n -- )
 :a [@] tos tos iLOAD ;a ( a -- a : load SUBLEQ address )
 :a [!] r0 {sp} iLOAD r0 tos iSTORE --sp t' opDrop JMP (a);
 :a opEmit tos PUT t' opDrop JMP (a); ( n -- )
@@ -497,11 +519,12 @@ assembler.1 -order
 :a opIpInc ip INC ;a ( -- : increment instruction pointer )
 :a opJumpZ ( u -- : Conditional jump on zero )
   tos r0 MOV
-  tos {sp} iLOAD --sp
+  fnDrop LINK
   r0 if t' opIpInc JMP then r0 DEC r0 +if t' opIpInc JMP then
   (fall-through); ( !!! )
 :a opJump ip ip iLOAD ;a ( -- : Unconditional jump )
-:a opNext r0 {rp} iLOAD ( R: n -- | n-1 )
+:a opNext ( R: n -- | n-1 )
+   r0 {rp} iLOAD 
    r0 +if r0 DEC r0 {rp} iSTORE t' opJump JMP then
    --rp t' opIpInc JMP (a);
 :a op0= ( n -- f : not equal to zero )
@@ -518,44 +541,49 @@ assembler.1 -order
   tos ONE! ;a
 :a - tos {sp} iSUB t' opDrop JMP (a); ( n n -- n )
 :a + tos {sp} iADD t' opDrop JMP (a); ( n n -- n )
-:a shift ( u n -- u : right shift 'u' by 'n' places )
-  bwidth r0 MOV       \ load machine bit width
+assembler.1 +order
+label: fnTopmost ( uses: top r1 r2 )
+  r1 r1 ADD
+  r2 +if else
+    r2 INC r2 +if else r1 INC then 
+  then
+  tos tos ADD
+  retsub JMP
+assembler.1 -order
+:a shift ( u n -- u : shift 'u' by 'n' places )
+  -bwidth r0 -MOV       \ load machine bit width
   tos r0 SUB          \ adjust tos by machine width
-  tos {sp} iLOAD --sp \ pop value to shift
+  fnDrop LINK         \ pop value to shift
   r1 ZERO             \ zero result register
   label: shift.loop
-    r1 r1 ADD \ double r1, equivalent to left shift by one
-    \ work out what bit to shift into r1
-    tos +if else
-      tos r2 MOV r2 INC r2 +if else r1 INC then then
-    tos tos ADD \ double tos, equivalent to left shift by one
+    tos r2 MOV
+    fnTopmost LINK
     r0 DEC \ decrement loop counter
   r0 +if shift.loop JMP then 
   r1 tos MOV ;a \ move result back into tos
 :a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
   \ tos contains multiplexor value
-  bwidth r0 MOV \ load loop counter initial value [16]
+  -bwidth r0 -MOV \ load loop counter initial value [16]
   r1 ZERO       \ zero results register
   r3 {sp} iLOAD --sp \ pop first input
   r4 {sp} iLOAD --sp \ pop second input
   
   label: opMux.loop
-    r1 r1 ADD \ shift results register
-    \ determine topmost bit of 'tos', place result in 'r2'
-    \ this is used to select whether to use r3 or r4
+    \ determine topmost bit of "tos", place result in "r2"
+    \ this is used to select whether to use "r3" or "r4"
     tos +if label: opMux.r3 r3 r2 MOV else
       tos r2 MOV
       r2 INC r2 +if
         opMux.r3 JMP ( space saving ) else
         r4 r2 MOV then then
     \ determine whether we should add 0/1 into result
-    r2 +if else r2 INC r2 +if else r1 INC then then
-    tos tos ADD \ shift tos
-    r3 r3 ADD \ shift r3
-    r4 r4 ADD \ shift r4
+    \ and double "tos", also shift "r1"
+    fnTopmost LINK
+    r3 r3 ADD \ shift "r3"
+    r4 r4 ADD \ shift "r4"
     r0 DEC \ decrement loop counter
     r0 +if opMux.loop JMP then
-  r1 tos MOV ;a \ move r1 to tos, returning our result
+  r1 tos MOV ;a \ move "r1" to "tos", returning our result
 opt.divmod [if]
 :a opDivMod ( u1 u2 -- u1 u2 )
   r0 {sp} iLOAD
@@ -711,6 +739,7 @@ system[
   user <tap>     ( -- a : tap xt loc. )
   user <expect>  ( -- a : expect xt loc. )
   user <error>   ( -- a : <error> xt container. )
+  user <pattern> ( -- a : executed for each interpreted word )
 ]system
 :s <boot> [ {boot} ] literal ;s ( -- a : cold xt loc. )
 :s <quit> [ {quit} ] literal ;s ( -- a : quit xt loc. )
@@ -763,21 +792,30 @@ system[
 : 0> leq0 0= ; ( n -- f : greater than zero )
 : 0<> 0= 0= ;  ( n -- f : not equal to zero )
 : 0<= 0> 0= ;  ( n -- f : less than or equal to zero )
+opt.buggy-comp [if] ( just for testing purposes )
+: < - ?dup if leq0 0<> exit then #0 ;
+: > swap < ; ( n1 n2 -- f : signed greater than )
+( This following is more broken than the code above, which is )
+( also broken. )
+( : > - 0> ; )
+( : < swap > ; )
+[else] ( working `<`: )
 : < ( n1 n2 -- f : less than, is n1 less than n2 )
-   2dup leq0 swap leq0 if
-     if
-       2dup 1+ leq0 swap 1+ leq0
-       if drop else if 2drop #0 exit then then
-     else 2drop #-1 exit then \ a0 && !b0
-   else
-     if 2drop #0 exit then \ !a0 && b0
-   then
-   2dup - leq0 if
-     swap 1+ swap - leq0 if #-1 exit then
-     #0 exit
-   then
-   2drop #0 ;
+  2dup leq0 swap leq0 if
+    if
+      2dup 1+ leq0 swap 1+ leq0
+      if drop else if 2drop #0 exit then then
+    else 2drop #-1 exit then \ a0 && !b0
+  else
+    if 2drop #0 exit then \ !a0 && b0
+  then
+  2dup - leq0 if
+    swap 1+ swap - leq0 if #-1 exit then
+    #0 exit
+  then
+  2drop #0 ;
 : > swap < ;   ( n1 n2 -- f : signed greater than )
+[then]
 : 0< #0 < ;   ( n -- f : less than zero )
 : 0>= 0< 0= ; ( n1 n2 -- f : greater or equal to zero )
 : >= < 0= ;   ( n1 n2 -- f : greater than or equal to )
@@ -846,7 +884,7 @@ system[ user tup =cell tallot ]system
   swap #0 max for swap aft 2dup c! 1+ then next 2drop ;
 : erase #0 fill ; ( b u -- : write zeros to array )
 :s do$ 2r> 2* dup count + aligned 2/ >r swap >r ;s ( -- a  )
-:s ($) do$ ;s           ( -- a : do string NB. )
+:s ($) do$ ;s           ( -- a : do string )
 :s .$ do$ count type ;s ( -- : print string in next cells )
 :m ." .$ $literal ;m ( --, ccc" : compile string )
 :m $" ($) $literal ;m ( --, ccc" : compile string )
@@ -864,7 +902,7 @@ system[ user tup =cell tallot ]system
     [ {handler} ] up @ rp! ( exc# ) \ restore prev ret. stack
     r> [ {handler} ] up !  ( exc# ) \ restore prev handler
     r> swap >r         ( saved-sp ) \ exc# on return stack
-    sp! r>        ( exc# )     \ restore stack
+    sp! r>             ( exc# )     \ restore stack
   then ;
 : abort #-1 throw ; ( -- : Time to die. )
 :s (abort) do$ swap if count type abort then drop ;s ( n -- )
@@ -956,13 +994,13 @@ system[ user tup =cell tallot ]system
 :s banner ( +n c -- : output 'c' 'n' times )
   >r begin dup 0> while r@ emit 1- repeat drop rdrop ;s
 : hold #-1 hld +! hld @ c! ; ( c -- : save char in hold space )
-: #> 2drop hld @ this [ =num ] literal + over - ; ( u -- b u )
+: #> 2drop hld @ this [ =num ] literal + over - ; ( d -- b u )
 :s extract ( ud ud -- ud u : extract digit from number )
   dup >r um/mod r> swap >r um/mod r> rot ;s
 :s digit ( u -- c : extract a character from number )
   [ 9 ] literal over < [ 7 ] literal and + [char] 0 + ;s
 : #  #2 ?depth #0 radix extract digit hold ; ( d -- d )
-: #s begin # 2dup ( d0= -> ) or 0= until ; ( d -- 0 )
+: #s begin # 2dup ( d0= -> ) or 0= until ; ( d -- 0 0 )
 : <# this [ =num ] literal + hld ! ; ( -- : start num. output )
 : sign 0>= ?exit [char] - hold ; ( n -- )
 : u.r >r #0 <# #s #> r> over - bl banner type ; ( u r -- )
@@ -1058,6 +1096,9 @@ opt.divmod [if]
 :s ?found ?exit ( b f -- b | ??? )
    space count type [char] ? emit cr [ -$D ] literal throw ;s
 : interpret ( b -- : interpret a counted word )
+  <pattern> @ ?dup if 
+    execute ?exit
+  then
   find ?dup if
     state @
     if
@@ -1077,7 +1118,7 @@ opt.divmod [if]
     else       \ <- dpl is not -1, it is a double cell number
       state @ if swap then
       postpone literal \ literal executed twice if # is double
-    then \ NB. "literal" is state aware
+    then \ N.B. "literal" is state aware
     postpone literal exit
   then
   \ N.B. Could vector ?found here, to handle arbitrary words
@@ -1090,7 +1131,7 @@ opt.divmod [if]
   context - 2/ dup >r 1- s>d [ -$32 ] literal and throw
   for aft @+ swap cell- then next @ r> ;
 :r set-order ( widn ... wid1 n -- : set current search order )
-  \ NB. Uses recursion, however the meta-compiler does not use
+  \ N.B. Uses recursion, however the meta-compiler does not use
   \ the Forth compilation mechanism, so the current definition
   \ of "set-order" is available immediately.
   dup #-1 = if drop root-voc #1 set-order exit then
@@ -1125,7 +1166,7 @@ root[
 : word ( c -- b : parse a character delimited word )
   #1 ?depth parse here aligned dup >r 2dup ! 1+ swap cmove r> ;
 :s token bl word ;s ( -- b : get space delimited word )
-:s ?unique ( a -- a : warn if word definition is not unique )
+:s ?unique ( b -- b : warn if word definition is not unique )
  dup get-current (search) 0= ?exit space
  2drop [ {last} ] literal @ .id ." redefined" cr ;s ( b -- b )
 :s ?nul ( b -- b : check not null )
@@ -1181,7 +1222,7 @@ root[
 :to constant create -cell allot compile (const) , ;
 :to user create -cell allot compile (user)
    cell user? +! user? @ , ;
-: >body cell+ ; ( a -- a : move to a create words body )
+: >body cell+ ; ( a -- a : move to a created words body )
 :s (does) 2r> 2* swap >r ;s compile-only
 :s (comp)
   r> [ {last} ] literal @ cfa
@@ -1386,28 +1427,23 @@ t' (block) t' <block> >tbody t!
    blk @ >r dup blk ! #0 [ $F ] literal for
    2dup 2>r loadline 2r> 1+ next 2drop r> blk ! ;
 root[
-  $FFFF constant eforth ( --, version )
+  $0200 constant eforth ( --, version )
 ]root
 opt.info [if]
-  :s info cr ( --, print system info )
-    ." eForth vX.X, Public Domain,"  here . cr
+  :s info  ( --, print system info )
+    cr
+    ." eForth v2.0, Public Domain,"  here . cr
     ." Richard James Howe, howe.r.j.89@gmail.com" cr
     ." https://github.com/howerj/subleq" cr ;s
 [else]
   :s info ;s ( --, [disabled] print system info )
 [then]
-opt.self [if]
-:s warnv [ {virtual} ] literal @ if
-    ." Warning: Virtual 16-bit SUBLEQ VM" cr
-    then ;s
-[then]
 :s xio ( xt xt xt -- : exchange I/O )
   [ t' accept ] literal <expect> ! <tap> ! <echo> ! <ok> ! ;s
 :s hand ( -- )
   [ t' ok ] lit
-  [ t' (emit) ] literal ( Default: echo on )
-  [ {options} ] literal @ #1 and
-    if drop [ to' drop ] literal then
+  [ t' (emit) ] literal [ to' drop ] literal
+  [ {options} ] literal @ #1 and 0= mux  ( Default: echo on )
   [ t' ktap ] literal postpone [ xio ;s
 :s pace [ $B ] literal emit ;s ( -- : emit pacing character )
 :s file ( -- )
@@ -1432,6 +1468,7 @@ opt.self [if]
   [ t' (literal) ] literal <literal> !
   opt.float [if] [ $3 ]  literal [ {precision} ] up ! [then]
   [ to' bye ] literal <error> !
+  #0 <pattern> !
   #0 >in ! #-1 dpl !
   \ Set terminal input buffer loc.
   this [ =tib ] literal + #0 tup 2!
@@ -1451,7 +1488,13 @@ opt.self [if]
   forth definitions ( un-mess-up dictionary / set it )
   ini ( initialize the current thread correctly )
   opt.self [if]
-    [ {options} ] literal @ [ $10 ] literal and if warnv then
+    [ {options} ] literal @ [ $10 ] literal and if 
+      \ Print out warning if we are running a virtualized
+      \ and thus very slow system
+      [ {virtual} ] literal @ if
+        ." Warning: Virtual 16-bit SUBLEQ VM" cr
+      then
+    then
   [then]
   [ {options} ] literal @ [ 4 ] literal and if info then
   [ {options} ] literal @ #2 and if ( checksum on? )
@@ -1528,19 +1571,19 @@ opt.control [if]
    repeat
    [ $1E ] literal <> [ -$16 ] literal and throw
    compile (endcase) ; compile-only immediate
-:s r+ 1+ ;s ( NB. Should be cell+ on most platforms )
+:s r+ 1+ ;s ( N.B. Should be cell+ on most platforms )
 :s (unloop) r> rdrop rdrop rdrop >r ;s compile-only
 :s (leave) rdrop rdrop rdrop ;s compile-only
 :s (j) [ $4 ] literal rpick ;s compile-only
 :s (k) [ $7 ] literal rpick ;s compile-only
 :s (do) r> dup >r swap rot >r >r r+ >r ;s compile-only
-:s (?do)
+:s (?do) \ BUG: equal numbers cause return failure
    2dup <> if
      r> dup >r swap rot >r >r r+ >r exit
    then 2drop ;s compile-only
 :s (loop)
   r> r> 1+ r> 2dup <> if
-    >r >r 2* @ >r exit \ NB. 2* and 2/ cause porting problems
+    >r >r 2* @ >r exit \ N.B. 2* and 2/ cause porting problems
   then >r 1- >r r+ >r ;s compile-only
 :s (+loop)
    r> swap r> r> 2dup - >r
@@ -1659,7 +1702,7 @@ variable freelist 0 t, 0 t, ( 0 t' freelist t! )
 : allocate freelist (allocate) ; ( u -- ptr ior )
 : free freelist (free) ; ( ptr -- ior )
 : resize freelist (resize) ; ( ptr u -- ptr ior )
-[then]
+[then] ( opt.allocate )
 opt.float [if] ( Large section of optional code! )
 system[
   $10 constant #bits  ( = 1 cells 8 * )
@@ -1713,23 +1756,24 @@ $0003 t, $0001 t, $0000 t, $0000 t,
 $26DD constant cordic_1K ( CORDIC scaling factor )
 $6487 constant hpi
 variable tx variable ty variable tz
-variable cx variable cy variable cz
-variable cd variable ck
+variable _x variable _y variable _z
+variable _d variable _k
 ]system
 ( CORDIC: valid in range -pi/2 to pi/2, arguments in fixed )
 ( point format with 1 = 16384, angle is given in radians.  )
+( It would be nice to get rid of the global variables )
 : cordic ( angle -- sine cosine | x y -- atan sqrt )
-  cz ! cordic_1K cx ! #0 cy ! #0 ck !
+  _z ! cordic_1K _x ! #0 _y ! #0 _k !
   [ $10 ] literal begin ?dup while
-    cz @ 0< cd !
-    cx @ cy @ ck @ arshift cd @ xor cd @ - - tx !
-    cy @ cx @ ck @ arshift cd @ xor cd @ - + ty !
-    cz @ ck @ cells lookup + @ cd @ xor cd @ - - tz !
-    tx @ cx ! ty @ cy ! tz @ cz !
-    ck 1+!
+    _z @ 0< _d !
+    _x @ _y @ _k @ arshift _d @ xor _d @ - - tx !
+    _y @ _x @ _k @ arshift _d @ xor _d @ - + ty !
+    _z @ _k @ cells lookup + @ _d @ xor _d @ - - tz !
+    tx @ _x ! ty @ _y ! tz @ _z !
+    _k 1+!
     1-
   repeat
-  cy @ cx @ ;
+  _y @ _x @ ;
 : sin cordic drop ; ( rad/16384 -- sin : fixed-point sine )
 : cos cordic nip ;  ( rad/16384 -- cos : fixed-point cosine )
 : fabs [ $7FFF ] literal and ; ( r -- r : FP absolute value )
@@ -1896,7 +1940,7 @@ mdecimal
   if [ 10 ] literal s>f f* r> 1- >r then
   <# r@ abs #0 #s r> sign 2drop
   [char] e hold f# #> r> over - spaces type ;
- : e ( f "123" -- usage "1.23 e 10", input scientific notation )
+: e ( f "123" -- usage "1.23 e 10", input scientific notation )
   f nget >r r@ abs [ 13301 ] literal [ 4004 ] literal */mod
   >r s>f [ 4004 ] literal s>f f/ exp r> +
   r> 0< if f/ else f* then ;
@@ -1905,11 +1949,11 @@ mhex
 ( : fe. e. ; ( r -- : display in engineering notation )
 : fs. e. ; ( r -- : display in scientific notation )
 ( Define some useful constants )
-$C911 $4002 2constant fpi \ Pi = 3.14159265 fconstant fpi )
-$C911 $4001 2constant fhpi \ 1/2pi = 1.57079632 fconstant fhpi
-$C911 $4003 2constant f2pi \ 2pi = 6.28318530 fconstant f2pi
-$ADF8 $4002 2constant fe \ e = 2.71828182 fconstant fe
-$B172 $4000 2constant fln2 \ ln[2] = 0.69314718 fconstant fln2
+$C911 $4002 2constant fpi   \ Pi = 3.14159265 fconstant fpi
+$C911 $4001 2constant fhpi  \ 1/2pi = 1.57079632 fconstant fhpi
+$C911 $4003 2constant f2pi  \ 2pi = 6.28318530 fconstant f2pi
+$ADF8 $4002 2constant fe    \ e = 2.71828182 fconstant fe
+$B172 $4000 2constant fln2  \ ln[2] = 0.69314718 fconstant fln2
 $935D $4002 2constant fln10 \ ln[10] 2.30258509 fconstant fln10
 : fdeg ( rad -- deg : FP radians to degrees )
   f2pi f/ [ $B400 $4009 ] 2literal ( [ 360.0 ] fliteral ) f* ;
@@ -2037,7 +2081,7 @@ opt.glossary [if]
 :s (w) begin ?dup while display @ repeat ;s ( voc -- )
 :s .voc dup  ." voc: " . cr ;s ( voc -- voc )
 : glossary get-order for aft .voc @ (w) then next ; ( -- )
-[then]
+[then] ( opt.glossary )
 : cold [ {boot} ] literal 2* @execute ; ( -- )
 t' (boot) half {boot} t!      \ Set starting Forth word
 t' quit {quit} t!             \ Set initial Forth word
@@ -2069,7 +2113,7 @@ it being run.
     r0 DEC
   repeat
   r5 tos MOV ;a
-:a opr5or
+:a opXor
   bwidth r0 MOV
   r5 ZERO
   r2 {sp} iLOAD
@@ -2118,21 +2162,21 @@ it being run.
 #
 # A single SUBLEQ instruction is written as:
 #
-# 	SUBLEQ a, b, c
+#         SUBLEQ a, b, c
 #
 # Which is as there is only one instruction possible, 
 # SUBLEQ, is often just written as:
 #
-# 	a b c
+#         a b c
 #
 # These three operands are stored in three continuous 
 # memory locations. Each operand is an address, They 
 # perform the following pseudo-code:
 #
-# 	[b] = [b] - [a]
-# 	if [b] <= 0:
-# 		goto c;
-# 	
+#         [b] = [b] - [a]
+#         if [b] <= 0:
+#                 goto c;
+#         
 # There are three special cases, if 'c' is negative 
 # then execution halts (or sometimes if it is refers 
 # to somewhere outside of addressable memory). The 
@@ -2399,21 +2443,21 @@ variable seed here seed !
 : bounds over + swap ;
 : d>s drop ; ( d -- n : convert dubs to single )
 : dabs s>d if dnegate then ; ( d -- ud )
-: d- dnegate d+ ; ( d d -- d )
-: d< rot 2dup >                    ( d -- f )
+: d- dnegate d+ ;  ( d d -- d )
+: d< rot 2dup >    ( d -- f )
    if = nip nip if 0 exit then -1 exit then
    2drop u< ;
-: d>= d< invert ;            ( d -- f )
-: d>  2swap d< ;             ( d -- f )
-: d<= d> invert ;            ( d -- f )
-: d0< nip 0< ; ( d -- f )
-: d0>= d0< 0= ; ( d -- f )
-: d0= or 0= ;                ( d -- f )
-: d0<> d0= 0= ;              ( d -- f )
+: d>= d< invert ;  ( d -- f )
+: d>  2swap d< ;   ( d -- f )
+: d<= d> invert ;  ( d -- f )
+: d0< nip 0< ;     ( d -- f )
+: d0>= d0< 0= ;    ( d -- f )
+: d0= or 0= ;      ( d -- f )
+: d0<> d0= 0= ;    ( d -- f )
 : du<  rot swap u< if 2drop #-1 exit then u< ; ( ud ud -- f )
-: du> 2swap du< ; ( ud -- t )
+: du> 2swap du< ;  ( ud -- t )
 : d=  rot = -rot = and ; ( d d -- f )
-: d<> d= 0= ;                ( d d -- f )
+: d<> d= 0= ;      ( d d -- f )
 : dmax 2over 2over d< if 2swap then 2drop ; ( d1 d2 -- d )
 : dmin 2over 2over d> if 2swap then 2drop ; ( d1 d2 -- d )
 : d.r >r tuck dabs <# #s rot sign #> r> over - bl banner type ;
@@ -2431,7 +2475,7 @@ variable seed here seed !
 : reverse for aft r@ -roll then next ; ( x0...xn n -- xn...x0 )
 : unpick 1+ sp@ + [!] ; ( n0..nx y nu -- n0..y..nx )
 : flip -rot swap ; ( a b c -- c b a ) 
-: signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 1 : signum )
+: signum s>d swap 0> 1 and xor ; ( n -- -1 | 0 | 1 : signum )
 : >< dup 8 rshift swap 8 lshift or ; ( u -- u : swap bytes )
 : #digits >r dup 0= if 1+ exit then r> log 1+ ; ( u b -- u )
 : ** ( n u -- n : integer exponentiation )
@@ -2561,7 +2605,7 @@ mark
 <ok> @ ' ) <ok> !
 system +order
 : wordlist here cell allot 0 over ! ; ( -- wid : alloc wid )
-( NB. Bitwise ops must be masked off on non 16-bit machines )
+( N.B. Bitwise ops must be masked off on non 16-bit machines )
 : crc ( b u -- u : calculate ccitt-ffff CRC )
   $FFFF >r begin ?dup while
    over c@ r> swap
