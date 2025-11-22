@@ -13,7 +13,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ # TODO -- THIS NEEDS EDITING -- TODO
 \
 \ This version should not be released to the public. It needs
-\ proof reading. For a proofread version use the previous
+\ proofreading. For a proofread version use the previous
 \ edition of the book. In the git repo for this book (in the
 \ branch `book`, not `master`, available at 
 \ <https://github.com/howerj/subleq>, the tag 
@@ -207,8 +207,8 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ written in C, when using the term "VM", it will not refer
 \ to the SUBLEQ machine however, but the Forth VM.
 \
-\ On a grammatical manner this document uses "ones compliment"
-\ and "twos compliment" without the apostrophe, which is
+\ On a grammatical manner this document uses "ones complement"
+\ and "twos complement" without the apostrophe, which is
 \ perhaps incorrect, but it shall be done consistently.
 \
 \ ## Markdown and Formatting
@@ -487,7 +487,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ programming problem on it (modulo memory and speed
 \ constraints) even if it is not an ideal system to do it on.
 \
-\ Assuming a twos compliment machine and 16-bit shorts, then
+\ Assuming a twos complement machine and 16-bit shorts, then
 \ this C program will execute the image we will make:
 \
 \        #include <stdio.h>
@@ -604,7 +604,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ Although an account of how a SUBLEQ machine has been given,
 \ there are other SUBLEQ machines that exist that will not
 \ run this program, either they lack the memory, they do not
-\ use twos-compliment arithmetic, they use bignums (or
+\ use twos-complement arithmetic, they use bignums (or
 \ arbitrary precision arithmetic) or even floating point
 \ numbers for each cell, or, more likely they use a different
 \ cell width than this one.
@@ -2236,13 +2236,13 @@ opt.optimize [if] ( optimizations on )
 \ 16-bits (such as an 8-bit or a 15-bit SUBLEQ machine), which
 \ are far less common so it is not a worry.
 \
-\ Tests to determine if we are on a ones-compliment, sign
+\ Tests to determine if we are on a ones-complement, sign
 \ magnitude, or arbitrary precision machine are not performed
 \ either, so this detection system might give false
-\ positives (only twos-compliment is supported). These could
+\ positives (only twos-complement is supported). These could
 \ be tested for. To support those machines whilst keeping the
 \ system mostly the same an emulator for a 16-bit twos
-\ compliment SUBLEQ machine could be written and prepended
+\ complement SUBLEQ machine could be written and prepended
 \ to the target image, this is a complication too far. Note,
 \ on systems with fewer than 16-bit cells we can address
 \ fewer bytes than might be necessary to do this.
@@ -2303,7 +2303,7 @@ label: start         \ System Entry Point
   start 2/ entry t!  \ Set the system entry point
 
 \ This routine doubles "w" until it becomes negative, which
-\ will happen on twos compliment machines upon reaching the
+\ will happen on twos complement machines upon reaching the
 \ maximum bit-width.
 \
 \ This routine really should be much closer to the beginning
@@ -3020,7 +3020,7 @@ label: fnDrop ( load next on stack into `tos` register )
 \
 \ "shift" works by looping for each bit in a 16-bit value less
 \ one bit, and it tests whether the topmost bit is set (a
-\ relatively cheap operation on twos compliment SUBLEQ 
+\ relatively cheap operation on twos complement SUBLEQ 
 \ machines, as the top bit is set when the value is negative,
 \ we also need to make sure it is not zero as well).
 \
@@ -3183,7 +3183,7 @@ assembler.1 -order
 \
 \ Using the topmost bit check and the doubling technique we
 \ have a way accomplish what we need to do. Although this will
-\ only work on SUBLEQ machines that implements twos compliment
+\ only work on SUBLEQ machines that implements twos complement
 \ arithmetic (it may fail on other signed arithmetic machines,
 \ and it will fail on machines with arbitrary precision
 \ arithmetic).
@@ -3994,7 +3994,7 @@ system[
 \
 \ The operation "invert" performs a bitwise invert, the only
 \ bitwise operation we can perform easily. It uses the fact
-\ that a subtraction using twos-compliment arithmetic is
+\ that a subtraction using twos-complement arithmetic is
 \ equivalent to the following:
 \
 \        b - a = b + ~a + 1
@@ -4625,27 +4625,27 @@ opt.buggy-comp [if] ( just for testing purposes )
 \ specify how signed numbers are encoded, they both came from
 \ a time when the hardware had not settled down on some basic
 \ features we now take for granted and everything was more
-\ experimental. However, twos compliment is now the norm, and
-\ "negate" does a twos compliment negation.
+\ experimental. However, twos complement is now the norm, and
+\ "negate" does a twos complement negation.
 \
 \ "s\>d" turns a signed number and turns it into a double cell
 \ number, which we will encounter more later on when talking
 \ about the more complex arithmetic operators.
 \
 \ "abs" gets the absolute value of a number, note, like most
-\ "abs" functions on twos compliment machines the
+\ "abs" functions on twos complement machines the
 \ function is only properly defined within the range of
 \ Minimum Signed Value + 1 to Maximum Signed Value, if you
 \ entered the Minimum Signed Value ($8000 or -32768) you will
 \ get back the same number. This is common to the majority of
 \ implementations of "abs" and is a consequence of twos
-\ compliment arithmetic having one more negative numbers than
+\ complement arithmetic having one more negative numbers than
 \ positive non-zero numbers. We could call "throw" in this
 \ condition, but the vast majority of "abs" functions in all
 \ programming languages do not do this.
 \
 
-: negate 1- invert ; ( n -- n : twos compliment negation )
+: negate 1- invert ; ( n -- n : twos complement negation )
 : s>d dup 0< ; ( n -- d : signed to double width cell )
 : abs s>d if negate then ; ( n -- u : absolute value )
 
@@ -10758,7 +10758,7 @@ it being run.
 \ that would require subtly different algorithms in the base
 \ image.
 \
-\ Making a ones compliment SUBLEQ machine would not be much
+\ Making a ones complement SUBLEQ machine would not be much
 \ harder.
 \
 \ The machine can address (almost) 65536 16-bit values, or
@@ -11102,9 +11102,9 @@ it being run.
 \ This C program implements a SUBLEQ machine with a variable
 \ width for the SUBLEQ cell, it can be used to simulated fixed
 \ width SUBLEQ machines from 8 to 64 bits inclusive, but only
-\ twos compliment machines, it could be extended if needs be
+\ twos complement machines, it could be extended if needs be
 \ to deal with different number representations (such as ones
-\ compliment or sign magnitude representation).
+\ complement or sign magnitude representation).
 \
 \        #include <stdint.h>
 \        #include <stdio.h>
@@ -11854,7 +11854,7 @@ it being run.
 \ There are some design decisions that have to be made
 \ immediately; how many cells are present and the width
 \ in bits of those cells. We also assume (or in this case
-\ emulate) twos-compliment arithmetic.
+\ emulate) twos-complement arithmetic.
 \ 
 \ Note that input is byte oriented and blocking. The
 \ program consists of space (or optionally comma in this
@@ -12776,7 +12776,7 @@ it being run.
 # numbers are represented, what bit length they are 
 # (or if each cell is an arbitrary precision number) 
 # and how negative numbers implemented (twos' 
-# compliment, sign magnitude, etcetera).
+# complement, sign magnitude, etcetera).
 #
 # Usually two's complement is used, but 8, 16, 32 and 
 # 64-bit versions of SUBLEQ are all common, with 
