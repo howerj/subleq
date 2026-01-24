@@ -161,7 +161,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ ## Glossary of Terms
 \
 \ Whilst you should be familiar with common Forth and
-\ programming terms, the following terms should be describe
+\ programming terms, the following terms should be described
 \ in more detail to avoid confusion.
 \
 \ * "Forth", the programming language that will be used
@@ -2264,7 +2264,7 @@ opt.sm-vm-err [if]
 err-str 2/ tvar err-str-addr
 
 \ This prints the error message if we are not on the
-\ right machine width, only 16-bit SUBLEQ machines are allowed. 
+\ right machine width, only 16-bit SUBLEQ machines are allowed.
 \ The test and jump to here is in the "start" routine.
 \
 
@@ -3011,9 +3011,9 @@ label: fnDrop ( load next on stack into `tos` register )
 \ a single bit as the result is produced in reverse order.
 \
 \ As is common for all bitwise operations on the SUBLEQ
-\ machine barring "invert", they are expensive to compute. If
+\ machine, barring "invert", they are expensive to compute. If
 \ the SUBLEQ machine could have any extra instructions a
-\ bitwise multiplexor and left and right shifts would be them.
+\ bitwise multiplexer and left and right shifts would be them.
 \ You could gain back a lot in terms of efficiency just from
 \ those three extra additions (another contender would
 \ be load and store instructions).
@@ -3042,7 +3042,7 @@ label: fnDrop ( load next on stack into `tos` register )
 \        1000     0101
 \
 \ In each cycle, "x" is first doubled, but as it starts as
-\ zero, this is has no effect initially, if the top most bit of
+\ zero, this has no effect initially, if the top most bit of
 \ "tos" is non-zero then 1 is added to "x", then "tos" is
 \ doubled, until completion.
 \
@@ -3050,9 +3050,9 @@ label: fnDrop ( load next on stack into `tos` register )
 \ for "opMux". The original algorithms for "AND", "OR", and
 \ "XOR" are in the appendix.
 \
-\ As mentioned, if we negate the shift count we can perform a 
-\ *left shift*.  We can use this fact to save space, reusing 
-\ the code for right shifts.
+\ As mentioned, if we negate the shift count we can then 
+\ perform a *left shift*. We can use this fact to save space, 
+\ reusing the code for right shifts.
 \
 \ The SUBLEQ assembly function "fnTopmost" is a common factor
 \ to both "shift" and "opMux". It is a poor factor in that
@@ -3112,7 +3112,7 @@ assembler.1 -order
 \ The Forth code that implements those operators using "mux"
 \ is shown later on, this section will describe how "mux" is
 \ implemented, and what it does. Unlike the normal boolean
-\ operators multiplex takes three arguments, which we will
+\ operators "mux" takes three arguments, which we will
 \ call "a", "b" and "sel" ("sel" being short for select).
 \
 \ The "mux" operator is applied to each bit, much like the
@@ -3164,7 +3164,7 @@ assembler.1 -order
 \ You can see that the operator is quite simple, and it is
 \ descriptive, it multiplexes between two values.
 \
-\ Multiplexors are more familiar to electronic engineers than
+\ Multiplexers are more familiar to electronic engineers than
 \ to programmers, and especially those familiar with the
 \ primitive 7400 series logic devices or FPGAs.
 \
@@ -3192,8 +3192,8 @@ assembler.1 -order
 \ TODO: Rewrite using `-MOV` where appropriate. And LINK
 \ It might be possible to make the loop counter count up from
 \ negative "bwidth" and save space that way.
-:a opMux ( u1 u2 u3 -- u : bitwise multiplexor function )
-  \ tos contains multiplexor value
+:a opMux ( u1 u2 u3 -- u : bitwise multiplexer function )
+  \ tos contains multiplexer value
   -bwidth r0 -MOV \ load loop counter initial value [16]
   r1 ZERO       \ zero results register
   r3 {sp} iLOAD --sp \ pop first input

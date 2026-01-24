@@ -399,17 +399,17 @@ typedef struct {
 	char name[MAX_LINE];
 	optimizer_t o;
 	instruction_t im[SZ];
-	unsigned debug: 1, 
-		 debug_on_io: 1,
-		 debug_on_halt: 1,
-		 debug_on_jump: 1,
-		 exit_on_cycles :1, 
-		 exit_on_escape :1,
-		 non_blocking :1,
-		 trace_zero_padding :1,
-		 optimize :1,
-		 assembler_print_labels :1,
-		 stats :1;
+	unsigned debug:                  1, 
+		 debug_on_io:            1,
+		 debug_on_halt:          1,
+		 debug_on_jump:          1,
+		 exit_on_cycles:         1, 
+		 exit_on_escape:         1,
+		 non_blocking:           1,
+		 trace_zero_padding:     1,
+		 optimize:               1,
+		 assembler_print_labels: 1,
+		 stats:                  1;
 
 	/* assembler stuff */
 	label_t lb[MAX_LABELS];
