@@ -80,7 +80,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \
 \ This program and explanation is for an esoteric, oddball,
 \ system, it is likely it will never be useful for
-\ anything. It will also not designed for beginner programmers,
+\ anything. It is also not designed for beginner programmers,
 \ it would help if you had some understanding of Forth and
 \ Assembly before you read this file.
 \
@@ -346,7 +346,7 @@ defined eforth [if] ' ) <ok> ! [then] ( Turn off ok prompt )
 \ SUBLEQ is an OISC that belongs to the category of single
 \ instruction set computers built around an arithmetic
 \ operation (the other two main categories include bit
-\ manipulation instructions and architectures build
+\ manipulation instructions and architectures built
 \ around a MOVE instruction called Transport Triggered
 \ Architectures). The arithmetic architecture feel closest to a
 \ real machine whilst at the same time being far away from
@@ -3224,8 +3224,8 @@ assembler.1 -order
 \ greatly increases the compilation speed as a large list of
 \ them has to be printed out at the end of the image
 \ generation. This is not a concern when "gforth" is used to
-\ compile the image, but is when the eForth interpreter running
-\ under SUBLEQ is.
+\ compile the image, but it is when the eForth interpreter 
+\ running under SUBLEQ is.
 \
 \ "opDivMod" is used by "(.)" later on. It computes both
 \ the quotient and the remainder of one number divided by
@@ -9029,7 +9029,7 @@ opt.info [if]
 \         multi schedule
 \
 \ This creates three new threads, two of which transmit a
-\ a single character to a third, "tx1" and "tx2" transmit
+\ single character to a third, "tx1" and "tx2" transmit
 \ "X" and "Y" respectively to task "rx", which they do at
 \ different rates. Notice that all three threads are executing
 \ in an infinite loop, so without the threading mechanism
