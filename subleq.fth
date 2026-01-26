@@ -2997,8 +2997,8 @@ label: fnDrop ( load next on stack into `tos` register )
 
 \ "shift" is implemented as a virtual machine instruction,
 \ this function can perform a shift in either direction due to
-\ the way it works. Shifting left is an fairly inexpensive
-\ construct on a SUBLEQ machine as that can be achieve by 
+\ the way it works. Shifting left is a fairly inexpensive
+\ construct on a SUBLEQ machine as that can be achieved by 
 \ adding a variable to itself, right shift, or division by two
 \ (for some definitions of division), is more expensive.
 \
@@ -10018,6 +10018,27 @@ variable _d variable _k
 \
 \ Some words have been renamed due to naming conflicts, such
 \ as "ZERO" (now called "null").
+\
+\ The floating point code is described along with the original
+\ code in the appendix, note that this code is not IEEE-754
+\ compliant (the standard for the vast majority of floating
+\ point implementations). It does not handle nor produce
+\ infinity, negative infinity, or Not-A-Number values 
+\ along with lacking many features of a IEEE-754 compliant 
+\ system. The format that it uses is optimized for 16-bit
+\ Forth implementations, which makes for a suboptimal float
+\ implementation from the point of view of actually using the
+\ floating point routines. 
+\
+\ Possible improvements include; making the system more 
+\ IEEE-754 compatible even if we do not use the exact same
+\ format (for example, the number of bits in exponent), using
+\ a stack for the floating point values, handling bases other
+\ than ten for printing, implementing more floating point
+\ routines, and more testing.
+\
+\ As normal arithmetic with SUBLEQ is slow, expect these
+\ operations to be glacial.
 \
 
 : fabs [ $7FFF ] literal and ; ( r -- r : FP absolute value )
