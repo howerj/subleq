@@ -11280,7 +11280,6 @@ it being run.
 \ Instructions for "-MOV", "LINK" and "retsub" are missing, but
 \ are not needed.
 \
-\ TODO: Sort out new iJMP instruction
 \
 \        /* SUBLEQ RECOMPILER - This takes a subset of SUBLEQ
 \         * programs (it might break them) and tries to
@@ -11504,10 +11503,9 @@ it being run.
 \              continue;
 \            }
 \        
-\        
 \            if (match(o, n, DEPTH, i, "00> !Z> Z0> ZZ>",
 \            &q0) == 1
-\        	&& get(o, '0') == (i + (3*4) + 2)) {
+\        	&& get(o, '0') == (i + (3*3) + 2)) {
 \              m[L(i)].instruction = IJMP;
 \              m[L(i)].d = L(q0);
 \              o->matches[IJMP]++;
@@ -11526,6 +11524,7 @@ it being run.
 \        	continue;
 \              }
 \            }
+\        
 \        
 \            /* We should match multiple ones in a row and
 \             * turn them into a left shift */
@@ -11674,6 +11673,7 @@ it being run.
 \          if (optimize)
 \            if (optimizer(&o, m, pc) < 0)
 \              return 1;
+\        
 \          o.start = clock();
 \          for (pc = 0; pc < (SZ/2);) {
 \            const int instruction = m[pc].instruction;
@@ -11769,7 +11769,6 @@ it being run.
 \              return 1;
 \          return 0;
 \        }
-\        
 \
 \ A report is printed to standard error at the end of
 \ execution containing the number of instructions executed
