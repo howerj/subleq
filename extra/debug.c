@@ -843,7 +843,7 @@ of memory limitations, etcetera. There is not much need for\n\
 them though.\n\
 \n\
 Some of the built in limitations are:\n\
-Number of labels:  %u (labels of the type 'label:'\n\
+Number of labels:  %u (labels of the type 'label:')\n\
 Number of holes:   %u (references to a label)\n\
 Number of copies:  %u (single operand instructions)\n\
 Label name length: %u\n\n\
